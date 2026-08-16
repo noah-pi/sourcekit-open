@@ -1,0 +1,280 @@
+<title>The Dead Secondary Stream</title>
+<style>
+  :root {
+    --ground: #F1F3F0; --surface: #FAFBF9; --surface-2: #E9ECE7;
+    --ink: #161A18; --ink-2: #414944; --ink-3: #6B746E; --rule: #D2D8D1;
+    --accent: #2F5D50; --accent-soft: #E2ECE7;
+    --crit: #A3341F; --crit-soft: #F6E4DF;
+    --warn: #8A6414; --warn-soft: #F5EBD6;
+    --good: #376B52; --good-soft: #E0EDE5;
+    --dead: #6B746E; --dead-soft: #E6E9E4;
+    --display: ui-serif, "Iowan Old Style", Georgia, "Palatino Linotype", serif;
+    --body: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101412; --surface: #171C19; --surface-2: #1F2621;
+      --ink: #E7EBE7; --ink-2: #B4BDB7; --ink-3: #848D87; --rule: #2C342E;
+      --accent: #7FBBA5; --accent-soft: #1B2A25;
+      --crit: #E08A72; --crit-soft: #2E1C17;
+      --warn: #D9AE5C; --warn-soft: #2A2314;
+      --good: #7FBB97; --good-soft: #17251C;
+      --dead: #848D87; --dead-soft: #1E241F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #101412; --surface: #171C19; --surface-2: #1F2621;
+    --ink: #E7EBE7; --ink-2: #B4BDB7; --ink-3: #848D87; --rule: #2C342E;
+    --accent: #7FBBA5; --accent-soft: #1B2A25;
+    --crit: #E08A72; --crit-soft: #2E1C17;
+    --warn: #D9AE5C; --warn-soft: #2A2314;
+    --good: #7FBB97; --good-soft: #17251C;
+    --dead: #848D87; --dead-soft: #1E241F;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 28px 110px; }
+  .prose { max-width: 68ch; }
+  header.mast { border-bottom: 2px solid var(--ink); padding: 68px 0 26px; margin-bottom: 40px; }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); margin: 0 0 18px; }
+  h1 { font-family: var(--display); font-weight: 600; font-size: clamp(2.1rem, 5.5vw, 3.2rem); line-height: 1.06; letter-spacing: -0.02em; text-wrap: balance; margin: 0 0 16px; }
+  .standfirst { font-family: var(--display); font-size: clamp(1.05rem, 2.2vw, 1.28rem); line-height: 1.5; color: var(--ink-2); max-width: 60ch; margin: 0; }
+  section { margin: 0 0 62px; }
+  h2 { font-family: var(--display); font-size: clamp(1.45rem, 3vw, 1.95rem); font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; text-wrap: balance; margin: 0 0 6px; padding-top: 22px; border-top: 1px solid var(--rule); }
+  h2 .num { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 0.1em; display: block; margin-bottom: 10px; font-weight: 400; }
+  .sec-sub { color: var(--ink-3); margin: 0 0 28px; max-width: 62ch; font-size: 15px; }
+  h3 { font-family: var(--body); font-size: 1rem; font-weight: 650; margin: 32px 0 12px; }
+  p { margin: 0 0 15px; }
+  .prose ul, .prose ol { margin: 0 0 15px; padding-left: 22px; }
+  .prose li { margin-bottom: 7px; }
+  code { font-family: var(--mono); font-size: 0.855em; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+  strong { font-weight: 650; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  pre { background: var(--surface-2); border: 1px solid var(--rule); padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.65; margin: 0 0 16px; }
+  pre code { background: none; padding: 0; font-size: inherit; }
+
+  .verdict { background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--crit); padding: 26px 28px; margin-bottom: 40px; }
+  .verdict p { max-width: 66ch; } .verdict p:last-child { margin-bottom: 0; }
+
+  /* eliminated / live register */
+  .row { display: grid; grid-template-columns: 132px 1fr; gap: 18px; align-items: start; padding: 15px 0; border-bottom: 1px solid var(--rule); }
+  .row:last-child { border-bottom: none; }
+  .row .tag { padding-top: 2px; }
+  .row p { font-size: 14.5px; color: var(--ink-2); margin: 0; }
+  .row .why { font-size: 13.5px; color: var(--ink-3); margin-top: 5px; }
+  .row.dead .lbl { text-decoration: line-through; text-decoration-thickness: 1.5px; color: var(--ink-3); }
+  .lbl { font-weight: 650; font-size: 15px; display: block; margin-bottom: 5px; color: var(--ink); }
+
+  .pill { display: inline-block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; white-space: nowrap; font-weight: 500; }
+  .p-crit { background: var(--crit-soft); color: var(--crit); }
+  .p-warn { background: var(--warn-soft); color: var(--warn); }
+  .p-good { background: var(--good-soft); color: var(--good); }
+  .p-dead { background: var(--dead-soft); color: var(--dead); }
+  .p-info { background: var(--accent-soft); color: var(--accent); }
+
+  .hyp { border: 1px solid var(--rule); border-left: 4px solid var(--ink-3); background: var(--surface); padding: 20px 24px; margin-bottom: 14px; }
+  .hyp.h1 { border-left-color: var(--crit); }
+  .hyp.h2 { border-left-color: var(--warn); }
+  .hyp.h3 { border-left-color: var(--accent); }
+  .hyp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .hyp-id { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); letter-spacing: 0.06em; }
+  .hyp-t { font-weight: 650; font-size: 15.5px; flex: 1 1 280px; line-height: 1.35; }
+  .hyp p { font-size: 14.5px; color: var(--ink-2); margin-bottom: 10px; }
+  .hyp p:last-child { margin-bottom: 0; }
+  .hyp .test { border-top: 1px dashed var(--rule); padding-top: 10px; margin-top: 12px; font-size: 14px; }
+  .hyp .test b { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 5px; font-weight: 500; }
+
+  .callout { background: var(--crit-soft); border: 1px solid var(--rule); border-left: 4px solid var(--crit); padding: 22px 26px; margin: 0 0 24px; }
+  .callout .lbl2 { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--crit); margin-bottom: 9px; font-weight: 500; }
+  .callout p { font-size: 14.5px; margin-bottom: 11px; } .callout p:last-child { margin-bottom: 0; }
+
+  .step { display: grid; grid-template-columns: 40px 1fr; gap: 18px; padding: 20px 0; border-bottom: 1px solid var(--rule); }
+  .step:last-child { border-bottom: none; }
+  .step-n { font-family: var(--mono); font-size: 13px; color: var(--accent); padding-top: 3px; }
+  .step h3 { margin: 0 0 8px; font-size: 15.5px; }
+  .step p, .step ul { font-size: 14.5px; color: var(--ink-2); }
+  .step ul { margin: 0 0 10px; padding-left: 20px; } .step li { margin-bottom: 5px; }
+  .step > div > *:last-child { margin-bottom: 0; }
+
+  .tw { overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); margin-bottom: 20px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 520px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); font-weight: 400; background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.mono { font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+
+  footer { border-top: 2px solid var(--ink); padding-top: 20px; font-size: 13px; color: var(--ink-3); }
+  @media (max-width: 640px) {
+    .wrap { padding: 0 18px 70px; }
+    header.mast { padding-top: 42px; }
+    .row, .step { grid-template-columns: 1fr; gap: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="eyebrow">Camera pipeline · iPhone 17 / iOS 26 · round 3</p>
+  <h1>The Dead Secondary Stream</h1>
+  <p class="standfirst">Your last two rounds eliminated wiring and formats correctly. There is one variable neither round controlled for — and the field log shows it was set against you the whole time.</p>
+</header>
+
+<div class="verdict">
+  <p><strong>The finding.</strong> Your 0.18.1 failure dump ends with <code>flag.photoMaxDimensionsPolicy=false</code>. That flag gates the ≤12 MP <code>maxPhotoDimensions</code> clamp — the mitigation you wrote in 0.15.2 for the mechanism you yourself named <em>"the structural suspect for BOTH field failures"</em>: an unclamped 48 MP photo-stream reservation starving everything else on a live multi-cam graph.</p>
+  <p>The flag's getter defaults to <code>true</code> and does so correctly (it checks <code>object(forKey:) != nil</code> before reading, so an unset key returns true). A <code>false</code> reading therefore means the key was <strong>explicitly written false on that device</strong> — almost certainly a leftover from a wave-7 A/B isolation. It lives in the <code>exhibit.debug</code> <code>UserDefaults</code> suite, which survives every TestFlight update. Only deleting the app clears it.</p>
+  <p>So the most likely story is not that your fixes failed. It is that rounds 1 and 2 were both tested on a device carrying a persisted flag that disabled the one mitigation aimed at this exact failure — while iPhone 17 is the first generation whose ultra-wide is a 48 MP sensor, making the unclamped reservation far larger than on any hardware where this code previously worked.</p>
+</div>
+
+<!-- ELIMINATED -->
+<section>
+  <h2><span class="num">01 — Cleared</span>What is genuinely eliminated</h2>
+  <p class="sec-sub">Your own counters did most of this work. I re-derived each from the code and agree — these are closed, and re-testing them is wasted field time.</p>
+
+  <div class="row dead">
+    <div class="tag"><span class="pill p-dead">eliminated</span></div>
+    <div><span class="lbl">Connection forming / wiring</span>
+      <p>The 3,399 <code>secondary-half</code> counts require <code>stereoActive &amp;&amp; secondaryVideoOutput != nil</code>, and the 300-drop rung would have nil'd the output at ~300 had the reseat failed. Two independently built explicit connections were created and enabled.</p>
+      <p class="why">Your round-2 self-audit. Correct.</p>
+    </div>
+  </div>
+
+  <div class="row dead">
+    <div class="tag"><span class="pill p-dead">eliminated</span></div>
+    <div><span class="lbl">activeFormat violating isMultiCamSupported</span>
+      <p>Round 2's headline theory. Your own 0.18.3 comment records the outcome: <em>"The 0.18.2 field log proved format+wiring innocent while zero secondary frames ever arrived."</em> The <code>configureFormat</code> filter was the right change on documented-compliance grounds, but it was not the bug.</p>
+      <p class="why">Killed by your 0.18.2 field log.</p>
+    </div>
+  </div>
+
+  <div class="row dead">
+    <div class="tag"><span class="pill p-dead">eliminated</span></div>
+    <div><span class="lbl">An unsupported device pair</span>
+      <p>Adding a device combination absent from <code>supportedMultiCamDeviceSets</code> raises <code>NSInvalidArgumentException</code> — <em>"These devices may not be used simultaneously"</em> — at <code>addInputWithNoConnections</code>. It is a loud throw, not a silent absence. You see no throw, so the pair is legal.</p>
+      <p class="why">Apple's documented behavior; confirmed against WWDC19-249 material.</p>
+    </div>
+  </div>
+
+  <div class="row dead">
+    <div class="tag"><span class="pill p-dead">eliminated</span></div>
+    <div><span class="lbl">Synchronizer pairing or timing</span>
+      <p><code>secondary-absent</code> is the synchronizer reporting that <em>no data exists</em> for that output at the master's PTS — not a late or mismatched frame. Your <code>alwaysDiscardsLateVideoFrames = true</code> is also correct; Apple recommends <code>YES</code>, and it only bounds queue depth. The stream never starts; it is not being dropped in pairing.</p>
+      <p class="why">Re-checked against the synchronizer's documented contract.</p>
+    </div>
+  </div>
+</section>
+
+<!-- LIVE HYPOTHESES -->
+<section>
+  <h2><span class="num">02 — Live</span>What is left, ranked</h2>
+  <p class="sec-sub">Everything below survives the eliminations above. Ordered by probability given your evidence.</p>
+
+  <div class="hyp h1">
+    <div class="hyp-head"><span class="hyp-id">H1</span><span class="hyp-t">Photo-output resource reservation starves the secondary video stream</span><span class="pill p-crit">most likely</span></div>
+    <p>Your graph carries six consumers on one multi-cam session: two <code>AVCaptureVideoDataOutput</code>s, <strong>two <code>AVCapturePhotoOutput</code>s</strong>, a PiP preview connection, and audio. WWDC19-249 is explicit that photo outputs are among the most expensive things you can attach, because the session reserves ISP and bandwidth for the configured photo stream whether or not you are capturing.</p>
+    <p>On iPhone 17 the ultra-wide moved from 12 MP to 48 MP. With the clamp disabled, the secondary photo output reserves against a 48 MP format on the same physical camera whose video stream then never delivers. That is a coherent mechanism for absent-not-dropped, deterministic from frame one, and preview-alive: preview-layer connections are the cheap, forgiving path and survive pressure that kills a data output.</p>
+    <p>To your credit the clamp is applied to <em>both</em> photo outputs when enabled (<code>applyFullResPhotoPolicy</code> is called for primary and secondary alike). The problem is only that it was switched off.</p>
+    <div class="test"><b>Test</b>Delete the app entirely (not an update — deletion is what clears the <code>exhibit.debug</code> suite), reinstall, confirm the Diagnostics screen shows <code>photoMaxDimensionsPolicy=true</code>, and re-run. This is a ten-minute test and it is the first thing to do.</div>
+  </div>
+
+  <div class="hyp h2">
+    <div class="hyp-head"><span class="hyp-id">H2</span><span class="hyp-t">Total graph cost — and you only gate on half of it</span><span class="pill p-warn">likely</span></div>
+    <p>You throw when <code>session.hardwareCost &gt; 1.0</code>, but <code>systemPressureCost</code> is logged and never gated. Both matter: a graph can sit under the hardware budget while system pressure forces the session to shed a stream. Shedding is silent — no exception, no drop callbacks — which is exactly your signature.</p>
+    <p>The <code>fellUp</code> path compounds this. If no multi-cam format on the 48 MP ultra-wide fits ≤1280×720, you fall up to the smallest multi-cam format on the device, which on this hardware could be substantially larger than the 720p budget you intended. Your 0.18.3 census logs this, so the answer is probably already sitting in a field log.</p>
+    <div class="test"><b>Test</b>Read the <code>multiCam census:</code> line from a failing session. You want four numbers: <code>hardwareCost</code>, <code>systemPressureCost</code>, and the <code>fellUp</code>/format summary for each device. If <code>fellUp=true</code> on the secondary, or <code>systemPressureCost</code> is near or above 1.0, this is your answer.</div>
+  </div>
+
+  <div class="hyp h3">
+    <div class="hyp-head"><span class="hyp-id">H3</span><span class="hyp-t">You cannot see the moment the connection dies</span><span class="pill p-info">diagnostic gap</span></div>
+    <p>This is not a cause, but it is why rounds 1 and 2 could not converge. <code>AVCaptureConnection.isActive</code> is the system's verdict on whether media flows — distinct from <code>isEnabled</code>, which is only your own toggle and is what <code>wireOutput</code> logs at wire time. You read <code>isActive</code> once, in the census immediately after <code>startRunning()</code>.</p>
+    <p>That read is too early. <code>isActive</code> settles asynchronously as the session spins up, and it is KVO-observable precisely because it changes over time. A connection that comes up active and is then deactivated under pressure is invisible in your current log — it looks identical to one that never activated.</p>
+    <div class="test"><b>Fix</b>Add KVO observers on <code>isActive</code> for both video connections and log every transition with a timestamp. This converts "secondary absent for 3,399 frames" into "secondary went inactive at t=340 ms", which separates H1/H2 (deactivated under pressure) from a stream that never starts at all. Do this before the next field session — it is the highest-value change you can make.</div>
+  </div>
+
+  <div class="hyp">
+    <div class="hyp-head"><span class="hyp-id">H4</span><span class="hyp-t">Port selection uses an undocumented shortcut</span><span class="pill p-warn">worth fixing regardless</span></div>
+    <p>Both <code>wireOutput</code> and <code>ensurePipConnection</code> select the input port with <code>input.ports.first(where: { $0.mediaType == mediaType })</code>. Apple's AVMultiCamPiP sample uses the explicit form instead:</p>
+    <pre><code>input.ports(for: .video,
+            sourceDeviceType: device.deviceType,
+            sourceDevicePosition: device.position).first</code></pre>
+    <p>The distinction is dormant while an input exposes exactly one video port and becomes real when it exposes several — which is precisely the kind of thing that changes when a sensor generation changes. Your <code>sourceDeviceType:</code> count across the whole module is zero, so this API is unused today.</p>
+    <p>I rank this below H1 and H2 because it does not explain why preview works and the data output does not — both paths use the same shortcut. But it is the documented API, it is a one-line change per site, and it removes a variable.</p>
+    <div class="test"><b>Fix</b>Switch both call sites to <code>ports(for:sourceDeviceType:sourceDevicePosition:)</code> and log the resolved port count. If any device reports more than one video port, this moves straight to the top of the list.</div>
+  </div>
+</section>
+
+<!-- PROTOCOL -->
+<section>
+  <h2><span class="num">03 — Protocol</span>The next field session, one variable at a time</h2>
+  <p class="sec-sub">Rounds 1 and 2 each changed several things and produced an unchanged signature, which is what makes them hard to learn from. This sequence changes one thing per session and every step has a defined stopping condition.</p>
+
+  <div class="step"><div class="step-n">00</div><div>
+    <h3>Clear the persisted flags — before changing any code</h3>
+    <p><strong>Delete the app from the device.</strong> Not a TestFlight update; an actual deletion, which is what clears the <code>exhibit.debug</code> <code>UserDefaults</code> suite. Reinstall, open Diagnostics, confirm <code>photoMaxDimensionsPolicy</code> reads <code>true</code>, and capture.</p>
+    <p><strong>Stop if this fixes it.</strong> If stereo commits, you have your answer and no Swift changes are needed — but add the guard in step 4 so a stale flag can never silently disable a mitigation again.</p>
+  </div></div>
+
+  <div class="step"><div class="step-n">01</div><div>
+    <h3>Read the census you already log</h3>
+    <p>From a failing session, pull these four lines out of the diagnostics log before touching anything:</p>
+    <div class="tw"><table>
+      <thead><tr><th>Log line</th><th>What it answers</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">multiCam census: hardwareCost=… systemPressureCost=…</td><td>Is the graph over budget? (H2)</td></tr>
+        <tr><td class="mono">format chosen: device=…UltraWide… fellUp=…</td><td>Did the secondary fall up out of its 720p budget? (H2)</td></tr>
+        <tr><td class="mono">configureSession started: … secondaryVideo=enabled=…,active=…</td><td>Was the connection ever active? (H3)</td></tr>
+        <tr><td class="mono">wire secondary-video OK: … port=…</td><td>Which port was resolved? (H4)</td></tr>
+      </tbody>
+    </table></div>
+    <p>These four numbers will likely decide between H1 and H2 without writing a line of Swift.</p>
+  </div></div>
+
+  <div class="step"><div class="step-n">02</div><div>
+    <h3>Add isActive KVO, then capture once</h3>
+    <p>Observe <code>isActive</code> on both video connections; log every transition with a millisecond timestamp relative to <code>startRunning()</code>. One session tells you which of two very different worlds you are in:</p>
+    <ul>
+      <li><strong>Never active</strong> → the connection was rejected at graph level. Go to step 3.</li>
+      <li><strong>Active, then inactive at t=N</strong> → resource pressure. H1/H2 confirmed; note what else happens at t=N (the session-calibration one-shot, first photo capture, PiP attach).</li>
+    </ul>
+  </div></div>
+
+  <div class="step"><div class="step-n">03</div><div>
+    <h3>Bisect the graph</h3>
+    <p>Strip to the minimum that could possibly work — <strong>two video data outputs, nothing else</strong>. No photo outputs, no PiP connection, no audio. If the secondary delivers, add one consumer back per session in this order, since it runs cheapest to most expensive:</p>
+    <ol>
+      <li>audio output</li>
+      <li>PiP preview connection</li>
+      <li>primary photo output</li>
+      <li>secondary photo output</li>
+    </ol>
+    <p>The consumer that kills it is the answer. Four sessions, maximum. If the secondary never delivers even in the two-output minimum, cost is not the story — go to H4 and re-examine the device pair with <code>supportedMultiCamDeviceSets</code> logged explicitly.</p>
+  </div></div>
+
+  <div class="step"><div class="step-n">04</div><div>
+    <h3>Fixes worth making whatever the outcome</h3>
+    <ul>
+      <li><strong>Gate on <code>systemPressureCost</code>, not just <code>hardwareCost</code>.</strong> Refusing honestly beats silently losing a stream — that is your own stated principle, and right now half the budget is unenforced.</li>
+      <li><strong>Surface debug-flag state in the failure path.</strong> Your photo-failure dump prints two flags; print all five, and consider having a non-default flag value show a visible banner in Diagnostics. A persisted A/B flag silently disabling a mitigation across two release cycles is the kind of thing that should be loud.</li>
+      <li><strong>Use the documented port API</strong> at both call sites (H4).</li>
+      <li><strong>Validate the pair against <code>supportedMultiCamDeviceSets</code> before configuring</strong>, so an unsupported combination degrades to single-cam honestly instead of throwing <code>NSInvalidArgumentException</code> from inside a <code>beginConfiguration</code> block.</li>
+      <li><strong>Reconsider the secondary photo output entirely.</strong> It is the single most expensive item on the graph and it exists to produce stereo stills. Those could come from the secondary <em>video</em> stream at far lower cost. Dropping it may be the structural fix rather than the workaround.</li>
+    </ul>
+  </div></div>
+</section>
+
+<section>
+  <h2><span class="num">04 — Note</span>On the blind-Swift problem</h2>
+  <div class="prose">
+    <p>Both triage rounds end with the same residual risk: <em>"No compiler; all edits re-verified by eye."</em> That is the underlying constraint here — you are debugging a platform-specific resource-allocation problem through field reports, with a one-build-per-round feedback loop and no way to typecheck. It is why two well-reasoned rounds produced an unchanged signature.</p>
+    <p>The highest-leverage fix is not any hypothesis above; it is shortening that loop. Even without a full Xcode setup, <code>swiftc -parse</code> or <code>swift-format --lint</code> against the module would catch syntax and delimiter errors before a build, and the KVO change in step 2 converts your field signal from one bit ("absent") into a timeline. Between them you would learn more in one session than the last two rounds produced together.</p>
+    <p>For the launch itself, this does not need to be solved first — it needs to be <em>stated</em>. The open repo's stereo suites are lab-verified against fixtures and that claim is true and reproducible. Saying plainly that multi-camera capture currently degrades on iPhone 17 / iOS 26, and that the analyzers are verified independently of it, costs you far less than having someone discover the gap themselves.</p>
+  </div>
+</section>
+
+<footer>
+  Derived from <code>modules/exhibit-camera/ios/ExhibitCameraModule.swift</code> (5,932 lines) and <code>ExhibitCameraTypes.swift</code>, read against the 0.18.1 and 0.18.2 triage notes. Platform behavior checked against Apple's AVFoundation documentation and WWDC19 sessions 225 and 249. Confidence is stated per hypothesis; H1 rests on a flag value observed in your own field dump, not on inference alone.
+</footer>
+
+</div>
