@@ -1,0 +1,86 @@
+[
+  {
+    "file": "oracle-merkle-aux.mp4",
+    "divergence": "verdict",
+    "handrolled": "UNSUPPORTED",
+    "upstream": "INTACT",
+    "reason": "THE intentional divergence class of the oracle design (WS3-Binding-Path §6b): the manifest's uuid box carries a nonzero merkle-aux offset. Our build declines the whole structure (BmffUnsupported → UNSUPPORTED — 'unchecked, not condemned', 0.11.0 audit A-4). Upstream c2pa-rs (wasm 0.11.1) evaluates the manifest anyway: it supports merkle-aux structures and its c2pa.hash.bmff.v2 evaluation over the untouched media succeeds, so its composed verdict is a genuine INTACT for bytes IT can check. Neither engine was weakened to force agreement (SPEC §0.3): our UNSUPPORTED is the honest posture for structures this build cannot verify; upstream's INTACT is honest for structures it can. Revisit this entry the day our build learns merkle-aux evaluation."
+  },
+  {
+    "file": "oracle-merkle-aux.mp4",
+    "divergence": "unsupportedPosture",
+    "handrolled": "everything — the manifest uses a structure this build cannot verify (manifest references merkle aux boxes — unsupported). Not a broken file, not tamper: unchecked.",
+    "upstream": "false",
+    "reason": "Posture record for the row above, pinned with the EXACT strings (1.0.0 audit M-03/M2): hand-rolled declines the structure with this precise reason, upstream does not decline (unsupported=false). Any change on either side — our build gaining merkle support, a reworded decline reason, or upstream starting to reject such boxes — fails loudly here and gets investigated, never absorbed."
+  },
+  {
+    "file": "oracle-merkle-aux.mp4",
+    "divergence": "signatureFacts",
+    "handrolled": "sig=null assertions=null",
+    "upstream": "sig=true assertions=true",
+    "reason": "Fact-level record of the row above (1.0.0 audit B-7 wired these aspects): our build declined, so every fact is null; upstream fully evaluated and its signature-side facts are positive. The verdict-level divergence is the whitelisted row above; this pins the exact fact postures so a silent fact drift (e.g. our build composing facts for a structure it declined) fails loudly."
+  },
+  {
+    "file": "oracle-merkle-aux.mp4",
+    "divergence": "assetHashFacts",
+    "handrolled": "asset=null/null",
+    "upstream": "asset=true/null",
+    "reason": "Asset-side twin of the signatureFacts entry: declined (null) on our side, positively evaluated (hash matches) on upstream's. Same whitelisted divergence class, exact postures pinned."
+  },
+  {
+    "file": "tampered-pixel.jpg",
+    "divergence": "signatureFacts",
+    "handrolled": "sig=true assertions=true",
+    "upstream": "sig=null assertions=null",
+    "reason": "Fact-level posture, verdicts AGREE (CONTENT_MODIFIED both): the hand-rolled verifier positively verifies the signature and assertion store before failing the media hash. c2pa-rs reports validation_state Invalid over the asset-hash mismatch and surfaces no positive signature evaluation, so the upstream normalizer leaves signature-side facts null rather than claiming a check the engine did not report. The pinned strings mean: any change — upstream positively asserting, our side dropping the positive facts, or a verdict flip — fails loudly."
+  },
+  {
+    "file": "tampered-pixel.png",
+    "divergence": "signatureFacts",
+    "handrolled": "sig=true assertions=true",
+    "upstream": "sig=null assertions=null",
+    "reason": "Same fact-level posture class as tampered-pixel.jpg (verdicts agree CONTENT_MODIFIED): hand-rolled positively verifies signature+assertions; c2pa-rs reports the media mismatch without a positive signature evaluation. Exact postures pinned."
+  },
+  {
+    "file": "oracle-tampered.jpg",
+    "divergence": "signatureFacts",
+    "handrolled": "sig=true assertions=true",
+    "upstream": "sig=null assertions=null",
+    "reason": "Same fact-level posture class as tampered-pixel.jpg (verdicts agree CONTENT_MODIFIED): hand-rolled positively verifies signature+assertions; c2pa-rs reports the media mismatch without a positive signature evaluation. Exact postures pinned."
+  },
+  {
+    "file": "oracle-tampered.mp4",
+    "divergence": "signatureFacts",
+    "handrolled": "sig=true assertions=true",
+    "upstream": "sig=null assertions=null",
+    "reason": "Same fact-level posture class as tampered-pixel.jpg (verdicts agree CONTENT_MODIFIED): hand-rolled positively verifies signature+assertions; c2pa-rs reports the media mismatch without a positive signature evaluation. Exact postures pinned."
+  },
+  {
+    "file": "oracle-void-binding.jpg",
+    "divergence": "signatureFacts",
+    "handrolled": "sig=true assertions=true",
+    "upstream": "sig=false assertions=null",
+    "reason": "A-1 binding guard (verdicts AGREE: SIGNATURE_INVALID both — the archived verifier's own verdict is SIGNATURE_INVALID here, parity-checked). The claim references no usable hard binding. The hand-rolled verifier positively verifies the COSE signature and assertion hashes, then finds the binding VOID (UNPROVEN, never proven tamper). Upstream c2pa-rs rejects the manifest at read time with assertion.undeclared, which normalizes fail-closed to signatureValid=false with no assertion or asset evaluation. Both routes condemn the credentials; the pinned strings catch any drift in HOW each engine gets there."
+  },
+  {
+    "file": "oracle-void-binding.jpg",
+    "divergence": "assetHashFacts",
+    "handrolled": "asset=false/void-binding",
+    "upstream": "asset=null/null",
+    "reason": "Asset-side twin of the void-binding signatureFacts entry: hand-rolled names the void binding explicitly; upstream never reaches an asset evaluation. Verdicts agree SIGNATURE_INVALID (UNPROVEN). Exact postures pinned."
+  },
+  {
+    "file": "oracle-attach-attack.jpg",
+    "divergence": "signatureFacts",
+    "handrolled": "sig=true assertions=true",
+    "upstream": "sig=false assertions=null",
+    "reason": "A-1 attach attack (verdicts AGREE: SIGNATURE_INVALID both): the claim does not reference the self-consistent binding box an attacker attached. Hand-rolled positively verifies signature+assertions then finds the binding VOID; upstream rejects with assertion.undeclared, normalized fail-closed to signatureValid=false. Same class as oracle-void-binding.jpg, exact postures pinned."
+  },
+  {
+    "file": "oracle-attach-attack.jpg",
+    "divergence": "assetHashFacts",
+    "handrolled": "asset=false/void-binding",
+    "upstream": "asset=null/null",
+    "reason": "Asset-side twin of the attach-attack signatureFacts entry: hand-rolled names the void binding; upstream never reaches an asset evaluation. Verdicts agree SIGNATURE_INVALID (UNPROVEN). Exact postures pinned."
+  }
+]

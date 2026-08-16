@@ -1,0 +1,626 @@
+/**
+ * Strict X.509 certificate-chain verification. No network, no WebCrypto —
+ * DER parsing plus @noble curves and BigInt RSA.
+ *
+ * Used for App Attest chains (ECDSA P-256/P-384), TSA certificates inside
+ * RFC 3161 tokens (ECDSA and RSA), and org-credential chains.
+ *
+ * A chain passes only when all of the following hold:
+ *   - each link's signature verifies under the next certificate's key
+ *   - issuer and subject names chain byte-for-byte
+ *   - every non-leaf carries basicConstraints CA:TRUE
+ *   - a CA with a keyUsage extension includes keyCertSign; a leaf does not
+ *   - pathLenConstraint, when present, is honored
+ *   - every certificate is inside its validity window at the given time
+ *   - no certificate carries a critical extension this verifier does not
+ *     consume (see RECOGNIZED_CRITICAL_EXTENSIONS)
+ *
+ * Anchoring is reported separately from link validity: when pinned roots are
+ * supplied and none matches, the result is linksValid with anchored=false.
+ */
+
+import { p256 } from '@noble/curves/p256';
+import { p384 } from '@noble/curves/p384';
+import { sha256 } from '@noble/hashes/sha256';
+import { sha384, sha512 } from '@noble/hashes/sha2';
+import { bytesToHex, bytesToUtf8, equalBytes } from './bytes';
+
+// ---------------------------------------------------------------------------
+// TLV reader
+// ---------------------------------------------------------------------------
+
+export interface Tlv {
+  tag: number;
+  /** Content bytes only. */
+  content: Uint8Array;
+  /** Offset just past this TLV. */
+  next: number;
+  /** Full TLV including tag + length header (the bytes a signature covers). */
+  full: Uint8Array;
+}
+
+export function readTlv(b: Uint8Array, o: number): Tlv {
+  if (!Number.isInteger(o) || o < 0 || o + 2 > b.length) throw new Error('DER: truncated');
+  const tag = b[o];
+  let len = b[o + 1];
+  let p = o + 2;
+  if (len & 0x80) {
+    const n = len & 0x7f;
+    if (n === 0 || n > 4) throw new Error('DER: indefinite or oversized length');
+    len = 0;
+    // Multiply-accumulate rather than shifts: JS bitwise operators are
+    // 32-bit signed, so a 4-byte length >= 0x80000000 would wrap negative
+    // and defeat the overrun guard below. Number math is exact to 2^53.
+    for (let i = 0; i < n; i++) len = len * 256 + b[p + i];
+    p += n;
+  }
+  if (p + len > b.length) throw new Error('DER: length overruns buffer');
+  const next = p + len;
+  // Invariant: every TLV advances. Guards the while-loops below against a
+  // non-terminating walk.
+  if (next <= o) throw new Error('DER: non-advancing TLV');
+  return { tag, content: b.subarray(p, next), next, full: b.subarray(o, next) };
+}
+
+/** Iterates the TLV children of a constructed value. */
+export function tlvChildren(b: Uint8Array): Tlv[] {
+  const out: Tlv[] = [];
+  let o = 0;
+  while (o < b.length) {
+    const t = readTlv(b, o);
+    out.push(t);
+    o = t.next;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// OIDs (content bytes, without tag/len)
+// ---------------------------------------------------------------------------
+
+const OID = {
+  ecPublicKey: '2a8648ce3d0201',       // 1.2.840.10045.2.1
+  p256: '2a8648ce3d030107',            // 1.2.840.10045.3.1.7 secp256r1
+  p384: '2b81040022',                  // 1.3.132.0.34 secp384r1
+  rsaEncryption: '2a864886f70d010101', // 1.2.840.113549.1.1.1
+  ecdsaSha256: '2a8648ce3d040302',     // 1.2.840.10045.4.3.2
+  ecdsaSha384: '2a8648ce3d040303',     // 1.2.840.10045.4.3.3
+  ecdsaSha512: '2a8648ce3d040304',     // 1.2.840.10045.4.3.4
+  rsaSha256: '2a864886f70d01010b',     // 1.2.840.113549.1.1.11
+  rsaSha384: '2a864886f70d01010c',     // 1.2.840.113549.1.1.12
+  rsaSha512: '2a864886f70d01010d',     // 1.2.840.113549.1.1.13
+  basicConstraints: '551d13',          // 2.5.29.19
+  keyUsage: '551d0f',                  // 2.5.29.15
+  extKeyUsage: '551d25',               // 2.5.29.37
+  org: '55040a',                       // 2.5.4.10 organizationName
+  cn: '550403',                        // 2.5.4.3 commonName
+} as const;
+
+/** Apple's App Attest nonce extension: 1.2.840.113635.100.8.2 */
+export const OID_APPLE_ATTEST_NONCE = '2a864886f763640802';
+
+// ---------------------------------------------------------------------------
+// Certificate parsing
+// ---------------------------------------------------------------------------
+
+export interface ParsedCert {
+  der: Uint8Array;
+  /** TBSCertificate TLV including header — the exact signed bytes. */
+  tbsFull: Uint8Array;
+  serial: Uint8Array;
+  issuerRaw: Uint8Array;
+  subjectRaw: Uint8Array;
+  issuerOrg: string | null;
+  issuerCN: string | null;
+  subjectOrg: string | null;
+  subjectCN: string | null;
+  notBeforeMs: number;
+  notAfterMs: number;
+  /** Signature algorithm OID hex (ecdsaSha256/384/512, rsaSha256/384/512). */
+  sigAlgOid: string;
+  /** Signature value (BIT STRING payload, unused-bits byte stripped). */
+  signature: Uint8Array;
+  keyAlg:
+    | { kind: 'ec'; curve: 'p256' | 'p384'; point: Uint8Array }
+    | { kind: 'rsa'; n: bigint; e: bigint };
+  /** Extensions: OID hex → extnValue content (the OCTET STRING's payload). */
+  extensions: Map<string, { critical: boolean; value: Uint8Array }>;
+}
+
+function readName(b: Uint8Array): { org: string | null; cn: string | null } {
+  let org: string | null = null;
+  let cn: string | null = null;
+  let o = 0;
+  while (o < b.length) {
+    const set = readTlv(b, o);
+    o = set.next;
+    const seq = readTlv(set.content, 0);
+    const oidTlv = readTlv(seq.content, 0);
+    const valTlv = readTlv(seq.content, oidTlv.next);
+    const hex = bytesToHex(oidTlv.content);
+    const text = bytesToUtf8(valTlv.content);
+    if (hex === OID.org) org = text;
+    if (hex === OID.cn) cn = text;
+  }
+  return { org, cn };
+}
+
+function readTimeMs(b: Uint8Array): number {
+  const tlv = readTlv(b, 0);
+  const s = bytesToUtf8(tlv.content);
+  if (tlv.tag === 0x18) {
+    // GeneralizedTime YYYYMMDDHHMMSSZ
+    return Date.parse(`${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}T${s.slice(8, 10)}:${s.slice(10, 12)}:${s.slice(12, 14)}Z`);
+  }
+  // UTCTime YYMMDDHHMMSSZ
+  const yy = parseInt(s.slice(0, 2), 10);
+  const yyyy = yy < 50 ? 2000 + yy : 1900 + yy;
+  return Date.parse(`${yyyy}-${s.slice(2, 4)}-${s.slice(4, 6)}T${s.slice(6, 8)}:${s.slice(8, 10)}:${s.slice(10, 12)}Z`);
+}
+
+function parseSpki(spki: Uint8Array): ParsedCert['keyAlg'] {
+  const algId = readTlv(spki, 0);
+  const algOid = readTlv(algId.content, 0);
+  const algHex = bytesToHex(algOid.content);
+  const bitString = readTlv(spki, algId.next);
+  if (bitString.tag !== 0x03) throw new Error('DER: SPKI missing BIT STRING');
+  const keyBytes = bitString.content.subarray(1); // strip unused-bits byte
+
+  if (algHex === OID.ecPublicKey) {
+    const curveTlv = readTlv(algId.content, algOid.next);
+    const curveHex = bytesToHex(curveTlv.content);
+    const curve = curveHex === OID.p256 ? 'p256' : curveHex === OID.p384 ? 'p384' : null;
+    if (!curve) throw new Error(`unsupported EC curve OID ${curveHex}`);
+    const expectedLen = curve === 'p256' ? 65 : 97;
+    if (keyBytes.length !== expectedLen || keyBytes[0] !== 0x04) {
+      throw new Error('EC key is not an uncompressed point');
+    }
+    return { kind: 'ec', curve, point: keyBytes };
+  }
+  if (algHex === OID.rsaEncryption) {
+    const seq = readTlv(keyBytes, 0);
+    const nTlv = readTlv(seq.content, 0);
+    const eTlv = readTlv(seq.content, nTlv.next);
+    const toBigInt = (v: Uint8Array) => BigInt('0x' + (bytesToHex(v) || '0'));
+    const n = toBigInt(nTlv.content);
+    const e = toBigInt(eTlv.content);
+    // e=1 would make verification a no-op and small moduli are factorable.
+    if (e < 3n || (e & 1n) === 0n) throw new Error(`RSA public exponent ${e} is not acceptable`);
+    if (n < (1n << 2047n)) throw new Error('RSA modulus is smaller than 2048 bits');
+    return { kind: 'rsa', n, e };
+  }
+  throw new Error(`unsupported public key algorithm OID ${algHex}`);
+}
+
+/** Parses one DER certificate. Throws on anything malformed or unsupported. */
+export function parseCertificate(der: Uint8Array): ParsedCert {
+  const cert = readTlv(der, 0);
+  if (cert.tag !== 0x30) throw new Error('not a certificate');
+  const tbs = readTlv(cert.content, 0);
+  if (tbs.tag !== 0x30) throw new Error('bad TBSCertificate');
+  const outerSigAlg = readTlv(cert.content, tbs.next);
+  const outerSig = readTlv(cert.content, outerSigAlg.next);
+  if (outerSig.tag !== 0x03) throw new Error('bad signature BIT STRING');
+  const sigAlgOid = bytesToHex(readTlv(outerSigAlg.content, 0).content);
+  // SHA-512 is required in practice: FreeTSA signs its TSA certificates
+  // with sha512WithRSAEncryption.
+  const SUPPORTED: string[] = [
+    OID.ecdsaSha256, OID.ecdsaSha384, OID.ecdsaSha512,
+    OID.rsaSha256, OID.rsaSha384, OID.rsaSha512,
+  ];
+  if (!SUPPORTED.includes(sigAlgOid)) {
+    throw new Error(`unsupported signature algorithm OID ${sigAlgOid}`);
+  }
+
+  // TBSCertificate fields, in order.
+  let o = 0;
+  let tlv = readTlv(tbs.content, o);
+  if (tlv.tag === 0xa0) { o = tlv.next; tlv = readTlv(tbs.content, o); } // [0] version
+  const serial = tlv.content; o = tlv.next;
+  o = readTlv(tbs.content, o).next; // signature algid (redundant with outer)
+  const issuerTlv = readTlv(tbs.content, o); o = issuerTlv.next;
+  const validity = readTlv(tbs.content, o); o = validity.next;
+  const notBeforeMs = readTimeMs(validity.content);
+  const notAfterMs = readTimeMs(validity.content.subarray(readTlv(validity.content, 0).next));
+  // Date.parse yields NaN for malformed dates, and every comparison against
+  // NaN is false — an unparseable validity window would pass every check.
+  // Refuse the certificate instead.
+  if (!Number.isFinite(notBeforeMs) || !Number.isFinite(notAfterMs)) {
+    throw new Error('DER: unparseable validity dates');
+  }
+  const subjectTlv = readTlv(tbs.content, o); o = subjectTlv.next;
+  const spkiTlv = readTlv(tbs.content, o); o = spkiTlv.next;
+
+  // Optional [1] issuerUniqueID, [2] subjectUniqueID, then [3] extensions.
+  const extensions = new Map<string, { critical: boolean; value: Uint8Array }>();
+  while (o < tbs.content.length) {
+    const opt = readTlv(tbs.content, o);
+    o = opt.next;
+    if (opt.tag === 0xa3) {
+      const seq = readTlv(opt.content, 0);
+      let eo = 0;
+      while (eo < seq.content.length) {
+        const ext = readTlv(seq.content, eo);
+        eo = ext.next;
+        const oidTlv = readTlv(ext.content, 0);
+        let valOff = oidTlv.next;
+        let critical = false;
+        const maybeBool = readTlv(ext.content, valOff);
+        if (maybeBool.tag === 0x01) {
+          critical = maybeBool.content[0] !== 0;
+          valOff = maybeBool.next;
+        }
+        const valTlv = readTlv(ext.content, valOff);
+        if (valTlv.tag !== 0x04) throw new Error('extnValue is not an OCTET STRING');
+        extensions.set(bytesToHex(oidTlv.content), { critical, value: valTlv.content });
+      }
+    }
+  }
+
+  const issuer = readName(issuerTlv.content);
+  const subject = readName(subjectTlv.content);
+  return {
+    der,
+    tbsFull: tbs.full,
+    serial,
+    issuerRaw: issuerTlv.full,
+    subjectRaw: subjectTlv.full,
+    issuerOrg: issuer.org,
+    issuerCN: issuer.cn,
+    subjectOrg: subject.org,
+    subjectCN: subject.cn,
+    notBeforeMs,
+    notAfterMs,
+    sigAlgOid,
+    signature: outerSig.content.subarray(1),
+    keyAlg: parseSpki(spkiTlv.content),
+    extensions,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Signature verification (ECDSA P-256/P-384, RSA PKCS#1 v1.5)
+// ---------------------------------------------------------------------------
+
+function modpow(base: bigint, exp: bigint, mod: bigint): bigint {
+  let result = 1n;
+  let b = base % mod;
+  let e = exp;
+  while (e > 0n) {
+    if (e & 1n) result = (result * b) % mod;
+    b = (b * b) % mod;
+    e >>= 1n;
+  }
+  return result;
+}
+
+/** EMSA-PKCS1-v1_5 DigestInfo prefixes. */
+const DIGEST_INFO_PREFIX: Record<string, string> = {
+  [OID.rsaSha256]: '3031300d060960864801650304020105000420',
+  [OID.rsaSha384]: '3041300d060960864801650304020205000430',
+  [OID.rsaSha512]: '3051300d060960864801650304020305000440',
+};
+
+const RSA_DIGEST: Record<string, (m: Uint8Array) => Uint8Array> = {
+  [OID.rsaSha256]: sha256,
+  [OID.rsaSha384]: sha384,
+  [OID.rsaSha512]: sha512,
+};
+
+/**
+ * Verifies a signature over `message` with the given key. Used for both
+ * certificate chains (message = child TBS) and CMS signerInfos.
+ * Low-S is NOT enforced — CAs are not bound by our canonicalization.
+ */
+export function verifySignatureWithKey(
+  key: ParsedCert['keyAlg'],
+  sigAlgOid: string,
+  message: Uint8Array,
+  signature: Uint8Array,
+): boolean {
+  try {
+    if (key.kind === 'ec') {
+      const curve = key.curve === 'p256' ? p256 : p384;
+      if (sigAlgOid === OID.ecdsaSha256) {
+        return curve.verify(signature, sha256(message), key.point, { format: 'der', lowS: false });
+      }
+      if (sigAlgOid === OID.ecdsaSha384) {
+        return curve.verify(signature, sha384(message), key.point, { format: 'der', lowS: false });
+      }
+      if (sigAlgOid === OID.ecdsaSha512) {
+        return curve.verify(signature, sha512(message), key.point, { format: 'der', lowS: false });
+      }
+      return false;
+    }
+    // RSA PKCS#1 v1.5: EM = 0x00 01 FF…FF 00 DigestInfo‖H
+    const prefix = DIGEST_INFO_PREFIX[sigAlgOid];
+    const hashFn = RSA_DIGEST[sigAlgOid];
+    if (!prefix || !hashFn) return false;
+    const digest = hashFn(message);
+    const k = Math.ceil(key.n.toString(2).length / 8); // modulus length in bytes
+    if (signature.length !== k) return false;
+    const s = BigInt('0x' + bytesToHex(signature));
+    if (s >= key.n) return false;
+    const m = modpow(s, key.e, key.n);
+    const emHex = m.toString(16).padStart(k * 2, '0');
+    const tHex = prefix + bytesToHex(digest);
+    const psLen = k - tHex.length / 2 - 3;
+    if (psLen < 8) return false;
+    const expected = '0001' + 'ff'.repeat(psLen) + '00' + tHex;
+    return emHex === expected;
+  } catch {
+    return false;
+  }
+}
+
+/** Verifies that `parent` signed `child`. */
+export function verifyCertSignature(child: ParsedCert, parent: ParsedCert): boolean {
+  return verifySignatureWithKey(parent.keyAlg, child.sigAlgOid, child.tbsFull, child.signature);
+}
+
+/** id-kp-timeStamping (1.3.6.1.5.5.7.3.8) — RFC 3161 §2.3 requires this EKU on TSA certs. */
+export const OID_KP_TIME_STAMPING = '2b06010505070308';
+
+/**
+ * True when the cert's Extended Key Usage includes the given KeyPurposeId
+ * (hex OID content). Missing or malformed EKU → false: purpose checks fail
+ * closed, never open.
+ */
+export function hasKeyPurpose(cert: ParsedCert, purposeOidHex: string): boolean {
+  const ext = cert.extensions.get(OID.extKeyUsage);
+  if (!ext) return false;
+  try {
+    const seq = readTlv(ext.value, 0);
+    if (seq.tag !== 0x30) return false;
+    let o = 0;
+    while (o < seq.content.length) {
+      const oidTlv = readTlv(seq.content, o);
+      o = oidTlv.next;
+      if (bytesToHex(oidTlv.content) === purposeOidHex) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Parses basicConstraints: { cA BOOLEAN DEFAULT FALSE, pathLenConstraint
+ * INTEGER OPTIONAL }. Returns null when the extension is absent or
+ * malformed (malformed fails closed — callers treat null as "not a CA").
+ */
+export function basicConstraints(cert: ParsedCert): { ca: boolean; pathLen: number | null } | null {
+  const ext = cert.extensions.get(OID.basicConstraints);
+  if (!ext) return null;
+  try {
+    const seq = readTlv(ext.value, 0);
+    if (seq.content.length === 0) return { ca: false, pathLen: null };
+    const first = readTlv(seq.content, 0);
+    let ca = false;
+    let o = 0;
+    if (first.tag === 0x01) { ca = first.content[0] === 0xff; o = first.next; }
+    let pathLen: number | null = null;
+    if (o < seq.content.length) {
+      const pl = readTlv(seq.content, o);
+      if (pl.tag === 0x02) {
+        pathLen = 0;
+        for (const byte of pl.content) pathLen = pathLen * 256 + byte;
+      }
+    }
+    return { ca, pathLen };
+  } catch {
+    return null;
+  }
+}
+
+/** True when basicConstraints marks this cert a CA (critical or not). */
+export function isCa(cert: ParsedCert): boolean {
+  return basicConstraints(cert)?.ca ?? false;
+}
+
+/**
+ * The keyUsage bits of a cert (first content byte of the BIT STRING —
+ * every bit this verifier reasons about lives there), or null when the
+ * extension is absent/malformed. Absent keyUsage means UNRESTRICTED per
+ * RFC 5280 — callers distinguish null from 0.
+ */
+export function keyUsageBits(cert: ParsedCert): number | null {
+  const ext = cert.extensions.get(OID.keyUsage);
+  if (!ext) return null;
+  try {
+    const bs = readTlv(ext.value, 0);
+    if (bs.tag !== 0x03 || bs.content.length < 2) return null;
+    return bs.content[1];
+  } catch {
+    return null;
+  }
+}
+
+/** keyCertSign — KeyUsage bit 5 (RFC 5280 §4.2.1.3). */
+const KEY_CERT_SIGN = 0x04;
+
+/**
+ * Critical extensions this verifier is allowed to see.
+ *
+ * basicConstraints and keyUsage are enforced during chain verification.
+ * extKeyUsage is accepted but NOT enforced here — callers that need a
+ * purpose check call hasKeyPurpose directly (RFC 3161 timestamping does).
+ *
+ * Any other critical extension fails the chain: the issuer marked it
+ * must-understand, and a verifier that cannot honor it must not guess
+ * (RFC 5280 section 4.2).
+ */
+const RECOGNIZED_CRITICAL_EXTENSIONS: Set<string> = new Set([
+  OID.basicConstraints,
+  OID.keyUsage,
+  OID.extKeyUsage,
+]);
+
+/** Renders an OID's content bytes in dotted form for reason strings. */
+function oidHexToDotted(hex: string): string {
+  try {
+    const bytes = hex.match(/../g)!.map((h) => parseInt(h, 16));
+    const first = Math.min(bytes[0] / 40 | 0, 2);
+    const parts: number[] = [first, first === 2 ? bytes[0] - 80 : bytes[0] % 40];
+    let acc = 0;
+    for (const b of bytes.slice(1)) {
+      acc = acc * 128 + (b & 0x7f);
+      if (!(b & 0x80)) { parts.push(acc); acc = 0; }
+    }
+    return parts.join('.');
+  } catch {
+    return hex;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Chain verification
+// ---------------------------------------------------------------------------
+
+export interface ChainResult {
+  /** Every link cryptographically sound (signatures, name chaining, CA flags, validity). */
+  linksValid: boolean;
+  /** Terminated at one of the supplied pinned roots. */
+  anchored: boolean;
+  /** Subject of the topmost cert in the presented chain (display). */
+  topSubject: string | null;
+  /** Failure reason in plain English, null when linksValid. */
+  reason: string | null;
+  linkCount: number;
+}
+
+function displayName(c: { subjectOrg: string | null; subjectCN: string | null }): string | null {
+  return c.subjectOrg ?? c.subjectCN;
+}
+
+/**
+ * Orders a certificate SET leaf→top by issuer/subject matching.
+ * The leaf is the unique cert whose subject no other cert in the set names as
+ * its issuer (ties broken toward the non-CA). The walk stops at a self-signed
+ * cert or when the issuer simply isn't in the set (partial chain — allowed;
+ * anchoring is the caller's question). Returns null when the set is ambiguous
+ * — fail closed, never guess.
+ */
+function orderByIssuer(certs: ParsedCert[]): ParsedCert[] | null {
+  const leaves = certs.filter((c) => !certs.some((p) => p !== c && equalBytes(p.issuerRaw, c.subjectRaw)));
+  let leaf: ParsedCert | undefined;
+  if (leaves.length === 1) leaf = leaves[0];
+  else {
+    const nonCa = leaves.filter((c) => !isCa(c));
+    if (nonCa.length === 1) leaf = nonCa[0];
+  }
+  if (!leaf) return null;
+
+  const ordered: ParsedCert[] = [leaf];
+  const used = new Set<ParsedCert>([leaf]);
+  for (;;) {
+    const cur = ordered[ordered.length - 1];
+    if (equalBytes(cur.issuerRaw, cur.subjectRaw)) break; // self-signed top
+    const nexts = certs.filter((c) => !used.has(c) && equalBytes(c.subjectRaw, cur.issuerRaw));
+    if (nexts.length > 1) return null; // ambiguous — refuse to guess
+    if (nexts.length === 0) break;     // partial chain ends here
+    ordered.push(nexts[0]);
+    used.add(nexts[0]);
+    if (used.size === certs.length) break;
+  }
+  // Any cert the walk never reached is unrelated baggage — a well-formed
+  // presented chain has none, and extras would silently skip validity checks.
+  return used.size === certs.length ? ordered : null;
+}
+
+/**
+ * Verifies a presented chain: chain[0] is the leaf, each cert signed by the
+ * next. When `pinnedRoots` is non-empty, the last presented cert must be
+ * signed by (or be) one of them. `atMs` sets the validity reference time —
+ * pass the VERIFIED signing time, never the verifier's clock, when one
+ * exists; pass null to skip validity (and report it as not performed).
+ */
+export function verifyChain(
+  chainDer: Uint8Array[],
+  pinnedRoots: Uint8Array[] = [],
+  atMs: number | null = null,
+): ChainResult {
+  let certs: ParsedCert[];
+  try {
+    certs = chainDer.map(parseCertificate);
+  } catch (e) {
+    return { linksValid: false, anchored: false, topSubject: null, reason: `certificate failed to parse: ${(e as Error).message}`, linkCount: 0 };
+  }
+  if (certs.length === 0) return { linksValid: false, anchored: false, topSubject: null, reason: 'empty chain', linkCount: 0 };
+
+  // Senders may include the same certificate twice (a TSA sending its cert
+  // as both signer and chain). Dedupe so a duplicate is not mistaken for a
+  // two-link chain that would require a CA flag on the end-entity cert.
+  certs = certs.filter((c, i) => certs.findIndex((p) => equalBytes(p.der, c.der)) === i);
+
+  // CMS `certificates` is a SET OF and arrives unordered; rebuild leaf→top
+  // by issuer/subject lookup rather than trusting array order.
+  {
+    const ordered = orderByIssuer(certs);
+    if (!ordered) {
+      return { linksValid: false, anchored: false, topSubject: null, reason: 'certificate set could not be ordered by issuer/subject', linkCount: certs.length };
+    }
+    certs = ordered;
+  }
+
+  for (let i = 0; i < certs.length; i++) {
+    const c = certs[i];
+    const fail = (reason: string): ChainResult => ({ linksValid: false, anchored: false, topSubject: displayName(certs[certs.length - 1]), reason, linkCount: certs.length });
+    if (atMs !== null && (atMs < c.notBeforeMs || atMs > c.notAfterMs)) {
+      return fail(`${displayName(c) ?? 'a certificate'} was not valid at signing time`);
+    }
+    // The leaf may additionally carry Apple's App Attest nonce extension,
+    // which the attestation verifier consumes.
+    for (const [oidHex, ext] of c.extensions) {
+      if (!ext.critical) continue;
+      if (RECOGNIZED_CRITICAL_EXTENSIONS.has(oidHex)) continue;
+      if (i === 0 && oidHex === OID_APPLE_ATTEST_NONCE) continue;
+      return fail(`${displayName(c) ?? 'a certificate'} carries a critical extension (${oidHexToDotted(oidHex)}) this verifier does not recognize; refusing to guess its meaning`);
+    }
+    // RFC 5280 section 4.2.1.3. A single-certificate chain is exempt: a
+    // presented pinned root legitimately carries keyCertSign.
+    const ku = keyUsageBits(c);
+    if (i === 0 && certs.length > 1 && ku !== null && (ku & KEY_CERT_SIGN) !== 0) {
+      return fail(`the leaf certificate's key usage permits signing other certificates; a leaf must not`);
+    }
+    const parent: ParsedCert | undefined = certs[i + 1];
+    if (parent) {
+      if (!equalBytes(c.issuerRaw, parent.subjectRaw)) {
+        return fail('issuer/subject names do not chain');
+      }
+      if (!isCa(parent)) {
+        return fail(`${displayName(parent) ?? 'the issuing certificate'} is not marked as a CA`);
+      }
+      const parentKu = keyUsageBits(parent);
+      if (parentKu !== null && (parentKu & KEY_CERT_SIGN) === 0) {
+        return fail(`${displayName(parent) ?? 'the issuing certificate'} is a CA but its key usage does not permit certificate signing`);
+      }
+      // A CA at depth i has i-1 subordinate CAs beneath it in this chain.
+      const pl = basicConstraints(parent)?.pathLen ?? null;
+      if (pl !== null && i > pl) {
+        return fail(`${displayName(parent) ?? 'a CA certificate'} allows at most ${pl} subordinate CA certificate(s); this chain presents ${i}`);
+      }
+      if (!verifyCertSignature(c, parent)) {
+        return fail(`signature on ${displayName(c) ?? 'certificate'} does not verify`);
+      }
+    }
+  }
+
+  const last = certs[certs.length - 1];
+  let anchored = pinnedRoots.length === 0 ? false : equalBytes(last.issuerRaw, last.subjectRaw) && pinnedRoots.some((r) => equalBytes(r, last.der));
+  if (!anchored) {
+    for (const rootDer of pinnedRoots) {
+      try {
+        const root = parseCertificate(rootDer);
+        if (equalBytes(last.issuerRaw, root.subjectRaw) && verifyCertSignature(last, root)) {
+          anchored = true;
+          break;
+        }
+      } catch { /* try next root */ }
+    }
+  }
+  if (pinnedRoots.length > 0 && !anchored) {
+    return { linksValid: true, anchored: false, topSubject: displayName(last), reason: 'chain does not reach a trusted root', linkCount: certs.length };
+  }
+  return { linksValid: true, anchored, topSubject: displayName(last), reason: null, linkCount: certs.length };
+}

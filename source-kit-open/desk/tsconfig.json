@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@exhibit/*": ["../src/*"],
+      "@exhibit-archive/*": ["../archive/*"],
+      "expo-secure-store": ["./src/platform/expo-secure-store.ts"],
+      "@noble/post-quantum/*": ["./node_modules/@noble/post-quantum/*"],
+      "@noble/hashes/*": ["./node_modules/@noble/hashes/*"],
+      "@noble/curves/*": ["./node_modules/@noble/curves/*"],
+      "@noble/ciphers/*": ["./node_modules/@noble/ciphers/*"],
+      "cbor-x": ["./node_modules/cbor-x"]
+    }
+  },
+  "include": ["src", "cli", "stereo"]
+}

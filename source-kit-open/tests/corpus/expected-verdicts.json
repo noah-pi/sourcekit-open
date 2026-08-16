@@ -1,0 +1,74 @@
+{
+  "format": "verify-corpus/1",
+  "builtAt": "2026-08-02T23:59:13.430Z",
+  "signerFingerprint": "ec3797af1fcd7842437769b9453794994f220758431655c3336aa6f24b23446a",
+  "semantics": "verdict = VerificationReport.verdict from verifyPhoto; assetHashMatches/signatureValid = report.checks fields where applicable",
+  "files": [
+    {
+      "file": "signed-valid.jpg",
+      "category": "signed",
+      "expect": {
+        "verdict": "INTACT",
+        "assetHashMatches": true,
+        "signatureValid": true
+      },
+      "note": "A genuine capture. Everything checks."
+    },
+    {
+      "file": "tampered-pixel.jpg",
+      "category": "tampered",
+      "expect": {
+        "verdict": "CONTENT_MODIFIED",
+        "assetHashMatches": false,
+        "signatureValid": true
+      },
+      "note": "One byte flipped outside the manifest. Signature valid, media changed."
+    },
+    {
+      "file": "stripped.jpg",
+      "category": "stripped",
+      "expect": {
+        "verdict": "NO_ATTESTATION"
+      },
+      "note": "Manifest removed. Absence of credentials proves nothing either way — and must say so."
+    },
+    {
+      "file": "hostile-claim.jpg",
+      "category": "hostile",
+      "expect": {
+        "verdict": "SIGNATURE_INVALID"
+      },
+      "note": "Manifest content altered after signing. The signature must fail, never downgrade quietly."
+    },
+    {
+      "file": "recaptured-screen.jpg",
+      "category": "recaptured",
+      "expect": {
+        "verdict": "INTACT",
+        "assetHashMatches": true,
+        "signatureValid": true
+      },
+      "note": "Simulates a photo of a screen (the analog hole). Verifies INTACT — a signature proves custody, not what the camera pointed at. This expectation exists so nobody ever \"fixes\" it."
+    },
+    {
+      "file": "signed-valid.png",
+      "category": "signed",
+      "expect": {
+        "verdict": "INTACT",
+        "assetHashMatches": true,
+        "signatureValid": true
+      },
+      "note": "PNG path — caBX chunk, same hard binding."
+    },
+    {
+      "file": "tampered-pixel.png",
+      "category": "tampered",
+      "expect": {
+        "verdict": "CONTENT_MODIFIED",
+        "assetHashMatches": false,
+        "signatureValid": true
+      },
+      "note": "One byte flipped in the pixel region of a signed PNG."
+    }
+  ]
+}

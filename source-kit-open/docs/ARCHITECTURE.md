@@ -1,0 +1,109 @@
+# Architecture — Source Kit provenance core
+
+One page from capture to verification.
+
+## Capture & seal
+
+```
+camera/mic ──► media file (JPEG / MP4 / MOV / M4A)
+                   │
+                   ▼
+            seal queue (background, restart-safe, encrypted at rest)
+                   │
+                   ▼
+        buildRecord (manifest.ts)        ← claims: time, location, sensors,
+                   │                       byline, device — all labeled claims
+                   ▼
+        signRecord (lib/sign.ts)         ← ES256 over canonical-JSON digest
+                   │
+                   ▼
+   C2PA manifest embed (provenance/)
+     ├─ JPEG: APP11/JUMBF segment after SOI      (jpegApp11.ts)
+     ├─ PNG:  caBX chunk before IEND             (png.ts)
+     └─ BMFF: C2PA uuid box after ftyp           (bmff.ts)
+                   │
+                   ▼
+        encrypted vault (vault/vaultFs.ts)  ← AES-256-GCM, keychain key
+```
+
+Vault layout: `index.json` (metadata only), `{id}.bin` (sealed media),
+`{id}.att.json` (sealed attestation record — it carries location/byline),
+`{id}.thumb.bin` (sealed 512-px grid thumbnail, so the library grid decrypts
+~25 KB per cell instead of the full frame). Plaintext exists only in a cache
+folder that is shredded on lock and on background.
+
+Hard binding: the manifest carries a `c2pa.hash.data` (JPEG/PNG) or
+`c2pa.hash.bmff.v2` (MP4 family) assertion covering every byte **except** the
+manifest container itself, so the signature and the pixels can't drift apart.
+COSE_Sign1 signs the claim; the claim pins every assertion by hash;
+optionally an RFC 3161 TSA countersigns.
+
+## Verification (fully offline, two axes since 0.8.0)
+
+```
+file ──► extract manifest (format-specific) ──► parse claim + assertions
+     ──► verify COSE signature against embedded certificate chain
+     ──► recompute asset hash over bytes-minus-manifest
+     ──► verify inner Source Kit record signature (defense in depth)
+     ──► integrity verdict: INTACT / CONTENT_MODIFIED / SIGNATURE_INVALID / NO_ATTESTATION
+
+credibility axes (independent of the integrity verdict):
+     ──► X.509 chain verifier (lib/x509.ts) — real link-by-link signature
+         verification (ECDSA P-256 & P-384, RSA), name chaining, CA flags,
+         validity evaluated at the VERIFIED signing time, never the
+         verifier's clock; anchored only to compiled-in pinned roots
+     ──► RFC 3161 verifier (lib/rfc3161.ts) — messageImprint vs. the exact
+         timestamp message, CMS signature over correctly re-tagged
+         signedAttrs (RFC 5652 §5.4), TSA chain links, TSA cert valid at
+         genTime
+     ──► App Attest verifier (provenance/verifyAppAttest.ts) — full chain to
+         the PINNED Apple App Attestation root (lib/appleAttestRoot.ts),
+         rpIdHash = this app, nonce extension = the emulated-key-attestation
+         binding for exactly the manifest's signing key
+     ──► every check lands in checksPerformed / checksNotPerformed, shown
+         verbatim in the UI
+```
+
+The two axes are deliberate: a file can be cryptographically INTACT while its
+signer is unknown, its attestation forged, or its timestamps absent — the UI
+shows integrity and credibility independently, and anything present-but-failed
+is a red warning, never silently ignored. Signer *identity* resolves only
+against anchors outside the file: this device's key, or an org credential
+chained to a real CA. Nothing found inside a file can ever upgrade identity
+to "known". (0.8.1 removed the manual known-signers list — a confirm-by-hand
+trust ritual is itself an attack surface; key-continuity trust is the roadmap
+replacement. See `docs/SECURITY.md`.)
+
+The manifest parser follows the C2PA update-chain rule: the **last** manifest
+in the store is the active one, and the verification report says so when a
+store carries more than one. All DER/TLV walkers enforce strict length
+decoding (multiply-accumulate, no 32-bit shifts) and a non-advancing-walker
+invariant — hostile length fields throw instead of hanging (0.8.1 audit).
+
+Trust anchors are compiled-in or user-pinned only. Anything fetched at runtime
+is an input, not an anchor. No network is required; nothing about verification
+trusts us.
+
+## De-identify & re-sign (share flow)
+
+Sharing flags embedded identifying details and offers a freshly signed copy:
+strip manifest (+ EXIF for JPEG), redact identity/location/sensors/device
+model, drop the audio transcript, keep the original capture time, re-sign the
+identical media bytes, mark the record `deidentified` with the removed field
+list. The copy is independently verifiable — integrity without identity.
+
+## Server (optional, stateless-ish)
+
+`server/server.mjs` — zero-framework node:http relay:
+- `GET /challenge` → single-use 5-min App Attest challenge (rate-limited)
+- `POST /attest` → verifies Apple's attestation chain against the Apple root
+  **embedded in the server source** (never fetched at
+  runtime) + app id, re-derives the emulated-key-attestation binding
+  (`clientDataHash = SHA256(challenge ‖ signingPublicKey)`) by walking the
+  DER to the nonce extension Apple signed into the leaf certificate, and
+  registers the device by its signing-key fingerprint (rate-limited, 2 MB cap)
+No database; device list is a small JSON file on a volume. There is **no
+device-listing endpoint** (a public roster of real journalist hardware is an
+opsec liability, not a feature). Since 0.9.5 the relay does exactly this one
+job — the Google Vision reverse-image route was removed with its app client,
+so no media ever transits the server.

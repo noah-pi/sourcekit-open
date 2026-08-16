@@ -1,0 +1,97 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-suites:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install ffmpeg (media fixtures)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install c2patool 0.14.0 (independent verifier)
+        run: |
+          curl -L -o c2patool.tar.gz \
+            https://github.com/contentauth/c2pa-rs/releases/download/c2patool-v0.14.0/c2patool-v0.14.0-x86_64-unknown-linux-gnu.tar.gz
+          tar xzf c2patool.tar.gz
+          chmod +x c2patool
+          ./c2patool --version
+          echo "C2PATOOL=$PWD/c2patool" >> "$GITHUB_ENV"
+
+      - name: Stage the validation lab
+        run: node tests/stage.mjs
+
+      - name: Install staged dependencies (exact versions)
+        run: npm install --no-audit --no-fund
+        working-directory: tests/.staged
+
+      - name: Verification + forgery-regression suite
+        run: ./node_modules/.bin/tsx test-verification.mts
+        working-directory: tests/.staged
+
+      - name: Builder/verifier round trip
+        run: ./node_modules/.bin/tsx test-roundtrip.mts
+        working-directory: tests/.staged
+
+      - name: Reference corpus + two-verifier conformance
+        run: ./node_modules/.bin/tsx test-corpus.mts
+        working-directory: tests/.staged
+
+      - name: Offline chain
+        run: ./node_modules/.bin/tsx test-offline.mts
+        working-directory: tests/.staged
+
+      - name: Independent-verifier suite (c2patool)
+        run: ./node_modules/.bin/tsx test-070-final.mts
+        working-directory: tests/.staged
+
+      - name: BMFF de-identification suite
+        run: ./node_modules/.bin/tsx test-bmff-deid.mts
+        working-directory: tests/.staged
+
+      - name: Seal-to-desk + Shamir custody suite
+        run: ./node_modules/.bin/tsx test-seal.mts
+        working-directory: tests/.staged
+
+      - name: Detached-manifest custody suite
+        run: ./node_modules/.bin/tsx test-detached.mts
+        working-directory: tests/.staged
+
+  desk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install (locked) and build
+        run: npm ci --no-audit --no-fund && npm run build
+        working-directory: desk
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Dependency budget (allow-list + caps + lockfiles)
+        run: node scripts/check-dependency-budget.mjs
+
+      - name: npm audit — desk
+        run: npm audit --audit-level=high
+        working-directory: desk
+
+      - name: npm audit — server
+        run: npm audit --audit-level=high
+        working-directory: server

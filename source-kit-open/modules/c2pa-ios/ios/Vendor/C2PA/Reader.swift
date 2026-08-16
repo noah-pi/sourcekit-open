@@ -1,0 +1,203 @@
+// This file is licensed to you under the Apache License, Version 2.0
+// (http://www.apache.org/licenses/LICENSE-2.0) or the MIT license
+// (http://opensource.org/licenses/MIT), at your option.
+//
+// Unless required by applicable law or agreed to in writing, this software is
+// distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR REPRESENTATIONS OF
+// ANY KIND, either express or implied. See the LICENSE-MIT and LICENSE-APACHE
+// files for the specific language governing permissions and limitations under
+// each license.
+//
+//  Reader.swift
+//
+
+@_implementationOnly import C2PAC
+import Foundation
+
+/// A reader for extracting C2PA manifest data and resources from media files.
+///
+/// `Reader` provides low-level access to C2PA manifests and associated resources
+/// embedded in media files. Use this class when you need fine-grained control
+/// over reading operations or when working with stream-based I/O.
+///
+/// For simple file-based reading, consider using ``C2PA/readFile(at:dataDir:)`` instead.
+///
+/// ## Topics
+///
+/// ### Creating a Reader
+/// - ``init(format:stream:)``
+/// - ``init(format:stream:manifest:)``
+///
+/// ### Reading Manifest Data
+/// - ``json()``
+/// - ``detailedJSON()``
+/// - ``remote()``
+/// - ``isEmbedded()``
+///
+/// ### Extracting Resources
+/// - ``resource(uri:to:)``
+///
+/// ## Example
+///
+/// ```swift
+/// let stream = try Stream(readFrom: imageURL)
+/// let reader = try Reader(format: "image/jpeg", stream: stream)
+/// let manifestJSON = try reader.json()
+/// print("Manifest: \(manifestJSON)")
+/// ```
+///
+/// - SeeAlso: ``Stream``, ``C2PA/readFile(at:dataDir:)``
+public final class Reader {
+    private let ptr: UnsafeMutablePointer<C2paReader>
+
+    /// Creates a reader for a media file stream.
+    ///
+    /// This initializer reads the manifest embedded in the media file itself.
+    ///
+    /// - Parameters:
+    ///   - format: The MIME type of the media file (e.g., "image/jpeg", "video/mp4").
+    ///   - stream: A ``Stream`` containing the media file data.
+    ///
+    /// - Throws: ``C2PAError`` if the stream cannot be read or contains no valid manifest.
+    public init(format: String, stream: Stream) throws {
+        ptr = try guardNotNull(c2pa_reader_from_stream(format, stream.rawPtr))
+    }
+
+    /// Creates a reader from separate manifest data and media stream.
+    ///
+    /// This initializer is used when the manifest is stored separately from the
+    /// media file (e.g., when using remote manifests with ``Builder/setNoEmbed()``).
+    ///
+    /// - Parameters:
+    ///   - format: The MIME type of the media file.
+    ///   - stream: A ``Stream`` containing the media file data.
+    ///   - manifest: The raw manifest bytes.
+    ///
+    /// - Throws: ``C2PAError`` if the manifest or stream cannot be processed.
+    public init(format: String, stream: Stream, manifest: Data) throws {
+        ptr = try manifest.withUnsafeBytes { buf in
+            try guardNotNull(
+                c2pa_reader_from_manifest_data_and_stream(
+                    format,
+                    stream.rawPtr,
+                    buf.bindMemory(to: UInt8.self).baseAddress!,
+                    UInt(manifest.count)
+                )
+            )
+        }
+    }
+
+    deinit { c2pa_reader_free(ptr) }
+
+    /// Returns the manifest data as a JSON string.
+    ///
+    /// This method extracts and validates the complete C2PA manifest,
+    /// returning it as formatted JSON.
+    ///
+    /// - Returns: A JSON string containing the manifest data.
+    ///
+    /// - Throws: ``C2PAError`` if the manifest cannot be read or is invalid.
+    ///
+    /// - SeeAlso: ``detailedJSON()``
+    public func json() throws -> String {
+        try stringFromC(c2pa_reader_json(ptr))
+    }
+
+    /// Returns detailed manifest data as a JSON string.
+    ///
+    /// This method returns a more comprehensive JSON representation of the manifest
+    /// that includes additional internal fields not present in the standard ``json()``
+    /// output. Use this when you need access to all manifest details for debugging
+    /// or advanced processing.
+    ///
+    /// - Returns: A JSON string containing the detailed manifest data.
+    ///
+    /// - Throws: ``C2PAError`` if the manifest cannot be read or is invalid.
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let stream = try Stream(readFrom: imageURL)
+    /// let reader = try Reader(format: "image/jpeg", stream: stream)
+    ///
+    /// // Standard JSON for typical use
+    /// let standardJSON = try reader.json()
+    ///
+    /// // Detailed JSON for debugging or advanced analysis
+    /// let detailedJSON = try reader.detailedJSON()
+    /// ```
+    ///
+    /// - SeeAlso: ``json()``
+    public func detailedJSON() throws -> String {
+        try stringFromC(c2pa_reader_detailed_json(ptr))
+    }
+
+    /// Returns the remote URL where the manifest is hosted, if available.
+    ///
+    /// This method returns the URL specified when the manifest was created with
+    /// ``Builder/setNoEmbed()`` and ``Builder/setRemote(url:)``. The URL indicates
+    /// where the manifest can be retrieved separately from the media file.
+    ///
+    /// - Returns: The remote URL, or `nil` if the manifest is embedded.
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let stream = try Stream(readFrom: imageURL)
+    /// let reader = try Reader(format: "image/jpeg", stream: stream)
+    /// if let remote = reader.remote() {
+    ///     print("Manifest hosted at: \(remote.absoluteString)")
+    /// } else {
+    ///     print("Manifest is embedded")
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: ``isEmbedded()``
+    public func remote() -> URL? {
+        guard let cString = c2pa_reader_remote_url(ptr) else {
+            return nil
+        }
+        defer { c2pa_string_free(UnsafeMutablePointer(mutating: cString)) }
+        return URL(string: String(cString: cString))
+    }
+
+    /// Returns whether the manifest is embedded in the media file.
+    ///
+    /// This method checks if the manifest data is stored directly within the
+    /// media file or if it is stored remotely and referenced via URL.
+    ///
+    /// - Returns: `true` if the manifest is embedded, `false` if it is remote.
+    ///
+    /// ## Example
+    ///
+    /// ```swift
+    /// let stream = try Stream(readFrom: imageURL)
+    /// let reader = try Reader(format: "image/jpeg", stream: stream)
+    /// if reader.isEmbedded() {
+    ///     print("Manifest is embedded in the file")
+    /// } else {
+    ///     print("Manifest is stored remotely at: \(reader.remoteURL() ?? "unknown")")
+    /// }
+    /// ```
+    ///
+    /// - SeeAlso: ``remote()``
+    public func isEmbedded() -> Bool {
+        c2pa_reader_is_embedded(ptr)
+    }
+
+    /// Extracts a resource from the manifest to a stream.
+    ///
+    /// Resources are auxiliary files embedded in the C2PA manifest, such as
+    /// thumbnails or additional metadata files.
+    ///
+    /// - Parameters:
+    ///   - uri: The URI of the resource within the manifest.
+    ///   - dest: A ``Stream`` where the resource data will be written.
+    ///
+    /// - Throws: ``C2PAError`` if the resource cannot be found or extracted.
+    public func resource(uri: String, to dest: Stream) throws {
+        _ = try guardNonNegative(
+            c2pa_reader_resource_to_stream(ptr, uri, dest.rawPtr)
+        )
+    }
+}

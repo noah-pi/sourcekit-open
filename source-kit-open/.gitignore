@@ -1,0 +1,7 @@
+node_modules/
+tests/.staged/
+.DS_Store
+*.log
+# Server runtime state — never commit checkpoints or the registry counter.
+server/state.json
+server/registry.json
