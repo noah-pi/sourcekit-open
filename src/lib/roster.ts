@@ -23,7 +23,7 @@
  *
  * The roster format is canonical JSON + one ES256 signature over SHA-256 of
  * the canonical payload — the same construction as attestation records, so
- * any desk tooling can produce it. The desk tool issues rosters;
+ * any desk tooling can produce it. The desk tool (0.9.4) issues rosters;
  * the app consumes them.
  */
 

@@ -48,7 +48,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { concatBytes, equalBytes, bytesToHex, bytesToUtf8, utf8ToBytes, base64ToBytes, bytesToBase64 } from './bytes';
 
 // Reference wire constants (python-opentimestamps op.py / notary.py /
-// timestamp.py — checked against live calendar responses,):
+// timestamp.py — checked against live calendar responses, 0.18.1):
 //   MAGIC tail is bf89e2e884e89294 (a wrong tail rejects every real .ots).
 export const OTS_MAGIC = concatBytes(
   new Uint8Array([0x00]),
@@ -376,7 +376,7 @@ export function verifyOtsReceipt(
   // The header arrives in Bitcoin WIRE format (esplora /block/{hash}/header),
   // and its Merkle-root field (bytes 36..68) equals the receipt's final msg
   // byte-for-byte — verified empirically against the OTS docs' receipt and
-  // real block 428648. (The reference JS library reverses the msg
+  // real block 428648 (0.18.1). (The reference JS library reverses the msg
   // only because its parsed header object stores the root pre-reversed.)
   const merkleRoot = blockHeader.subarray(36, 68);
   const ok = bytesToHex(merkleRoot) === btc.msgHex;

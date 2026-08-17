@@ -1,51 +1,42 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="340" viewBox="0 0 1280 340" role="img" aria-label="Source Kit — open provenance core">
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="300" viewBox="0 0 1280 300" role="img" aria-label="Source Kit — an open cryptographic camera">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0C1013"/>
-      <stop offset="0.55" stop-color="#0E1418"/>
-      <stop offset="1" stop-color="#101B22"/>
+    <linearGradient id="seal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2E9E66"/>
+      <stop offset="1" stop-color="#1B7A4B"/>
     </linearGradient>
-    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#EAEEEF"/>
-      <stop offset="1" stop-color="#BFD4DE"/>
-    </linearGradient>
-    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
-      <path d="M34 0H0V34" fill="none" stroke="#284A5C" stroke-width="0.6" opacity="0.32"/>
-    </pattern>
-    <radialGradient id="sealGlow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#74AECB" stop-opacity="0.28"/>
-      <stop offset="1" stop-color="#74AECB" stop-opacity="0"/>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#2E9E66" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#2E9E66" stop-opacity="0"/>
     </radialGradient>
   </defs>
 
-  <rect width="1280" height="340" fill="url(#bg)"/>
-  <rect width="1280" height="340" fill="url(#grid)"/>
-  <rect x="0.5" y="0.5" width="1279" height="339" fill="none" stroke="#2C4C5E" stroke-width="1" opacity="0.5"/>
+  <!-- app canvas -->
+  <rect width="1280" height="300" fill="#F6F6F8"/>
 
-  <!-- seal mark -->
-  <g transform="translate(150 170)">
-    <circle r="86" fill="url(#sealGlow)"/>
-    <circle r="66" fill="none" stroke="#74AECB" stroke-width="2.5"/>
-    <circle r="54" fill="none" stroke="#3E6377" stroke-width="1" stroke-dasharray="2 5"/>
-    <circle r="17" fill="#74AECB"/>
-    <path d="M-7 0 l5 6 l10 -13" fill="none" stroke="#0C1013" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the seal mark: aperture ring + sealed centre -->
+  <g transform="translate(148 150)">
+    <circle r="96" fill="url(#glow)"/>
+    <circle r="52" fill="none" stroke="url(#seal)" stroke-width="3"/>
+    <circle r="40" fill="none" stroke="#1F6B45" stroke-width="1" opacity="0.30" stroke-dasharray="1.5 5"/>
+    <circle r="18" fill="url(#seal)"/>
   </g>
 
   <!-- wordmark -->
-  <text x="290" y="150" font-family="'Iowan Old Style', Palatino, Georgia, serif" font-size="72" font-weight="600" letter-spacing="-1" fill="url(#ink)">Source Kit</text>
-  <text x="293" y="196" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="19" letter-spacing="6" fill="#74AECB">OPEN&#160;&#160;PROVENANCE&#160;&#160;CORE</text>
+  <text x="258" y="132" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="62" font-weight="700" letter-spacing="-2" fill="#1D1D1F">Source Kit</text>
+  <text x="261" y="169" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="15" font-weight="800" letter-spacing="3.4" fill="#78787D">AN OPEN CRYPTOGRAPHIC CAMERA</text>
 
-  <!-- readout motif -->
-  <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="14" transform="translate(292 236)">
-    <text x="0" y="0" fill="#5E6E6B">$ node tests/stage.mjs &amp;&amp; tsx test-verification.mts</text>
-    <text x="0" y="26" fill="#7FBB97">&#8594; 146 passed, 0 failed</text>
-  </g>
+  <!-- the promise, in the product's own words -->
+  <text x="261" y="212" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="19" font-weight="500" fill="#6E6E73">Every capture, sealed at the shutter.</text>
 
-  <!-- right rule + tagline -->
-  <g transform="translate(1130 90)">
-    <line x1="0" y1="0" x2="0" y2="160" stroke="#2C4C5E" stroke-width="1"/>
+  <!-- the ladder motif, right -->
+  <g transform="translate(1006 84)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5">
+    <line x1="6" y1="8" x2="6" y2="112" stroke="#E6E6EB" stroke-width="1.5"/>
+    <circle cx="6" cy="10"  r="6" fill="#1F6B45"/><text x="24" y="14" fill="#1D1D1F" font-weight="600">Media unchanged</text>
+    <circle cx="6" cy="44"  r="6" fill="#1F6B45"/><text x="24" y="48" fill="#1D1D1F" font-weight="600">Signer identified</text>
+    <circle cx="6" cy="78"  r="7.5" fill="none" stroke="#1F6B45" stroke-width="2.5"/><circle cx="6" cy="78" r="3.5" fill="#1F6B45"/><text x="24" y="82" fill="#1D1D1F" font-weight="600">Hardware attested</text>
+    <circle cx="6" cy="112" r="6" fill="none" stroke="#78787D" stroke-width="1.5"/><text x="24" y="116" fill="#78787D">Time anchored</text>
   </g>
-  <text x="1152" y="140" font-family="'Iowan Old Style', Palatino, Georgia, serif" font-size="26" font-style="italic" fill="#AEB6B4">Show</text>
-  <text x="1152" y="176" font-family="'Iowan Old Style', Palatino, Georgia, serif" font-size="26" font-style="italic" fill="#AEB6B4">your</text>
-  <text x="1152" y="212" font-family="'Iowan Old Style', Palatino, Georgia, serif" font-size="26" font-style="italic" fill="#EAEEEF">work.</text>
 </svg>

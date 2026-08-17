@@ -3,562 +3,463 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Source Kit — open provenance core</title>
-<meta name="description" content="The auditable core of Source Kit: an iOS camera that cryptographically seals every capture on-device with genuine C2PA Content Credentials. Show your work." />
+<title>Source Kit — a camera that seals what it sees</title>
+<meta name="description" content="An open cryptographic camera. Every capture is signed at the shutter, on-device, with real C2PA Content Credentials. Take the parts you need — the crypto core, the native modules, the whole interface." />
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Source Kit — open provenance core" />
-<meta property="og:description" content="An iOS camera that cryptographically seals every capture on-device with genuine C2PA Content Credentials. Every claim is reproducible offline in about five minutes." />
+<meta property="og:title" content="Source Kit — a camera that seals what it sees" />
+<meta property="og:description" content="An open cryptographic camera. Signed at the shutter, on-device, offline. Built to be taken apart and built on." />
 <meta property="og:url" content="https://noah-pi.github.io/sourcekit-open/" />
 <meta property="og:image" content="https://noah-pi.github.io/sourcekit-open/banner.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Source Kit — open provenance core" />
-<meta name="twitter:description" content="Show your work: on-device C2PA sealing, a fail-closed verifier, and a lab that reproduces every cryptographic claim offline." />
+<meta name="twitter:title" content="Source Kit — a camera that seals what it sees" />
 <meta name="twitter:image" content="https://noah-pi.github.io/sourcekit-open/banner.png" />
 <style>
-  /* ============ TOKENS — cyanotype / evidence-readout ============ */
-  :root {
-    --paper:      #E7E8E2;
-    --surface:    #F1F2EC;
-    --surface-2:  #DDDED6;
-    --ink:        #191C1A;
-    --ink-2:      #454B48;
-    --ink-3:      #6E736E;
-    --rule:       #C9CBC1;
-    --rule-soft:  #D8DAD0;
-    --cyan:       #1D4E6F;   /* prussian ink — the accent */
-    --cyan-soft:  #DCE6EC;
-    --cyan-line:  #A9C2D2;
-    --seal:       #8F3A2C;   /* used sparingly: the broken seal */
-    --seal-soft:  #EFDDD8;
-    --ok:         #2F5D42;
-    --ok-soft:    #DDE8E0;
-    --warn:       #7E5A16;
-    --warn-soft:  #EFE6D2;
-    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-    --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --mono: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+/* ===========================================================================
+   Tokens — lifted verbatim from the app's src/theme.ts so the site and the
+   product speak the same visual language.
+   =========================================================================== */
+:root {
+  --bg:        #F6F6F8;
+  --surface:   #FFFFFF;
+  --surface2:  #EEEEF2;
+  --border:    #E6E6EB;
+  --borderSoft:#EFEFF3;
+  --text:      #1D1D1F;
+  --textDim:   #6E6E73;
+  --textFaint: #78787D;
+  --accent:    #1F6B45;
+  --accentSoft: rgba(31,107,69,0.10);
+  --gradStart: #2E9E66;
+  --gradEnd:   #1B7A4B;
+  --warn:      #8A5F12;
+  --warnSoft:  rgba(164,116,28,0.10);
+  --danger:    #C03527;
+  --dangerSoft:rgba(192,53,39,0.08);
+  --info:      #3D6B8E;
+  --infoSoft:  rgba(61,107,142,0.10);
+  --onAccent:  #FFFFFF;
+
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: Menlo, ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+
+  --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-full: 999px;
+  --s-xs: 4px; --s-sm: 8px; --s-md: 16px; --s-lg: 24px; --s-xl: 32px; --s-xxl: 48px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0D0D0F; --surface:#151519; --surface2:#08080A;
+    --border:#26262C; --borderSoft:#1A1A1F;
+    --text:#E8E8EC; --textDim:#A9A9B2; --textFaint:#71717A;
+    --accent:#4E7A62; --accentSoft:rgba(78,122,98,0.16);
+    --gradStart:#5E9D7B; --gradEnd:#4E7A62;
+    --warn:#C9974F; --warnSoft:rgba(201,151,79,0.14);
+    --danger:#E5484D; --dangerSoft:rgba(229,72,77,0.14);
+    --info:#86ADCB; --infoSoft:rgba(134,173,203,0.14);
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --paper:      #0E1114;
-      --surface:    #141A1E;
-      --surface-2:  #1C242A;
-      --ink:        #E4E7E4;
-      --ink-2:      #AEB6B4;
-      --ink-3:      #7C8582;
-      --rule:       #263038;
-      --rule-soft:  #1E262C;
-      --cyan:       #74AECB;
-      --cyan-soft:  #16242D;
-      --cyan-line:  #2C4C5E;
-      --seal:       #CE7B6C;
-      --seal-soft:  #2A1815;
-      --ok:         #79B393;
-      --ok-soft:    #17251C;
-      --warn:       #CFA657;
-      --warn-soft:  #26200F;
-    }
-  }
-  :root[data-theme="dark"] {
-    --paper:      #0E1114;
-    --surface:    #141A1E;
-    --surface-2:  #1C242A;
-    --ink:        #E4E7E4;
-    --ink-2:      #AEB6B4;
-    --ink-3:      #7C8582;
-    --rule:       #263038;
-    --rule-soft:  #1E262C;
-    --cyan:       #74AECB;
-    --cyan-soft:  #16242D;
-    --cyan-line:  #2C4C5E;
-    --seal:       #CE7B6C;
-    --seal-soft:  #2A1815;
-    --ok:         #79B393;
-    --ok-soft:    #17251C;
-    --warn:       #CFA657;
-    --warn-soft:  #26200F;
-  }
+}
+:root[data-theme="dark"] {
+  --bg:#0D0D0F; --surface:#151519; --surface2:#08080A;
+  --border:#26262C; --borderSoft:#1A1A1F;
+  --text:#E8E8EC; --textDim:#A9A9B2; --textFaint:#71717A;
+  --accent:#4E7A62; --accentSoft:rgba(78,122,98,0.16);
+  --gradStart:#5E9D7B; --gradEnd:#4E7A62;
+  --warn:#C9974F; --warnSoft:rgba(201,151,79,0.14);
+  --danger:#E5484D; --dangerSoft:rgba(229,72,77,0.14);
+  --info:#86ADCB; --infoSoft:rgba(134,173,203,0.14);
+}
 
-  * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { animation: none !important; transition: none !important; } }
-  body {
-    margin: 0; background: var(--paper); color: var(--ink);
-    font-family: var(--sans); font-size: 16.5px; line-height: 1.62;
-    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-  }
-  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
-  .measure { max-width: 66ch; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto } *{animation:none!important;transition:none!important} }
+body {
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--sans); font-size:17px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap { max-width:1080px; margin:0 auto; padding:0 var(--s-lg); }
+.measure { max-width:64ch; }
+a { color:var(--accent); text-underline-offset:2px; }
+a:focus-visible,button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:4px; }
+code { font-family:var(--mono); font-size:.86em; background:var(--surface2); padding:2px 6px; border-radius:6px; }
 
-  a { color: var(--cyan); text-underline-offset: 2px; text-decoration-thickness: 1px; }
-  a:focus-visible, button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 2px; }
-  strong { font-weight: 650; }
-  code { font-family: var(--mono); font-size: 0.86em; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+/* --- app primitives, on the web ------------------------------------------ */
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s-md); }
+.seclabel {
+  font-size:10.5px; font-weight:800; letter-spacing:1.9px; text-transform:uppercase;
+  color:var(--textFaint); margin:0 0 var(--s-sm);
+}
+.chip {
+  display:inline-flex; align-items:center; gap:5px; border-radius:var(--r-full);
+  padding:5px 10px; font-size:11px; font-weight:600; letter-spacing:.2px;
+}
+.chip.good{background:var(--accentSoft);color:var(--accent)}
+.chip.warn{background:var(--warnSoft);color:var(--warn)}
+.chip.info{background:var(--infoSoft);color:var(--info)}
+.chip.neutral{background:var(--surface2);color:var(--textDim)}
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  border-radius:var(--r-sm); border:1px solid transparent; padding:13px 20px;
+  font-size:14px; font-weight:700; letter-spacing:.1px; text-decoration:none; cursor:pointer;
+}
+.btn.primary { background:var(--text); color:var(--bg); }
+.btn.ghost { background:transparent; color:var(--textDim); border-color:var(--border); }
+.btn.ghost:hover { color:var(--accent); border-color:var(--accent); }
 
-  /* ---------- top bar ---------- */
-  .topbar { position: sticky; top: 0; z-index: 40; background: color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--rule); }
-  .topbar .wrap { display: flex; align-items: center; gap: 20px; height: 56px; }
-  .brand { font-family: var(--mono); font-size: 13px; letter-spacing: 0.02em; font-weight: 600; display: flex; align-items: center; gap: 9px; margin-right: auto; }
-  .seal-dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--cyan); position: relative; flex: none; }
-  .seal-dot::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--cyan); }
-  .navlinks { display: flex; gap: 22px; font-size: 13.5px; }
-  .navlinks a { color: var(--ink-2); text-decoration: none; }
-  .navlinks a:hover { color: var(--cyan); }
-  .ghlink { font-family: var(--mono); font-size: 12.5px; border: 1px solid var(--rule); padding: 6px 12px; border-radius: 4px; text-decoration: none; color: var(--ink); white-space: nowrap; }
-  .ghlink:hover { border-color: var(--cyan); color: var(--cyan); }
-  @media (max-width: 760px) { .navlinks { display: none; } }
+/* --- nav ------------------------------------------------------------------ */
+.nav {
+  position:sticky; top:0; z-index:50; background:color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter:blur(12px); border-bottom:1px solid var(--border);
+}
+.nav .wrap { display:flex; align-items:center; gap:var(--s-lg); height:58px; }
+.brand { display:flex; align-items:center; gap:9px; font-weight:700; font-size:15px; letter-spacing:-.2px; margin-right:auto; }
+.navlinks { display:flex; gap:var(--s-lg); font-size:14px; }
+.navlinks a { color:var(--textDim); text-decoration:none; }
+.navlinks a:hover { color:var(--text); }
+@media (max-width:820px){ .navlinks{display:none} }
 
-  /* ---------- hero ---------- */
-  .hero { padding: 78px 0 60px; border-bottom: 1px solid var(--rule); position: relative; overflow: hidden; }
-  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 54px; align-items: center; }
-  @media (max-width: 900px) { .hero-grid { grid-template-columns: 1fr; gap: 40px; } }
-  .kicker { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--cyan); margin: 0 0 22px; }
-  h1.title { font-family: var(--serif); font-weight: 600; font-size: clamp(2.5rem, 6.2vw, 4.1rem); line-height: 1.02; letter-spacing: -0.02em; margin: 0 0 22px; text-wrap: balance; }
-  .lede { font-size: clamp(1.08rem, 2.1vw, 1.32rem); line-height: 1.5; color: var(--ink-2); margin: 0 0 30px; max-width: 40ch; }
-  .lede b { color: var(--ink); font-weight: 600; }
-  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; }
-  .btn { font-family: var(--mono); font-size: 13px; padding: 11px 18px; border-radius: 5px; text-decoration: none; border: 1px solid var(--cyan); display: inline-flex; align-items: center; gap: 8px; }
-  .btn.primary { background: var(--cyan); color: var(--paper); }
-  .btn.primary:hover { filter: brightness(1.08); }
-  .btn.ghost { color: var(--cyan); }
-  .btn.ghost:hover { background: var(--cyan-soft); }
+/* --- hero ----------------------------------------------------------------- */
+.hero { padding:var(--s-xxl) 0 var(--s-xl); }
+.hero-grid { display:grid; grid-template-columns:1fr 340px; gap:var(--s-xxl); align-items:center; }
+@media (max-width:900px){ .hero-grid{grid-template-columns:1fr; gap:var(--s-xl)} }
+h1 {
+  font-size:clamp(38px,6vw,60px); font-weight:700; letter-spacing:-1.6px; line-height:1.04;
+  margin:var(--s-md) 0; text-wrap:balance;
+}
+.lede { font-size:clamp(18px,2.2vw,21px); color:var(--textDim); line-height:1.5; margin:0 0 var(--s-lg); max-width:44ch; }
+.cta { display:flex; flex-wrap:wrap; gap:var(--s-sm); }
 
-  /* readout card in hero */
-  .readout { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 0 var(--rule-soft), 0 18px 40px -28px rgba(0,0,0,0.4); }
-  .readout-head { display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
-  .readout-head .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); }
-  .readout-body { padding: 16px 18px 18px; font-family: var(--mono); font-size: 12.5px; line-height: 1.85; }
-  .rl { display: grid; grid-template-columns: 15px 1fr auto; gap: 10px; align-items: baseline; opacity: 0; transform: translateY(4px); animation: rlin .4s ease forwards; }
-  @media (prefers-reduced-motion: reduce) { .rl { opacity: 1; transform: none; } }
-  @keyframes rlin { to { opacity: 1; transform: none; } }
-  .rl .m { color: var(--cyan); }
-  .rl .k { color: var(--ink-2); }
-  .rl .v { color: var(--ink); text-align: right; }
-  .rl .v.ok { color: var(--ok); } .rl .v.no { color: var(--seal); } .rl .v.dim { color: var(--ink-3); }
-  .readout-split { border-top: 1px dashed var(--rule); margin-top: 10px; padding-top: 12px; }
-  .readout-axis { display: flex; gap: 12px; }
-  .axis { flex: 1; border: 1px solid var(--rule); border-radius: 6px; padding: 10px 12px; }
-  .axis .lbl { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px; }
-  .axis .val { font-family: var(--serif); font-size: 1.15rem; line-height: 1.1; }
-  .axis.integ .val { color: var(--ok); }
-  .axis.cred .val { color: var(--ink); }
-  .axis .sub { font-size: 10.5px; color: var(--ink-3); margin-top: 4px; font-family: var(--mono); }
+/* --- phone ---------------------------------------------------------------- */
+.phone {
+  border-radius:38px; border:1px solid var(--border); background:var(--surface);
+  padding:10px; box-shadow:0 30px 60px -40px rgba(0,0,0,.5); margin:0 auto; max-width:320px;
+}
+.screen { border-radius:29px; overflow:hidden; background:var(--bg); }
+.statusbar { display:flex; justify-content:space-between; padding:9px 18px 4px; font-size:11px; font-weight:600; color:var(--text); }
+.screenpad { padding:var(--s-md) 14px var(--s-lg); }
+.screentitle { font-size:26px; font-weight:700; letter-spacing:-.9px; margin:2px 0 3px; }
+.screensub { font-size:13px; color:var(--textDim); margin:0 0 var(--s-md); line-height:1.45; }
 
-  /* ---------- section frame ---------- */
-  section.block { padding: 74px 0; border-bottom: 1px solid var(--rule); }
-  .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 34px; }
-  .sec-num { font-family: var(--mono); font-size: 12px; color: var(--seal); letter-spacing: 0.05em; flex: none; padding-top: 6px; }
-  h2 { font-family: var(--serif); font-weight: 600; font-size: clamp(1.7rem, 3.6vw, 2.5rem); line-height: 1.1; letter-spacing: -0.015em; margin: 0 0 8px; text-wrap: balance; }
-  .sec-sub { color: var(--ink-2); font-size: 15.5px; margin: 0; max-width: 60ch; }
-  h3 { font-size: 1.02rem; font-weight: 650; margin: 30px 0 12px; letter-spacing: 0.005em; }
-  p { margin: 0 0 16px; }
-  .prose ul { margin: 0 0 16px; padding-left: 20px; } .prose li { margin-bottom: 8px; }
+/* trust ladder (faithful to src/components/TrustLadder.tsx) */
+.ladder-title { font-size:16px; font-weight:700; margin:0 0 var(--s-md); }
+.rung { display:flex; align-items:flex-start; gap:6px; }
+.rail-col { width:22px; display:flex; flex-direction:column; align-items:center; flex:none; }
+.node { width:14px; height:14px; border-radius:50%; border:1.5px solid var(--textFaint); margin-top:2px; flex:none; }
+.node.reached { background:var(--accent); border-color:var(--accent); }
+.node.ringed { width:18px; height:18px; border-width:2.5px; border-color:var(--accent); }
+.rail { width:1.5px; flex:1; min-height:20px; background:var(--border); }
+.rung-text { flex:1; padding:0 0 var(--s-md) var(--s-xs); }
+.rung-label { font-size:13px; font-weight:700; line-height:19px; }
+.rung-label.dim { color:var(--textDim); }
+.rung-detail { font-size:11px; line-height:16px; color:var(--textDim); margin-top:1px; }
 
-  /* pull statement */
-  .thesis { font-family: var(--serif); font-size: clamp(1.5rem, 3.6vw, 2.35rem); line-height: 1.28; letter-spacing: -0.01em; text-wrap: balance; margin: 0; color: var(--ink); }
-  .thesis .fade { color: var(--ink-3); }
+/* kv rows */
+.kv { display:flex; justify-content:space-between; gap:var(--s-md); padding:7px 0; font-size:13px; }
+.kv .k { color:var(--textFaint); }
+.kv .v { color:var(--text); text-align:right; font-family:var(--mono); font-size:12px; }
+.hair { height:1px; background:var(--border); margin:var(--s-sm) 0; }
 
-  /* code */
-  figure.code { margin: 0 0 20px; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--surface); }
-  figure.code figcaption { display: flex; align-items: center; gap: 10px; padding: 9px 15px; border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
-  figure.code figcaption .path { color: var(--cyan); }
-  figure.code figcaption .tag { margin-left: auto; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid var(--rule); border-radius: 3px; padding: 2px 7px; }
-  pre { margin: 0; padding: 16px 18px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; }
-  pre code { background: none; padding: 0; font-size: inherit; }
-  .c-com { color: var(--ink-3); font-style: italic; }
-  .c-key { color: var(--cyan); }
-  .c-str { color: var(--ok); }
-  .c-fn  { color: var(--seal); }
+/* --- sections ------------------------------------------------------------- */
+section.block { padding:var(--s-xxl) 0; border-top:1px solid var(--border); scroll-margin-top:70px; }
+h2 { font-size:clamp(26px,3.4vw,36px); font-weight:700; letter-spacing:-.9px; line-height:1.12; margin:0 0 var(--s-sm); text-wrap:balance; }
+.sub { color:var(--textDim); font-size:17px; margin:0 0 var(--s-xl); max-width:58ch; }
+h3 { font-size:17px; font-weight:700; margin:var(--s-lg) 0 var(--s-sm); letter-spacing:-.2px; }
+p { margin:0 0 var(--s-md); }
 
-  /* pipeline steps */
-  .pipe { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
-  .pipe-step { background: var(--surface); display: grid; grid-template-columns: 34px 1fr; gap: 16px; padding: 18px 20px; }
-  .pipe-step .n { font-family: var(--mono); font-size: 12px; color: var(--seal); padding-top: 2px; }
-  .pipe-step h4 { margin: 0 0 5px; font-size: 15px; font-weight: 650; }
-  .pipe-step p { margin: 0; font-size: 14px; color: var(--ink-2); }
-  .pipe-step .file { font-family: var(--mono); font-size: 11.5px; color: var(--cyan); }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-lg); }
+.grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:var(--s-md); }
+@media (max-width:820px){ .grid2{grid-template-columns:1fr} }
 
-  /* two-col */
-  .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; }
-  @media (max-width: 820px) { .cols2 { grid-template-columns: 1fr; gap: 24px; } }
+.step { display:grid; grid-template-columns:28px 1fr; gap:var(--s-md); padding:var(--s-md) 0; border-bottom:1px solid var(--borderSoft); }
+.step:last-child{border-bottom:none}
+.step-n { font-family:var(--mono); font-size:12px; color:var(--accent); padding-top:3px; }
+.step h4 { margin:0 0 4px; font-size:16px; font-weight:700; }
+.step p { margin:0; font-size:15px; color:var(--textDim); }
+.step .where { font-family:var(--mono); font-size:12px; color:var(--textFaint); }
 
-  /* card grid */
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
-  .card { border: 1px solid var(--rule); border-radius: 8px; padding: 20px 22px; background: var(--surface); }
-  .card .ic { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cyan); margin-bottom: 10px; }
-  .card h4 { margin: 0 0 8px; font-size: 15.5px; font-weight: 650; }
-  .card p { margin: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.55; }
+pre { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s-md); overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.7; margin:0 0 var(--s-md); }
+pre code { background:none; padding:0; }
+.c-dim { color:var(--textFaint); }
+.c-ok  { color:var(--accent); }
 
-  /* banned words strip */
-  .banned { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0 22px; }
-  .banned .w { font-family: var(--serif); font-size: 1.25rem; color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--seal); text-decoration-thickness: 2px; padding: 2px 4px; }
+.tw { overflow-x:auto; border:1px solid var(--border); border-radius:var(--r-md); background:var(--surface); }
+table { border-collapse:collapse; width:100%; font-size:14px; min-width:560px; }
+th,td { text-align:left; padding:12px var(--s-md); border-bottom:1px solid var(--border); vertical-align:top; }
+th { font-size:10.5px; font-weight:800; letter-spacing:1.9px; text-transform:uppercase; color:var(--textFaint); }
+tbody tr:last-child td{border-bottom:none}
+td.p { font-family:var(--mono); font-size:12.5px; color:var(--accent); white-space:nowrap; }
 
-  /* reproduce block */
-  .repro { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
-  .repro pre { background: var(--surface); }
-  .repro .out { border-top: 1px dashed var(--rule); padding: 14px 18px; font-family: var(--mono); font-size: 12px; line-height: 1.8; color: var(--ink-2); }
-  .repro .out .ok { color: var(--ok); }
-  .tally { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; margin-top: 22px; }
-  .tally .t { background: var(--surface); padding: 16px 18px; }
-  .tally .t .big { font-family: var(--serif); font-size: 1.9rem; line-height: 1; }
-  .tally .t .cap { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); margin-top: 8px; }
+.pull { font-size:clamp(22px,3vw,30px); font-weight:700; letter-spacing:-.7px; line-height:1.28; text-wrap:balance; margin:0; }
+.pull span { color:var(--textFaint); }
 
-  /* scope table */
-  .tw { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; }
-  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 540px; }
-  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-  th { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); font-weight: 400; background: var(--surface); }
-  tbody tr:last-child td { border-bottom: none; }
-  td.mono { font-family: var(--mono); font-size: 12px; color: var(--cyan); }
-
-  /* footer */
-  footer { padding: 56px 0 70px; }
-  .foot-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 30px; }
-  @media (max-width: 760px) { .foot-grid { grid-template-columns: 1fr; gap: 26px; } }
-  footer h5 { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px; font-weight: 400; }
-  footer a { display: block; color: var(--ink-2); text-decoration: none; font-size: 14px; margin-bottom: 8px; }
-  footer a:hover { color: var(--cyan); }
-  .foot-note { font-size: 12.5px; color: var(--ink-3); line-height: 1.6; }
-  .divider-note { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; }
+footer { border-top:1px solid var(--border); padding:var(--s-xl) 0 var(--s-xxl); }
+.foot { display:grid; grid-template-columns:2fr 1fr 1fr; gap:var(--s-lg); }
+@media (max-width:820px){ .foot{grid-template-columns:1fr} }
+footer a { display:block; color:var(--textDim); text-decoration:none; font-size:14px; margin-bottom:6px; }
+footer a:hover{color:var(--accent)}
+.fine { font-size:13px; color:var(--textFaint); line-height:1.6; }
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="wrap">
-    <div class="brand"><span class="seal-dot" aria-hidden="true"></span> SOURCE&nbsp;KIT&nbsp;·&nbsp;OPEN</div>
-    <nav class="navlinks" aria-label="Sections">
-      <a href="#custody">Thesis</a>
-      <a href="#pipeline">How it works</a>
-      <a href="#verifier">The verifier</a>
-      <a href="#honesty">Honesty</a>
-      <a href="#reproduce">Reproduce</a>
-    </nav>
-    <a class="ghlink" href="https://github.com/noah-pi/sourcekit-open">View source ↗</a>
+<nav class="nav"><div class="wrap">
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.4" fill="none" stroke="var(--accent)" stroke-width="1.7"/><circle cx="10" cy="10" r="3.4" fill="var(--accent)"/></svg>
+    Source Kit
   </div>
-</div>
+  <div class="navlinks">
+    <a href="#how">How it works</a>
+    <a href="#interface">The interface</a>
+    <a href="#take">What you can take</a>
+    <a href="#build">Build on it</a>
+    <a href="#limits">Honest limits</a>
+  </div>
+  <a class="btn ghost" style="padding:8px 14px;font-size:13px" href="https://github.com/noah-pi/sourcekit-open">GitHub ↗</a>
+</div></nav>
 
-<!-- ============ HERO ============ -->
-<header class="hero">
-  <div class="wrap hero-grid">
-    <div>
-      <p class="kicker">Open provenance core · Apache-2.0</p>
-      <h1 class="title">Show your work.</h1>
-      <p class="lede">Source Kit is an iOS camera that <b>cryptographically seals every photo and video at the moment of capture</b>, on-device, with genuine C2PA Content Credentials embedded in the file. This is the auditable core — the part a skeptic needs to check the claims, plus the lab that reproduces every one of them offline.</p>
-      <div class="cta-row">
-        <a class="btn primary" href="#reproduce">Reproduce the claims ↓</a>
-        <a class="btn ghost" href="https://github.com/noah-pi/sourcekit-open">Read the code ↗</a>
-      </div>
+<!-- ============================ HERO ============================ -->
+<header class="hero"><div class="wrap hero-grid">
+  <div>
+    <p class="seclabel">Open source · Apache-2.0</p>
+    <h1>A camera that seals what it sees.</h1>
+    <p class="lede">The moment you shoot, the phone signs the bytes, the time, and what its sensors said. Nothing about the file can change afterwards without breaking that seal.</p>
+    <p class="lede" style="font-size:17px">This is the whole thing, opened up — the cryptography, the native modules, and the interface. Take what's useful.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
+      <a class="btn ghost" href="#how">See how it works</a>
     </div>
+  </div>
 
-    <div class="readout" role="img" aria-label="Example verification readout showing integrity intact and credibility reported separately">
-      <div class="readout-head"><span class="dot" aria-hidden="true"></span> how-we-know · exhibit_4831.mov</div>
-      <div class="readout-body">
-        <div class="rl" style="animation-delay:.05s"><span class="m">✓</span><span class="k">media bytes unchanged since signing</span><span class="v ok">INTACT</span></div>
-        <div class="rl" style="animation-delay:.14s"><span class="m">✓</span><span class="k">COSE_Sign1 signature (ES256)</span><span class="v ok">valid</span></div>
-        <div class="rl" style="animation-delay:.23s"><span class="m">✓</span><span class="k">X.509 chain → device certificate</span><span class="v ok">links verify</span></div>
-        <div class="rl" style="animation-delay:.32s"><span class="m">✓</span><span class="k">Apple App Attest → signing key</span><span class="v ok">bound</span></div>
-        <div class="rl" style="animation-delay:.41s"><span class="m">✓</span><span class="k">RFC 3161 timestamp @ genTime</span><span class="v ok">2026-08-11</span></div>
-        <div class="rl" style="animation-delay:.50s"><span class="m">·</span><span class="k">TSA root anchoring</span><span class="v dim">not checked</span></div>
-        <div class="rl" style="animation-delay:.59s"><span class="m">·</span><span class="k">certificate revocation</span><span class="v dim">not checked</span></div>
+  <!-- Faithful reproduction of the app's trust-ladder card -->
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar"><span>9:41</span><span style="display:inline-flex;gap:5px;align-items:center"><svg width="17" height="11" viewBox="0 0 17 11" aria-hidden="true"><rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="currentColor"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="currentColor"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="currentColor" opacity=".35"/></svg><svg width="24" height="11" viewBox="0 0 24 11" aria-hidden="true"><rect x="0.5" y="0.5" width="20" height="10" rx="3" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="14" height="7" rx="1.6" fill="currentColor"/><rect x="21.6" y="3.6" width="1.6" height="3.8" rx="0.8" fill="currentColor" opacity=".4"/></svg></span></div>
+      <div class="screenpad">
+        <div class="screentitle">Inspect</div>
+        <p class="screensub">exhibit_4831.mov · 12.4 MB</p>
+        <div class="card">
+          <p class="ladder-title">What this file can show</p>
 
-        <div class="readout-split readout-axis">
-          <div class="axis integ">
-            <div class="lbl">Integrity</div>
-            <div class="val">Intact</div>
-            <div class="sub">bytes + assertions</div>
+          <div class="rung">
+            <div class="rail-col"><div class="node reached"></div><div class="rail"></div></div>
+            <div class="rung-text">
+              <div class="rung-label">Media unchanged since signing</div>
+              <div class="rung-detail">Signature valid; media bit-for-bit identical to what was signed.</div>
+            </div>
           </div>
-          <div class="axis cred">
-            <div class="lbl">Credibility</div>
-            <div class="val">This device</div>
-            <div class="sub">resolved off-band</div>
+
+          <div class="rung">
+            <div class="rail-col"><div class="node reached"></div><div class="rail"></div></div>
+            <div class="rung-text">
+              <div class="rung-label">Signer identified</div>
+              <div class="rung-detail">This device's own key. Recognised from your history.</div>
+            </div>
+          </div>
+
+          <div class="rung">
+            <div class="rail-col"><div class="node reached ringed"></div><div class="rail"></div></div>
+            <div class="rung-text">
+              <div class="rung-label">Key attested by Apple hardware</div>
+              <div class="rung-detail">Apple certifies the key is Enclave-resident on genuine hardware.</div>
+            </div>
+          </div>
+
+          <div class="rung">
+            <div class="rail-col"><div class="node"></div><div class="rail"></div></div>
+            <div class="rung-text">
+              <div class="rung-label dim">Accessioned by an organization</div>
+              <div class="rung-detail">No newsroom roster vouches for this key.</div>
+            </div>
+          </div>
+
+          <div class="rung">
+            <div class="rail-col"><div class="node"></div></div>
+            <div class="rung-text">
+              <div class="rung-label dim">Time bracketed by an independent anchor</div>
+              <div class="rung-detail">No timestamp token was attached at signing.</div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
-</header>
+</div></header>
 
-<!-- ============ 1 · CUSTODY NOT REALITY ============ -->
-<section class="block" id="custody">
-  <div class="wrap">
-    <div class="measure" style="margin-bottom:36px;">
-      <p class="thesis">A valid signature proves the bytes are unchanged since signing, and which key signed them. <span class="fade">It does not prove what a camera pointed at — and the app says so, in plain language, on every verification.</span></p>
+<!-- ============================ THESIS ============================ -->
+<section class="block"><div class="wrap">
+  <p class="pull measure">It proves the file. Not the scene. <span>A seal says these bytes haven't changed since this phone signed them — what the phone recorded alongside is evidence you can weigh, never a verdict the software hands down.</span></p>
+</div></section>
+
+<!-- ============================ HOW ============================ -->
+<section class="block" id="how"><div class="wrap">
+  <p class="seclabel">How it works</p>
+  <h2>What happens when you press the shutter</h2>
+  <p class="sub">Six things, all on the device, in the time it takes to write the file. Sealing and checking both work with the radio off.</p>
+
+  <div class="grid2">
+    <div>
+      <div class="step"><div class="step-n">1</div><div><h4>Hash the exact bytes</h4><p>SHA-256, chunked — checking a video never loads the whole file into memory.</p><span class="where">src/lib/fileHash.ts</span></div></div>
+      <div class="step"><div class="step-n">2</div><div><h4>Record what the sensors said</h4><p>Time, GPS (opt-in), compass heading, barometric altitude, a motion signal.</p><span class="where">src/sensors/</span></div></div>
+      <div class="step"><div class="step-n">3</div><div><h4>Sign it in the Secure Enclave</h4><p>ECDSA P-256. The private key is generated on the chip and can't be extracted — signing happens there, not in app memory.</p><span class="where">src/lib/deviceKey.ts · modules/secure-enclave/</span></div></div>
     </div>
-    <div class="cols2 prose">
-      <div>
-        <h3>Two axes, never one score</h3>
-        <p>Most "authenticity" tools collapse everything into a single green checkmark. Source Kit refuses to. <strong>Integrity</strong> — have the bytes changed since signing? — and <strong>credibility</strong> — whose key is this, and what does it vouch for? — are different questions with different failure modes, so they are computed and shown separately.</p>
-        <p>A failed attestation, timestamp, or chain is a loud warning that <em>never</em> silently moves the integrity verdict. What was <em>not</em> checked is stated on every report, in the app, every time.</p>
+    <div>
+      <div class="step"><div class="step-n">4</div><div><h4>Write Content Credentials into the file</h4><p>A real C2PA manifest — CBOR claim, hard binding, COSE_Sign1 — inside the JPEG, PNG, MP4, MOV or M4A itself. Any C2PA reader can open it.</p><span class="where">src/c2pa/</span></div></div>
+      <div class="step"><div class="step-n">5</div><div><h4>Add a second signature for later</h4><p>ML-DSA-65 (FIPS 204) over the same commitment, so a future break of P-256 doesn't quietly invalidate an archive.</p><span class="where">src/lib/pq.ts</span></div></div>
+      <div class="step"><div class="step-n">6</div><div><h4>Anchor the time</h4><p>An RFC 3161 countersignature when there's a network; an OpenTimestamps receipt for independent proof-of-existence. Offline, it signs without and says so.</p><span class="where">src/lib/timestamp.ts · src/lib/ots.ts</span></div></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ============================ INTERFACE ============================ -->
+<section class="block" id="interface"><div class="wrap">
+  <p class="seclabel">The interface</p>
+  <h2>The design is open too</h2>
+  <p class="sub">Getting the cryptography right is half the problem. The other half is telling someone what a signature actually means without overstating it — and that lives in the interface. All of it is in the repo: tokens, primitives, screens.</p>
+
+  <div class="grid2" style="align-items:start">
+    <div>
+      <h3>Five rungs, never a badge</h3>
+      <p>The verdict surface is a ladder, not a shield. Each rung is a separate question with its own answer, and an unreached rung says why in plain words. There are no seals or checkmark icons anywhere in the product — they read as authority claims, and this software isn't an authority.</p>
+      <p>The card carries its own title and limits <em>inside</em> the frame, so it still tells the truth when someone crops it into a screenshot.</p>
+      <h3>Words the product may never use</h3>
+      <p>A test fails the build if <em>verified</em>, <em>authentic</em>, <em>trusted</em>, <em>proven</em>, <em>real</em>, <em>secure</em> or <em>guaranteed</em> appears in a verdict position. Operations that genuinely ran keep their precise verbs — "signature mathematically valid" is allowed, because it happened.</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--s-md)">
+        <span class="chip good">◍ intact</span>
+        <span class="chip warn">◍ unproven</span>
+        <span class="chip info">◍ not checked</span>
+        <span class="chip neutral">◍ unsigned</span>
       </div>
-      <div>
-        <h3>The label, not the adjudication</h3>
-        <p>The project borrows museum grammar deliberately: a sealed file is an <em>exhibit</em>, its manifest is the <em>label</em> on the wall beside it. A label describes an object without pronouncing it genuine — which is exactly the boundary a provenance tool must hold.</p>
-        <p>So the verifier is evidence for a journalist to weigh, not an automated verdict. That single design decision runs through every file in this repository.</p>
+      <p class="fine" style="margin-top:var(--s-sm)">Unsigned is neutral grey — never red. Absence of a credential is not evidence of tampering.</p>
+    </div>
+
+    <div>
+      <div class="card" style="margin-bottom:var(--s-md)">
+        <p class="seclabel">Capture record</p>
+        <div class="kv"><span class="k">Signed</span><span class="v">2026-08-17 09:41:22Z</span></div>
+        <div class="hair"></div>
+        <div class="kv"><span class="k">Key</span><span class="v">Secure Enclave</span></div>
+        <div class="hair"></div>
+        <div class="kv"><span class="k">Fingerprint</span><span class="v">a4f2 8e11 … 9c3d</span></div>
+        <div class="hair"></div>
+        <div class="kv"><span class="k">Motion</span><span class="v">handheld</span></div>
+        <div class="hair"></div>
+        <div class="kv"><span class="k">Altitude</span><span class="v">42 m</span></div>
+      </div>
+      <div class="card">
+        <p class="seclabel">Not checked</p>
+        <p style="font-size:14px;color:var(--textDim);margin:0">TSA root anchoring · certificate revocation</p>
+        <p class="fine" style="margin:var(--s-sm) 0 0">Every report lists what it did <em>not</em> check, every time. An absent check is stated, never quietly dropped.</p>
       </div>
     </div>
   </div>
-</section>
+</div></section>
 
-<!-- ============ 2 · PIPELINE ============ -->
-<section class="block" id="pipeline">
-  <div class="wrap">
-    <div class="sec-head">
-      <div class="sec-num">01</div>
-      <div>
-        <h2>What happens when you press the shutter</h2>
-        <p class="sec-sub">Every step runs on the device. Sealing and checking both work fully offline; the few optional network calls are enumerated, named, and never hidden.</p>
-      </div>
-    </div>
+<!-- ============================ WHAT YOU CAN TAKE ============================ -->
+<section class="block" id="take"><div class="wrap">
+  <p class="seclabel">What you can take</p>
+  <h2>The parts, and what each is good for</h2>
+  <p class="sub">Most of this is platform-neutral TypeScript with no build step. If you're writing a signer, a verifier, or an Android port, these are the pieces worth stealing.</p>
 
-    <div class="pipe" style="margin-bottom:30px;">
-      <div class="pipe-step"><div class="n">1</div><div><h4>Hash the exact media bytes</h4><p>SHA-256, chunked so verification never has to load a whole video into memory. <span class="file">src/lib/fileHash.ts</span></p></div></div>
-      <div class="pipe-step"><div class="n">2</div><div><h4>Record capture context</h4><p>GPS (opt-in), compass heading, barometric altitude, an accelerometer motion signal — each a lead a desk corroborates, never proof. <span class="file">src/sensors/</span></p></div></div>
-      <div class="pipe-step"><div class="n">3</div><div><h4>Sign the attestation record</h4><p>ECDSA P-256 (ES256), key held non-extractably in the Secure Enclave, optionally App Attest–certified. <span class="file">src/lib/deviceKey.ts · src/lib/sign.ts</span></p></div></div>
-      <div class="pipe-step"><div class="n">4</div><div><h4>Embed Content Credentials</h4><p>A spec-conformant C2PA manifest — CBOR claim, hard binding, COSE_Sign1 — written into the JPEG/PNG/MP4/MOV/M4A itself. <span class="file">archive/handrolled-verifier/c2pa.ts</span></p></div></div>
-      <div class="pipe-step"><div class="n">5</div><div><h4>Add a second signature</h4><p>An ML-DSA-65 (FIPS 204) post-quantum signature over the same commitment, so a future break of P-256 doesn't silently invalidate the archive. <span class="file">src/lib/pq.ts</span></p></div></div>
-      <div class="pipe-step"><div class="n">6</div><div><h4>Anchor in time</h4><p>An RFC 3161 timestamp countersignature when online; an OpenTimestamps/Bitcoin receipt for independent proof-of-existence. Offline captures sign without and say so. <span class="file">src/lib/timestamp.ts · src/lib/ots.ts</span></p></div></div>
-    </div>
+  <div class="tw"><table>
+    <thead><tr><th>Path</th><th>What it is, and why you might want it</th></tr></thead>
+    <tbody>
+      <tr><td class="p">src/c2pa/</td><td>A complete, dependency-light C2PA implementation: CBOR claims, COSE_Sign1, JPEG APP11/JUMBF, PNG <code>caBX</code>, BMFF/MP4 embedding with chunk-offset repair, and the verifier. Independently checked against <code>c2patool</code> on every CI run.</td></tr>
+      <tr><td class="p">src/lib/</td><td>The crypto plumbing, all pure TS: a strict X.509 chain verifier, an RFC 3161 token verifier, COSE/DER, ECDSA signing, an ML-DSA-65 post-quantum layer, AES-256-GCM, canonical JSON. No WebCrypto, no network.</td></tr>
+      <tr><td class="p">src/provenance/</td><td>The pipeline that turns a capture into a sealed record — orchestration, schema, background seal queue, detached manifests, and a differential oracle that cross-checks two independent engines against each other.</td></tr>
+      <tr><td class="p">src/vault/</td><td>Encrypted on-device storage. Media, records and thumbnails are all sealed; plaintext only ever exists in a cache folder shredded on lock.</td></tr>
+      <tr><td class="p">src/theme.ts · src/components/ · app/</td><td>The whole interface: design tokens with a dual light/dark palette, the UI kit, and the screens — capture, inspect, exhibits, settings, onboarding.</td></tr>
+      <tr><td class="p">modules/</td><td>The native Swift: Secure Enclave keygen and signing, App Attest, the AVFoundation capture engine, the raw-audio sink, and the C2PA Rust binding.</td></tr>
+      <tr><td class="p">server/</td><td>A zero-dependency App Attest relay in one file. Runs anywhere Node 20 runs; you can host your own or skip it entirely.</td></tr>
+      <tr><td class="p">tests/</td><td>The lab: 27 suites that run the real shipping code against real forgeries, with only device services shimmed.</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
 
-    <p class="prose measure" style="color:var(--ink-2);">The commitment binds the layers together on purpose: the post-quantum public key is committed <em>inside</em> the classically-signed payload, so a stripped PQ layer is detectable and a forged one binds to nothing. Here is the hard binding itself — the code that makes "one changed pixel breaks the math" true:</p>
+<!-- ============================ BUILD ON IT ============================ -->
+<section class="block" id="build"><div class="wrap">
+  <p class="seclabel">Build on it</p>
+  <h2>Things worth doing next</h2>
+  <p class="sub">This is a reference implementation, not a platform. It's most useful as parts. If any of these appeal, they're genuinely open — no coordination needed, no permission to ask.</p>
 
-    <figure class="code">
-      <figcaption><span class="path">archive/handrolled-verifier/verifyAsset.ts</span> <span class="tag">the two-axis check</span></figcaption>
-<pre><code><span class="c-com">// Integrity and credibility are SEPARATE axes. A broken chain or a failed</span>
-<span class="c-com">// attestation is a credibility warning — it never flips the integrity</span>
-<span class="c-com">// verdict, and the report lists exactly what was and was not checked.</span>
-<span class="c-key">const</span> hardBinding = verifyHardBinding(assetBytes, claim);   <span class="c-com">// SHA-256 over the covered byte ranges</span>
-<span class="c-key">const</span> signature   = verifyCose(claim, signerCert);          <span class="c-com">// COSE_Sign1 ES256</span>
-<span class="c-key">const</span> chain       = verifyChain(x5c, pinnedRoots, signedAt); <span class="c-com">// links + anchoring, at the VERIFIED time</span>
-
-<span class="c-key">return</span> {
-  integrity:   hardBinding.matched ? <span class="c-str">'INTACT'</span> : <span class="c-str">'CHANGED'</span>,       <span class="c-com">// the bytes question</span>
-  credibility: resolveIdentity(chain, attestation, roster),    <span class="c-com">// the whose-key question</span>
-  notChecked:  [<span class="c-str">'tsa-root-anchoring'</span>, <span class="c-str">'revocation'</span>],           <span class="c-com">// stated, every time</span>
-};</code></pre>
-    </figure>
+  <div class="grid3">
+    <div class="card"><h3 style="margin-top:0">An Android port</h3><p style="font-size:15px;color:var(--textDim);margin:0">The provenance core is platform-neutral TypeScript. What's needed is the equivalent of <code>modules/secure-enclave</code> against Android Keystore and Play Integrity — the record format and verifier carry over unchanged.</p></div>
+    <div class="card"><h3 style="margin-top:0">A standalone verifier</h3><p style="font-size:15px;color:var(--textDim);margin:0">Wrap <code>src/c2pa/verifyAsset.ts</code> in a CLI so anyone can check a file with <code>npx</code>, no app required. The verifier is already free of platform dependencies.</p></div>
+    <div class="card"><h3 style="margin-top:0">Better time anchoring</h3><p style="font-size:15px;color:var(--textDim);margin:0">TSA root anchoring is the honest gap — there's no mature public root store for timestamping the way there is for the web PKI. A curated, auditable trust list would help every project in this space, not just this one.</p></div>
+    <div class="card"><h3 style="margin-top:0">Newsroom key custody</h3><p style="font-size:15px;color:var(--textDim);margin:0">Rosters and revocation are implemented and lab-pinned, but the operational question — how a desk actually enrolls and retires a photographer's key — deserves real field design.</p></div>
+    <div class="card"><h3 style="margin-top:0">Take the interface</h3><p style="font-size:15px;color:var(--textDim);margin:0">The honesty rules encoded in the UI — the ladder, the banned words, disclosing unreached rungs — are the part that took longest to get right. Lift them wholesale; they aren't specific to this app.</p></div>
+    <div class="card"><h3 style="margin-top:0">Attack it</h3><p style="font-size:15px;color:var(--textDim);margin:0">If you find a way to make a forged file verify, that's a real contribution to the field. The suites in <code>tests/</code> show the shape of a good repro.</p></div>
   </div>
-</section>
+</div></section>
 
-<!-- ============ 3 · THE VERIFIER ============ -->
-<section class="block" id="verifier">
-  <div class="wrap">
-    <div class="sec-head">
-      <div class="sec-num">02</div>
-      <div>
-        <h2>A verifier that fails closed</h2>
-        <p class="sec-sub">The X.509 stack is pure TypeScript — no WebCrypto, no network, no runtime-fetched roots. It does the things hand-rolled verifiers usually skip, because those are where forgeries hide.</p>
-      </div>
+<!-- ============================ RUN IT ============================ -->
+<section class="block"><div class="wrap">
+  <div class="grid2" style="align-items:center">
+    <div>
+      <p class="seclabel">Run it yourself</p>
+      <h2 style="margin-bottom:var(--s-md)">Five minutes, offline</h2>
+      <p style="color:var(--textDim)">The lab stages the real shipping code and rewires only device services — keychain, filesystem, device model — to small shims. Every cryptographic operation is the code that runs on the phone.</p>
+      <p style="color:var(--textDim)">It signs fresh media with a random key on each run, then attacks it: flipped bits, transplanted manifests, self-issued "O=Reuters" certificates, truncated files, hostile parsers.</p>
     </div>
-
-    <div class="cols2">
-      <figure class="code">
-        <figcaption><span class="path">src/lib/x509.ts</span> <span class="tag">critical extensions</span></figcaption>
-<pre><code><span class="c-com">// The issuer marked this extension must-understand.</span>
-<span class="c-com">// A verifier that cannot honor it must NOT guess</span>
-<span class="c-com">// (RFC 5280 §4.2) — so the chain fails closed.</span>
-<span class="c-key">for</span> (<span class="c-key">const</span> [oidHex, ext] <span class="c-key">of</span> c.extensions) {
-  <span class="c-key">if</span> (!ext.critical) <span class="c-key">continue</span>;
-  <span class="c-key">if</span> (RECOGNIZED.has(oidHex)) <span class="c-key">continue</span>;
-  <span class="c-key">return</span> <span class="c-fn">fail</span>(
-    <span class="c-str">`critical extension `</span> +
-    <span class="c-str">`this verifier does not recognize`</span>);
-}</code></pre>
-      </figure>
-
-      <div class="prose">
-        <h3 style="margin-top:0;">What it enforces</h3>
-        <ul>
-          <li>Every link's signature verifies under the next certificate's key; issuer and subject names chain <em>byte-for-byte</em>.</li>
-          <li>Certificate validity is evaluated at the <strong>verified signing time</strong>, never the verifier's clock.</li>
-          <li>RSA exponent ≥ 3 and odd, modulus ≥ 2048 bits; strict full-block PKCS#1 v1.5 comparison (closes signature-forgery shortcuts).</li>
-          <li>CA discipline in both directions: a non-leaf must be a CA; a leaf must not be able to sign certificates; <code>pathLenConstraint</code> is honored.</li>
-          <li>An ambiguous certificate set is <strong>refused</strong>, not guessed at.</li>
-        </ul>
-      </div>
-    </div>
-
-    <p class="prose measure" style="margin-top:22px; color:var(--ink-2);">Signer identity resolves only against out-of-band anchors — this device, or an organization credential — never a self-asserted name inside the file. A self-issued certificate claiming <code>O=Reuters</code> does not anchor, and the suite proves it: the exact attack an external audit threw at an early build is now a permanent regression test.</p>
-  </div>
-</section>
-
-<!-- ============ 4 · HARDWARE BINDING ============ -->
-<section class="block" id="attest">
-  <div class="wrap">
-    <div class="sec-head">
-      <div class="sec-num">03</div>
-      <div>
-        <h2>Binding a signature to real hardware</h2>
-        <p class="sec-sub">Apple gives apps no direct access to App Attest keys. Source Kit uses emulated key attestation to prove the signing key lives on a genuine device running a genuine build — verifiable by anyone, offline.</p>
-      </div>
-    </div>
-
-    <div class="cols2">
-      <div class="prose">
-        <p>The trick is a commitment: the App Attest <code>clientDataHash</code> is set to <code>SHA256(challenge ‖ signingPublicKey)</code>. Apple's nonce extension in the attestation leaf certificate then vouches for <em>exactly that key</em> — not just some key. The binding rides inside every C2PA manifest, so it can be re-checked long after capture, with no server involved.</p>
-        <p>Attestation is strictly on demand. The app ships with <strong>no registry address bundled</strong> and makes <strong>no launch-time network call of any kind</strong>. Offline devices simply sign unattested and say so. A software-keychain fallback exists and is labeled as such in the UI — the app never dresses it up as hardware.</p>
-      </div>
-
-      <figure class="code">
-        <figcaption><span class="path">server/server.mjs</span> <span class="tag">nonce binding</span></figcaption>
-<pre><code><span class="c-com">// Re-derive the hash the client committed to, and</span>
-<span class="c-com">// require Apple's signed nonce to match it exactly.</span>
-<span class="c-key">const</span> expectedNonce = <span class="c-fn">sha256</span>(
-  Buffer.<span class="c-fn">concat</span>([authData, clientDataHash]));
-
-<span class="c-key">const</span> nonce = <span class="c-fn">extractNonce</span>(leafCert);  <span class="c-com">// real DER walk</span>
-<span class="c-key">if</span> (!nonce.<span class="c-fn">equals</span>(expectedNonce)) {
-  <span class="c-key">throw new</span> <span class="c-fn">Error</span>(
-    <span class="c-str">'attestation not bound to this signing key'</span>);
-}</code></pre>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 5 · HONESTY MACHINERY ============ -->
-<section class="block" id="honesty">
-  <div class="wrap">
-    <div class="sec-head">
-      <div class="sec-num">04</div>
-      <div>
-        <h2>The honesty is enforced in code</h2>
-        <p class="sec-sub">Anyone can claim strong cryptography. What's unusual here is that the project's restraint — the refusal to overclaim — is compiled and tested, not just promised in a README.</p>
-      </div>
-    </div>
-
-    <h3>Words the product may never say in a verdict</h3>
-    <p class="prose measure" style="color:var(--ink-2); margin-bottom:6px;">A test suite scans every banner, chip, and badge. If any of these words appears in verdict position, the build fails:</p>
-    <div class="banned" aria-label="Banned verdict words">
-      <span class="w">verified</span><span class="w">authentic</span><span class="w">trusted</span><span class="w">proven</span><span class="w">real</span><span class="w">secure</span><span class="w">guaranteed</span>
-    </div>
-
-    <figure class="code">
-      <figcaption><span class="path">desk/src/core/bannedWords.ts</span> <span class="tag">enforced by copy.test.ts</span></figcaption>
-<pre><code><span class="c-key">export const</span> BANNED_VERDICT_WORDS = [
-  <span class="c-str">'verified'</span>, <span class="c-str">'authentic'</span>, <span class="c-str">'trusted'</span>, <span class="c-str">'proven'</span>,
-  <span class="c-str">'real'</span>, <span class="c-str">'secure'</span>, <span class="c-str">'guaranteed'</span>,
-] <span class="c-key">as const</span>;
-<span class="c-com">// "signature mathematically valid" keeps its precise verb.</span>
-<span class="c-com">// "verified" as a summary badge does not ship. Ever.</span></code></pre>
-    </figure>
-
-    <h3 style="margin-top:34px;">Checks we examined and refused to build</h3>
-    <p class="prose measure" style="color:var(--ink-2);">A refusal belongs on the record — a silently absent check looks like an oversight a future contributor will re-propose. Three of the seven, in brief:</p>
-    <div class="cards">
-      <div class="card"><div class="ic">Rejected</div><h4>Error level analysis</h4><p>Its own author discredits it as forensics: the pattern tracks save history, not edit history, and one re-save flattens it. A heat map that glows on command is theatre.</p></div>
-      <div class="card"><div class="ic">Rejected</div><h4>AI-detector classifiers</h4><p>"87% AI-generated" is an unverifiable probability in verdict clothing. The reader cannot re-derive it, and it fails silently on generators the model never saw.</p></div>
-      <div class="card"><div class="ic">Rejected</div><h4>Fused trust scores</h4><p>Collapsing independent signals into one number destroys the information a reader needs — which signal failed, and whether it bears on integrity or credibility at all.</p></div>
-    </div>
-  </div>
-</section>
-
-<!-- ============ 6 · REPRODUCE ============ -->
-<section class="block" id="reproduce">
-  <div class="wrap">
-    <div class="sec-head">
-      <div class="sec-num">05</div>
-      <div>
-        <h2>Don't take our word for it — run it</h2>
-        <p class="sec-sub">Every cryptographic claim on this page can be checked offline in about five minutes. The suites sign fresh media with a random lab key on each run; nothing is canned.</p>
-      </div>
-    </div>
-
-    <div class="cols2">
-      <div class="repro">
-<pre><code><span class="c-com"># node 20+, ffmpeg, and (for the independent checks) c2patool</span>
+    <div>
+<pre><code><span class="c-dim"># node 20+, ffmpeg</span>
 node tests/stage.mjs
-<span class="c-key">cd</span> tests/.staged &amp;&amp; npm install
+cd tests/.staged && npm install
 
 ./node_modules/.bin/tsx test-verification.mts
-./node_modules/.bin/tsx test-070-final.mts
-./node_modules/.bin/tsx test-bmff-deid.mts</code></pre>
-        <div class="out">
-          <div>test-verification &nbsp;<span class="ok">146 passed, 0 failed</span></div>
-          <div>test-070-final &nbsp;&nbsp;&nbsp;&nbsp;<span class="ok">19 passed, 0 failed</span></div>
-          <div>test-bmff-deid &nbsp;&nbsp;&nbsp;&nbsp;<span class="ok">18 passed, 0 failed</span></div>
-        </div>
-      </div>
-
-      <div class="prose">
-        <p>The staging script rewrites <em>only</em> device-service imports — keychain, filesystem, device model — to tiny shims. Every cryptographic operation (canonicalization, CBOR, COSE, hashes, X.509, ECDSA, RSA, CMS) runs as the real shipping code.</p>
-        <p>The independent checks validate our output against <a href="https://github.com/contentauth/c2pa-rs">c2patool</a> — the reference C2PA implementation — not just against ourselves. In CI it runs against a SHA-256-pinned binary, verified before extraction.</p>
-      </div>
-    </div>
-
-    <div class="tally">
-      <div class="t"><div class="big">39</div><div class="cap">test suites</div></div>
-      <div class="t"><div class="big">1,192</div><div class="cap">checks, all green</div></div>
-      <div class="t"><div class="big">0</div><div class="cap">network calls at launch</div></div>
-      <div class="t"><div class="big">100%</div><div class="cap">on-device</div></div>
+<span class="c-ok">→ 146 passed, 0 failed</span></code></pre>
+      <p class="fine">Add <code>c2patool</code> to the path and the independent-verifier checks run too, cross-checking our output against the reference C2PA implementation.</p>
     </div>
   </div>
-</section>
+</div></section>
 
-<!-- ============ 7 · SCOPE / LICENSE ============ -->
-<section class="block" id="scope">
-  <div class="wrap">
-    <div class="sec-head">
-      <div class="sec-num">06</div>
-      <div>
-        <h2>What's open, and what deliberately isn't</h2>
-        <p class="sec-sub">Everything that makes a security claim is here. What's withheld makes no claims — and there's a reason for the line.</p>
-      </div>
+<!-- ============================ LIMITS ============================ -->
+<section class="block" id="limits"><div class="wrap">
+  <p class="seclabel">Honest limits</p>
+  <h2>What this does not do</h2>
+  <p class="sub">Stated here as plainly as the app states them on screen, because a provenance tool that oversells itself is worse than none.</p>
+
+  <div class="grid2">
+    <div>
+      <h3>It cannot tell you a scene was real</h3>
+      <p style="color:var(--textDim)">A signature proves custody of bytes, not truth about the world. A photograph of a screen, a staged scene, or an AI image shot off a monitor will all seal perfectly. The camera commits; it never concludes.</p>
+      <h3>Sensors are claims, not facts</h3>
+      <p style="color:var(--textDim)">Time, GPS, heading and altitude are what the device reported, bound into the signature. That binding is real. Whether the device was telling the truth is a separate question, and the app never pretends otherwise.</p>
     </div>
-
-    <div class="tw" style="margin-bottom:26px;">
-      <table>
-        <thead><tr><th>In this repository</th><th>What it is</th></tr></thead>
-        <tbody>
-          <tr><td class="mono">src/provenance/</td><td>The provenance pipeline: attestation orchestration, record schema, detached manifests, per-track streamed chunks, the engine layer, differential oracle.</td></tr>
-          <tr><td class="mono">src/lib/</td><td>Crypto plumbing: X.509 verifier, RFC 3161, COSE/CBOR, ECDSA signing, the ML-DSA-65 PQ layer, Secure Enclave &amp; App Attest bridges, AES-256-GCM vault.</td></tr>
-          <tr><td class="mono">archive/…/</td><td>The hand-rolled C2PA engine: manifest construction &amp; verification, JPEG/PNG/BMFF embed, the two-axis verifier, the offline App Attest verifier.</td></tr>
-          <tr><td class="mono">desk/</td><td>Source Kit Desk — the newsroom verifier, checking media and proof bundles entirely in the browser (<code>connect-src 'none'</code>, enforced).</td></tr>
-          <tr><td class="mono">tests/</td><td>The validation lab: staging script, shims, and the exact suites quoted above.</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="cols2 prose">
-      <div>
-        <h3 style="margin-top:0;">Why the app shell stays out</h3>
-        <p>A provenance app's entire value is that users can trust what they install. A one-command fork shipping a pixel-identical lookalike under the same name is the one supply-chain attack worth cheaply preventing. Key custody, attestation, signing, and verification are all here; the shell is not, and it makes no security claim.</p>
-        <p><strong>Forking this core to build your own signer is the point.</strong> Ship it under your own name.</p>
-      </div>
-      <div>
-        <h3 style="margin-top:0;">License &amp; credit</h3>
-        <p>Apache-2.0, with a <code>NOTICE</code> that must travel with every redistribution (§4(d)) and a <code>TRADEMARK.md</code>: the code is free to fork, the name <em>Source Kit</em> is not. That combination keeps the tooling open while keeping a lookalike from trading on verification claims it doesn't implement.</p>
-        <p class="divider-note">Found a vulnerability while checking? Report it privately — see SECURITY.md.</p>
-      </div>
+    <div>
+      <h3>Two checks it doesn't perform</h3>
+      <p style="color:var(--textDim)">TSA root anchoring and certificate revocation. Both are named on every verification rather than silently skipped, and the trust ladder marks the time rung unreached rather than implying more than it knows.</p>
+      <h3>It's beta software</h3>
+      <p style="color:var(--textDim)">Written with AI assistance and held to account by the test lab, an independent reference verifier, and a differential oracle. It carries no conformance certification. Don't keep your only copy of something important in it.</p>
     </div>
   </div>
-</section>
+</div></section>
 
-<footer>
-  <div class="wrap">
-    <div class="foot-grid">
-      <div>
-        <div class="brand" style="margin-bottom:14px;"><span class="seal-dot" aria-hidden="true"></span> SOURCE&nbsp;KIT&nbsp;·&nbsp;OPEN</div>
-        <p class="foot-note">The auditable core of an iOS provenance camera. Built for newsroom field work: a signed file can be checked by any desk, offline, in seconds. No accounts, no analytics, no ads.</p>
+<!-- ============================ FOOTER ============================ -->
+<footer><div class="wrap">
+  <div class="foot">
+    <div>
+      <div class="brand" style="margin-bottom:var(--s-sm)">
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.4" fill="none" stroke="var(--accent)" stroke-width="1.7"/><circle cx="10" cy="10" r="3.4" fill="var(--accent)"/></svg>
+        Source Kit
       </div>
-      <div>
-        <h5>Repository</h5>
-        <a href="https://github.com/noah-pi/sourcekit-open">Source on GitHub ↗</a>
-        <a href="https://github.com/noah-pi/sourcekit-open/blob/main/README.md">README</a>
-        <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">Threat model</a>
-        <a href="https://github.com/noah-pi/sourcekit-open/blob/main/SECURITY.md">Security policy</a>
-      </div>
-      <div>
-        <h5>Read more</h5>
-        <a href="#custody">Custody, not reality</a>
-        <a href="#verifier">The verifier</a>
-        <a href="#honesty">Honesty machinery</a>
-        <a href="#reproduce">Reproduce the claims</a>
-      </div>
+      <p class="fine">An open cryptographic camera, published so the next one is easier to build. Apache-2.0 — fork it, ship it under your own name, and tell people what it can and can't do.</p>
     </div>
-    <p class="foot-note" style="margin-top:40px; padding-top:20px; border-top:1px solid var(--rule);">Source Kit — open provenance core · © 2026 Noah Pisner · Apache-2.0 · The name “Source Kit” is a trademark and is not licensed for derivative use.</p>
+    <div>
+      <p class="seclabel">Repository</p>
+      <a href="https://github.com/noah-pi/sourcekit-open">Source ↗</a>
+      <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/ARCHITECTURE.md">Architecture</a>
+      <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">Threat model</a>
+      <a href="https://github.com/noah-pi/sourcekit-open/blob/main/SECURITY.md">Report an issue</a>
+    </div>
+    <div>
+      <p class="seclabel">On this page</p>
+      <a href="#how">How it works</a>
+      <a href="#interface">The interface</a>
+      <a href="#take">What you can take</a>
+      <a href="#build">Build on it</a>
+    </div>
   </div>
-</footer>
+  <p class="fine" style="margin-top:var(--s-xl);padding-top:var(--s-md);border-top:1px solid var(--border)">© 2026 Noah Pisner · Apache-2.0 · “Source Kit” is a trademark and isn’t licensed for derivative use — fork freely, rename proudly.</p>
+</div></footer>
 
 </body>
 </html>

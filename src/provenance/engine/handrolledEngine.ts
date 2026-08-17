@@ -1,7 +1,7 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS3 hand-rolled engine — a thin ADAPTER exposing the archived verifier
- * (archive/handrolled-verifier/, moved not deleted) through the same
+ * (src/c2pa/, moved not deleted) through the same
  * normalized shape as the upstream engine. Refactor only: the archived code
  * is called as-is, with zero behavior change; every existing suite keeps
  * exercising it directly.
@@ -18,7 +18,7 @@ import {
   verifyVideoBytes,
   type VerificationReport,
   type VerifyOptions,
-} from '../../../archive/handrolled-verifier/verifyAsset';
+} from '../../c2pa/verifyAsset';
 import {
   baseResultLike,
   type NormalizedEngineResult,

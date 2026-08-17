@@ -1,0 +1,71 @@
+{
+  "expo": {
+    "name": "Source Kit",
+    "slug": "verify-app",
+    "owner": "noah-pi",
+    "version": "0.18.5",
+    "orientation": "portrait",
+    "icon": "./assets/icons/icon-light.png",
+    "scheme": "verify",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#FAFAF7",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.verify.camera",
+      "buildNumber": "35",
+      "icon": {
+        "light": "./assets/icons/icon-light.png",
+        "dark": "./assets/icons/icon-dark.png",
+        "tinted": "./assets/icons/icon-tinted.png"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Source Kit uses the camera to capture photos and video that you choose to cryptographically sign.",
+        "NSMicrophoneUsageDescription": "Source Kit uses the microphone when you record video with sound or capture signed audio.",
+        "NSSpeechRecognitionUsageDescription": "Source Kit transcribes your recordings on this device so the transcript can travel inside the signed file. Audio never leaves your phone for transcription.",
+        "NSLocationWhenInUseUsageDescription": "Source Kit can attach your approximate location to signed media. This is optional and can be turned off at any time.",
+        "NSFaceIDUsageDescription": "Source Kit can use Face ID to unlock your encrypted vault.",
+        "NSPhotoLibraryUsageDescription": "Source Kit lets you select photos from your library to check their provenance signatures.",
+        "NSPhotoLibraryAddUsageDescription": "Source Kit can save signed photos to your photo library if you enable this option."
+      },
+      "entitlements": {
+        "com.apple.developer.devicecheck.appattest-environment": "production",
+        "com.apple.developer.networking.wifi-info": true
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Source Kit can attach your approximate location to signed media. This is optional and can be turned off at any time."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Source Kit can use Face ID to unlock your encrypted vault."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Source Kit can save signed photos to your photo library if you enable this option.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "expo-secure-store",
+      "expo-video",
+      "expo-sharing",
+      "expo-image"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

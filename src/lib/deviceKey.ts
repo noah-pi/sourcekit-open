@@ -218,7 +218,7 @@ export async function getDeviceCert(): Promise<Uint8Array> {
   const stored = await SecureStore.getItemAsync(certKey, OPTIONS);
   if (stored) {
     const storedDer = base64ToBytes(stored);
-    // staleness migration: the subject is the only place the app name
+    // 0.18.2 staleness migration: the subject is the only place the app name
     // lives in the cert, and a Keychain-cached cert minted under the old name
     // ("Exhibit A") survives the update. Same key, same storage key — when
     // the cached subject no longer matches the current constants, fall
@@ -277,7 +277,7 @@ export async function regenerateDeviceKey(): Promise<DeviceSigner> {
     (enclaveAvailable() && !cached)
   ) {
     // The old attestation was bound to the old key and goes stale here;
-    // the user re-binds on demand (Settings → attest now,).
+    // the user re-binds on demand (Settings → attest now, 0.9.5).
     enclaveDeleteKey();
     const pub = enclaveGenerateKey();
     cached = enclaveSigner(pub);

@@ -24,7 +24,7 @@
 import { readUpstreamAsset, type NormalizedEngineResult } from './upstreamEngine';
 import { readHandrolledPhotoAsset, readHandrolledVideoAsset } from './handrolledEngine';
 import { policyVerdict, type PolicyResult } from './policyLayer';
-import type { VerifyOptions } from '../../../archive/handrolled-verifier/verifyAsset';
+import type { VerifyOptions } from '../../c2pa/verifyAsset';
 
 export interface OracleDivergence {
   /** What differed: 'verdict' | 'manifestFound' | 'signatureFacts' | 'assetHashFacts' | 'unsupportedPosture'. */

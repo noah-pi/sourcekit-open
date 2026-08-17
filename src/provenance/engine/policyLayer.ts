@@ -64,10 +64,10 @@ import type {
   VerificationReport,
   VerifyOptions,
   VerdictCode,
-} from '../../../archive/handrolled-verifier/verifyAsset';
+} from '../../c2pa/verifyAsset';
 import type { SignerTrust } from '../../lib/trustProvider';
 
-export type { VerdictCode } from '../../../archive/handrolled-verifier/verifyAsset';
+export type { VerdictCode } from '../../c2pa/verifyAsset';
 
 export interface PolicyResult {
   verdict: VerdictCode;

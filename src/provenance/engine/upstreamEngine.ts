@@ -5,11 +5,11 @@
  * Verdicts are composed exclusively by policyLayer.ts.
  *
  * Binding (SPEC §1, WS3-Binding-Path §3a):
- * - TARGET: @contentauth/c2pa-node@ (napi over c2pa-rs) —
+ *   - TARGET:  @contentauth/c2pa-node@0.8.1 (napi over c2pa-rs) —
  *     requires **node >= 22** (its `engines` field). The staged harness
  *     and CI run node 20, so this binding cannot load there.
  *   - FALLBACK (documented in SPEC §1 for node < 22):
- * @contentauth/c2pa-wasm@ the SAME c2pa-rs core compiled to
+ *     @contentauth/c2pa-wasm@0.11.1 — the SAME c2pa-rs core compiled to
  *     wasm, pinned exactly, runs on node 20. This module prefers c2pa-node
  *     on node >= 22 and uses the wasm build otherwise; `engine` in the
  *     result says which one actually ran, so reports stay honest.

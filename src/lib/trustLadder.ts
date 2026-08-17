@@ -39,7 +39,7 @@
  *   neutral and gets its own card) — projectTrustLadder returns null.
  */
 
-import type { VerdictCode } from '../../archive/handrolled-verifier/verifyAsset';
+import type { VerdictCode } from '../c2pa/verifyAsset';
 import type { TrustTier } from './trustProvider';
 
 export type RungState = 'reached' | 'unreached' | 'failed' | 'not-applicable';

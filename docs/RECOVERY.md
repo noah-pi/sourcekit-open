@@ -3,7 +3,7 @@
 When proof travels separately from media (hash-only claims, proof-only
 bundles, de-identified copies), the desk eventually needs to answer: *which
 file does this proof belong to?* This document defines the recovery index
-the desk tool builds locally, and the honesty rules for matches.
+a desk-side tool builds locally, and the honesty rules for matches.
 
 ## The three match grades — never merged
 
@@ -31,7 +31,7 @@ the desk tool builds locally, and the honesty rules for matches.
 
 ## Index format (`verify-recovery-index/1`)
 
-Built and stored locally by the desk tool at intake; never uploaded.
+Built and stored locally by a desk-side tool at intake; never uploaded.
 
 ```json
 {

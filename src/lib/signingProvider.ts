@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * SigningProvider — the pluggable signing seam (portable trust).
+ * SigningProvider — the pluggable signing seam (0.9.0, portable trust).
  *
  * The rule: certificate and key are supplied at build or runtime by whoever
  * ships the app — never bundled, never hardcoded, no assumption about

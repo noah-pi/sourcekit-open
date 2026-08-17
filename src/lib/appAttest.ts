@@ -25,8 +25,8 @@
  * on-chip). Attestation upgrades the key's public credibility; it is never
  * a gate on signing.
  *
- * (zero-dependency): the app ships with no registry address and never
- * contacts one on its own. (set-and-forget): attestation runs
+ * 0.9.5 (zero-dependency): the app ships with no registry address and never
+ * contacts one on its own. 0.18.0 (set-and-forget): attestation runs
  * AUTOMATICALLY on first launch and silently retries on later launches while
  * absent — with a LOCALLY generated challenge, so no network or registry is
  * needed at all. The local challenge changes nothing a verifier checks:
@@ -68,7 +68,7 @@ const OPTIONS: SecureStore.SecureStoreOptions = {
 
 /**
  * The configured registry, or null when none was ever set. There is NO
- * bundled default: Source Kit does not phone any server home. Any
+ * bundled default (0.9.5): Source Kit does not phone any server home. Any
  * registry speaking the open format in server/ works — self-hosted or
  * public — and the user chooses it explicitly in Settings.
  */
@@ -92,7 +92,7 @@ export interface AttestState {
   /** SHA-256 of the bound Secure Enclave signing public key, hex. */
   boundFingerprint: string;
   registeredAt: string;
-  /** Where the challenge came from — absent on older states (registry). */
+  /** Where the challenge came from — absent on pre-0.18.0 states (registry). */
   origin?: 'local' | 'registry';
 }
 
@@ -201,7 +201,7 @@ export async function attestThisDevice(
 }
 
 /**
- * Registry-free attestation: the challenge is 32 fresh random bytes
+ * Registry-free attestation (0.18.0): the challenge is 32 fresh random bytes
  * generated on-device — no server round-trip, nothing to configure. The
  * verifier's math is identical (nonce = SHA256(authData ‖ SHA256(challenge ‖
  * signingPublicKey)) against Apple's root); what a registry adds is ITS
@@ -239,7 +239,7 @@ export async function attestThisDeviceLocally(
 }
 
 /**
- * Set-and-forget entry point: called at every launch. Returns the
+ * Set-and-forget entry point (0.18.0): called at every launch. Returns the
  * current state immediately when one is bound to the active signing key;
  * otherwise attests silently — via the configured registry when one is set,
  * else with a local challenge. Key rotation invalidates the old binding, so

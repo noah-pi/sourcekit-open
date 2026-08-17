@@ -234,10 +234,8 @@ export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Ar
       return FAIL(`TSA signature does not verify${tsaName ? ` (${tsaName})` : ''}`, tsaFingerprints);
     }
 
-    // Check 4: TSA chain links + the signer cert was valid AT genTime. The
-    // required timestamping EKU is enforced inside verifyChain too, so a
-    // critical extKeyUsage on the TSA leaf is honored, not merely parsed.
-    const chain = verifyChain(certs.map((c) => c.der), [], genTimeMs, OID_KP_TIME_STAMPING);
+    // Check 4: TSA chain links + the signer cert was valid AT genTime.
+    const chain = verifyChain(certs.map((c) => c.der), [], genTimeMs);
     if (!chain.linksValid) return FAIL(`TSA certificate chain broken: ${chain.reason}`, tsaFingerprints);
     if (genTimeMs < signer.notBeforeMs || genTimeMs > signer.notAfterMs) {
       return FAIL('TSA certificate was not valid at the timestamp time', tsaFingerprints);

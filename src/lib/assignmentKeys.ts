@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Per-assignment signing keys (source protection).
+ * Per-assignment signing keys (0.9.0 source protection).
  *
  * When assignment mode is on, captures sign with a dedicated key per
  * assignment instead of the device's long-lived key:

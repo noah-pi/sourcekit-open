@@ -30,11 +30,11 @@ fs.mkdirSync(out, { recursive: true });
 const STAGE = [
   // Hand-rolled verification core — ARCHIVED but still wired as the
   // differential oracle and the desk's current engine. Staged from
-  // archive/handrolled-verifier/ under flat basenames, so the suites
+  // src/c2pa/ under flat basenames, so the suites
   // import './verifyAsset.mts' etc.
-  'archive/handrolled-verifier/verifyAsset.ts', 'archive/handrolled-verifier/verifyAppAttest.ts',
-  'archive/handrolled-verifier/c2pa.ts', 'archive/handrolled-verifier/bmff.ts',
-  'archive/handrolled-verifier/jpegApp11.ts', 'archive/handrolled-verifier/png.ts',
+  'src/c2pa/verifyAsset.ts', 'src/c2pa/verifyAppAttest.ts',
+  'src/c2pa/c2pa.ts', 'src/c2pa/bmff.ts',
+  'src/c2pa/jpegApp11.ts', 'src/c2pa/png.ts',
   'src/provenance/attest.ts', 'src/provenance/manifest.ts',
   'src/provenance/detached.ts',
   // Stereo-capture artifact ingestion (Spec-Camera-Module-0.13): three-state
@@ -74,41 +74,27 @@ const STAGE = [
   // desk-side analyzers staged so the lab exercises the SAME code the desk
   // ships (parallax; display-beat / ENF-extract / onset
   // A/V desync / rolling-shutter skew; @exhibit/lib/* imports rewired below).
-  'desk/src/core/parallax.ts',
-  'desk/src/core/displayBeat.ts', 'desk/src/core/enfExtract.ts',
-  'desk/src/core/avSync.ts', 'desk/src/core/rollingShutter.ts',
   // rephoto + videoMotion are raster.ts/avExtract.ts's desk-core
   // dependencies (type-level for avExtract, runtime for raster).
   // NOTE: desk/src/core/rephoto.ts collides on basename with
   // src/lib/rephoto.ts — it is staged below as deskRephoto.mts instead.
-  'desk/src/core/videoMotion.ts',
-  'desk/cli/raster.ts', 'desk/cli/avExtract.ts',
   // Stereo planarity verifier (P4) — committed-input types, LUT
   // undistortion, pure-TS homography RANSAC, the distance-gated signal,
   // and the public entry point. Zero external deps by design.
-  'desk/stereo/types.ts', 'desk/stereo/undistort.ts',
-  'desk/stereo/homography.ts', 'desk/stereo/planarity.ts',
-  'desk/stereo/index.ts',
   // Feature-extraction front end for the stereo verifier: FAST-9/Harris
   // corners, oriented rBRIEF descriptors, Hamming matching with ratio +
   // cross-check, epipolar pre-filter from the committed calibration.
-  'desk/stereo/match.ts',
   // Desk stereo bundle command (exhibit-desk stereo): extraction, integrity,
   // planarity signal. Imports @exhibit/provenance/stereoArtifacts and
   // ../stereo/index — rewired below.
-  'desk/cli/stereoVerify.ts',
   // Multi-baseline (three-lens: ultra-wide/wide/tele) stereo verifier —
   // per-pair two-view pipeline reuse + the over-determined
   // composition-consistency check. Sibling './x' imports flatten via the
   // same rewrite rules as the other stereo modules.
-  'desk/stereo/multibaseline.ts',
   // P5 single-image physics checks (Lumethic-derived): radial CA structure,
   // JPEG-grid-in-RAW with a provenance gate, Poisson–PRNU profile. The
   // orchestrator index.ts is staged separately at the end of this file as
   // singleimageIndex.mts (basename collision with desk/stereo/index.ts).
-  'desk/singleimage/caRadial.ts',
-  'desk/singleimage/jpegGrid.ts',
-  'desk/singleimage/poissonPrnu.ts',
 ];
 
 function rewrite(src, fname) {
@@ -116,8 +102,8 @@ function rewrite(src, fname) {
     // Longest prefixes FIRST: engine/ modules are one level deeper than
     // provenance/ modules, and archived modules reach back into src/ —
     // everything flattens to './x.mts' here.
-    .replace(/from '\.\.\/\.\.\/\.\.\/archive\/handrolled-verifier\/(\w+)'/g, "from './$1.mts'")
-    .replace(/from '\.\.\/\.\.\/archive\/handrolled-verifier\/(\w+)'/g, "from './$1.mts'")
+    .replace(/from '\.\.\/\.\.\/c2pa\/(\w+)'/g, "from './$1.mts'")
+    .replace(/from '\.\.\/c2pa\/(\w+)'/g, "from './$1.mts'")
     // engine/ modules reach src/lib as '../../lib/x' (policyLayer → trustProvider).
     .replace(/from '\.\.\/\.\.\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/\.\.\/src\/lib\/(\w+)'/g, "from './$1.mts'")
@@ -173,13 +159,6 @@ for (const name of DISCLOSURE_STAGE) {
   fs.writeFileSync(path.join(out, `disclosure-${name}.mts`), src);
 }
 
-// desk/src/core/rephoto.ts — the basename collision with src/lib/rephoto.ts
-// (both would stage as rephoto.mts). Staged under a distinct name; raster.mts
-// and avExtract.mts are rewritten to point at it above.
-{
-  const src = fs.readFileSync(path.join(root, 'desk/src/core/rephoto.ts'), 'utf8');
-  fs.writeFileSync(path.join(out, 'deskRephoto.mts'), rewrite(src, 'deskRephoto'));
-}
 
 // shims — filesystem shim roots inside the staged dir
 for (const f of fs.readdirSync(path.join(here, 'shims'))) {
@@ -242,11 +221,3 @@ fs.writeFileSync(path.join(out, 'package.json'), JSON.stringify({
 console.log('staged →', out);
 console.log('next: cd tests/.staged && npm install && ./node_modules/.bin/tsx test-070-final.mts');
 
-// --- P5 append (singleimage orchestrator) -----------------------------------
-// desk/singleimage/index.ts stages as singleimageIndex.mts: the flat staged
-// dir already carries desk/stereo/index.ts as index.mts, and the basename
-// flattening would clobber it. Same rewrite() pipeline as the STAGE list.
-{
-  const src = fs.readFileSync(path.join(root, 'desk/singleimage/index.ts'), 'utf8');
-  fs.writeFileSync(path.join(out, 'singleimageIndex.mts'), rewrite(src, 'singleimageIndex'));
-}

@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * tsaTrustList — pinned time-stamping authorities. A valid RFC 3161
+ * tsaTrustList — pinned time-stamping authorities (0.10.0). A valid RFC 3161
  * token proves only that SOME TSA signed it — anyone can run a TSA and mint
  * any genTime (e.g. to backdate a capture around a revocation) — so time
  * claims anchor only against this bundled pin list (SHA-256 over cert DER):

@@ -15,20 +15,20 @@ import CoreVideo
  * Architecture: ONE AVCaptureSession; the video/audio data outputs fan out
  * sample buffers on a single serial session queue to:
  *   1. AVAssetWriter        → delivery .mp4 (H.264/AAC)
- * 2. StreamingHasher → legacy stream commitment (see below)
+ *   2. StreamingHasher      → legacy 0.11.x stream commitment (see below)
  *   3. PcmMasterWriter      → LPCM mono 16 kHz 16-bit .caf master (§5.1)
  *   4. RingBuffer           → last 8 frames, JPEG dump on photo only (§4)
  *   5. SensorLogger         → 100 Hz IMU/baro/fused-loc JSONL file (§5.2)
  *
- * Hashing reality (audit,): the StreamingHasher NEVER sees delivery
+ * Hashing reality (audit, 0.12.0): the StreamingHasher NEVER sees delivery
  * (compressed H.264/AAC) bytes. Video capture frames are CVPixelBuffer-backed
  * with no CMBlockBuffer, so hashBytes's CMSampleBufferGetDataBuffer guard is
  * always nil and no video byte is ever hashed — the video Merkle root is the
  * documented empty-stream SHA-256 with 0 chunks. Audio roots commit the
  * pre-encode native LPCM sample stream handed to the AAC encoder, NOT the
- * AAC bytes stored in the file. these roots are no longer
+ * AAC bytes stored in the file. As of 0.12.0 these roots are no longer
  * consumed for new seals (v2 delivery-file roots are computed at seal time
- * and carry the commitment); the machinery remains only so records
+ * and carry the commitment); the machinery remains only so 0.11.x records
  * can still be reproduced. See StreamingHasher.swift.
  *
  * Thread confinement: ALL mutable session state lives on `sessionQueue`.
@@ -667,16 +667,16 @@ public class CaptureKitModule: Module {
     writerStarted = true
   }
 
-  /// Commit sample-buffer bytes to the legacy streaming hasher.
+  /// Commit sample-buffer bytes to the legacy (0.11.x) streaming hasher.
   ///
-  /// AUDIT NOTE: this does NOT hash delivery/compressed bytes.
+  /// AUDIT NOTE (0.12.0): this does NOT hash delivery/compressed bytes.
   /// Video: AVCaptureVideoDataOutput frames wrap a CVPixelBuffer and carry
   /// no CMBlockBuffer, so the guard below ALWAYS yields nil for capture
   /// frames — no video byte is ever hashed and the video root is the
   /// empty-stream hash with 0 chunks. Audio: the bytes hashed are the
   /// pre-encode native LPCM samples the AAC writer was handed, not the
-  /// encoded AAC in the delivery file. Retained for record
-  /// reproduction only; seals use v2 delivery-file roots.
+  /// encoded AAC in the delivery file. Retained for 0.11.x record
+  /// reproduction only; 0.12.0 seals use v2 delivery-file roots.
   private func hashBytes(track: HashTrack, from sampleBuffer: CMSampleBuffer) {
     // Nil for every video capture frame (CVPixelBuffer-backed, no
     // CMBlockBuffer) — see the audit note above.

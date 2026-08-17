@@ -24,7 +24,7 @@ Natural hand movement over a real 3D scene produces motion a desk can
 cross-check against the footage: near detail should move the way the gyro
 says the phone moved.
 
-**How to review it.** A person (or the desk tool) compares the signed motion
+**How to review it.** A person (or a desk-side tool) compares the signed motion
 against the media. The motion summary should show handheld-class motion for
 a handheld shot; a perfectly static capture carries no motion evidence and
 says so (`steady` / `insufficient-data`).
@@ -158,8 +158,9 @@ labeled as such.
 
 ## Desk-side parallax flatness measurement (1.0.0, WS4)
 
-**What it is.** A desk analyzer (`desk/src/core/parallax.ts`, CLI:
-`exhibit-desk parallax <ringDir> [--sensors log.jsonl] [--json]`, analyzer
+**What it is.** A desk-side analyzer (run by the newsroom, not shipped in this
+repository; the app performs its own on-device parallax measurement — see
+`src/components/forensic/MultipleLensCard.tsx`). Analyzer
 registry tier 1) that measures **scene flatness from the 8-frame pre-shutter
 ring dump** (§4 above) with optional gyro rotation compensation from the
 sensor log (§5.2). Feature points are tracked across the burst with the same
@@ -225,7 +226,7 @@ dressed up as evidence.
 
 ## RESOLVE (WS3) — what any producer's manifest carries
 
-RESOLVE (`desk/src/core/resolve.ts`, CLI: `exhibit-desk resolve <paths...>
+RESOLVE (a desk-side pass, run by the newsroom: `resolve <paths...>
 [--json out.json] [--trust-anchors anchors.pem --trust-list official|interim]`)
 parses **any producer's C2PA manifest** via the official engine
 (`@contentauth/c2pa-node@0.8.1` on node ≥ 22; `@contentauth/c2pa-wasm@0.11.1`
@@ -270,7 +271,7 @@ never a badge.
   media carries no credentials. RESOLVE says "no", and that is all it says.
 - Corpus characterization pending; no error rates published.
 
-## Signals deliberately left to the desk tool
+## Signals deliberately left to desk-side analysis
 
 Moiré analysis (screen-refresh interference patterns), specular/flat-field
 checks, and focus-consistency heuristics need pixel access and compute the

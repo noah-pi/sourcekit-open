@@ -13,8 +13,8 @@ import {
   parseManifestChain, verifyManifest, sha256ExcludingRanges,
   boxExcluded, u64be,
   type C2paManifest,
-} from '../../archive/handrolled-verifier/c2pa';
-import { parseRootBoxes } from '../../archive/handrolled-verifier/bmff';
+} from '../c2pa/c2pa';
+import { parseRootBoxes } from '../c2pa/bmff';
 
 export interface DetachedMatch {
   /** The active manifest's label, for display. */

@@ -101,7 +101,7 @@ The audit flagged `shamir.ts`, `rephoto.ts`, `roc.ts`, `imuflow.ts`,
 `opticalflow.ts` as unimported in the app tree. They are app-unused but
 **ecosystem-live**: `shamir` backs the desk key manager, `rephoto`/
 `imuflow`/`opticalflow` are the desk-side analyzers named in
-docs/INTEGRITY.md ("signals deliberately left to the desk tool"), and `roc`
+docs/INTEGRITY.md ("signals deliberately left to desk-side analysis"), and `roc`
 is the error-rate math behind the corpus gate (no UI signal without
 characterized error rates). The app and desk share one mirrored `src/lib`
 by deliberate repo-boundary design — the desk imports the same tree, never

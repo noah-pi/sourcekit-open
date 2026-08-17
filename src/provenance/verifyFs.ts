@@ -15,7 +15,7 @@ import {
   verifyWithSidecarBytes,
   type VerificationReport,
   type VerifyOptions,
-} from '../../archive/handrolled-verifier/verifyAsset';
+} from '../c2pa/verifyAsset';
 
 export async function verifyPhoto(photoUri: string, opts?: VerifyOptions): Promise<VerificationReport> {
   try {

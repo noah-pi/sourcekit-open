@@ -386,9 +386,6 @@ export function verifyCertSignature(child: ParsedCert, parent: ParsedCert): bool
 /** id-kp-timeStamping (1.3.6.1.5.5.7.3.8) — RFC 3161 §2.3 requires this EKU on TSA certs. */
 export const OID_KP_TIME_STAMPING = '2b06010505070308';
 
-/** anyExtendedKeyUsage (2.5.29.37.0) — a leaf asserting it satisfies any purpose. */
-export const OID_ANY_EXT_KEY_USAGE = '551d2500';
-
 /**
  * True when the cert's Extended Key Usage includes the given KeyPurposeId
  * (hex OID content). Missing or malformed EKU → false: purpose checks fail
@@ -468,17 +465,17 @@ export function keyUsageBits(cert: ParsedCert): number | null {
 const KEY_CERT_SIGN = 0x04;
 
 /**
- * Critical extensions this verifier consumes. basicConstraints and keyUsage
- * are enforced during chain verification. extKeyUsage is enforced on the
- * leaf when the caller names a required purpose (verifyChain's
- * requiredLeafEku) — so a critical extKeyUsage is honored, not merely
- * parsed. Non-leaf EKUs are not used as path constraints.
- *
- * Any other critical extension fails the chain: the issuer marked it
- * must-understand, and a verifier that cannot honor it must not guess
- * (RFC 5280 §4.2). subjectKeyIdentifier/authorityKeyIdentifier are not
- * consumed here, so a critical instance (itself a spec violation — both
- * must be non-critical) correctly fails.
+ * Critical extensions this verifier accepts. basicConstraints and keyUsage
+ * are CONSUMED (enforced during chain verification). extKeyUsage is
+ * accepted without enforcement: no EKU constraint this verifier accepts
+ * would change a verdict here, but note the asymmetry — a future
+ * constraining critical EKU would be accepted unhonored.
+ * Any OTHER extension marked critical fails chain
+ * verification closed: the issuer marked it must-understand, and a
+ * verifier that does not understand it must not guess (RFC 5280 §4.2).
+ * subjectKeyIdentifier/authorityKeyIdentifier are NOT consumed by this
+ * verifier, so critical instances (a spec violation in itself — RFC 5280
+ * mandates both be non-critical) correctly fail here.
  */
 const RECOGNIZED_CRITICAL_EXTENSIONS: Set<string> = new Set([
   OID.basicConstraints,
@@ -564,15 +561,11 @@ function orderByIssuer(certs: ParsedCert[]): ParsedCert[] | null {
  * signed by (or be) one of them. `atMs` sets the validity reference time —
  * pass the VERIFIED signing time, never the verifier's clock, when one
  * exists; pass null to skip validity (and report it as not performed).
- * `requiredLeafEku`, when set (a KeyPurposeId OID hex), requires the leaf to
- * assert that extended key usage — or anyExtendedKeyUsage — and fails the
- * chain otherwise; pass null to make no purpose demand.
  */
 export function verifyChain(
   chainDer: Uint8Array[],
   pinnedRoots: Uint8Array[] = [],
   atMs: number | null = null,
-  requiredLeafEku: string | null = null,
 ): ChainResult {
   let certs: ParsedCert[];
   try {
@@ -614,13 +607,6 @@ export function verifyChain(
       if (RECOGNIZED_CRITICAL_EXTENSIONS.has(oidHex)) continue;
       if (i === 0 && oidHex === OID_APPLE_ATTEST_NONCE) continue;
       return fail(`${displayName(c) ?? 'a certificate'} carries a critical extension (${oidHexToDotted(oidHex)}) this verifier does not recognize; refusing to guess its meaning`);
-    }
-    // Extended Key Usage (RFC 5280 §4.2.1.12): when the caller names a
-    // required purpose, the leaf must assert it (or anyExtendedKeyUsage).
-    // This honors a critical extKeyUsage rather than merely parsing it.
-    if (i === 0 && requiredLeafEku !== null &&
-        !hasKeyPurpose(c, requiredLeafEku) && !hasKeyPurpose(c, OID_ANY_EXT_KEY_USAGE)) {
-      return fail(`the leaf certificate does not assert the required extended key usage (${oidHexToDotted(requiredLeafEku)})`);
     }
     // Key-usage discipline (RFC 5280 §4.2.1.3): a leaf that may sign
     // certificates is a CA that skipped basicConstraints — forbid

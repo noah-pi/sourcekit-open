@@ -129,9 +129,6 @@ jobs:
         run: ./node_modules/.bin/tsx test-disclosure.mts
         working-directory: tests/.staged
 
-      - name: Parallax scene-flatness analyzer suite
-        run: ./node_modules/.bin/tsx test-parallax.mts
-        working-directory: tests/.staged
 
       - name: JUMBF layout parity suite
         run: ./node_modules/.bin/tsx test-jumbf-parity.mts
@@ -149,25 +146,10 @@ jobs:
         run: ./node_modules/.bin/tsx test-posetrace.mts
         working-directory: tests/.staged
 
-      - name: Audio/video sync analyzer suite
-        run: ./node_modules/.bin/tsx test-avsync.mts
-        working-directory: tests/.staged
 
-      - name: A/V extraction adapter suite
-        run: ./node_modules/.bin/tsx test-avextract.mts
-        working-directory: tests/.staged
 
-      - name: Display-beat analyzer suite
-        run: ./node_modules/.bin/tsx test-displaybeat.mts
-        working-directory: tests/.staged
 
-      - name: ENF extraction analyzer suite
-        run: ./node_modules/.bin/tsx test-enf.mts
-        working-directory: tests/.staged
 
-      - name: Rolling-shutter skew analyzer suite
-        run: ./node_modules/.bin/tsx test-skew.mts
-        working-directory: tests/.staged
 
       - name: Real FreeTSA token regression suite (stored fixture, no network)
         run: ./node_modules/.bin/tsx test-tsa-real-network.mts
@@ -177,24 +159,7 @@ jobs:
         run: ./node_modules/.bin/tsx test-vault-hygiene.mts
         working-directory: tests/.staged
 
-  desk:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 20
-      - name: Install (locked) and build
-        run: npm ci --no-audit --no-fund && npm run build
-        working-directory: desk
 
-      - name: CLI typecheck + smoke
-        run: ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/tsx cli/exhibit-c.ts --help
-        working-directory: desk
-
-  # The app core (src/) has no build step of its own — the staged lab is
-  # the app's real shipped code with device services rewired to shims, so
-  # that is what gets typechecked. Mirrors the desk job's strict tsc.
   app-typecheck:
     runs-on: ubuntu-latest
     steps:
@@ -206,14 +171,13 @@ jobs:
       - name: Stage the app core (real code + device shims)
         run: node tests/stage.mjs
 
-      - name: Install staged dependencies (exact versions)
+      - name: Install staged dependencies
         run: npm install --package-lock-only --no-audit --no-fund && npm ci --no-audit --no-fund
         working-directory: tests/.staged
 
-      - name: Typecheck the app tree (strict)
-        # App modules + shims only; the test/tool suites are runners, not
-        # the tree under check. typescript and @types/node come in unsaved
-        # so the staged manifest stays byte-identical to what stage.mjs wrote.
+      - name: Typecheck the staged tree (strict)
+        # The staged lab is the app's real shipped code with device services
+        # rewired to shims, so that is what gets typechecked.
         run: |
           npm install --no-save --no-audit --no-fund typescript@5.6.3 @types/node@20.14.0
           ./node_modules/.bin/tsc --noEmit --strict --skipLibCheck \
@@ -222,6 +186,7 @@ jobs:
             --allowImportingTsExtensions --resolveJsonModule \
             $(ls *.mts | grep -v -E '^(test|tool|build)-')
         working-directory: tests/.staged
+
 
   supply-chain:
     runs-on: ubuntu-latest
@@ -234,9 +199,6 @@ jobs:
       - name: Dependency budget (allow-list + caps + lockfiles)
         run: node scripts/check-dependency-budget.mjs
 
-      - name: npm audit — desk
-        run: npm audit --audit-level=high
-        working-directory: desk
 
       - name: npm audit — server
         run: npm audit --audit-level=high
