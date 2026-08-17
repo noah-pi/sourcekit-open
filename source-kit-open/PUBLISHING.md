@@ -3,7 +3,7 @@
 Five minutes, from a new terminal.
 
 ```sh
-cd ~/Downloads/source-kit-open
+cd ~/Downloads/sourcekit-open
 git init
 git add -A
 git commit -m "Source Kit open provenance core (0.18.3)"
@@ -13,14 +13,14 @@ Create the GitHub repo and push. If you have the GitHub CLI:
 
 ```sh
 gh auth login            # browser flow, once
-gh repo create source-kit-open --public --source . --push
+gh repo create sourcekit-open --public --source . --push
 ```
 
-Without the CLI: github.com → New repository → name it `source-kit-open` →
+Without the CLI: github.com → New repository → name it `sourcekit-open` →
 **do not** add a README/license (we ship our own) → then:
 
 ```sh
-git remote add origin https://github.com/<your-username>/source-kit-open.git
+git remote add origin https://github.com/<your-username>/sourcekit-open.git
 git branch -M main
 git push -u origin main
 ```
@@ -43,5 +43,5 @@ git push -u origin main
 - Independent review of the PNG `caBX` embed vs. the C2PA 2.x spec
 - Additional TSA endpoints / countersignature policy
 - Android port of the provenance core (the crypto is platform-neutral TS)
-- Verifier CLI: wrap `verifyAsset.ts` so `npx source-kit-open <file>` works
+- Verifier CLI: wrap `verifyAsset.ts` so `npx sourcekit-open <file>` works
   without the iOS app

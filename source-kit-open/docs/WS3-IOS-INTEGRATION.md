@@ -30,7 +30,7 @@ signers; not Secure Enclave (hardware is P-256/ES256 only)".
   text preserved (`C2PAError.errorDescription` = `"C2PA API error: <raw>"`,
   carried to JS by a `NamedException` — same SDK-57 reason-propagation fix as
   CaptureKit). The TS bridge sorts codes/messages into facts; the policy layer
-  (synced from source-kit-open) is the sole verdict authority.
+  (synced from sourcekit-open) is the sole verdict authority.
 - **Normalization is verbatim from the desk engine** (status-code classes,
   ORDERED `classifyThrown` chain, store-JSON summarization, fail-closed
   unknown-class rule, trust-input composition, container gate). The
@@ -234,7 +234,7 @@ import {
 ```
 
 - Feed `verify(...)`'s result to `policyVerdict(...)` from the policy layer
-  (synced from source-kit-open by the main agent — the app's policyLayer is NOT
+  (synced from sourcekit-open by the main agent — the app's policyLayer is NOT
   part of this deliverable). Never compose verdicts from the normalized
   fields directly (1.0.0 audit M-06).
 - Suggested seam: wherever the verify flow currently calls the hand-rolled

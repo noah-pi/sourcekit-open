@@ -4,6 +4,22 @@ Release notes are written per-milestone in `docs/` — see
 `docs/RELEASE-0.8.0.md` through `docs/RELEASE-0.9.5.md` for the early
 history. From 0.18.x onward, notable changes are listed here.
 
+## Unreleased
+
+- **X.509 verifier:** `verifyChain` gained an optional `requiredLeafEku`
+  argument. The RFC 3161 path passes `id-kp-timeStamping`, so the TSA
+  leaf's extended key usage is now honored inside chain verification (a
+  critical `extKeyUsage` is enforced, not merely parsed) in addition to the
+  existing explicit signer check. Other callers pass nothing and are
+  unchanged.
+- **Desk supply chain:** `desk/package-lock.json` regenerated against the
+  public npm registry — the previous lockfile resolved every dependency
+  against an internal mirror, which would fail `npm ci` on any external
+  checkout and in CI.
+- **c2pa-ios:** `Frameworks/FRAMEWORK-STORAGE.md` rewritten — the binary
+  `C2PAC.xcframework` is an iOS-app build dependency sourced from upstream
+  c2pa-swift, not part of the open core, and is not committed here.
+
 ## 0.18.4 — 2026-08-17
 
 - **Stereo capture graph (app, 0.18.4):** the rear dual-camera path moved

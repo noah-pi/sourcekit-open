@@ -1,5 +1,5 @@
 {
-  "name": "source-kit-open",
+  "name": "sourcekit-open",
   "version": "0.18.4",
   "description": "Source Kit — open provenance core: the auditable capture-signing and verification code, the validation lab, the Desk web app, the CLI, and the attestation relay.",
   "license": "Apache-2.0",

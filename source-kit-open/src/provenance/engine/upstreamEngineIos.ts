@@ -3,7 +3,7 @@
  * WS3 upstream engine — iOS binding (SPEC WS3 phase iOS, WS3-Binding-Path
  * §2/§7a). Wraps the native module `modules/c2pa-ios` (c2pa-swift v0.0.12,
  * C2PAC.xcframework, iOS 16+) and returns the SAME NORMALIZED result shape
- * as the desk engine (source-kit-open src/provenance/engine/upstreamEngine.ts),
+ * as the desk engine (sourcekit-open src/provenance/engine/upstreamEngine.ts),
  * so the shared policy layer (policyLayer.ts — THE verdict authority) is fed
  * identical facts on device and on desk. NO VERDICTS HERE — normalization
  * only (SPEC §2.1).
