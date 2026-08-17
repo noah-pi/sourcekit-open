@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Source Kit — a camera that seals what it sees</title>
-<meta name="description" content="An open cryptographic camera. Every capture is signed at the shutter, on-device, with real C2PA Content Credentials. Take the parts you need — the crypto core, the native modules, the whole interface." />
+<title>Source Kit — a camera that signs what it records</title>
+<meta name="description" content="An open cryptographic camera. Signed at the shutter, on the device, into the file itself — with the cryptography, the native modules and the whole interface published to build on." />
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Source Kit — a camera that seals what it sees" />
-<meta property="og:description" content="An open cryptographic camera. Signed at the shutter, on-device, offline. Built to be taken apart and built on." />
+<meta property="og:title" content="Source Kit — a camera that signs what it records" />
+<meta property="og:description" content="Signed at the shutter, on the device, into the file itself. Built to be taken apart." />
 <meta property="og:url" content="https://noah-pi.github.io/sourcekit-open/" />
 <meta property="og:image" content="https://noah-pi.github.io/sourcekit-open/banner.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Source Kit — a camera that seals what it sees" />
+<meta name="twitter:title" content="Source Kit — a camera that signs what it records" />
 <meta name="twitter:image" content="https://noah-pi.github.io/sourcekit-open/banner.png" />
 <style>
 /* ===========================================================================
@@ -211,7 +211,7 @@ footer a:hover{color:var(--accent)}
     <a href="#interface">The interface</a>
     <a href="#take">What you can take</a>
     <a href="#build">Build on it</a>
-    <a href="#limits">Honest limits</a>
+    <a href="#limits">What's left</a>
   </div>
   <a class="btn ghost" style="padding:8px 14px;font-size:13px" href="https://github.com/noah-pi/sourcekit-open">GitHub ↗</a>
 </div></nav>
@@ -220,12 +220,12 @@ footer a:hover{color:var(--accent)}
 <header class="hero"><div class="wrap hero-grid">
   <div>
     <p class="seclabel">Open source · Apache-2.0</p>
-    <h1>A camera that seals what it sees.</h1>
-    <p class="lede">The moment you shoot, the phone signs the bytes, the time, and what its sensors said. Nothing about the file can change afterwards without breaking that seal.</p>
-    <p class="lede" style="font-size:17px">This is the whole thing, opened up — the cryptography, the native modules, and the interface. Take what's useful.</p>
+    <h1>A camera that signs what it records.</h1>
+    <p class="lede">At the shutter, on the device, into the file itself. Anyone can check it afterwards without asking me for anything.</p>
+    <p class="lede" style="font-size:17px">This is all of it — the cryptography, the native modules, the interface, the test lab. Take what's useful.</p>
     <div class="cta">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
-      <a class="btn ghost" href="#how">See how it works</a>
+      <a class="btn ghost" href="#how">The shutter path</a>
     </div>
   </div>
 
@@ -286,14 +286,14 @@ footer a:hover{color:var(--accent)}
 
 <!-- ============================ THESIS ============================ -->
 <section class="block"><div class="wrap">
-  <p class="pull measure">It proves the file. Not the scene. <span>A seal says these bytes haven't changed since this phone signed them — what the phone recorded alongside is evidence you can weigh, never a verdict the software hands down.</span></p>
+  <p class="pull measure">Detection is guessing, and it gets worse as the generators get better. <span>Provenance is the other answer: not proof that a scene was real, but an unbroken, checkable record of where a file came from — and it's only cheap to establish at one instant.</span></p>
 </div></section>
 
 <!-- ============================ HOW ============================ -->
 <section class="block" id="how"><div class="wrap">
   <p class="seclabel">How it works</p>
-  <h2>What happens when you press the shutter</h2>
-  <p class="sub">Six things, all on the device, in the time it takes to write the file. Sealing and checking both work with the radio off.</p>
+  <h2>The shutter path</h2>
+  <p class="sub">Six things happen on the device before the file exists. Sealing and verifying both work with the radio off — no accounts, no analytics, no launch-time network calls.</p>
 
   <div class="grid2">
     <div>
@@ -377,16 +377,16 @@ footer a:hover{color:var(--accent)}
 <!-- ============================ BUILD ON IT ============================ -->
 <section class="block" id="build"><div class="wrap">
   <p class="seclabel">Build on it</p>
-  <h2>Things worth doing next</h2>
-  <p class="sub">This is a reference implementation, not a platform. It's most useful as parts. If any of these appeal, they're genuinely open — no coordination needed, no permission to ask.</p>
+  <h2>Worth building next</h2>
+  <p class="sub">This is most useful as parts. If any of these appeal, take them — no coordination needed, no permission to ask.</p>
 
   <div class="grid3">
     <div class="card"><h3 style="margin-top:0">An Android port</h3><p style="font-size:15px;color:var(--textDim);margin:0">The provenance core is platform-neutral TypeScript. What's needed is the equivalent of <code>modules/secure-enclave</code> against Android Keystore and Play Integrity — the record format and verifier carry over unchanged.</p></div>
     <div class="card"><h3 style="margin-top:0">A standalone verifier</h3><p style="font-size:15px;color:var(--textDim);margin:0">Wrap <code>src/c2pa/verifyAsset.ts</code> in a CLI so anyone can check a file with <code>npx</code>, no app required. The verifier is already free of platform dependencies.</p></div>
     <div class="card"><h3 style="margin-top:0">Better time anchoring</h3><p style="font-size:15px;color:var(--textDim);margin:0">TSA root anchoring is the honest gap — there's no mature public root store for timestamping the way there is for the web PKI. A curated, auditable trust list would help every project in this space, not just this one.</p></div>
     <div class="card"><h3 style="margin-top:0">Newsroom key custody</h3><p style="font-size:15px;color:var(--textDim);margin:0">Rosters and revocation are implemented and lab-pinned, but the operational question — how a desk actually enrolls and retires a photographer's key — deserves real field design.</p></div>
-    <div class="card"><h3 style="margin-top:0">Take the interface</h3><p style="font-size:15px;color:var(--textDim);margin:0">The honesty rules encoded in the UI — the ladder, the banned words, disclosing unreached rungs — are the part that took longest to get right. Lift them wholesale; they aren't specific to this app.</p></div>
-    <div class="card"><h3 style="margin-top:0">Attack it</h3><p style="font-size:15px;color:var(--textDim);margin:0">If you find a way to make a forged file verify, that's a real contribution to the field. The suites in <code>tests/</code> show the shape of a good repro.</p></div>
+    <div class="card"><h3 style="margin-top:0">Take the interface</h3><p style="font-size:15px;color:var(--textDim);margin:0">The ladder, the banned verdict words, the unreached-rung disclosures — the part that took longest to get right. Lift it; none of it is specific to this app.</p></div>
+    <div class="card"><h3 style="margin-top:0">Attack it</h3><p style="font-size:15px;color:var(--textDim);margin:0">Make a forged file verify and I'd genuinely like to see it. The suites in <code>tests/</code> show the shape of a good repro.</p></div>
   </div>
 </div></section>
 
@@ -411,24 +411,40 @@ cd tests/.staged && npm install
   </div>
 </div></section>
 
-<!-- ============================ LIMITS ============================ -->
+<!-- ============================ THE REMAINING PROBLEM ============================ -->
 <section class="block" id="limits"><div class="wrap">
-  <p class="seclabel">Honest limits</p>
-  <h2>What this does not do</h2>
-  <p class="sub">Stated here as plainly as the app states them on screen, because a provenance tool that oversells itself is worse than none.</p>
+  <p class="seclabel">The remaining problem</p>
+  <h2>Two different attacks, and only one of them is closed</h2>
+  <p class="sub">A signature proves custody of bytes. It cannot prove what the lens was pointed at &mdash; and that isn't a caveat to bolt on the end, it's the shape of the work that's left.</p>
 
   <div class="grid2">
+    <div class="card">
+      <span class="chip good" style="margin-bottom:var(--s-sm)">largely closed</span>
+      <h3 style="margin-top:0">Injection &mdash; fake photons</h3>
+      <p style="color:var(--textDim);margin:0">Frames substituted below the API, virtual camera drivers, replaced sensor modules. Enclave signing and hardware attestation are aimed squarely at this: they establish that a genuine device and a genuine build produced the bytes.</p>
+    </div>
+    <div class="card">
+      <span class="chip warn" style="margin-bottom:var(--s-sm)">open</span>
+      <h3 style="margin-top:0">Rephotography &mdash; real photons, fake scene</h3>
+      <p style="color:var(--textDim);margin:0">A genuine sensor faithfully recording a monitor. Every cryptographic guarantee here holds perfectly, and the result is a valid seal over a real recording of something that never happened.</p>
+    </div>
+  </div>
+
+  <p class="measure" style="margin-top:var(--s-lg);color:var(--textDim)">Closing injection doesn't reduce rephotography. It makes it the only remaining path, which concentrates attacker effort there. Attestation makes the geometry work more necessary, not less.</p>
+
+  <p class="measure" style="color:var(--textDim)">And rephotography is geometric, which is the encouraging part. A screen three metres away is a plane. Two lenses with a known baseline can measure planarity directly &mdash; a homography residual is a different order of evidence from a monocular depth estimate or a moir&eacute; heuristic, and it degrades honestly: past a few metres the answer is <em>insufficient</em>, never <em>passed</em>.</p>
+
+  <p class="measure" style="color:var(--textDim)">That's what the stereo capture path and the committed second view are for. The verifier keeps custody and scene rigorously separate, because collapsing them into one number is how this whole category loses its credibility.</p>
+
+  <h3 style="margin-top:var(--s-xl)">Where this build actually stands</h3>
+  <div class="grid2">
     <div>
-      <h3>It cannot tell you a scene was real</h3>
-      <p style="color:var(--textDim)">A signature proves custody of bytes, not truth about the world. A photograph of a screen, a staged scene, or an AI image shot off a monitor will all seal perfectly. The camera commits; it never concludes.</p>
-      <h3>Sensors are claims, not facts</h3>
-      <p style="color:var(--textDim)">Time, GPS, heading and altitude are what the device reported, bound into the signature. That binding is real. Whether the device was telling the truth is a separate question, and the app never pretends otherwise.</p>
+      <p style="color:var(--textDim)"><b>Two checks aren't performed:</b> TSA root anchoring and certificate revocation. Both are named on every verification rather than skipped quietly.</p>
+      <p style="color:var(--textDim)"><b>Sensors are claims.</b> Time, GPS, heading and altitude are what the device reported, bound into the signature. The binding is real; whether the device told the truth is a separate question.</p>
     </div>
     <div>
-      <h3>Two checks it doesn't perform</h3>
-      <p style="color:var(--textDim)">TSA root anchoring and certificate revocation. Both are named on every verification rather than silently skipped, and the trust ladder marks the time rung unreached rather than implying more than it knows.</p>
-      <h3>It's beta software</h3>
-      <p style="color:var(--textDim)">Written with AI assistance and held to account by the test lab, an independent reference verifier, and a differential oracle. It carries no conformance certification. Don't keep your only copy of something important in it.</p>
+      <p style="color:var(--textDim)"><b>Stereo capture is unvalidated</b> on iPhone 17 / iOS 26. The verification side is lab-tested; the capture side moved to Apple's virtual dual-wide device graph and hasn't been confirmed in the field.</p>
+      <p style="color:var(--textDim)"><b>Beta software</b>, written with AI assistance and held to account by the test lab, an independent reference verifier, and a differential oracle. No conformance certification.</p>
     </div>
   </div>
 </div></section>

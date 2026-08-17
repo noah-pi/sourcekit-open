@@ -3,94 +3,110 @@
 </p>
 
 <p align="center">
-  <b>A camera that seals what it sees.</b><br>
-  The moment you shoot, the phone signs the bytes, the time, and what its sensors said.<br>
-  Nothing about the file can change afterwards without breaking that seal.
-</p>
-
-<p align="center">
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-1F6B45?style=flat-square"></a>
   <a href=".github/workflows/ci.yml"><img alt="CI" src="https://github.com/noah-pi/sourcekit-open/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="C2PA conformant" src="https://img.shields.io/badge/C2PA-conformant-1F6B45?style=flat-square">
   <img alt="Platform iOS" src="https://img.shields.io/badge/platform-iOS-6E6E73?style=flat-square">
-</p>
-
-<p align="center">
-  <a href="https://noah-pi.github.io/sourcekit-open/"><b>Read the deep dive →</b></a>
+  &nbsp;<a href="https://noah-pi.github.io/sourcekit-open/"><b>Deep dive →</b></a>
 </p>
 
 ---
 
-This is a working cryptographic camera, opened up so the next one is easier to build.
+I built a camera that signs what it records, at the moment it records it. This is all of
+it — the cryptography, the native modules, the interface, and the test lab.
 
-Fakes are free and perfect now, and eyes can't settle it. One answer is to record
-provenance at the only moment it's cheap to establish — the instant of capture — and
-then let anyone check it, offline, forever. That's what this app does, and everything
-it takes to do it is in this repository: the cryptography, the native modules, the
-test lab, and the whole interface.
+The reason is narrow and I want to be precise about it. A photograph used to carry its
+own evidence: grain, optics, the physical awkwardness of faking one. That's gone. What
+replaces it isn't detection — detectors are guessing, and they get worse as the
+generators get better — it's provenance. Not proof that a scene was real, but an
+unbroken, checkable record of where a file came from and what's happened to it since.
 
-**Take what's useful.** Port it to Android, lift the C2PA engine, steal the interface
-patterns, or fork the entire thing under your own name. That's what it's here for.
+Provenance is only cheap to establish at one instant: capture. After that you're
+reconstructing. So the whole design collapses into one problem — commit to everything
+you can, at the shutter, in a way anyone can check later without asking me for
+anything.
 
-## What happens when you press the shutter
+## The shutter path
 
-| | Step | Where |
+Six things happen on the device before the file exists.
+
+| | | |
 |---|---|---|
-| 1 | **Hash the exact bytes.** SHA-256, chunked — checking a video never loads the whole file into memory. | `src/lib/fileHash.ts` |
-| 2 | **Record what the sensors said.** Time, GPS (opt-in), compass heading, barometric altitude, a motion signal. | `src/sensors/` |
-| 3 | **Sign it in the Secure Enclave.** ECDSA P-256. The key is generated on the chip and can't be extracted — signing happens there, never in app memory. | `src/lib/deviceKey.ts`, `modules/secure-enclave/` |
-| 4 | **Write Content Credentials into the file.** A real C2PA manifest — CBOR claim, hard binding, COSE_Sign1 — inside the JPEG, PNG, MP4, MOV or M4A itself. Any C2PA reader can open it. | `src/c2pa/` |
-| 5 | **Add a second signature for later.** ML-DSA-65 (FIPS 204) over the same commitment, so a future break of P-256 doesn't quietly invalidate an archive. | `src/lib/pq.ts` |
-| 6 | **Anchor the time.** RFC 3161 countersignature when there's a network; an OpenTimestamps receipt for independent proof-of-existence. Offline, it signs without and says so. | `src/lib/timestamp.ts`, `src/lib/ots.ts` |
+| 1 | **Hash the exact bytes.** SHA-256, chunked, so verifying a video never loads it whole. | `src/lib/fileHash.ts` |
+| 2 | **Record what the sensors said.** Time, GPS (opt-in), heading, barometric altitude, a motion signal. | `src/sensors/` |
+| 3 | **Sign in the Secure Enclave.** ECDSA P-256. The key is generated on the chip and can't leave it; signing happens there, not in app memory. | `src/lib/deviceKey.ts`, `modules/secure-enclave/` |
+| 4 | **Write Content Credentials into the file.** A real C2PA manifest — CBOR claim, hard binding, COSE_Sign1 — inside the JPEG, PNG, MP4, MOV or M4A. Any C2PA reader opens it. | `src/c2pa/` |
+| 5 | **Sign it again, post-quantum.** ML-DSA-65 over the same commitment, so a future break of P-256 doesn't quietly invalidate an archive. | `src/lib/pq.ts` |
+| 6 | **Anchor the time.** RFC 3161 when there's a network, OpenTimestamps for independent proof-of-existence. Offline it signs without, and says so. | `src/lib/timestamp.ts`, `src/lib/ots.ts` |
 
-Sealing and checking both work with the radio off. There are no accounts, no analytics,
-and no launch-time network calls of any kind. Every optional network event is enumerated
-in [`docs/NETWORK.md`](docs/NETWORK.md).
+Sealing and verifying both work with the radio off. No accounts, no analytics, no
+launch-time network calls. Every optional network event is named in
+[`docs/NETWORK.md`](docs/NETWORK.md).
 
-## It proves the file. Not the scene.
+## The part I find most interesting
 
-A seal says these bytes haven't changed since this phone signed them, and which key
-signed them. It does **not** prove what the camera was pointed at. A photograph of a
-screen, a staged scene, or an AI image shot off a monitor will all seal perfectly.
+Apple gives apps no direct access to App Attest keys, so you can't simply attest your
+signing key. The workaround is a commitment: set the App Attest `clientDataHash` to
+`SHA256(challenge ‖ signingPublicKey)`. Apple's nonce extension in the attestation
+certificate then vouches for *exactly that key* — not merely for some key on some
+genuine device.
 
-The app says this on screen, in plain words, every time. The camera commits; it never
-concludes.
+The binding rides inside every manifest, so anyone can re-check it offline years later
+with no server involved. It's in `src/lib/appAttest.ts` and `server/server.mjs`, and
+it's the piece I'd most like someone to either reuse or break.
 
-## The interface is open too
+## What it can't do, and why that's the interesting part
 
-Getting the cryptography right is half the problem. The other half is telling someone
-what a signature actually means without overstating it — and that lives in the
-interface. It's all here: design tokens, the UI kit, and the screens.
+A signature proves custody of bytes. It cannot prove what the lens was pointed at. Shoot
+a monitor showing a generated video and you get a perfectly valid seal over a perfectly
+real recording of a fake scene.
 
-- **Five rungs, never a badge.** The verdict surface is a ladder, not a shield. Each
-  rung is a separate question with its own answer, and an unreached rung says why.
-  There are no seals or checkmark icons anywhere in the product — they read as
-  authority claims, and this software isn't an authority. *(`src/components/TrustLadder.tsx`)*
-- **The card survives the crop.** It carries its own title and limits *inside* the
-  frame, so it still tells the truth when someone screenshots it.
-- **Words the product may never use.** A test fails the build if *verified*,
-  *authentic*, *trusted*, *proven*, *real*, *secure* or *guaranteed* appears in a
-  verdict position. Operations that genuinely ran keep their precise verbs.
-- **Unsigned is neutral grey, never red.** Absence of a credential is not evidence of
-  tampering, so it isn't coloured like it.
-- **A dual light/dark palette** resolved at module load, with contrast ratios recorded
-  next to the values that carry the product's honesty sentences. *(`src/theme.ts`)*
+That's not a caveat to bolt onto the end — it's the shape of the remaining problem.
+Attestation closes *injection*: substituted frames, virtual camera drivers, forged
+sensor data. It does nothing to *rephotography*: real photons, fake scene. Closing
+injection doesn't reduce rephotography, it concentrates attacker effort there.
+
+Rephotography is geometric. A flat screen three metres away is a plane, and two lenses
+with a known baseline can measure that. The stereo capture path and the parallax work
+exist for this reason, and the honest status is in the limits below. Everything in the
+verifier is careful to keep custody and scene separate, because conflating them is how
+this category loses credibility.
 
 ## What you can take
 
-Most of this is platform-neutral TypeScript with no build step.
+Most of it is platform-neutral TypeScript with no build step.
 
-| Path | What it is, and why you might want it |
+| Path | What it is |
 |---|---|
-| `src/c2pa/` | A complete, dependency-light C2PA implementation: CBOR claims, COSE_Sign1, JPEG APP11/JUMBF, PNG `caBX`, BMFF/MP4 embedding with chunk-offset repair, and the verifier. Cross-checked against `c2patool` on every CI run. |
-| `src/lib/` | Crypto plumbing, all pure TS: a strict X.509 chain verifier, an RFC 3161 token verifier, COSE/DER, ECDSA signing, the ML-DSA-65 layer, AES-256-GCM, canonical JSON. No WebCrypto, no network. |
-| `src/provenance/` | The pipeline that turns a capture into a sealed record — orchestration, schema, background seal queue, detached manifests, and a differential oracle that cross-checks two independent engines against each other. |
-| `src/vault/` | Encrypted on-device storage. Media, records and thumbnails are all sealed; plaintext only ever exists in a cache folder shredded on lock. |
-| `src/disclosure/` | Selective disclosure — commit at capture, reveal per field later, without breaking the original signature. |
-| `src/theme.ts`, `src/components/`, `app/` | The whole interface: tokens, UI kit, and the screens — capture, inspect, exhibits, settings, onboarding. |
-| `modules/` | The native Swift: Secure Enclave keygen and signing, App Attest, the AVFoundation capture engine, the raw-audio sink, the C2PA Rust binding, Wi-Fi claims. |
-| `server/` | A zero-dependency App Attest relay in one file. Run your own, or skip it — offline devices simply sign unattested and say so. |
-| `tests/` | The lab: 27 suites that run the real shipping code against real forgeries. |
+| `src/c2pa/` | A complete, dependency-light C2PA implementation: CBOR claims, COSE_Sign1, JPEG APP11/JUMBF, PNG `caBX`, BMFF/MP4 embedding with chunk-offset repair, and the verifier. Cross-checked against `c2patool` on every CI run. Probably the most reusable thing here. |
+| `src/lib/` | Crypto plumbing, pure TS: a strict X.509 chain verifier, RFC 3161 tokens, COSE/DER, ECDSA, the ML-DSA-65 layer, AES-256-GCM, canonical JSON. No WebCrypto, no network. |
+| `src/provenance/` | Capture → sealed record: orchestration, schema, background seal queue, detached manifests, and a differential oracle that runs two independent engines against each other and flags disagreement. |
+| `src/disclosure/` | Commit every field at capture, reveal them individually later, without breaking the original signature. |
+| `src/vault/` | Encrypted storage. Media, records and thumbnails all sealed; plaintext exists only in a cache folder shredded on lock. |
+| `src/theme.ts`, `src/components/`, `app/` | The whole interface — tokens, UI kit, screens. |
+| `modules/` | The Swift: Secure Enclave keygen and signing, App Attest, the AVFoundation capture engine, the raw-audio sink, the C2PA Rust binding. |
+| `server/` | An App Attest relay in one dependency-free file. Run your own or skip it — offline devices sign unattested and say so. |
+| `tests/` | 27 suites, 769 checks, run against the real shipping code. |
+
+## The interface is part of the argument
+
+Getting the cryptography right is the easier half. The harder half is saying what a
+signature means without overstating it, and that lives in the UI.
+
+The verdict surface is a **ladder, not a badge** — five separate questions, each with
+its own answer, and an unreached rung says why. No seals, no shields, no checkmarks
+anywhere in the product; they read as authority claims and this software isn't an
+authority. The card carries its title and limits *inside* the frame so it still tells
+the truth when someone screenshots it. Unsigned renders neutral grey, never red —
+absence of a credential isn't evidence of tampering.
+
+There's also a test that fails the build if *verified*, *authentic*, *trusted*,
+*proven*, *real*, *secure* or *guaranteed* shows up in a verdict position. Operations
+that actually ran keep their precise verbs. It sounds fussy; it's the single thing that
+kept the copy honest as the feature count grew.
+
+All of it is in `src/theme.ts` and `src/components/`. Lift it — none of it is specific
+to this app.
 
 ## Run the lab
 
@@ -100,69 +116,69 @@ cd tests/.staged && npm install
 ./node_modules/.bin/tsx test-verification.mts     # → 146 passed, 0 failed
 ```
 
-The staging script rewires only device services — keychain, filesystem, device model —
-to small shims. Every cryptographic operation is the code that runs on the phone. The
-suites sign fresh media with a random key on each run, then attack it: flipped bits,
-transplanted manifests, self-issued "O=Reuters" certificates, truncated files, hostile
-parsers.
+Staging rewires only device services — keychain, filesystem, device model — to small
+shims. Every cryptographic operation is the code that runs on the phone. The suites
+sign fresh media with a random key each run, then attack it: flipped bits, transplanted
+manifests, a self-issued "O=Reuters" certificate, truncated files, hostile parsers.
 
-Put `c2patool` on your path and the independent-verifier checks run too, cross-checking
-the output against the reference C2PA implementation. Without it those checks report
-`SKIP` and are counted separately — never silently passed.
+With `c2patool` on your path the independent-verifier checks run too. Without it they
+report `SKIP` and are counted separately.
 
-## Things worth doing next
+## Worth building next
 
-Genuinely open — no coordination needed, no permission to ask.
+No coordination needed, no permission to ask.
 
-- **An Android port.** The provenance core is platform-neutral. What's needed is the
-  equivalent of `modules/secure-enclave` against Android Keystore and Play Integrity;
-  the record format and verifier carry over unchanged.
-- **A standalone verifier.** Wrap `src/c2pa/verifyAsset.ts` in a CLI so anyone can
-  check a file with `npx`, no app required.
-- **Better time anchoring.** TSA root anchoring is the honest gap — there's no mature
-  public root store for timestamping the way there is for the web PKI. A curated,
-  auditable trust list would help everyone working in this space.
-- **Newsroom key custody.** Rosters and revocation are implemented and lab-pinned, but
-  how a desk actually enrols and retires a photographer's key deserves real field design.
-- **Attack it.** If you can make a forged file verify, that's a contribution to the
-  field. The suites in `tests/` show the shape of a good repro.
+- **An Android port.** The core is platform-neutral; what's missing is the equivalent of
+  `modules/secure-enclave` against Keystore and Play Integrity. The record format and
+  verifier carry over unchanged.
+- **A standalone verifier CLI.** `src/c2pa/verifyAsset.ts` has no platform dependencies.
+  Someone should make `npx` check a file.
+- **A TSA trust list.** Timestamping has no mature public root store the way the web PKI
+  does. That's a gap for everyone in this space, not just me.
+- **Rephotography geometry.** Chromatic-aberration radial physics, JPEG grid artifacts
+  surviving into RAW, homography residual across a known baseline. Real signals with
+  real error rates, which is the bar — anything that can't publish a false-positive rate
+  on a named corpus shouldn't ship a number.
+- **Break it.** Make a forged file verify and I'd genuinely like to see it. `tests/`
+  shows the shape of a good repro.
 
-## Honest limits
+## Limits
 
-- **Two checks it doesn't perform:** TSA root anchoring and certificate revocation.
-  Both are named on every verification rather than silently skipped.
-- **Sensors are claims, not facts.** Time, GPS, heading and altitude are what the
-  device reported, bound into the signature. The binding is real; whether the device
-  told the truth is a separate question.
-- **Stereo capture is pending on-device validation** on iPhone 17 / iOS 26. The stereo
-  *verification* code is lab-tested; the capture path uses Apple's virtual dual-wide
-  device graph and hasn't been confirmed in the field yet.
-- **This is beta software**, written with AI assistance and held to account by the test
-  lab, an independent reference verifier, and a differential oracle — see
-  [`docs/PROVENANCE.md`](docs/PROVENANCE.md). It carries no conformance certification.
-  Don't keep your only copy of something important in it.
+- **Two checks aren't performed:** TSA root anchoring and certificate revocation. Both
+  are named on every verification rather than skipped quietly.
+- **Sensors are claims.** Time, GPS, heading, altitude are what the device reported,
+  bound into the signature. The binding is real; whether the device told the truth is a
+  separate question.
+- **Stereo capture is unvalidated on iPhone 17 / iOS 26.** The verification side is
+  lab-tested. The capture side moved to Apple's virtual dual-wide device graph and I
+  haven't confirmed it in the field yet.
+- **Beta software**, written with AI assistance and held to account by the test lab, an
+  independent reference verifier, and the differential oracle — see
+  [`docs/PROVENANCE.md`](docs/PROVENANCE.md). No conformance certification. Don't keep
+  your only copy of anything important in it.
 
 ## Building it
 
-See [`docs/BUILDING.md`](docs/BUILDING.md). It's an Expo app: `npm install`, then
-`npx expo run:ios` on a Mac with Xcode. The Secure Enclave and App Attest paths need a
-real device — the simulator falls back to a software key and labels itself as such.
+[`docs/BUILDING.md`](docs/BUILDING.md). It's an Expo app: `npm install`, then
+`npx expo run:ios` on a Mac with Xcode. Secure Enclave and App Attest need a real
+device; the simulator falls back to a software key and labels itself as such. Forking
+for your own build means replacing the EAS project id in `app.json` and the App Attest
+app id in `src/lib/appleAttestRoot.ts`.
 
-Forking for your own build: `app.json` carries a placeholder EAS project id, and the
-App Attest app id in `src/lib/appleAttestRoot.ts` is bound to this project's team —
-both need to be yours.
+## Docs
 
-## Documentation
-
-[`ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`THREAT-MODEL.md`](docs/THREAT-MODEL.md) ·
-[`SECURITY.md`](docs/SECURITY.md) · [`INTEGRITY.md`](docs/INTEGRITY.md) ·
-[`NETWORK.md`](docs/NETWORK.md) · [`SETTINGS.md`](docs/SETTINGS.md) ·
-[`DECISIONS.md`](docs/DECISIONS.md) · [`RECOVERY.md`](docs/RECOVERY.md) ·
-[`PROVENANCE.md`](docs/PROVENANCE.md)
+[Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
+[Security](docs/SECURITY.md) · [Integrity](docs/INTEGRITY.md) ·
+[Network](docs/NETWORK.md) · [Settings](docs/SETTINGS.md) ·
+[Decisions](docs/DECISIONS.md) · [Recovery](docs/RECOVERY.md) ·
+[Provenance](docs/PROVENANCE.md)
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE), and [NOTICE](NOTICE) for attribution that travels
-with redistribution. The name "Source Kit" is a trademark and isn't licensed for
-derivative use ([TRADEMARK.md](TRADEMARK.md)): fork it freely, ship it under your own
-name. If you build something with this, I'd love to hear about it.
+Apache-2.0 ([LICENSE](LICENSE), with [NOTICE](NOTICE) for attribution that travels).
+"Source Kit" is a trademark and isn't licensed for derivative use
+([TRADEMARK.md](TRADEMARK.md)) — fork it, ship it under your own name.
+
+If you build something with this, I'd like to hear about it.
+
+— Noah Pisner
