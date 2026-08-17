@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Rolling-shutter skew vs IMU suite — synthetic frames
  * with KNOWN row-time skew:

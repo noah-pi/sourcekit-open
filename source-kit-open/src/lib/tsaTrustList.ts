@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * tsaTrustList — pinned time-stamping authorities (0.10.0). A valid RFC 3161
  * token proves only that SOME TSA signed it — anyone can run a TSA and mint

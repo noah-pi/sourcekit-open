@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Detached-manifest custody matching (W5.5, docs/RECOVERY.md): platforms strip
  * credentials (APP11/caBX/uuid), so the sidecar bundle is matched by exact

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 import ExpoModulesCore
 // NO `import C2PA`: c2pa-swift v0.0.12 is VENDORED (Vendor/C2PA/** compiles
 // into THIS pod target, so its types are same-module here; the C2PAC Rust

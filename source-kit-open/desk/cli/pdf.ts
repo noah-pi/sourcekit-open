@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Minimal PDF writer for desk reports — zero dependencies.
  *

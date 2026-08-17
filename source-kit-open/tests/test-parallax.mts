@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Parallax analyzer suite — synthetic scenes with KNOWN geometry.
  *

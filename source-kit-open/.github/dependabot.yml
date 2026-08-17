@@ -1,0 +1,20 @@
+# Dependency updates are supply-chain events here, not chores: every bump
+# re-runs the full lab + the dependency budget in CI, and a version split
+# must be declared in scripts/check-dependency-budget.mjs to merge.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/desk"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3

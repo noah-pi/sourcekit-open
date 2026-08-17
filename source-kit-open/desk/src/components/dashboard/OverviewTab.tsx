@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * OverviewTab — the Overview surface of the asset dashboard (DESIGN §4.2).
  * Every capability the stopgap DossierView carried lands here, re-laid as

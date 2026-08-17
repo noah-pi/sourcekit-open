@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Pure-TypeScript homography estimation: normalized DLT inside RANSAC.
  *

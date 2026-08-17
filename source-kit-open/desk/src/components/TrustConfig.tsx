@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Trust & rosters — what THIS workspace trusts. Three knobs, all honest:
  *  1. Trusted rosters (only signature-checked rosters may enter).

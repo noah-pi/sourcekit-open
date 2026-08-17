@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS2 Phase 2: commit-at-capture (SPEC-WS2-Phase2 §4).
  *

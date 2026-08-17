@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Desk-side onset-alignment A/V desync analyzer.
  *

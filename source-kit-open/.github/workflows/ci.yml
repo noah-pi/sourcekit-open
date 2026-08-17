@@ -1,3 +1,4 @@
+# Written with AI assistance. Verification: docs/PROVENANCE.md.
 name: ci
 
 on:
@@ -188,7 +189,7 @@ jobs:
         working-directory: desk
 
       - name: CLI typecheck + smoke
-        run: ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/tsx cli/exhibit-desk.ts --help
+        run: ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/tsx cli/exhibit-c.ts --help
         working-directory: desk
 
   # The app core (src/) has no build step of its own — the staged lab is

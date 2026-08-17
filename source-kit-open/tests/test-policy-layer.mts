@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Policy-layer unit coverage: every row of the verdict-mapping
  * table in policyLayer.ts is exercised with synthetic normalized facts. No

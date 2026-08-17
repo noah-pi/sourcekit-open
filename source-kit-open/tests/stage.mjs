@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Stages a runnable validation lab into tests/.staged/.
  *
@@ -62,6 +63,13 @@ const STAGE = [
   // deleteItem/destroyVault must take the disclosure
   // state + chunk maps with them. cipher.ts is vaultFs's encryption core.
   'src/lib/cipher.ts', 'src/vault/vaultFs.ts',
+  // passcode is vaultFs's PIN verifier (staged so the strict typecheck
+  // covers it; the lockout path is exercised via the real pinLockout.ts).
+  'src/vault/passcode.ts',
+  // Device-integrity signal collector + its Enclave bridge — staged for
+  // typecheck coverage; attest.mts imports the SIGNALS TYPE only, and the
+  // Enclave bridge resolves to the absent-module case via shim-modules-core.
+  'src/lib/integrity.ts', 'src/lib/enclave.ts',
   'src/sensors/motion.ts',
   // desk-side analyzers staged so the lab exercises the SAME code the desk
   // ships (parallax; display-beat / ENF-extract / onset
@@ -69,6 +77,11 @@ const STAGE = [
   'desk/src/core/parallax.ts',
   'desk/src/core/displayBeat.ts', 'desk/src/core/enfExtract.ts',
   'desk/src/core/avSync.ts', 'desk/src/core/rollingShutter.ts',
+  // rephoto + videoMotion are raster.ts/avExtract.ts's desk-core
+  // dependencies (type-level for avExtract, runtime for raster).
+  // NOTE: desk/src/core/rephoto.ts collides on basename with
+  // src/lib/rephoto.ts — it is staged below as deskRephoto.mts instead.
+  'desk/src/core/videoMotion.ts',
   'desk/cli/raster.ts', 'desk/cli/avExtract.ts',
   // Stereo planarity verifier (P4) — committed-input types, LUT
   // undistortion, pure-TS homography RANSAC, the distance-gated signal,
@@ -105,8 +118,14 @@ function rewrite(src, fname) {
     // everything flattens to './x.mts' here.
     .replace(/from '\.\.\/\.\.\/\.\.\/archive\/handrolled-verifier\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/\.\.\/archive\/handrolled-verifier\/(\w+)'/g, "from './$1.mts'")
+    // engine/ modules reach src/lib as '../../lib/x' (policyLayer → trustProvider).
+    .replace(/from '\.\.\/\.\.\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/\.\.\/src\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/\.\.\/src\/provenance\/(\w+)'/g, "from './$1.mts'")
+    // desk/cli modules reach desk/src/core as '../src/core/x' (avExtract, raster).
+    // rephoto is the basename-collision exception: it lands at deskRephoto.mts.
+    .replace(/from '\.\.\/src\/core\/rephoto'/g, "from './deskRephoto.mts'")
+    .replace(/from '\.\.\/src\/core\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '@exhibit\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '@exhibit\/provenance\/(\w+)'/g, "from './$1.mts'")
@@ -116,14 +135,19 @@ function rewrite(src, fname) {
     // provenance/disclosure cross-imports flatten to the disclosure-*.mts names below.
     .replace(/from '\.\.\/disclosure\/(\w+)'/g, "from './disclosure-$1.mts'")
     .replace(/from '\.\/(\w+)'/g, "from './$1.mts'")
+    // Inline TYPE imports (import('./x')) flatten by the same rules — the
+    // 'from'-anchored rules above never see them (manifest → stereoArtifacts).
+    .replace(/import\('\.\.\/\.\.\/lib\/(\w+)'\)/g, "import('./$1.mts')")
+    .replace(/import\('\.\/(\w+)'\)/g, "import('./$1.mts')")
     .replace("from 'expo-device'", "from './shim-device.mts'")
     .replace("from 'react-native'", "from './shim-rn.mts'")
     .replace("from 'expo-constants'", "from './shim-constants.mts'")
+    .replace("from 'expo-modules-core'", "from './shim-modules-core.mts'")
     .replace("from 'expo-file-system/legacy'", "from './shim-fs.mts'")
     .replace("from 'expo-image-manipulator'", "from './shim-image-manipulator.mts'")
     .replace("from 'expo-video-thumbnails'", "from './shim-video-thumbnails.mts'")
     .replace("from 'expo-secure-store'", "from './shim-secure-store.mts'");
-  if (fname === 'attest') {
+  if (fname === 'attest' || fname === 'signingProvider') {
     src = src
       .replace("from './deviceKey.mts'", "from './deviceKey-shim.mts'")
       .replace("from './appAttest.mts'", "from './appAttest-shim.mts'");
@@ -149,12 +173,24 @@ for (const name of DISCLOSURE_STAGE) {
   fs.writeFileSync(path.join(out, `disclosure-${name}.mts`), src);
 }
 
+// desk/src/core/rephoto.ts — the basename collision with src/lib/rephoto.ts
+// (both would stage as rephoto.mts). Staged under a distinct name; raster.mts
+// and avExtract.mts are rewritten to point at it above.
+{
+  const src = fs.readFileSync(path.join(root, 'desk/src/core/rephoto.ts'), 'utf8');
+  fs.writeFileSync(path.join(out, 'deskRephoto.mts'), rewrite(src, 'deskRephoto'));
+}
+
 // shims — filesystem shim roots inside the staged dir
 for (const f of fs.readdirSync(path.join(here, 'shims'))) {
   let s = fs.readFileSync(path.join(here, 'shims', f), 'utf8');
   s = s.replaceAll('/tmp/lab/fs/', path.join(out, 'fs') + '/').replaceAll('/tmp/lab/fs', path.join(out, 'fs'));
   fs.writeFileSync(path.join(out, f), s);
 }
+// The withheld camera bridge's CONTRACT types land under the name the
+// staged code imports: './exhibitCamera.mts'. Type-only; see the shim's
+// header for the boundary rationale.
+fs.copyFileSync(path.join(out, 'exhibitCamera-types-shim.mts'), path.join(out, 'exhibitCamera.mts'));
 
 // test suites — media paths point at the staged dir; c2patool from env/PATH
 const stagedAbs = out.endsWith('/') ? out : out + '/';

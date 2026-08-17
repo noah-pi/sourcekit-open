@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Stereo-capture artifact ingestion (Spec-Camera-Module-0.13 §5 → seal).
  *

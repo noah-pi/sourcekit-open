@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * "Known hand": local collection history at the unidentified floor.
  *

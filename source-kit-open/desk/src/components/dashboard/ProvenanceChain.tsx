@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ProvenanceChain — the provenance timeline (DESIGN §5.7, law L11:
  * "gaps are drawn"). Nodes are signed events, attributed to their signer

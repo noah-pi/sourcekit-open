@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Byte-level utilities. Pure — no React Native or Node dependencies.
  * Shared by the signer, the JPEG embedder, and the verifier.

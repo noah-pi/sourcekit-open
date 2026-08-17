@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS2 Phase 1: commit + burn semantics (docs/INTEGRITY.md — selective disclosure).
  * One Merkle root commits the full claim set; leaf 0 is the inventory meta-leaf,

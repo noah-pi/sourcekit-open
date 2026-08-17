@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * .exhibitcase v1 — the desk's portable case file.
  *

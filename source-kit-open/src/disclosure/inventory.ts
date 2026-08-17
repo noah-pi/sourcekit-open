@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS2 Phase 1: context-claim inventory (docs/INTEGRITY.md — selective disclosure).
  *

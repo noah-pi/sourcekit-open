@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Desk analyzer registry — one list of every measurement the desk can
  * run, with the tier that constrains how its output may be used.

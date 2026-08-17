@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * intakeReport.ts — assembles the Tier-0 IntakeReport (ARCHITECTURE §3.3/§5.1)
  * from the pieces intake already computes: the worker hash, the worker byte

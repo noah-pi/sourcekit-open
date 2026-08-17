@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Desk-side rolling-shutter skew vs IMU analyzer.
  *

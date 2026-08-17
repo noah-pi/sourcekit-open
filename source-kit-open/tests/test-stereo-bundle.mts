@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Stereo-artifact bundle suite — end to end through the REAL seal pipeline.
  *

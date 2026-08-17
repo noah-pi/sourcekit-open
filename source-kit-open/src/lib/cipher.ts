@@ -1,12 +1,12 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * AES-256-GCM vault encryption. Depends only on @noble/ciphers and never
- * touches storage.
+ * AES-256-GCM vault encryption. Pure — depends only on @noble/ciphers.
  *
- * Blob layout: [ 12-byte nonce ][ ciphertext ][ 16-byte GCM tag ], since
- * noble's gcm() appends the tag to the ciphertext.
+ * File layout: [ 12-byte nonce ][ ciphertext ][ 16-byte GCM tag ]
+ * (noble's gcm() appends the tag to the ciphertext.)
  *
- * The 256-bit vault key is generated here but held in the OS keychain by
- * src/vault/vaultFs.ts.
+ * The vault key is a random 256-bit value kept in the OS keychain
+ * (see src/vault/vaultFs.ts). This module never touches storage.
  */
 
 import { gcm } from '@noble/ciphers/aes';

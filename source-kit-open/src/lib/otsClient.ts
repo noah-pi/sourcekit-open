@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * OpenTimestamps network client — hash-only, accountless, free.
  *

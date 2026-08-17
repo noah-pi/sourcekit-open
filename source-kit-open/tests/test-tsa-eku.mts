@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The TSA signer cert MUST carry the id-kp-timeStamping
  * extended key usage (RFC 3161 §2.3). Without the check, any general-purpose

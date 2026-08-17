@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * P5 single-image physics checks — synthetic-fixture suite.
  *

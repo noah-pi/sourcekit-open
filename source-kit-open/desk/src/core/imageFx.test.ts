@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * imageFx.test.ts — Tier-2 image analyses on synthetic rasters.
  *

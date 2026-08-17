@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * migration.test.ts — the two rename migrations of ARCHITECTURE §7:
  *  1. localStorage verifyDesk.* → exhibitC.* (copy-and-remove, known keys

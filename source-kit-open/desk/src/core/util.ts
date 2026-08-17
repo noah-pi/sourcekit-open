@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * util.ts — small shared helpers, deduplicated (0.15.1 / W1).
  *

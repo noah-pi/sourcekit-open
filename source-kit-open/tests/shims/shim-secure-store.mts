@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Lab shim for expo-secure-store: in-memory keychain stand-in so
  * rosterStore/trustProvider can be staged and tested as the real code.
@@ -8,6 +9,13 @@ export const WHEN_UNLOCKED_THIS_DEVICE_ONLY = 'WHEN_UNLOCKED_THIS_DEVICE_ONLY';
 
 export interface SecureStoreOptions {
   keychainAccessible?: string;
+  requireAuthentication?: boolean;
+  /**
+   * The app's vaultFs/pinLockout entries set WHEN_UNLOCKED_THIS_DEVICE_ONLY
+   * (+ requireAuthentication on the vault key). The lab's in-memory map
+   * accepts and ignores both — accessibility policy is keychain behavior,
+   * not lab behavior.
+   */
 }
 
 const mem = new Map<string, string>();

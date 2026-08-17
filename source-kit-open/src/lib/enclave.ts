@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Bridge to the native Secure Enclave module (modules/secure-enclave).
  * Absent on web, Expo Go, Android, or old builds — callers must check

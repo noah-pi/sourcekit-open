@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Pin the malleable byte set of the signed JPEG
  * container. C2PA signs the claim and (through it) the assertion contents

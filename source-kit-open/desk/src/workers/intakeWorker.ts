@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * intakeWorker.ts — the Tier-0 intake pipeline, off the main thread
  * (ARCHITECTURE §5.1: "byte analyses are synchronous typed-array work,

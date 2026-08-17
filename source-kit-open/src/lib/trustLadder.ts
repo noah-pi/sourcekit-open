@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Trust ladder — a pure projection of the verification
  * evidence into five named rungs:

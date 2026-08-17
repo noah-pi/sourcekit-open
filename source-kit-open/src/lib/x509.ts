@@ -1,22 +1,37 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Strict X.509 certificate-chain verification. No network, no WebCrypto —
- * DER parsing plus @noble curves and BigInt RSA.
+ * Minimal, strict X.509 certificate verification — built for three jobs:
  *
- * Used for App Attest chains (ECDSA P-256/P-384), TSA certificates inside
- * RFC 3161 tokens (ECDSA and RSA), and org-credential chains.
+ *   1. App Attest chains (leaf → intermediate → pinned Apple root; ECDSA
+ *      P-256 and P-384, SHA-256/384).
+ *   2. TSA certificate inspection inside RFC 3161 tokens (ECDSA and RSA —
+ *      FreeTSA's TSA is RSA; DigiCert's chains include RSA links).
+ *   3. Org-credential chains (mechanical link verification; anchoring is
+ *      reported honestly as self-asserted when no pinned root matches).
  *
- * A chain passes only when all of the following hold:
- *   - each link's signature verifies under the next certificate's key
- *   - issuer and subject names chain byte-for-byte
- *   - every non-leaf carries basicConstraints CA:TRUE
- *   - a CA with a keyUsage extension includes keyCertSign; a leaf does not
- *   - pathLenConstraint, when present, is honored
- *   - every certificate is inside its validity window at the given time
- *   - no certificate carries a critical extension this verifier does not
- *     consume (see RECOGNIZED_CRITICAL_EXTENSIONS)
+ * What "verified" means here, precisely:
+ *   - every link's signature verifies with the next cert's public key,
+ *   - issuer/subject names chain byte-for-byte,
+ *   - every non-leaf has basicConstraints CA:TRUE,
+ *   - no cert carries a CRITICAL extension this verifier does not consume
+ *     (fail closed — an unrecognized critical extension means the cert's
+ *     issuer demanded a semantic we cannot honor),
+ *   - a CA cert with a keyUsage extension includes keyCertSign, and a leaf
+ *     never carries keyCertSign (a leaf that may sign certificates is a CA
+ *     that skipped basicConstraints),
+ *   - a basicConstraints pathLenConstraint, when present, is honored,
+ *   - every cert was inside its validity window at the given time,
+ *   - and the chain terminates at a pinned root when roots are supplied
+ *     (anchored=false is reported, never hidden).
  *
- * Anchoring is reported separately from link validity: when pinned roots are
- * supplied and none matches, the result is linksValid with anchored=false.
+ * One deliberate exemption: the pinned root's own validity window is NOT
+ * checked. A pinned root is trusted by byte-exact configuration, not by its
+ * self-declared dates — an expired-but-pinned root proves exactly as much as
+ * an unexpired one, and captures anchored during its validity must keep
+ * verifying after it expires. The exemption is stated here so no reader
+ * mistakes it for an omission.
+ *
+ * No network, no WebCrypto — pure parsing + @noble + BigInt RSA.
  */
 
 import { p256 } from '@noble/curves/p256';
@@ -48,16 +63,20 @@ export function readTlv(b: Uint8Array, o: number): Tlv {
     const n = len & 0x7f;
     if (n === 0 || n > 4) throw new Error('DER: indefinite or oversized length');
     len = 0;
-    // Multiply-accumulate rather than shifts: JS bitwise operators are
-    // 32-bit signed, so a 4-byte length >= 0x80000000 would wrap negative
-    // and defeat the overrun guard below. Number math is exact to 2^53.
+    // Multiply-accumulate — NEVER (len << 8) | byte. JS bitwise ops are
+    // 32-bit SIGNED, so a 4-byte length ≥ 0x80000000 wrapped negative, the
+    // overrun guard below passed against a negative length, and `next`
+    // pointed backwards — an infinite loop in every while-walker, reachable
+    // from any attacker-supplied certificate. Number math is exact to 2^53
+    // and cannot wrap at n ≤ 4.
     for (let i = 0; i < n; i++) len = len * 256 + b[p + i];
     p += n;
   }
   if (p + len > b.length) throw new Error('DER: length overruns buffer');
   const next = p + len;
-  // Invariant: every TLV advances. Guards the while-loops below against a
-  // non-terminating walk.
+  // Unreachable with correct length math (next ≥ o + 2 always) — kept as a
+  // hard invariant so ANY parser regression fails loudly instead of hanging
+  // a walker's while-loop.
   if (next <= o) throw new Error('DER: non-advancing TLV');
   return { tag, content: b.subarray(p, next), next, full: b.subarray(o, next) };
 }
@@ -184,7 +203,10 @@ function parseSpki(spki: Uint8Array): ParsedCert['keyAlg'] {
     const toBigInt = (v: Uint8Array) => BigInt('0x' + (bytesToHex(v) || '0'));
     const n = toBigInt(nTlv.content);
     const e = toBigInt(eTlv.content);
-    // e=1 would make verification a no-op and small moduli are factorable.
+    // Parameter sanity: e=1 makes RSA "verification" a no-op — any bytes
+    // "verify" — and toy moduli are factorable. Only reachable through
+    // unanchored chains today, but fail closed now so a future trust list
+    // can't inherit the hole.
     if (e < 3n || (e & 1n) === 0n) throw new Error(`RSA public exponent ${e} is not acceptable`);
     if (n < (1n << 2047n)) throw new Error('RSA modulus is smaller than 2048 bits');
     return { kind: 'rsa', n, e };
@@ -202,8 +224,10 @@ export function parseCertificate(der: Uint8Array): ParsedCert {
   const outerSig = readTlv(cert.content, outerSigAlg.next);
   if (outerSig.tag !== 0x03) throw new Error('bad signature BIT STRING');
   const sigAlgOid = bytesToHex(readTlv(outerSigAlg.content, 0).content);
-  // SHA-512 is required in practice: FreeTSA signs its TSA certificates
-  // with sha512WithRSAEncryption.
+  // SHA-512 matters in the real world: FreeTSA signs its TSA certs with
+  // sha512WithRSAEncryption. Rejecting an unrecognized OID here drops EVERY
+  // FreeTSA certificate — the CMS parser reports "no TSA certificates in
+  // token" and every genuine FreeTSA-stamped asset draws a false red rung.
   const SUPPORTED: string[] = [
     OID.ecdsaSha256, OID.ecdsaSha384, OID.ecdsaSha512,
     OID.rsaSha256, OID.rsaSha384, OID.rsaSha512,
@@ -222,9 +246,10 @@ export function parseCertificate(der: Uint8Array): ParsedCert {
   const validity = readTlv(tbs.content, o); o = validity.next;
   const notBeforeMs = readTimeMs(validity.content);
   const notAfterMs = readTimeMs(validity.content.subarray(readTlv(validity.content, 0).next));
-  // Date.parse yields NaN for malformed dates, and every comparison against
-  // NaN is false — an unparseable validity window would pass every check.
-  // Refuse the certificate instead.
+  // Date.parse yields NaN for garbage dates — and every comparison against
+  // NaN is false, so verifyChain's validity window silently PASSED for
+  // unparseable dates. A certificate whose dates
+  // can't be read is malformed; refuse to parse it at all.
   if (!Number.isFinite(notBeforeMs) || !Number.isFinite(notAfterMs)) {
     throw new Error('DER: unparseable validity dates');
   }
@@ -440,15 +465,17 @@ export function keyUsageBits(cert: ParsedCert): number | null {
 const KEY_CERT_SIGN = 0x04;
 
 /**
- * Critical extensions this verifier is allowed to see.
- *
- * basicConstraints and keyUsage are enforced during chain verification.
- * extKeyUsage is accepted but NOT enforced here — callers that need a
- * purpose check call hasKeyPurpose directly (RFC 3161 timestamping does).
- *
- * Any other critical extension fails the chain: the issuer marked it
- * must-understand, and a verifier that cannot honor it must not guess
- * (RFC 5280 section 4.2).
+ * Critical extensions this verifier accepts. basicConstraints and keyUsage
+ * are CONSUMED (enforced during chain verification). extKeyUsage is
+ * accepted without enforcement: no EKU constraint this verifier accepts
+ * would change a verdict here, but note the asymmetry — a future
+ * constraining critical EKU would be accepted unhonored.
+ * Any OTHER extension marked critical fails chain
+ * verification closed: the issuer marked it must-understand, and a
+ * verifier that does not understand it must not guess (RFC 5280 §4.2).
+ * subjectKeyIdentifier/authorityKeyIdentifier are NOT consumed by this
+ * verifier, so critical instances (a spec violation in itself — RFC 5280
+ * mandates both be non-critical) correctly fail here.
  */
 const RECOGNIZED_CRITICAL_EXTENSIONS: Set<string> = new Set([
   OID.basicConstraints,
@@ -548,13 +575,15 @@ export function verifyChain(
   }
   if (certs.length === 0) return { linksValid: false, anchored: false, topSubject: null, reason: 'empty chain', linkCount: 0 };
 
-  // Senders may include the same certificate twice (a TSA sending its cert
-  // as both signer and chain). Dedupe so a duplicate is not mistaken for a
-  // two-link chain that would require a CA flag on the end-entity cert.
+  // Real-world senders sometimes include the same cert twice (e.g. a TSA
+  // sending its cert as both signer and chain). Identical bytes carry no
+  // additional trust — dedupe so a duplicated self-signed end-entity cert is
+  // not mistaken for a two-cert chain requiring a CA flag on itself.
   certs = certs.filter((c, i) => certs.findIndex((p) => equalBytes(p.der, c.der)) === i);
 
-  // CMS `certificates` is a SET OF and arrives unordered; rebuild leaf→top
-  // by issuer/subject lookup rather than trusting array order.
+  // CMS `certificates` is a SET OF — unordered. Rebuild leaf→top by
+  // issuer/subject lookup instead of trusting array order — real DigiCert
+  // tokens arrive unordered.
   {
     const ordered = orderByIssuer(certs);
     if (!ordered) {
@@ -569,16 +598,22 @@ export function verifyChain(
     if (atMs !== null && (atMs < c.notBeforeMs || atMs > c.notAfterMs)) {
       return fail(`${displayName(c) ?? 'a certificate'} was not valid at signing time`);
     }
-    // The leaf may additionally carry Apple's App Attest nonce extension,
-    // which the attestation verifier consumes.
+    // Fail CLOSED on unrecognized critical extensions (RFC 5280 §4.2): the
+    // issuer marked them must-understand. The leaf additionally gets the
+    // Apple App Attest nonce extension, which this verifier consumes during
+    // attestation checks.
     for (const [oidHex, ext] of c.extensions) {
       if (!ext.critical) continue;
       if (RECOGNIZED_CRITICAL_EXTENSIONS.has(oidHex)) continue;
       if (i === 0 && oidHex === OID_APPLE_ATTEST_NONCE) continue;
       return fail(`${displayName(c) ?? 'a certificate'} carries a critical extension (${oidHexToDotted(oidHex)}) this verifier does not recognize; refusing to guess its meaning`);
     }
-    // RFC 5280 section 4.2.1.3. A single-certificate chain is exempt: a
-    // presented pinned root legitimately carries keyCertSign.
+    // Key-usage discipline (RFC 5280 §4.2.1.3): a leaf that may sign
+    // certificates is a CA that skipped basicConstraints — forbid
+    // keyCertSign on leaves. A CA whose keyUsage is present but
+    // lacks keyCertSign may not sign certificates at all.
+    // (Single-certificate chains are exempt from the leaf check: a
+    // presented pinned root legitimately carries keyCertSign.)
     const ku = keyUsageBits(c);
     if (i === 0 && certs.length > 1 && ku !== null && (ku & KEY_CERT_SIGN) !== 0) {
       return fail(`the leaf certificate's key usage permits signing other certificates; a leaf must not`);
@@ -595,7 +630,8 @@ export function verifyChain(
       if (parentKu !== null && (parentKu & KEY_CERT_SIGN) === 0) {
         return fail(`${displayName(parent) ?? 'the issuing certificate'} is a CA but its key usage does not permit certificate signing`);
       }
-      // A CA at depth i has i-1 subordinate CAs beneath it in this chain.
+      // pathLenConstraint: a CA at depth i has i-1 subordinate CAs below
+      // it in this chain; the constraint caps exactly that count.
       const pl = basicConstraints(parent)?.pathLen ?? null;
       if (pl !== null && i > pl) {
         return fail(`${displayName(parent) ?? 'a CA certificate'} allows at most ${pl} subordinate CA certificate(s); this chain presents ${i}`);

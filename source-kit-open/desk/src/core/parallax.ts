@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Desk-side parallax / scene-flatness analyzer.
  *

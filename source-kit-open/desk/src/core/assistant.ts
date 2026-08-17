@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * assistant.ts — the Assistant (ARCHITECTURE §6.3). A PURE function over
  * the item's computed evidence: verification result, Tier-0 IntakeReport,

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * reverseImageSearch.ts — the reverse-image-search connector STUB
  * (ARCHITECTURE §6.1/§11: the UI and consent flow ship complete; no

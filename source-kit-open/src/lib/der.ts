@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ECDSA signature format plumbing: DER ↔ IEEE P1363 (raw r‖s), plus low-S
  * normalization. COSE requires P1363; iOS Security returns DER; low-S keeps

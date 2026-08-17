@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * imageFx.ts — Tier-2 in-browser image analyses (ARCHITECTURE §5.3, r3
  * algorithm set): clone detection (Haar-wavelet fuzzy block matching),

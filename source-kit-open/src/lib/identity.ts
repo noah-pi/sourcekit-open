@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Capture-time identity resolution (CAWG-aligned).
  *

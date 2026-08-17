@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * RFC 3161 TimeStampToken verification — real CMS/PKCS#7 checks.
  *

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Intake — the sidebar dropzone and ingest queue. Files are checked locally
  * in THIS tab; nothing is uploaded, ever. The only network call Source Kit Desk can

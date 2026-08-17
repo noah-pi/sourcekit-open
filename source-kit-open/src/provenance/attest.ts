@@ -1,10 +1,11 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Attestation orchestration: media file → signed media file + record.
  *
  * Photos (JPEG): a genuine C2PA manifest (Content Credentials) is embedded
  *                into the file itself as an APP11/JUMBF store — CBOR claim,
  *                c2pa.hash.data hard binding, COSE_Sign1 signature with the
- *                device certificate. The full Exhibit A record rides inside as
+ *                device certificate. The full Source Kit record rides inside as
  *                the com.verify.telemetry assertion. Recognized by any
  *                third-party C2PA verifier.
  * Video (MP4):   the same manifest embedded as a C2PA uuid box after ftyp,

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * connectors/index.ts — the connector registry (ARCHITECTURE §6.1).
  *

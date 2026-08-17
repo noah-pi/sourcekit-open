@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Motion-signature analysis of the accelerometer stream captured while the
  * shutter was open.

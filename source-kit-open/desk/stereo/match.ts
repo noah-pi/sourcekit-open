@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Stereo feature extraction front end — the matcher that feeds
  * verifyStereoCommitment.

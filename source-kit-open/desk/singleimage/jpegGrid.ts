@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * P5 single-image physics: 8×8 DCT periodicity ("JPEG grid") in a buffer
  * that claims to be RAW/uncompressed (Plan-0.13.0 P5 item 23).

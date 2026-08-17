@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * "How we know this" — a standalone HTML export of one dossier.
  *

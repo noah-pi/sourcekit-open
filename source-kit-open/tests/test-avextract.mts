@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * avExtract adapter suite (desk/cli/avExtract.ts) — the ffmpeg
  * boundary that feeds the desk's pure analyzers (displayBeat, enfExtract,

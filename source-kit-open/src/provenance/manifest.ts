@@ -1,5 +1,6 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * The Exhibit A attestation record: the self-contained provenance statement
+ * The Source Kit attestation record: the self-contained provenance statement
  * embedded in every signed photo (JPEG APP11/JUMBF) or written as a sidecar
  * JSON for video. Human-readable by design. The signature proves the media
  * bytes and telemetry are unaltered since signing — not that the scene was

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Multi-baseline stereo suite — SYNTHETIC three-lens rigs with known geometry.
  *

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Bridge to the native AudioCapture module (modules/audio-capture) — one
  * AVAudioEngine feeding both the .m4a file and on-device speech recognition.

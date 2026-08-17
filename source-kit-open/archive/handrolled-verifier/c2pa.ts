@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Genuine C2PA ("Content Credentials") support, implemented from the spec
  * with no external SDK:
@@ -605,7 +606,7 @@ async function signPlannedClaim(
   return { signed, timestampTokens };
 }
 
-/** The telemetry + optional App Attest / transcript boxes every Exhibit A manifest carries. */
+/** The telemetry + optional App Attest / transcript boxes every Source Kit manifest carries. */
 function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array): { boxes: Uint8Array[]; labels: string[] } {
   const telemetryBox = jumbBox(UUID_JSON, 'com.verify.telemetry', box('json', telemetryJson));
   const attestBox = p.appAttest ? jumbBox(UUID_JSON, 'com.verify.app-attest', box('json', p.appAttest)) : null;
@@ -1219,7 +1220,7 @@ export interface C2paManifest {
    * ONLY when the signed claim references the box: these entries are
    * DECLARED by the sealing software — they show what was declared and
    * cannot prove nothing else happened. Absent entirely when the manifest
-   * carries no actions box (Exhibit A's own manifests don't).
+   * carries no actions box (Source Kit's own manifests don't).
    */
   actions: { list: EditAction[]; referenced: boolean } | null;
   /**

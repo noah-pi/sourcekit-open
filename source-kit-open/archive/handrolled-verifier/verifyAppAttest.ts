@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Offline verification of the com.verify.app-attest assertion — the check
  * the badge always implied but nobody performed.
@@ -12,7 +13,7 @@
  *      days; the attestation is an enrollment-time artifact and is never
  *      re-dated by the signing time of the media it later vouches for).
  *   2. authData's rpIdHash is SHA-256 of our Apple App ID — the attestation
- *      was minted for a genuine Exhibit A build, not another app.
+ *      was minted for a genuine Source Kit build, not another app.
  *   3. The nonce Apple signed into the leaf certificate's extension
  *      1.2.840.113635.100.8.2 equals
  *        SHA256(authData ‖ SHA256(challenge ‖ signingPublicKey))

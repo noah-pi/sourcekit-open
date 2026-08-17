@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * aiStrings.ts — the AI Forensics copy deck, as data.
  *

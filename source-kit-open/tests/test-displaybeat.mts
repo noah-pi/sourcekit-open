@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Display-beat analyzer suite — synthetic luma series
  * with KNOWN periodicity:

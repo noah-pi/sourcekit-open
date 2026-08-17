@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * consent.test.ts — the Tier-3 consent state machine (ARCHITECTURE §6.2,
  * DESIGN §5.8/§5.9), driven with a MOCK connector: no network anywhere.

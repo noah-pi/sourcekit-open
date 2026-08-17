@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS3 hand-rolled engine — a thin ADAPTER exposing the archived verifier
  * (archive/handrolled-verifier/, moved not deleted) through the same
@@ -57,7 +58,7 @@ function normalizeReport(report: VerificationReport): NormalizedEngineResult {
   r.assetHashMatches =
     r.assetHashFailure === 'void-binding' ? false : report.checks.assetHashMatches;
 
-  // The archive also fails SIGNATURE_INVALID when the INNER Exhibit A record's
+  // The archive also fails SIGNATURE_INVALID when the INNER Source Kit record's
   // signature is broken (defense in depth) with the claim layer intact. The
   // report doesn't expose that bit directly; when the verdict says
   // SIGNATURE_INVALID and no other fact explains it, that is the cause —
@@ -106,7 +107,7 @@ function normalizeReport(report: VerificationReport): NormalizedEngineResult {
     statuses.push({ code: 'exhibit.assetHashMismatch', severity: 'failure', explanation: 'hand-rolled pipeline: media bytes differ from the signed hash' });
   }
   if (v === 'SIGNATURE_INVALID' && statuses.length === 0) {
-    // Verdict SIGNATURE_INVALID with no claim-layer fact → the INNER Exhibit A
+    // Verdict SIGNATURE_INVALID with no claim-layer fact → the INNER Source Kit
     // record's signature failed (defense in depth, claim layer intact).
     statuses.push({ code: 'exhibit.innerRecordSignatureInvalid', severity: 'failure', explanation: 'hand-rolled pipeline: inner Source Kit record signature failed (claim layer intact)' });
   }

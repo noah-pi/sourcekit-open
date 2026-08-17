@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * storageMigration.ts — the verifyDesk.* → exhibitC.* localStorage rename
  * (ARCHITECTURE §7), as a pure function so it is testable without a browser.

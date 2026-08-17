@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Onset-alignment A/V desync suite — synthetic audio +
  * motion series with KNOWN offset:

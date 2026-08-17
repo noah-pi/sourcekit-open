@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS2 Phase 1: per-leaf salts from one master seed (docs/INTEGRITY.md — selective disclosure).
  *   salt = HKDF-SHA256(ikm = masterSeed, salt = none,

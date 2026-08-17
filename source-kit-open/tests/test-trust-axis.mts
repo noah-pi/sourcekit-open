@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The trust axis lives in the verification DATA MODEL,
  * not only in presentation. verifyPhotoBytes/verifyVideoBytes accept an

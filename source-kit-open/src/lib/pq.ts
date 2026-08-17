@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Post-quantum dual-signature layer — ML-DSA-65 (FIPS 204) alongside classical
  * ES256, hedging a future P-256 break. The hedge's teeth: the PQ public key is

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Filesystem wrappers around the pure byte verifiers (app-side only).
  *

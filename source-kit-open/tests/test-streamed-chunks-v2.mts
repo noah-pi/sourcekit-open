@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * streamedChunks v2 — per-track Merkle commitments.
  *

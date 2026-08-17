@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Stereo matcher suite — the feature-extraction front end feeding
  * verifyStereoCommitment. Every fixture is rendered IN-TEST: a synthetic

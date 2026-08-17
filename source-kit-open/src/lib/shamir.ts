@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Shamir secret sharing over GF(256) — desk-key custody.
  *

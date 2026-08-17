@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * exhibit-c — the Source Kit Desk CLI (renamed from exhibit-c; the old path is
  * a forwarding shim, removed next minor).
@@ -54,7 +55,7 @@ import { stereoMain } from './stereoVerify';
 import { resolveAsset, RESOLVE_ENGINE_PINS, type ResolveResult } from '../src/core/resolve';
 import type { EngineTrustOptions } from '@exhibit/provenance/engine/upstreamEngine';
 
-const VERSION = '0.15.0';
+const VERSION = '0.18.4';
 
 /**
  * Print and exit(2) — typed `never` so strict null-assignability and

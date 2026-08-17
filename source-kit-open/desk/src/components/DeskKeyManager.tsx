@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Workspace key custody — the receiving side of seal-to-workspace.
  *

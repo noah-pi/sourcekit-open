@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Tier-1 CLI extraction adapters — the node/ffmpeg counterparts
  * that feed the desk's pure analyzers (desk/src/core/displayBeat.ts,

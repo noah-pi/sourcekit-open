@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * OpenTimestamps (OTS) — ledger-anchored time, separate from authority time.
  *

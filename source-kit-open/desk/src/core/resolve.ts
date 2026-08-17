@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * RESOLVE — parse-any-manifest for the desk.
  *

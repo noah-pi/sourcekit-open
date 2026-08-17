@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Mutation fuzz over the hand-rolled parsers.
  *

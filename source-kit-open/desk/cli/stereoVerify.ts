@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * exhibit-desk stereo — stereo-artifact extraction + the planarity signal.
  *

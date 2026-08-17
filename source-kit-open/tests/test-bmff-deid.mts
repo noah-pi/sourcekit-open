@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Validate deidentifyBmff (BMFF de-identification).
  *  1. Sign an MP4 video and an M4A (with transcript) via the real attest paths.
@@ -22,11 +23,18 @@ const ctx = {
 } as any;
 const identity = { author: 'Lab Test', organization: null };
 
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skipped = 0;
 const check = (name: string, ok: boolean, detail = '') => {
   if (ok) { pass++; console.log(`  PASS ${name}`); }
   else { fail++; console.log(`  FAIL ${name} ${detail}`); }
 };
+const skip = (name: string, why: string) => { skipped++; console.log(`  SKIP ${name} :: ${why}`); };
+// c2patool is the optional gold standard: when absent, its checks SKIP loudly
+// (excluded from the pass/fail tally) instead of failing. See README ▸ Requirements.
+const c2patoolBin = process.env.C2PATOOL ?? '/tmp/bin/c2patool';
+let c2patoolAvailable = false;
+try { execFileSync(c2patoolBin, ['--version'], { stdio: 'pipe' }); c2patoolAvailable = true; } catch { /* not installed */ }
+if (!c2patoolAvailable) console.log('  NOTE: c2patool not found — gold-standard checks below will SKIP, not fail');
 
 // ---------- 1. sign a video ----------
 const v = await attestVideo({ videoUri: '/tmp/lab/clean.mp4', context: ctx, identity, key });
@@ -83,8 +91,9 @@ check('transcript text present in ORIGINAL signed m4a (sanity)', haySigned.inclu
 
 // ---------- 5. c2patool gold standard on de-identified files ----------
 for (const f of ['deid.mp4', 'deid.m4a']) {
+  if (!c2patoolAvailable) { skip(`c2patool validates ${f}`, 'c2patool not installed'); continue; }
   try {
-    const out = execFileSync('/tmp/bin/c2patool', [`/tmp/lab/${f}`], { encoding: 'utf8' });
+    const out = execFileSync(c2patoolBin, [`/tmp/lab/${f}`], { encoding: 'utf8' });
     const j = JSON.parse(out);
     const vs = j.validation_status ?? [];
     check(`c2patool validates ${f}`, vs.length === 0, JSON.stringify(vs).slice(0, 200));
@@ -106,5 +115,5 @@ fs.writeFileSync('/tmp/lab/deid-legacy.mp4', dl.signedBytes);
 const vl = await verifyVideo('/tmp/lab/deid-legacy.mp4');
 check('clean-input de-id verifies valid', vl.verdict === 'INTACT', vl.verdict);
 
-console.log(`\n${pass} passed, ${fail} failed`);
+console.log(`\n${pass} passed, ${fail} failed, ${skipped} skipped`);
 process.exit(fail ? 1 : 0);

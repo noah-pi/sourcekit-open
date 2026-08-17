@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Roster storage — the device's copy of one or more signed newsroom rosters,
  * held in the OS keychain (WHEN_UNLOCKED_THIS_DEVICE_ONLY).

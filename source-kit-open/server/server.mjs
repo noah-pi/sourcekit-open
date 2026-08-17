@@ -1,17 +1,21 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Source Kit attestation server (beta).
+ * Source Kit attestation relay (beta).
  *
- * Verifies Apple App Attest statements, connecting "a key claims to live in
- * a Secure Enclave" to "Apple certifies this device runs a genuine build on
- * genuine hardware, and that attestation is bound to this exact signing
- * key."
+ * Verifies Apple App Attest statements and counts registrations — the
+ * missing link between "a key claims to be in a Secure Enclave" and
+ * "Apple certifies this device runs a genuine Source Kit build on genuine
+ * hardware, and that attestation is bound to this exact signing key."
+ * The registry is an aggregate counter ONLY (total registrations): the old
+ * per-device entries were write-only and accumulated a hardware roster no
+ * one read — an opsec liability, deleted by design.
  *
  * Binding: Apple gives apps no direct access to App Attest keys, so clients
  * use emulated key attestation — the App Attest clientDataHash is
- * SHA256(challenge || signingPublicKey), which Apple's nonce extension
- * certifies. This server re-derives that hash from the challenge it issued
- * plus the declared signing key, and rejects anything that does not match
- * the nonce Apple signed into the leaf certificate.
+ * SHA256(challenge ‖ signingPublicKey), which Apple's nonce extension then
+ * certifies. This server re-derives the clientDataHash from the challenge it
+ * issued plus the declared signing key, and rejects anything that doesn't
+ * match the nonce Apple signed into the leaf certificate.
  *
  * Endpoints:
  *   GET  /            → status
@@ -22,15 +26,18 @@
  *                       counter (no per-device record is kept)
  *
  * Trust anchors and privacy:
- *   - The Apple App Attestation root CA is pinned in this source, never
- *     fetched, so a network attacker cannot substitute a root.
- *   - The leaf's nonce extension is located with a DER walk to OID
- *     1.2.840.113635.100.8.2, not a substring search.
- *   - The registry stores a total count only, never per-device records. A
- *     readable log of attested device fingerprints and registration times
- *     would be an operational-security risk for field users, and media
- *     verification is fully offline and never needs it. GET /devices
- *     therefore returns 404.
+ *   - The Apple App Attestation root CA is PINNED on disk
+ *     (apple-app-attest-root.pem), never fetched — a network attacker must
+ *     not be able to substitute a root.
+ *   - The leaf certificate's nonce extension is parsed with a real DER walk
+ *     to OID 1.2.840.113635.100.8.2 — not a substring search.
+ *   - There is deliberately NO public device listing: a world-readable log of
+ *     every attested device fingerprint and registration time is an
+ *     operational-security problem for the people this tool serves. The
+ *     registry stays on the server's volume; verification of media is fully
+ *     offline and does not need it. GET /devices answers 404 by design.
+ *
+ * This server does exactly one thing: App Attest registration.
  *
  * Config (env): PORT (default 8787), TEAM_ID (10-char Apple team id, REQUIRED),
  * BUNDLE_ID (default com.verify.camera).
@@ -49,9 +56,10 @@ const BUNDLE_ID = process.env.BUNDLE_ID ?? 'com.verify.camera';
 const APP_ID = `${TEAM_ID}.${BUNDLE_ID}`;
 // On Fly.io set REGISTRY_FILE=/data/registry.json so the registry survives deploys (mounted volume).
 const REGISTRY_FILE = process.env.REGISTRY_FILE ?? new URL('./registry.json', import.meta.url).pathname;
-// Pinned Apple App Attestation root (DER, base64). Embedded in source
-// rather than read from disk so the trust anchor cannot depend on
-// filesystem layout; the PEM in this repo is for human inspection only.
+// Pinned Apple App Attestation root (DER, base64), embedded in the source.
+// Embedded in the source rather than read from disk: a trust anchor must
+// not depend on filesystem layout. The PEM stays in this repo for human
+// inspection only.
 // Source: https://www.apple.com/certificateauthority/Apple_App_Attestation_Root_CA.pem
 // serial 0BF3BE0EF1CDD2E0FB8C6E721F621798 · DER SHA-256
 // 1cb9823ba28ba6ad2d33a006941de2ae4f513ef1d4e831b9f7e0fa7b6242c932
@@ -67,13 +75,19 @@ const APPLE_ROOT_DER = Buffer.from(
   'base64'
 );
 
-const challenges = new Map(); // base64 -> expiresAt ms
-// Aggregate counter, never a device list — see the privacy note above.
+// --- tiny state ---
+const challenges = new Map(); // base64 → expiresAt ms
+// The registry is an AGGREGATE COUNTER, not a device list. The old
+// per-device entries (keyIds, signing-key fingerprints, registration
+// timestamps) were write-only — nothing in the server, the app, or the
+// verifiers ever read them — and they accumulated a permanent roster of
+// real hardware on disk: exactly the operational-security liability the
+// missing /devices endpoint was designed around. Only the count survives.
 let registrations = 0;
 try {
   const j = JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'));
-  // Older registries were arrays of per-device entries; collapse them to a
-  // count on first read and drop the entries.
+  // Pre-counter registries were arrays of per-device entries: collapse to
+  // a count on first read; the entries themselves are dropped, not kept.
   registrations = Array.isArray(j) ? j.length : (Number(j?.totalRegistrations) || 0);
 } catch { /* first run */ }
 const saveRegistry = () => fs.writeFileSync(REGISTRY_FILE, JSON.stringify({ totalRegistrations: registrations }, null, 2));
@@ -95,10 +109,11 @@ setInterval(() => {
   for (const [k, b] of rateBuckets) if (b.resetAt <= now) rateBuckets.delete(k);
 }, 60_000).unref();
 
-// Checkpoint for challenges and rate buckets, stored beside the registry so
-// a redeploy neither grants a fresh rate allowance nor kills in-flight
-// attestations. The in-memory maps are authoritative; this file is a
-// best-effort snapshot, written at most every 5s when dirty.
+// --- state persistence (challenges + rate buckets) ---
+// Lives next to the registry on the mounted volume, so a redeploy no longer
+// hands abusers a fresh allowance or kills in-flight attestations. Writes are
+// debounced (5s, dirty-flagged) — the maps in memory remain the truth; the
+// file is a checkpoint, best-effort by design.
 const STATE_FILE = process.env.STATE_FILE ?? REGISTRY_FILE.replace(/[^/]+$/, 'state.json');
 let stateDirty = false;
 function persistState() {
@@ -117,6 +132,7 @@ function persistState() {
     const now = Date.now();
     for (const [k, exp] of s.challenges ?? []) if (exp > now) challenges.set(k, exp);
     for (const [k, b] of s.rateBuckets ?? []) if (b.resetAt > now) rateBuckets.set(k, b);
+    // Legacy checkpoints may carry a forensicsGlobal field — ignored.
   } catch { /* first run or fresh volume */ }
 }
 setInterval(persistState, 5_000).unref();
@@ -126,13 +142,14 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
 }
 
 function clientIp(req) {
-  // Known limitation: outside Fly.io there is no trusted client-IP header.
-  // x-forwarded-for is client-supplied and forgeable, so IP-keyed limits
-  // are evadable. They serve only as a coarse pre-verification guard; the
-  // unforgeable attested keyId is the primary rate-limit key once the
-  // attestation verifies (see /attest). Deployments needing a stronger
-  // pre-verification limit should front this server with a proxy that sets
-  // a trustworthy client-IP header.
+  // RESIDUAL LIMITATION: off Fly.io there is no trusted client-IP header —
+  // x-forwarded-for is client-supplied and trivially forged, so IP-keyed
+  // rate limits are evadable by an attacker who rotates or spoofs it. They
+  // remain only as the coarse PRE-verification guard (the attested keyId,
+  // which the attacker cannot forge, becomes the primary key once the
+  // attestation verifies — see /attest). A deployment that needs a harder
+  // pre-verification limit must front this server with a proxy that sets a
+  // trustworthy client-IP header.
   return req.headers['fly-client-ip'] ?? req.headers['x-forwarded-for']?.split(',')[0].trim() ?? req.socket.remoteAddress ?? 'unknown';
 }
 
@@ -142,8 +159,10 @@ function sweepChallenges() {
   for (const [k, exp] of challenges) if (exp <= now) challenges.delete(k);
 }
 
+// --- minimal DER walking (for the Apple nonce extension) ---
 // Node's X509Certificate verifies chain signatures but does not expose
-// extensions, so the nonce is extracted with an explicit TLV walk.
+// extensions, so the nonce is extracted with an explicit TLV walk to OID
+// 1.2.840.113635.100.8.2 — a parser, not a substring search.
 const APPLE_NONCE_OID_HEX = '2a864886f763640802';
 function readTlv(b, o) {
   if (!Number.isInteger(o) || o < 0 || o + 2 > b.length) throw new Error('DER: truncated');
@@ -154,15 +173,16 @@ function readTlv(b, o) {
     const n = len & 0x7f;
     if (n === 0 || n > 4) throw new Error('DER: indefinite or oversized length');
     len = 0;
-    // Multiply-accumulate rather than shifts: JS bitwise operators are
-    // 32-bit signed, so a 4-byte length >= 0x80000000 would wrap negative
-    // and send the walk backwards.
+    // Multiply-accumulate, never (len << 8) | byte: JS bitwise ops are 32-bit
+    // signed, so a 4-byte length ≥ 0x80000000 wrapped negative, `next`
+    // pointed backwards, and the nonce walker hung forever — a one-request
+    // remote DoS on this public endpoint.
     for (let i = 0; i < n; i++) len = len * 256 + b[p + i];
     p += n;
   }
   if (p + len > b.length) throw new Error('DER: length overruns buffer');
   const next = p + len;
-  if (next <= o) throw new Error('DER: non-advancing TLV'); // must always advance
+  if (next <= o) throw new Error('DER: non-advancing TLV'); // hard anti-hang invariant
   return { tag, content: b.subarray(p, next), next };
 }
 /** Returns the extnValue content for an extension OID, or null. */
@@ -229,9 +249,11 @@ async function verifyAttestation(attestationBytes, clientDataHash) {
   if (att.fmt !== 'apple-appattest') throw new Error('not an apple-appattest statement');
   const { x5c } = att.attStmt;
   if (!Array.isArray(x5c) || x5c.length < 2) throw new Error('missing x5c chain');
-  // attStmt.receipt is neither required nor stored: it is only useful to a
-  // server running Apple's receipt-based fraud-metric flow, which this one
-  // does not.
+  // attStmt.receipt is deliberately NOT required or stored: an Apple App
+  // Attest receipt is only useful to a server running Apple's receipt-based
+  // fraud-metric flow (receipt → Apple → risk metrics), which this server
+  // does not run. Requiring it bought nothing and stored client data for
+  // no purpose.
 
   const leafDer = Buffer.from(x5c[0]);
   const chain = x5c.map((c) => new crypto.X509Certificate(Buffer.from(c)));
@@ -348,12 +370,12 @@ const server = http.createServer(async (req, res) => {
         let killed = false;
         req.on('data', (c) => {
           d += c;
-          // Attestations are a few KB. Destroy with an error so this promise
-          // rejects rather than dangling on a dead socket.
+          // attestations are a few KB; 2 MB is generous. Destroy WITH an error so
+          // this promise rejects instead of dangling on the dead socket.
           if (d.length > 2_000_000 && !killed) { killed = true; req.destroy(new Error('body too large')); }
         });
-        // Malformed JSON resolves to a sentinel so it becomes a clean 400
-        // rather than an uncaught exception.
+        // Malformed JSON must be a clean 400, never an uncaught exception —
+        // one bad POST body must not crash the whole process.
         req.on('end', () => { try { resolve(JSON.parse(d || '{}')); } catch { resolve({ __malformed: true }); } });
         req.on('error', reject);
       }).catch(() => null);
@@ -372,18 +394,24 @@ const server = http.createServer(async (req, res) => {
         send(400, { error: 'signingPublicKey must be a base64 uncompressed P-256 point (65 bytes)' });
         return;
       }
-      // Must be a bounded base64 string: Buffer.from(n) with a numeric JSON
-      // field allocates n bytes instead, so an unchecked numeric field would
-      // let a small POST force a very large allocation.
+      // Emulated key attestation: re-derive the clientDataHash the client
+      // used — SHA256(challenge ‖ signingPublicKey) — and require Apple's
+      // nonce to match it.
+      // attestation must be a base64 STRING of bounded length — Buffer.from(n)
+      // with a numeric JSON field ALLOCATES n bytes instead, so a 200-byte
+      // POST could force a multi-hundred-MB allocation per request.
+      // The 2 MB body cap already bounds legitimate base64.
       if (typeof attestation !== 'string' || attestation.length === 0 || attestation.length > 2_000_000) {
         send(400, { error: 'attestation must be a base64 string (a few KB)' });
         return;
       }
       const clientDataHash = sha256(Buffer.concat([Buffer.from(challenge, 'base64'), signingPub]));
       const device = await verifyAttestation(Buffer.from(attestation, 'base64'), clientDataHash);
-      // Primary rate limit, keyed on the attested keyId: an attacker can
-      // rotate source IPs but cannot mint keyIds, since each must verify
-      // against Apple's root first. Only checkable post-verification.
+      // The PRIMARY rate limit, keyed on the attested keyId: an attacker can
+      // rotate source IPs but cannot mint keyIds — each one must verify
+      // against Apple's root first, which is exactly the work this limit
+      // exists to ration. (It can only be checked post-verification; the IP
+      // bucket above remains the coarse pre-verification guard.)
       if (rateLimited(`attest:key:${device.keyId}`, 20, 10 * 60_000)) { send(429, { error: 'rate limit exceeded' }); return; }
       const fingerprint = sha256(signingPub).toString('hex');
       const entry = {
@@ -392,13 +420,16 @@ const server = http.createServer(async (req, res) => {
         fingerprint,
         registeredAt: new Date().toISOString(),
       };
+      // Nothing per-device is stored: the registry is a counter (see above).
       registrations += 1;
       saveRegistry();
       send(200, { ok: true, device: entry });
       return;
     }
 
-    // See the privacy note at the top of this file.
+    // No /devices listing by design: a public log of every attested device
+    // (fingerprints + registration times) is an operational-security hazard
+    // for field users. Media verification is offline and never needs it.
     if (req.method === 'GET' && url.pathname === '/devices') {
       send(404, { error: 'not found' });
       return;

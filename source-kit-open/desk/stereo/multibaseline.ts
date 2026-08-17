@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Multi-baseline stereo planarity signal — three-lens rigs (ultra-wide,
  * wide, telephoto).

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS2 Phase 1: the disclosure bundle (docs/INTEGRITY.md — selective disclosure).
  *

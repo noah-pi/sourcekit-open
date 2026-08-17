@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * OpenTimestamps anchor + queue lifecycle (0.9.1).
  *

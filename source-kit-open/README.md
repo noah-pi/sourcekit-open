@@ -29,6 +29,10 @@ in this README yourself, offline, in about five minutes (see
 **Reproduce our results** below). Found a vulnerability while checking?
 Please report it privately — see [SECURITY.md](SECURITY.md).
 
+This code was written with AI assistance; it is held to account by the test
+lab, an independent verifier, and a differential oracle — not by that fact
+one way or the other. The full story: [docs/PROVENANCE.md](docs/PROVENANCE.md).
+
 ## What's inside
 
 | Path | What it is |
@@ -40,7 +44,7 @@ Please report it privately — see [SECURITY.md](SECURITY.md).
 | `src/store/` | Settings/state the crypto code reads (`useStore.ts`) |
 | `modules/` | Native modules: `secure-enclave` (Swift — Enclave keygen/signing, App Attest), `audio-capture` (Swift — recording, the raw LPCM master sink, and on-device live transcription), `c2pa-ios` (Swift — the c2pa-rs FFI binding plus the vendored C2PA Rust sources under `ios/Vendor/`), `capture-kit` (Swift capture helpers), and `wifi-info` (Swift — the opt-in Wi-Fi claim's native read) |
 | `server/` | The zero-framework attestation relay (App Attest verification, rate-limited — since 0.9.5 its only job). Runs on any node 20+ host |
-| `desk/` | Source Kit Desk (since 0.9.4): the newsroom verifier — a local web app that checks media, proof bundles, and hash claims entirely in the browser, importing this same `src/` tree (never a fork). Includes the roster editor and the "how we know this" export. See `docs/DESK.md` |
+| `desk/` | Source Kit Desk (since 0.9.4): the newsroom verifier — a local web app that checks media, proof bundles, and hash claims entirely in the browser, importing this same `src/` tree (never a fork — desk, CLI, and the staged lab pin the same primitive versions: @noble/curves 1.9.7, @noble/hashes 1.8.0, @noble/ciphers 1.3.0, @noble/post-quantum 0.6.1). Includes the roster editor and the "how we know this" export. See `docs/DESK.md` |
 | `tests/` | The validation lab: staging script, shims, and the exact suites quoted below |
 
 ## What's deliberately NOT inside — and why
@@ -132,8 +136,11 @@ ship it under your own name.
 
 ## Reproduce our results
 
-Requirements: node 20+, ffmpeg, and (for the independent checks) `c2patool`
-0.9.12+ on PATH or via `C2PATOOL=/path/to/c2patool`.
+Requirements: node 20+, ffmpeg, and `c2patool` — the independent reference
+verifier — on PATH or via `C2PATOOL=/path/to/c2patool`. CI runs the
+SHA-256-pinned c2patool 0.14.0 release binary. Without it every suite still
+runs, but the gold-standard checks report `SKIP` (counted separately, never
+silently passed), so a full local replication needs it installed.
 
 ```sh
 node tests/stage.mjs          # builds tests/.staged: real code + tiny expo shims
@@ -141,10 +148,14 @@ cd tests/.staged
 npm install
 ./node_modules/.bin/tsx test-070-final.mts       # 19 checks: all formats + tamper + red team
 ./node_modules/.bin/tsx test-bmff-deid.mts       # 18 checks: de-identify & re-sign flow
-./node_modules/.bin/tsx test-verification.mts    # 25 checks: verifiers vs. real forgeries & hostile parsers
+./node_modules/.bin/tsx test-verification.mts    # 146 checks: verifiers vs. real forgeries & hostile parsers
 ```
 
-Expected: `19 passed, 0 failed`, `18 passed, 0 failed`, `25 passed, 0 failed`.
+Expected: `19 passed, 0 failed`, `18 passed, 0 failed`, `146 passed, 0 failed`.
+Without `c2patool`, the gold-standard checks print `SKIP` lines and are
+excluded from the tally (`12 passed, 0 failed, 7 skipped` /
+`16 passed, 0 failed, 2 skipped`) — install it to run them; the suites
+never silently pass them.
 The suites sign fresh media with a random lab key on every run — nothing is
 canned. The verification suite runs against openssl-generated fixtures in
 `tests/fixtures/`, including a genuine RFC 3161 token and a self-issued
@@ -156,7 +167,7 @@ filesystem, device model) to the shims in `tests/shims/`. Every cryptographic
 operation — canonicalization, CBOR, COSE, hashes, X.509, ECDSA, RSA, CMS —
 runs as the real shipping code.
 
-Latest results (0.18.3, on this tree — the only checks not run locally are
+Latest results (0.18.4, on this tree — the only checks not run locally are
 the c2patool gold-standard ones, which run in CI against the SHA-256-pinned
 binary):
 
@@ -204,6 +215,18 @@ binary):
   detached 19/19, disclosure 58/58, pose trace 31/31, policy layer 28/28,
   PQ 39/39 — every suite in `tests/` green, with the manifest parser now
   fail-closed on malformed records (the exported-dossier injection fix).
+
+> **Stereo capture — status caveat (0.18.4).** The stereo *verification*
+> code in this repo (artifact ingestion, pair matching, planarity and
+> multi-baseline signals) is lab-tested and green above. The stereo
+> *capture* path lives in the closed camera engine, and its original
+> two-input capture graph degraded in the field on iPhone 17 / iOS 26 —
+> the ultra-wide stream never delivered a frame. 0.18.4 replaces it with
+> Apple's virtual dual-wide device graph (one hardware-synchronized input,
+> wide + ultra-wide constituent ports, with the old graph kept behind a
+> diagnostic flag). That fix is blind-compiled and **pending on-device
+> validation**; until a field capture confirms it, treat stereo capture on
+> iPhone 17 as unproven.
 
 Milestone notes live in `docs/RELEASE-0.9.0.md` through
 `docs/RELEASE-0.9.5.md`; the desk tool has its own guide in

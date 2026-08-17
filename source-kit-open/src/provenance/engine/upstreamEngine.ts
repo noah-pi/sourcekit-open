@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS3 upstream engine — wraps the official C2PA reader and returns a
  * NORMALIZED result. No verdicts here — normalization only (SPEC §2.1).

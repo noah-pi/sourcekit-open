@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Ring-dump JPEG decoding for the desk CLI.
  *

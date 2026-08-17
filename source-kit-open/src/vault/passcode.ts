@@ -1,14 +1,15 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * App-lock passcode: a 6-digit PIN hashed with PBKDF2-SHA256 and a random
- * 128-bit salt, stored in the OS keychain. The PIN itself is never stored.
+ * App-lock passcode: 6-digit PIN, PBKDF2-SHA256 (600,000 iterations) with a
+ * random 128-bit salt, stored in the OS keychain — never the PIN itself.
+ * Iterations are stored per record: PINs set before the 60k → 600k raise
+ * still verify at their recorded work factor, and re-derive to the current
+ * one on the next successful unlock.
  *
- * The work factor is recorded per record, so a PIN set under an older,
- * lower iteration count still verifies and is re-derived at the current
- * count on the next successful unlock.
- *
- * Scope: this is a lock, not a vault. The vault's encryption key lives in
- * the keychain and is not derived from the PIN, so a copy of the app's
- * files is useless without the device keychain as well.
+ * A 6-digit PIN is a lock, not a vault: the vault's actual encryption key
+ * lives in the keychain and does not derive from the PIN, so a stolen backup
+ * of app files is useless without the device keychain too. The Settings
+ * screen says this in plain words.
  */
 
 import * as SecureStore from 'expo-secure-store';
@@ -57,8 +58,10 @@ export async function verifyPasscode(pin: string): Promise<boolean> {
     const stored: StoredPasscode = JSON.parse(raw);
     const candidate = derive(pin, hexToBytes(stored.saltHex), stored.iterations);
     if (!equalBytes(candidate, hexToBytes(stored.hashHex))) return false;
-    // Re-derive at the current work factor. Best-effort: the unlock has
-    // already succeeded, so a failed rewrite simply retries next time.
+    // Work-factor migration: a record written before the 60k → 600k raise
+    // re-derives and re-stores at the current iterations on this successful
+    // verify. Best-effort — the unlock already succeeded, and a failed
+    // rewrite simply retries at the next one.
     if (stored.iterations < ITERATIONS) {
       try {
         const salt = randomBytes(16);
@@ -69,7 +72,7 @@ export async function verifyPasscode(pin: string): Promise<boolean> {
         };
         await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(upgraded), OPTIONS);
       } catch {
-        // A migration failure must never turn a good PIN into a rejection.
+        // See above — migration failure never turns a good PIN into a failure.
       }
     }
     return true;

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Screen re-photography signals — the desk's browser adapter.
  *

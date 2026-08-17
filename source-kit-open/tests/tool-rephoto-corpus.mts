@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Re-photography corpus runner — the error-rate gate.
  *

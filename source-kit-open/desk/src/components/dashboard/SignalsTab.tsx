@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * SignalsTab — Tier-1 analyzers as a first-class dashboard tab (was the
  * collapsed AdvancedSignals panel). Semantics are IDENTICAL to the donor:

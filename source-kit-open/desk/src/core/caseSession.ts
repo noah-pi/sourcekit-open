@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Case-session helpers — building and restoring the desk's .exhibitcase
  * snapshots (the format itself, the chain, and the fail-closed parse live in

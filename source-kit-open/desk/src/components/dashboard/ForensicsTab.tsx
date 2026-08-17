@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ForensicsTab — the Tier-2 ad-hoc tool suite (ARCHITECTURE §5.3, DESIGN
  * §10.7 copy verbatim). Every tool is a card with: its ⓘ "can show /

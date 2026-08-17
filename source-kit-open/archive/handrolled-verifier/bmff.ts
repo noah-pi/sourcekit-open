@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ISO Base Media File Format (MP4/MOV/M4A) surgery for C2PA embedding.
  *

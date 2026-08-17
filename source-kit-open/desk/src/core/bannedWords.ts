@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * bannedWords.ts — the DESIGN §1.3 banned-word list, as checkable data.
  *

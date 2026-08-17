@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Round-trip: BUILD → VERIFY, with timestamps on.
  *

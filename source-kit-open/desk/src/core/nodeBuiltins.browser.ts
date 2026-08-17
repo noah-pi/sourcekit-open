@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Browser stubs for the node builtins referenced by the WS3 upstream engine
  * (src/provenance/engine/upstreamEngine.ts). The browser desk never loads

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * App Attest — Apple certifies that this device is genuine Apple hardware
  * running a genuine, unmodified Source Kit build, and the attestation is

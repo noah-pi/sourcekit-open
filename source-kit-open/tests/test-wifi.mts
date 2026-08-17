@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Wi-Fi SSID/BSSID opt-in capture.
  *
@@ -36,11 +37,18 @@ const ctxWith = {
 } as any;
 const identity = { author: 'Wifi Test', organization: null };
 
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skipped = 0;
 const check = (name: string, ok: boolean, detail = '') => {
   if (ok) { pass++; console.log(`  PASS ${name}`); }
   else { fail++; console.log(`  FAIL ${name} ${detail}`); }
 };
+const skip = (name: string, why: string) => { skipped++; console.log(`  SKIP ${name} :: ${why}`); };
+// c2patool is the optional gold standard: when absent, its checks SKIP loudly
+// (excluded from the pass/fail tally) instead of failing. See README ▸ Requirements.
+const c2patoolBin = process.env.C2PATOOL ?? 'c2patool';
+let c2patoolAvailable = false;
+try { execFileSync(c2patoolBin, ['--version'], { stdio: 'pipe' }); c2patoolAvailable = true; } catch { /* not installed */ }
+if (!c2patoolAvailable) console.log('  NOTE: c2patool not found — gold-standard checks below will SKIP, not fail');
 
 const mkRecord = (ctx: any) => buildRecord({
   assetSha256: bytesToHex(sha256(utf8ToBytes('wifi-media-bytes'))),
@@ -104,8 +112,10 @@ fs.writeFileSync('/tmp/lab/wifi-signed.jpg', j.signedPhotoBytes);
   check('attestPhoto carries the wifi claim', w?.ssid === WIFI.ssid && w?.bssid === WIFI.bssid);
   const report = await verifyPhotoBytes(j.signedPhotoBytes);
   check('wifi-bearing photo verifies INTACT', report.verdict === 'INTACT', `got ${report.verdict}`);
-  try {
-    execFileSync(process.env.C2PATOOL ?? 'c2patool', ['/tmp/lab/wifi-signed.jpg'], { stdio: 'pipe' });
+  if (!c2patoolAvailable) {
+    skip('c2patool validates the wifi-bearing JPEG', 'c2patool not installed');
+  } else try {
+    execFileSync(c2patoolBin, ['/tmp/lab/wifi-signed.jpg'], { stdio: 'pipe' });
     check('c2patool validates the wifi-bearing JPEG', true);
   } catch {
     check('c2patool validates the wifi-bearing JPEG', false);
@@ -141,5 +151,5 @@ fs.writeFileSync('/tmp/lab/wifi-signed.jpg', j.signedPhotoBytes);
   check('BMFF deID copy signature verifies', verifyRecordSignature(db.record).signatureValid);
 }
 
-console.log(`\n=== ${pass} passed, ${fail} failed ===`);
+console.log(`\n=== ${pass} passed, ${fail} failed, ${skipped} skipped ===`);
 process.exit(fail ? 1 : 0);

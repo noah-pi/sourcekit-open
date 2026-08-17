@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * P5 single-image physics checks — orchestration (Plan-0.13.0 P5, items
  * 22–24; Lumethic-derived, geometric/statistical, no ML).

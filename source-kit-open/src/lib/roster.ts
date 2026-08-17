@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Signed newsroom roster — the honest answer to "who took this?" for an
  * organization of twelve people.

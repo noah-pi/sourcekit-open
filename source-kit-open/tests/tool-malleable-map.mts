@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Tool: empirical malleability map of the APP11/JUMBF region, annotated by
  * structure. Builds a signed JPEG, flips every byte of the APP11 segment,

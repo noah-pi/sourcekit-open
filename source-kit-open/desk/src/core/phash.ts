@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * pHash — the soft binding for proof↔media recovery (docs/RECOVERY.md).
  *

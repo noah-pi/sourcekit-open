@@ -1,8 +1,8 @@
 Pod::Spec.new do |s|
   s.name           = 'C2paIos'
   s.version        = '1.0.0'
-  s.summary        = 'Exhibit A local module: upstream C2PA read/verify/sign via c2pa-swift'
-  s.description    = 'Local Expo module wrapping the official c2pa-swift SDK (v0.0.12, C2PAC.xcframework) for the Exhibit A app: manifest reading/verification for JPEG/PNG/BMFF and manifest signing with PEM or Secure Enclave P-256 keys.'
+  s.summary        = 'Source Kit local module: upstream C2PA read/verify/sign via c2pa-swift'
+  s.description    = 'Local Expo module wrapping the official c2pa-swift SDK (v0.0.12, C2PAC.xcframework) for the Source Kit app: manifest reading/verification for JPEG/PNG/BMFF and manifest signing with PEM or Secure Enclave P-256 keys.'
   s.author         = 'noah-pi'
   s.homepage       = 'https://docs.expo.dev/modules/'
   # c2pa-swift v0.0.12 requires iOS 16.0+ (WS3-Binding-Path §2). The APP

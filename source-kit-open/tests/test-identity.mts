@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Org identity assertion (com.verify.identity).
  *
@@ -30,11 +31,18 @@ import { verifyPhotoBytes } from './verifyAsset.mts';
 import { labSigner } from './deviceKey-shim.mts';
 
 const key = labSigner();
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skipped = 0;
 const check = (name: string, ok: boolean, detail = '') => {
   if (ok) { pass++; console.log(`  PASS ${name}`); }
   else { fail++; console.log(`  FAIL ${name} ${detail}`); }
 };
+const skip = (name: string, why: string) => { skipped++; console.log(`  SKIP ${name} :: ${why}`); };
+// c2patool is the optional gold standard: when absent, its checks SKIP loudly
+// (excluded from the pass/fail tally) instead of failing. See README ▸ Requirements.
+const c2patoolBin = process.env.C2PATOOL ?? 'c2patool';
+let c2patoolAvailable = false;
+try { execFileSync(c2patoolBin, ['--version'], { stdio: 'pipe' }); c2patoolAvailable = true; } catch { /* not installed */ }
+if (!c2patoolAvailable) console.log('  NOTE: c2patool not found — gold-standard checks below will SKIP, not fail');
 
 // Two certs: the device leaf + a stand-in "org" cert. Chain VALIDITY is not
 // what this suite tests (x509 suite owns that) — only the assertion seam.
@@ -81,8 +89,10 @@ check('claim ↔ assertion binding holds with the new box', !!v?.claimAssertions
 check('identity telemetry hash matches', v?.identity?.telemetryHashMatches === true);
 check('manifest signature still valid', v?.signatureValid === true);
 check('asset hash still binds', v?.assetHashMatches === true);
-try {
-  execFileSync(process.env.C2PATOOL ?? 'c2patool', ['/tmp/lab/identity-signed.jpg'], { stdio: 'pipe' });
+if (!c2patoolAvailable) {
+  skip('c2patool accepts the identity-bearing JPEG (gold standard)', 'c2patool not installed');
+} else try {
+  execFileSync(c2patoolBin, ['/tmp/lab/identity-signed.jpg'], { stdio: 'pipe' });
   check('c2patool accepts the identity-bearing JPEG (gold standard)', true);
 } catch {
   check('c2patool accepts the identity-bearing JPEG (gold standard)', false);
@@ -129,5 +139,5 @@ if (m && v) {
   check('deID copy still verifies INTACT', dReport.verdict === 'INTACT');
 }
 
-console.log(`\n=== ${pass} passed, ${fail} failed ===`);
+console.log(`\n=== ${pass} passed, ${fail} failed, ${skipped} skipped ===`);
 process.exit(fail ? 1 : 0);

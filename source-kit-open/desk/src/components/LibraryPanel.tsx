@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * LibraryPanel — the main-pane media library (0.15.1).
  *

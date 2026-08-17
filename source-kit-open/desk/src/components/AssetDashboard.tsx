@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * AssetDashboard — the per-asset dashboard (DESIGN §4.2): custody summary
  * banner above an ALWAYS-rendered four-tab bar (Overview · Signals ·

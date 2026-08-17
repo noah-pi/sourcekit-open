@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Desk-side audio ENF extractor — EXTRACT ONLY. There is deliberately NO
  * reference matching at Tier 1: matching against a grid reference is a

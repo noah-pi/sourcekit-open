@@ -1,10 +1,11 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 import ExpoModulesCore
 import AVFoundation
 import CoreMedia
 import CoreVideo
 
 /**
- * CaptureKit — evidentiary camera capture (SPEC WS1, Exhibit A 1.0.0).
+ * CaptureKit — evidentiary camera capture (SPEC WS1 (1.0.0 era)).
  *
  * The camera commits, it never concludes (SPEC §0 rule 1): this module
  * captures and hashes. No analysis, no verdicts, no ENF logic. It records

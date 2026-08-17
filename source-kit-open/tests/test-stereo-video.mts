@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * VIDEO stereo-pair suite — end to end through the REAL seal pipeline.
  *

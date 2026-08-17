@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Screen re-photography analysis — desk-side DSP core.
  *

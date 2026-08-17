@@ -1,3 +1,5 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
+
 import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
 import { buildSelfSignedCert } from './cert.mts';
@@ -33,7 +35,20 @@ export function labSigner(): DeviceSigner {
   };
 }
 
-export async function getDeviceCertChain(): Promise<{ chain: Uint8Array[]; org: null; orgStale: boolean }> {
+/** Mirrors OrgCredential['info'] (src/lib/orgCert.ts) — the fields
+ * attest.mts mirrors into the signed record when an org credential is
+ * active. The lab never attaches one (org is always null here). */
+export interface ShimOrgInfo {
+  subjectOrg: string | null;
+  subjectCN: string | null;
+  issuerOrg: string | null;
+  issuerCN: string | null;
+  serialHex: string;
+  notBefore: string;
+  notAfter: string;
+}
+
+export async function getDeviceCertChain(): Promise<{ chain: Uint8Array[]; org: ShimOrgInfo | null; orgStale: boolean }> {
   if (!certCache) certCache = await buildSelfSignedCert(pub, signDigest);
   return { chain: [certCache], org: null, orgStale: false };
 }

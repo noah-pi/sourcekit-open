@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Trust Roster — creating and maintaining the signed device-key lists the
  * user chooses to trust.

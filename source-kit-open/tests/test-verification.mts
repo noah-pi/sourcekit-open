@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Verification + forgery-regression suite. Run: npm run test:verify
  *

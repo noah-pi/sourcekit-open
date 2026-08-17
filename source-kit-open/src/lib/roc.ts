@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Corpus + ROC tooling — the structural gate for every signal.
  *

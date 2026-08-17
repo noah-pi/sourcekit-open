@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Case panel — the .exhibitcase affordances (save / open) and the case
  * notes. A case file is the session made durable: item references by path +

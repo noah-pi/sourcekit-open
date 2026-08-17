@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * assistant.test.ts — golden tests for the Assistant (ARCHITECTURE §9).
  *

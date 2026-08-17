@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Stereo planarity signal suite — SYNTHETIC fixtures with known geometry.
  *

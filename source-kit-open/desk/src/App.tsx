@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Source Kit Desk — custody checking, entirely in this tab.
  * No server, no upload, no analytics. The only possible network call is the

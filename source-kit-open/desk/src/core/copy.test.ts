@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * copy.test.ts — the ethos guard for the W3 surfaces (ARCHITECTURE §9,
  * DESIGN §1.3): every AI-tab string, every Assistant template, and every

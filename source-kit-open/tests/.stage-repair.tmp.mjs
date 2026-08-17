@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Stages a runnable validation lab into tests/.staged/.
  *

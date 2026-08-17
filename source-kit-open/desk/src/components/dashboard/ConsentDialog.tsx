@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ConsentDialog — the boundary consent modal (DESIGN §5.8, `.fx-consent`).
  * Mandatory before any Tier-3 connector action; driven entirely by the

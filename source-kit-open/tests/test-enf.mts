@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ENF extractor suite — synthetic 16 kHz mono with
  * KNOWN mains hum:

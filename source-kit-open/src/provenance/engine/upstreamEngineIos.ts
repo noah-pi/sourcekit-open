@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS3 upstream engine — iOS binding (SPEC WS3 phase iOS, WS3-Binding-Path
  * §2/§7a). Wraps the native module `modules/c2pa-ios` (c2pa-swift v0.0.12,

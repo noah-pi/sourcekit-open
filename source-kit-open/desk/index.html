@@ -2,6 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- The desk makes no network calls of any kind — evidence never leaves
+         the browser. This policy makes that a hard guarantee, not a promise:
+         connect-src 'none' blocks fetch/XHR/WebSocket outright. blob:/data:
+         exist only for locally opened evidence (object URLs) and Vite's
+         module workers. -->
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; font-src 'self' data:" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Source Kit Desk — media custody checking, entirely in this browser</title>
   </head>

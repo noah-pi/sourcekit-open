@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Desk CLI rasterizer — the node counterpart of the browser
  * adapters in desk/src/core. Same shared DSP (@exhibit/lib/rephoto,

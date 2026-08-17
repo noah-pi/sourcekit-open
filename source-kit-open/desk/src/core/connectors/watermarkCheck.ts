@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * watermarkCheck.ts — the watermark-check connector STUB (same contract as
  * reverseImageSearch.ts: complete boundary UX, no endpoint, no request

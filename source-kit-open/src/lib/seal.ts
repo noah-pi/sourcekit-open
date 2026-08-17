@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Sealed capture — encryption to a newsroom desk key.
  *

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * IMU ↔ optical-flow consistency — the hard-to-forge one.
  *

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Dependency budget (supply-chain).
  *
@@ -96,7 +97,7 @@ const KNOWN_VERSION_SPLITS = {
     '@noble/hashes': ['1.8.0', '2.2.0'],
     // Dev tooling only (never shipped): vite pins esbuild 0.25.x, tsx pins
     // 0.28.x. Build-time bundlers, not runtime attack surface.
-    'esbuild': ['0.25.12', '0.28.1'],
+    'esbuild': ['0.25.12', '0.28.2'],
   },
 };
 for (const [lockRel, known] of Object.entries(KNOWN_VERSION_SPLITS)) {

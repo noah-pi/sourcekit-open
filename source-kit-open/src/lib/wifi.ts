@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Bridge to the native Wi-Fi info module (modules/wifi-info).
  *

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * PQ key custody — the ML-DSA-65 SOFTWARE key.
  *

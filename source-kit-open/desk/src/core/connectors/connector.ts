@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * connector.ts — the Tier-3 connector consent plumbing (ARCHITECTURE
  * §5.4/§6.1/§6.2, DESIGN §5.8/§5.9). DOM-free pure logic: the components

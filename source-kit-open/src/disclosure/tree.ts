@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS2 Phase 1: Merkle tree over committed leaf digests
  * (docs/INTEGRITY.md — selective disclosure).

@@ -92,7 +92,7 @@ public final class Stream {
     ///   - offset: The offset to seek to.
     ///   - origin: The origin for the seek operation (start, current, or end).
     /// - Returns: The new position in the stream, or -1 on error.
-    // Exhibit A deviation: `internal` (upstream `public`). `C2paSeekMode` is a
+    // Source Kit deviation: `internal` (upstream `public`). `C2paSeekMode` is a
     // C2PAC C type; with `@_implementationOnly import C2PAC` it may not appear
     // in public API. Same-module consumers are unaffected. See VENDORED.md.
     typealias Seeker = (_ offset: Int, _ origin: C2paSeekMode) -> Int
@@ -201,7 +201,7 @@ public final class Stream {
     ///     }
     /// )
     /// ```
-    // Exhibit A deviation: `internal` (upstream `public`) — its `seek:` parameter
+    // Source Kit deviation: `internal` (upstream `public`) — its `seek:` parameter
     // uses the now-internal `Seeker` typealias (C2paSeekMode is C2PAC API, hidden
     // behind @_implementationOnly). C2paIosModule uses only Stream(readFrom:) /
     // Stream(writeTo:) / Stream(data:). See VENDORED.md.

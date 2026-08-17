@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * JPEG APP11 / JUMBF embedding, extraction, and stripping.
  *
@@ -31,14 +32,14 @@ const MARKER_APP11 = 0xeb;
 const MARKER_APP13 = 0xed;
 const MARKER_COM = 0xfe;
 
-/** 16-byte JUMBF UUID identifying an Exhibit A attestation box. */
+/** 16-byte JUMBF UUID identifying a Source Kit attestation box. */
 export const VERIFY_JUMD_UUID = asciiToBytes('verifyappattest!');
 const JUMD_LABEL = 'exhibit.attestation';
 
 const MAX_SEGMENT_PAYLOAD = 65533; // length field is 2 bytes, includes itself
 /** "JP"(2) + box-instance En(2) + packet-sequence Z(4) — the per-segment JUMBF envelope. */
 const APP11_ENVELOPE_BYTES = 8;
-/** Box-instance id (En) for the legacy Exhibit A attestation box. */
+/** Box-instance id (En) for the legacy attestation box. */
 const VERIFY_EN = 0x0001;
 
 interface Segment {
@@ -106,7 +107,7 @@ function jpEnvelope(payload: Uint8Array): { en: number; z: number } | null {
   return { en, z };
 }
 
-/** True if an APP11 payload is one of ours (JP header + Exhibit A JUMD UUID). */
+/** True if an APP11 payload is one of ours (JP header + our JUMD UUID). */
 function isVerifyApp11(payload: Uint8Array): boolean {
   if (payload.length < 8 + 8 + 8 + 16) return false;
   if (payload[0] !== 0x4a || payload[1] !== 0x50) return false; // "JP"
@@ -181,7 +182,7 @@ function buildApp11Segments(manifest: Uint8Array): Uint8Array {
 
 /**
  * The box-instance ids (En) whose FIRST packet (Z=1) opens a provenance
- * JUMBF — the legacy Exhibit A box or a C2PA store. Multi-segment honesty:
+ * JUMBF — the legacy attestation box or a C2PA store. Multi-segment honesty:
  * continuation packets (Z>1) carry no uuid, so per-segment uuid matching
  * strands orphans; stripping works by GROUP, and a group is only as
  * provenance-marked as its first packet. A continuation chain whose Z=1 is
@@ -199,7 +200,7 @@ function provenanceGroupEns(segments: Segment[]): Set<number> {
   return ens;
 }
 
-/** Removes every provenance APP11 segment (legacy Exhibit A box or C2PA store), returning the clean signed bytes. */
+/** Removes every provenance APP11 segment (legacy attestation box or C2PA store), returning the clean signed bytes. */
 export function stripManifest(jpeg: Uint8Array): Uint8Array {
   if (!isJpeg(jpeg)) throw new Error('Not a JPEG file');
   const segments = parseSegments(jpeg);
@@ -272,7 +273,7 @@ function reassemble(group: Segment[]): Uint8Array {
   return concatBytes(...group.map((s) => s.payload.subarray(APP11_ENVELOPE_BYTES)));
 }
 
-/** Extracts the first Exhibit A attestation manifest, or null if none. */
+/** Extracts the first Source Kit attestation manifest, or null if none. */
 export function extractManifest(jpeg: Uint8Array): Uint8Array | null {
   if (!isJpeg(jpeg)) return null;
   let segments: Segment[];
@@ -315,7 +316,7 @@ export function extractManifest(jpeg: Uint8Array): Uint8Array | null {
 }
 
 /**
- * Returns a new JPEG with the manifest embedded. Any previous Exhibit A
+ * Returns a new JPEG with the manifest embedded. Any previous Source Kit
  * attestation is stripped first, so a file always carries at most one.
  * The segment is placed after SOI and any APP0 (JFIF) headers.
  */

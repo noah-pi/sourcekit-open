@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Differential oracle: every corpus asset runs through BOTH
  * engines — the archived hand-rolled verifier and the official C2PA engine

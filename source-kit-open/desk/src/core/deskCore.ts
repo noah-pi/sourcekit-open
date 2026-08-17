@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Desk core — intake classification, verification, trust resolution.
  * Everything runs in this browser tab; nothing is uploaded anywhere.
@@ -21,7 +22,7 @@ import { extractVideoMotion, type VideoMotionResult } from './videoMotion';
 import { analyzeImuFlowConsistency, type ConsistencyReport } from '@exhibit/lib/imuflow';
 
 /** The desk's current version — the single source of truth for UI and exports. */
-export const DESK_VERSION = '0.15.0';
+export const DESK_VERSION = '0.18.4';
 
 /** pHash for photos only; video frames are not hashed (stated, not hidden). */
 async function tryPHash(bytes: Uint8Array, mime: string): Promise<string | null> {

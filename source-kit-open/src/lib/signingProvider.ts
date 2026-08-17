@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * SigningProvider — the pluggable signing seam (0.9.0, portable trust).
  *

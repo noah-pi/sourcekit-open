@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS3 policy layer — THE verdict authority (SPEC §0.2, §2.1).
  *

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * byteReads.ts — Tier-0 byte reads (ARCHITECTURE §5.1). PURE: bytes in,
  * data out. No DOM, no canvas, no network — safe in a Web Worker and under

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS3 differential oracle (SPEC §2.1 oracle.ts).
  *

@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Diagnostics log — because a 3-second toast is not a record.
  *

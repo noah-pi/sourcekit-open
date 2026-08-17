@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Org credential over HTTPS — "signet-org/1" (0.18.0).
  *

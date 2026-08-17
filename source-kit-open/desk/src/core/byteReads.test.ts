@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * byteReads.test.ts — Tier-0 byte reads on hand-built fixture byte arrays.
  *

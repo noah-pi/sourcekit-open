@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Settings — single column, five concerns (DESIGN §4.3):
  *  1. Trust & rosters (today's TrustConfig cards),
@@ -170,9 +171,7 @@ export function SettingsPanel(props: {
           Method versions — every analysis names the version that ran, so a report can be re-checked against the same code.
         </p>
         <p className="honest-note" style={{ marginBottom: 0 }}>
-          Written with AI assistance, then verified by the test suites published
-          with the source. Every check this tool reports can be reproduced from
-          that source — see PROVENANCE.md.
+          Source Kit Desk is written with AI assistance. Verification: docs/PROVENANCE.md.
         </p>
       </div>
     </div>

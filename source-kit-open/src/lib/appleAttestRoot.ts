@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The Apple App Attestation Root CA, pinned at build time (DER, base64).
  *

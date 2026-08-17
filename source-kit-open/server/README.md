@@ -1,4 +1,4 @@
-# Source Kit attestation server
+# Source Kit attestation relay
 
 Verifies Apple App Attest statements and counts registrations. Since
 0.9.5 this is the server's ONLY job — the Google Vision reverse-image route

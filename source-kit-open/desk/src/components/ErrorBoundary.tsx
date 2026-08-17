@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Error boundary — one bad file must never white-screen the tab.
  *

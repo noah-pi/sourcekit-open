@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS2 Phase 2 §3: the signed gyro trace (com.verify.poseTrace).
  *

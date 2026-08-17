@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS2 Phase 1: disclosure ladders — the fixed coarseness rungs every
  * claim family commits under (docs/INTEGRITY.md — selective disclosure).

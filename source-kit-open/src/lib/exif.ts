@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * EXIF sanitization for the signed com.verify.exif assertion (0.10.0).
  *

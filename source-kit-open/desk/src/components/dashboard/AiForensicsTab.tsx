@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * AiForensicsTab — the AI Forensics tab (DESIGN §10.8; ARCHITECTURE §6).
  * Two kinds of help, both honest about what they are:

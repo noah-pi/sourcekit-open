@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Verification pipeline — the desk editor's path.
  *
@@ -33,7 +34,7 @@ export type VerdictCode =
   | 'INTACT'             // signature valid + bytes identical to what was signed
   | 'CONTENT_MODIFIED'   // signature valid, but the media changed after signing
   | 'SIGNATURE_INVALID'  // the manifest itself was tampered with
-  | 'NO_ATTESTATION'     // no Exhibit A manifest found
+  | 'NO_ATTESTATION'     // no Source Kit manifest found
   | 'NOT_JPEG'           // embedded photo flow only supports JPEG
   | 'NOT_BMFF'           // embedded video flow only supports MP4/MOV
   | 'UNSUPPORTED'        // manifest present, but uses structures this build can't check (e.g. merkle aux boxes)
@@ -47,7 +48,7 @@ export interface VerificationReport {
     generator: string | null;
     alg: string | null;
     claimAssertionsMatch: boolean;
-    /** True when the embedded telemetry is an Exhibit A record from this ecosystem. */
+    /** True when the embedded telemetry is a Source Kit record from this ecosystem. */
     hasVerifyTelemetry: boolean;
     /** Why the asset hash failed, when it did — 'void-binding' means the
         declared exclusions exempt the hash input (integrity UNPROVEN, not
@@ -176,7 +177,7 @@ export async function verifyPhotoBytes(bytes: Uint8Array, opts?: VerifyOptions):
     return c2paReport(bytes, manifest, c2paStore.payload, () => sha256Hex(stripManifest(bytes)), { start: c2paStore.segmentStart, length: c2paStore.segmentLength }, opts);
   }
 
-  // 2. Legacy Exhibit A manifests (photos signed by pre-C2PA builds).
+  // 2. Legacy manifests (photos signed by pre-C2PA builds).
   const manifestBytes = extractManifest(bytes);
   if (!manifestBytes) {
     return { verdict: 'NO_ATTESTATION', record: null, checks: { ...noChecks }, ...NO_EXTRAS };
@@ -321,12 +322,12 @@ async function c2paReport(
   }
   const notPerformed: string[] = [];
 
-  // Our own media carries the full Exhibit A record as the telemetry assertion.
+  // Our own media carries the full Source Kit record as the telemetry assertion.
   const telemetryRecord =
     manifest.telemetry && isAttestationRecord(manifest.telemetry) ? manifest.telemetry : null;
   // Defense in depth: the inner record carries its own ECDSA signature.
   const inner = telemetryRecord ? verifyRecordSignature(telemetryRecord) : null;
-  if (inner) performed.push('inner Exhibit A record signature verified (defense in depth)');
+  if (inner) performed.push('inner Source Kit record signature verified (defense in depth)');
 
   // --- Post-quantum dual signature. ---
   // Two layers, two custodies — always labeled. A PQ FAILURE never flips the

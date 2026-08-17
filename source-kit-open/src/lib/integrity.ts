@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Device integrity signals (0.9.0) — a SIGNED, SELF-REPORTED assertion, never
  * a capture gate. A compromised device can lie about being compromised; the

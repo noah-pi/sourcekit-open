@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Self-signed X.509 certificate (DER) for the device signing key, built with
  * a minimal hand-rolled ASN.1 writer — no native PKI dependency.

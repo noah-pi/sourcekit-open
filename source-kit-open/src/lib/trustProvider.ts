@@ -1,3 +1,4 @@
+// Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * TrustProvider — pluggable trust anchors for VERIFICATION. Anchors live
  * OUTSIDE the file being verified; providers run in precedence order and the
