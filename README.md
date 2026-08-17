@@ -1,37 +1,74 @@
-# Source Kit — open provenance core
+<p align="center">
+  <img src=".github/banner.svg" alt="Source Kit — open provenance core" width="100%">
+</p>
 
-**Show your work.**
+<p align="center">
+  <b>An iOS camera that cryptographically seals every photo and video at the moment of capture — on-device, offline, with genuine <a href="https://c2pa.org">C2PA Content Credentials</a> embedded in the file itself.</b>
+</p>
 
-This repository publishes the **auditable core** of
-Source Kit — an iOS provenance camera whose every capture is
-cryptographically sealed on-device with genuine
-[C2PA Content Credentials](https://c2pa.org) embedded in the file itself.
+<p align="center">
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-1D4E6F?style=flat-square"></a>
+  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.18.4-1D4E6F?style=flat-square"></a>
+  <a href=".github/workflows/ci.yml"><img alt="CI" src="https://github.com/noah-pi/sourcekit-open/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="1192 checks passing" src="https://img.shields.io/badge/lab-1%2C192_checks_green-2F5D42?style=flat-square">
+  <img alt="C2PA" src="https://img.shields.io/badge/C2PA-conformant-1D4E6F?style=flat-square">
+</p>
 
-> **Naming (0.18.3).** The product is **Source Kit** (it was Signet Cam,
-> then Source, briefly Exhibit A in this repo's docs); the sealed file is
-> still *an exhibit*; its C2PA manifest is *the label*; the signing key's
-> identity is *the hand*; roster enrollment is *accession*. Museum grammar,
-> chosen because a label describes the object without adjudicating it —
-> which is exactly what this software does. Product copy bans the
-> adjudication words (verified, authentic, trusted, proven, real, secure,
-> guaranteed) in verdict position; operations that actually ran keep their
-> precise verbs ("signature mathematically valid", "proven tamper"). The
-> repository and code identifiers keep their historical names — renaming
-> symbols is churn, not honesty. Concretely: the slug, URL scheme, and
-> bundle identifier remain `verify-app` / `verify` / `com.verify.camera` —
-> renaming shipped identifiers breaks installs, and the App Attest keys are
-> bound to them. **Source Kit** is the display name, and the rename stops
-> there deliberately.
+<p align="center">
+  <a href="#reproduce-our-results"><img alt="Reproduce the claims" src="https://img.shields.io/badge/%E2%96%B6_reproduce_the_claims-1D4E6F?style=for-the-badge"></a>
+  &nbsp;
+  <a href="https://noah-pi.github.io/sourcekit-open/"><img alt="Read the deep dive" src="https://img.shields.io/badge/%F0%9F%93%96_read_the_deep_dive-24333B?style=for-the-badge"></a>
+  &nbsp;
+  <a href="SECURITY.md"><img alt="Security policy" src="https://img.shields.io/badge/%F0%9F%94%92_report_a_vulnerability-8F3A2C?style=for-the-badge"></a>
+</p>
 
-We open-source the parts a skeptic needs to check our claims, and we publish
-the validation suites that prove them. You can run every cryptographic claim
-in this README yourself, offline, in about five minutes (see
-**Reproduce our results** below). Found a vulnerability while checking?
-Please report it privately — see [SECURITY.md](SECURITY.md).
+---
 
-This code was written with AI assistance; it is held to account by the test
-lab, an independent verifier, and a differential oracle — not by that fact
-one way or the other. The full story: [docs/PROVENANCE.md](docs/PROVENANCE.md).
+Welcome. This repository is the **auditable core** of Source Kit: the parts a
+skeptic needs to check the claims, and the validation suites that prove them.
+There are no accounts, no analytics, and no ads anywhere in this project.
+
+The idea is simple, and it is the whole point: **you should not have to take our
+word for anything.** Every cryptographic claim below can be run on your own
+machine, offline, in about five minutes — see [Reproduce our
+results](#reproduce-our-results). If a claim can't be checked, it doesn't ship.
+
+> [!IMPORTANT]
+> **Custody, not reality.** A valid signature proves the bytes are unchanged
+> since signing, and *which key* signed them. It does **not** prove what a
+> camera pointed at — and the app says so, in plain language, on every
+> verification. Integrity (did the bytes change?) and credibility (whose key is
+> this?) are separate axes, shown separately, never fused into a single score.
+> The label describes the object; it never adjudicates it.
+
+> [!NOTE]
+> This code was written with AI assistance. It is held to account by the test
+> lab, an independent reference verifier, and a differential oracle — not by
+> that fact one way or the other. The full story is in
+> [docs/PROVENANCE.md](docs/PROVENANCE.md). Found a vulnerability while
+> checking? Please report it privately — see [SECURITY.md](SECURITY.md).
+
+<details>
+<summary><b>A note on names</b> — why the product is "Source Kit" but the code still says <code>verify</code></summary>
+
+<br>
+
+The product is **Source Kit** (it was Signet Cam, then Source, briefly Exhibit A
+in this repo's docs). The museum grammar is deliberate: the sealed file is *an
+exhibit*, its C2PA manifest is *the label*, the signing key's identity is *the
+hand*, roster enrollment is *accession* — because a label describes an object
+without adjudicating it, which is exactly what this software does. Product copy
+bans the adjudication words (*verified, authentic, trusted, proven, real,
+secure, guaranteed*) in verdict position; operations that actually ran keep
+their precise verbs ("signature mathematically valid", "proven tamper").
+
+The repository and code identifiers keep their historical names on purpose —
+renaming shipped symbols is churn, not honesty. The slug, URL scheme, and bundle
+identifier remain `verify-app` / `verify` / `com.verify.camera`; renaming them
+breaks installs, and the App Attest keys are bound to them. **Source Kit** is
+the display name, and the rename stops there deliberately.
+
+</details>
 
 ## What's inside
 
