@@ -15,16 +15,32 @@
 I built a camera that signs what it records, at the moment it records it. This is all of
 it — the cryptography, the native modules, the interface, and the test lab.
 
-The reason is narrow and I want to be precise about it. A photograph used to carry its
-own evidence: grain, optics, the physical awkwardness of faking one. That's gone. What
-replaces it isn't detection — detectors are guessing, and they get worse as the
-generators get better — it's provenance. Not proof that a scene was real, but an
-unbroken, checkable record of where a file came from and what's happened to it since.
+The anxiety about synthetic images tends to assume a prior age in which photographs
+could be believed. There wasn't one. Retouching is as old as the negative. Conan Doyle
+was taken in by two schoolgirls with paper cutouts in 1917, and the Soviet censors were
+airbrushing the disgraced out of group portraits for half a century before Photoshop
+shipped in 1990. What photographs had was never self-evidence. It was friction — faking
+one took a darkroom, a skill, and an afternoon — plus a scaffolding of picture desks,
+wire services and libel law that made lying expensive by other means.
 
-Provenance is only cheap to establish at one instant: capture. After that you're
-reconstructing. So the whole design collapses into one problem — commit to everything
-you can, at the shutter, in a way anyone can check later without asking me for
-anything.
+Generative models did not make images forgeable. They made forgery free, and they made
+it fast. The friction is gone, the scaffolding is thinner than it was, and what remains
+is a medium that was always susceptible, now cheap to abuse at volume.
+
+So the interesting question isn't how to restore a credibility photographs never quite
+had. It's what you can put in its place. Detection is the obvious candidate and the
+wrong one: a detector is a classifier guessing at the output of a generator, and it
+gets worse precisely as the generator gets better. The alternative is provenance — not
+proof that a scene was real, but an unbroken, checkable record of where a file came from
+and what has happened to it since.
+
+That is a smaller claim than most people want. It is also the only one that survives
+contact with someone determined to lie.
+
+And provenance is cheap at exactly one instant — capture. Everything after that is
+reconstruction. So the whole design collapses into a single problem: commit to
+everything you can, at the shutter, in a form anyone can check later without asking me
+for anything.
 
 ## The shutter path
 
@@ -94,16 +110,24 @@ Getting the cryptography right is the easier half. The harder half is saying wha
 signature means without overstating it, and that lives in the UI.
 
 The verdict surface is a **ladder, not a badge** — five separate questions, each with
-its own answer, and an unreached rung says why. No seals, no shields, no checkmarks
-anywhere in the product; they read as authority claims and this software isn't an
-authority. The card carries its title and limits *inside* the frame so it still tells
-the truth when someone screenshots it. Unsigned renders neutral grey, never red —
-absence of a credential isn't evidence of tampering.
+its own answer, and an unreached rung that says why. There are no seals, shields or
+checkmarks anywhere in the product, and the reason is worth stating plainly. A
+checkmark is an institutional gesture. It works by borrowing the authority of some
+body that has supposedly done the checking — a notary, a ratings board, a verification
+team. No such body exists here. A badge in this app would be a piece of borrowed
+furniture, and the borrowing would be the dishonest part, not the cryptography.
+
+So the card carries its title and limits *inside* the frame, where they survive being
+screenshotted. Unsigned renders neutral grey, never red: the absence of a credential is
+not evidence of tampering, and colouring it like a failure would smuggle in a claim
+nobody checked.
 
 There's also a test that fails the build if *verified*, *authentic*, *trusted*,
-*proven*, *real*, *secure* or *guaranteed* shows up in a verdict position. Operations
-that actually ran keep their precise verbs. It sounds fussy; it's the single thing that
-kept the copy honest as the feature count grew.
+*proven*, *real*, *secure* or *guaranteed* appears in a verdict position. Operations
+that actually ran keep their precise verbs. It sounds fussy. It is the single thing
+that kept the copy honest as the feature count grew, because the pressure to round a
+qualified result up to a confident one is constant and comes from everywhere,
+including from me.
 
 All of it is in `src/theme.ts` and `src/components/`. Lift it — none of it is specific
 to this app.
