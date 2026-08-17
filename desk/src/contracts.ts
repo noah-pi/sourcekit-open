@@ -1,5 +1,5 @@
 /**
- * contracts.ts — Source Kit Desk 0.15.1 cross-agent interface lock.
+ * contracts.ts — Source Kit Desk cross-agent interface lock.
  *
  * ORCHESTRATOR-OWNED. READ-ONLY for all implementation agents.
  * Types only (no runtime code) — safe to import from anywhere, no cycles.

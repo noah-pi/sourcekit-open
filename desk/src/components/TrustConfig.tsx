@@ -5,7 +5,7 @@
  *  2. Online checks (the ONLY network call this tool can make — stated).
  *  3. pHash lead thresholds (tuning parameters, not science).
  *
- * Rendered as a fragment of cards; SettingsPanel (0.15.1) is the host.
+ * Rendered as a fragment of cards; SettingsPanel is the host.
  */
 import React, { useRef, useState } from 'react';
 import type { Roster } from '@exhibit/lib/roster';

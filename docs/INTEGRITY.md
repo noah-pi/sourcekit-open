@@ -1,6 +1,6 @@
-# Capture integrity — what each signal bounds, and what it misses (0.10.0)
+# Capture integrity — what each signal bounds, and what it misses
 
-> **0.11.0 addendum — the binding must be signed INTO the claim (audit A-1).**
+> ** addendum — the binding must be signed INTO the claim (audit A-1).**
 > The verifier honors a `c2pa.hash.*` assertion only when the signed claim
 > references it. A binding box attached after signing — however
 > self-consistent — proves nothing, and every defective-credential shape
@@ -40,7 +40,7 @@ says so (`steady` / `insufficient-data`).
 - A compromised enrolled device can sign a fabricated trace outright. The
   trace is commitment under signature, not detection.
 
-*(0.10.0 note: the trace replaced the earlier "proof clip" capture mode,
+*(note: the trace replaced the earlier "proof clip" capture mode,
 which bound the same physical phenomenon as a second media artifact. The
 clip mode was removed; the trace carries the evidence as pure signed data.)*
 
@@ -270,7 +270,7 @@ never a badge.
   media carries no credentials. RESOLVE says "no", and that is all it says.
 - Corpus characterization pending; no error rates published.
 
-## Signals deliberately left to the desk tool (0.9.4)
+## Signals deliberately left to the desk tool
 
 Moiré analysis (screen-refresh interference patterns), specular/flat-field
 checks, and focus-consistency heuristics need pixel access and compute the
@@ -287,7 +287,7 @@ claim is literally true. The record schema reserves `sceneDepth`; captures
 simply omit it. When a device-validated build lands, depth maps will be
 signed as an additional bounded signal — with its own entry on this page.
 
-## The signed byte boundary — which bytes a flip breaks, and which it doesn't (0.11.0)
+## The signed byte boundary — which bytes a flip breaks, and which it doesn't
 
 The sections above cover capture-time signals. This one covers the container:
 an external audit measured that flipping **157 specific bytes** of a signed
@@ -348,7 +348,7 @@ parser never checked the slot, so that byte flipped freely. The verifier now
 rejects any non-null payload — a non-conformant embedded payload fails
 instead of being ignored. Fixed bytes: 157 → 156.
 
-**Three more bytes left the set (156 → 153) with the 0.18.x APP11
+**Three more bytes left the set (156 → 153) with the APP11
 chain-hardening.** `Z`'s low three bytes carry the packet-sequence number,
 and reassembly now ENFORCES it: a chain with a gap, a duplicate, or
 non-contiguous packets is stated absence, never a guess. Flipping a

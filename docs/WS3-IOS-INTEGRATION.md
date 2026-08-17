@@ -315,9 +315,9 @@ created and `app.json` needs no plugin entry (P2 is moot).
 - React Native ≥ 0.75 ships `spm_dependency(spec, url:, requirement:,
   products:)` as a documented library-developer API in
   `react-native/scripts/react_native_pods.rb` (verified at the pinned
-  react-native@0.86.0: `spm_dependency` at react_native_pods.rb:339, backed by
+ react-native@ `spm_dependency` at react_native_pods.rb:339, backed by
   `SPMManager` in `scripts/cocoapods/spm.rb`). This app pins
-  `react-native@0.86.0`.
+ `react-native@ `.
 - The Expo SDK 57 Podfile template
   (`expo-template-bare-minimum@57.0.13/ios/Podfile`, the template EAS prebuild
   uses) requires `react_native_pods.rb` at the top — before any podspec is

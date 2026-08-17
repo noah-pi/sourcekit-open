@@ -25,7 +25,7 @@ export const TSA_URLS = ['https://timestamp.digicert.com', 'https://freetsa.org/
 const TIMEOUT_MS = 8000;
 
 /**
- * Organizations can run or contract their own TSAs (0.9.1) — every trust
+ * Organizations can run or contract their own TSAs — every trust
  * claim must be swappable. Settings inject the override at load; the pool
  * below is only the default witness set.
  */
@@ -98,7 +98,7 @@ export async function fetchTimestampTokens(message: Uint8Array): Promise<Uint8Ar
   return results.filter((t): t is Uint8Array => t !== null && t.length > 0);
 }
 
-// --- Seal-latency machinery (0.18.0) ---------------------------------------
+// --- Seal-latency machinery ---------------------------------------
 //
 // A token's size is TSA-fixed (same signer chain, same 32-byte imprint), so
 // the manifest builder's sizing probe no longer burns a network round: it
@@ -119,7 +119,7 @@ export function estimatedTsaTokenSizes(): number[] {
  * bounded by a deadline — the countersign is valuable, never worth a slow
  * shutter. The deadline caps the WAIT, not the harvest: tokens that arrive
  * before it are kept, so one slow or unreachable TSA can no longer starve
- * the witnesses that did answer (0.18.0 raced the all-settled promise and
+ * the witnesses that did answer (raced the all-settled promise and
  * discarded every token on a miss — a single down TSA meant NO countersign).
  * On a full miss the seal ships unsigned-by-TSA exactly as an offline
  * capture always has; fetches still in flight finish (updating the size

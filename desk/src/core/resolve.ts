@@ -11,8 +11,8 @@
  * is the policy layer (src/provenance/engine/policyLayer.ts); the CLI
  * exposes it as the `resolve` subcommand.
  *
- * Engine binding: @contentauth/c2pa-node@0.8.1 on node>=22, wasm fallback
- * (@contentauth/c2pa-wasm@0.11.1, pinned) on the node-20 harness — see
+ * Engine binding: @contentauth/c2pa-node@ on node>=22, wasm fallback
+ * (@contentauth/c2pa-wasm@, pinned) on the node-20 harness — see
  * upstreamEngine.ts. Trust material is caller-pinned and offline; the
  * result DISCLOSES which trust-list basis was used (official TL vs frozen
  * ITL vs none vs unknown) per C2PA's own product-messaging guidance.

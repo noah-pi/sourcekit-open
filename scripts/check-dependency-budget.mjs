@@ -86,7 +86,7 @@ for (const rel of Object.keys(BUDGET)) {
 // reason; an undeclared split fails the gate.
 const KNOWN_VERSION_SPLITS = {
   'desk/package-lock.json': {
-    // @noble/post-quantum@0.6.1 is written against the noble 2.x API line
+    // @noble/post-quantum@ is written against the noble 2.x API line
     // (it imports 2.x-only modules such as @noble/curves/abstract/fft.js),
     // while the rest of the tree pins the 1.x line. npm overrides CANNOT
     // safely collapse these — forcing one line breaks the other consumer
@@ -95,7 +95,7 @@ const KNOWN_VERSION_SPLITS = {
     '@noble/ciphers': ['1.3.0', '2.2.0'],
     '@noble/curves': ['1.9.7', '2.2.0'],
     '@noble/hashes': ['1.8.0', '2.2.0'],
-    // Dev tooling only (never shipped): vite pins esbuild 0.25.x, tsx pins
+    // Dev tooling only (never shipped): vite pins esbuild, tsx pins
     // 0.28.x. Build-time bundlers, not runtime attack surface.
     'esbuild': ['0.25.12', '0.28.2'],
   },

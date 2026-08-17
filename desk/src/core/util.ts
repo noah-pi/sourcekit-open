@@ -1,11 +1,10 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * util.ts — small shared helpers, deduplicated (0.15.1 / W1).
+ * util.ts — small shared helpers.
  *
- * These used to be triplicated (downloadJson/Text/Bytes in RosterManager,
- * DeskKeyManager, howWeKnow), duplicated (mkId in Intake/App; ageLine in
- * App as rosterAgeLine vs TrustConfig), or both. One implementation now;
- * behavior unchanged. Nothing here touches the network.
+ * One shared implementation of each helper (downloadJson/Text/Bytes, mkId,
+ * ageLine), imported everywhere it is needed. Nothing here touches the
+ * network.
  */
 
 /** Collision-resistant-enough session id for library items. */

@@ -38,7 +38,7 @@ manifest container itself, so the signature and the pixels can't drift apart.
 COSE_Sign1 signs the claim; the claim pins every assertion by hash;
 optionally an RFC 3161 TSA countersigns.
 
-## Verification (fully offline, two axes since 0.8.0)
+## Verification (fully offline, two axes since)
 
 ```
 file ──► extract manifest (format-specific) ──► parse claim + assertions
@@ -70,7 +70,7 @@ shows integrity and credibility independently, and anything present-but-failed
 is a red warning, never silently ignored. Signer *identity* resolves only
 against anchors outside the file: this device's key, or an org credential
 chained to a real CA. Nothing found inside a file can ever upgrade identity
-to "known". (0.8.1 removed the manual known-signers list — a confirm-by-hand
+to "known". (removed the manual known-signers list — a confirm-by-hand
 trust ritual is itself an attack surface; key-continuity trust is the roadmap
 replacement. See `docs/SECURITY.md`.)
 
@@ -78,7 +78,7 @@ The manifest parser follows the C2PA update-chain rule: the **last** manifest
 in the store is the active one, and the verification report says so when a
 store carries more than one. All DER/TLV walkers enforce strict length
 decoding (multiply-accumulate, no 32-bit shifts) and a non-advancing-walker
-invariant — hostile length fields throw instead of hanging (0.8.1 audit).
+invariant — hostile length fields throw instead of hanging (audit).
 
 Trust anchors are compiled-in or user-pinned only. Anything fetched at runtime
 is an input, not an anchor. No network is required; nothing about verification
@@ -104,6 +104,6 @@ list. The copy is independently verifiable — integrity without identity.
   registers the device by its signing-key fingerprint (rate-limited, 2 MB cap)
 No database; device list is a small JSON file on a volume. There is **no
 device-listing endpoint** (a public roster of real journalist hardware is an
-opsec liability, not a feature). Since 0.9.5 the relay does exactly this one
+opsec liability, not a feature). the relay does exactly this one
 job — the Google Vision reverse-image route was removed with its app client,
 so no media ever transits the server.

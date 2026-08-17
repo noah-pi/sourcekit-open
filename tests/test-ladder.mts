@@ -54,8 +54,8 @@ const over = (patch: Partial<LadderInput>): LadderInput => ({ ...base, ...patch 
   check('base: rung labels are the short checkable names',
     l.rungs.map((r) => r.label).join(' | ') ===
     // Vocabulary note: rung 1 ships as 'Media unchanged since signing' in the
-    // app (0.14.x onward); the open tree's copy had drifted to 'Bytes…' and
-    // the trees were unified on the shipped string in 0.15.0 (audit E4).
+    // app (onward); the open tree's copy had drifted to 'Bytes…' and
+    // the trees were unified on the shipped string in (audit E4).
     'Media unchanged since signing | Signer identified | Accessioned by an organization | Key attested by Apple hardware | Time bracketed by an independent anchor');
   check('base: double anchor says "both sides"', l.rungs[4].detail.includes('Pinned-authority countersign') && l.rungs[4].detail.includes('Bitcoin anchor'));
 }
@@ -179,7 +179,7 @@ const over = (patch: Partial<LadderInput>): LadderInput => ({ ...base, ...patch 
 
   const envUnknown = projectTrustLadder(over({ appAttest: { present: true, valid: true, attestationEnv: null } }))!;
   // Wording note: 'verified' is on the project's own ban list in status
-  // positions (audit B8, applied to settings.tsx there and here in 0.15.0),
+  // positions (audit B8, applied to settings.tsx there and here in),
   // so the classic wording pin now tracks the banned-word-free string.
   check('hardware: unknown environment stays backward compatible (reached, ban-list wording)',
     envUnknown.rungs[3].state === 'reached' && envUnknown.rungs[3].detail.includes("App Attest checked against Apple's root, offline"));

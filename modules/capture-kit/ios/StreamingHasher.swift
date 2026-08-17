@@ -5,10 +5,10 @@ import CryptoKit
 /**
  * StreamingHasher — chunked SHA-256 + Merkle root (SPEC §3).
  *
- * LEGACY (0.11.x) — read this before trusting any root. As of 0.12.0 these
+ * LEGACY — read this before trusting any root. these
  * roots are NO LONGER consumed for new seals: v2 delivery-file roots are
  * computed at seal time and carry the commitment. This machinery remains
- * only so 0.11.x records stay reproducible, and its actual coverage is:
+ * only so records stay reproducible, and its actual coverage is:
  *   - VIDEO commits NOTHING. Capture frames are CVPixelBuffer-backed with
  *     no CMBlockBuffer, so the caller's CMSampleBufferGetDataBuffer guard
  *     is always nil and the video root is always the documented
@@ -134,7 +134,7 @@ final class StreamingHasher {
 
   // MARK: - Feeding
 
-  /// Feed captured bytes for one track (legacy 0.11.x stream — see the class
+  /// Feed captured bytes for one track (legacy stream — see the class
   /// header). Video is never called with data (capture frames have no
   /// CMBlockBuffer); audio receives pre-encode native LPCM, not file bytes.
   func append(track: HashTrack, bytes: UnsafeRawBufferPointer) {

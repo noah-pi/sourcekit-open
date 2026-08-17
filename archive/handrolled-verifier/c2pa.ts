@@ -62,7 +62,7 @@ const UUID_JSON = c2paUuid('json');
 const UUID_JPEG = c2paUuid('jpeg');
 
 // ---------------------------------------------------------------------------
-// Standard assertion labels (0.16.0 data contract, C2–C5) — per the vendored
+// Standard assertion labels (data contract, C2–C5) — per the vendored
 // C2PA SDK 2.3 StandardAssertionLabel enum (modules/c2pa-ios …/
 // Manifest/StandardAssertionLabel.swift). Emitted through the first-class
 // allowlist in verifyAssertionBoxes; parsed back by parseOneManifest with
@@ -75,7 +75,7 @@ export const LABEL_SOFT_BINDING = 'c2pa.soft-binding';
 export const LABEL_THUMBNAIL_CLAIM_JPEG = 'c2pa.thumbnail.claim.jpeg';
 export const LABEL_TRAINING_MINING = 'c2pa.training-mining';
 /**
- * D1 (0.16.0): signed stereo depth. Label spellings are the vendored SDK
+ * D1: signed stereo depth. Label spellings are the vendored SDK
  * 2.3 enum's (StandardAssertionLabel.depthmap / .collectionDataHash), which
  * are also the spec's (C2PA 2.2 §18.21 Depthmap, §18.8 Collection Data
  * Hash).
@@ -83,7 +83,7 @@ export const LABEL_TRAINING_MINING = 'c2pa.training-mining';
 export const LABEL_DEPTHMAP_GDEPTH = 'c2pa.depthmap.GDepth';
 export const LABEL_COLLECTION_HASH = 'c2pa.hash.collection.data';
 /**
- * 0.16.1: the secondary viewpoint baked into the manifest as a first-class
+ * the secondary viewpoint baked into the manifest as a first-class
  * standard ingredient (C2PA 2.2 §18.11, ingredient.v3 schema) with
  * relationship 'componentOf' — the wide-angle frame is a COMPONENT of this
  * exhibit, not a parent it was derived from. Its 512px thumbnail rides as
@@ -245,7 +245,7 @@ export function timestampMessageForSignature(protectedBstr: Uint8Array, rawSigna
 // ---------------------------------------------------------------------------
 
 export interface C2paManifestParams {
-  appName: string;          // claim_generator, e.g. "ExhibitA/0.2.0 (com.verify.camera)"
+  appName: string;          // claim_generator, e.g. "ExhibitA/ (com.verify.camera)"
   mime: string;             // dc:format
   title: string;            // dc:title
   instanceId: string;       // "xmp:iid:<hex>"
@@ -278,10 +278,10 @@ export interface C2paManifestParams {
   /** Returns every witness token obtained (empty array when offline). */
   fetchTimestamp?: (message: Uint8Array) => Promise<Uint8Array[]>;
   /**
-   * Sizing-only probe token lengths (0.18.0). Token sizes are TSA-fixed, so
+   * Sizing-only probe token lengths. Token sizes are TSA-fixed, so
    * the layout probe uses the last observed length per TSA instead of a
-   * throwaway network fetch — that fetch used to cost a full TSA round per
-   * seal. When absent, the probe falls back to fetchTimestamp (lab seam).
+   * throwaway network fetch that would cost a full TSA round per seal.
+   * When absent, the probe falls back to fetchTimestamp (lab seam).
    */
   probeTokenSizes?: () => number[];
   /** Optional App Attest binding assertion (JSON: Apple attestation object + challenge + bound signing-key fingerprint) — embedded as com.verify.app-attest. */
@@ -314,7 +314,7 @@ export interface C2paManifestParams {
    * with 'com.verify.' and must not collide with the built-in boxes.
    */
   customAssertions?: { label: string; data: unknown }[] | null;
-  // ---- 0.16.0 data contract (C2–C5): standard assertions, each emitted
+  // ---- data contract (C2–C5): standard assertions, each emitted
   // only when its param is supplied; the caller omits (and logs) any
   // assertion it cannot build honestly — never a capture/seal failure.
   /**
@@ -395,7 +395,7 @@ export interface C2paManifestParams {
    */
   collectionAssets?: { uri: string; bytes: Uint8Array; dcFormat?: string | null }[] | null;
   /**
-   * 0.16.1: the secondary (wide) viewpoint as a componentOf ingredient.
+   * the secondary (wide) viewpoint as a componentOf ingredient.
    * `thumbnailJpeg` is the embedded 512px lead; `fullResSha256` commits the
    * measurement-grade bytes that stay in the vault — the claim seals BOTH,
    * so the vault copy and the in-file lead cannot silently diverge. Absent
@@ -639,7 +639,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
           'Proves WHICH org credential produced this file — never that its contents are true.',
       }))))
     : null;
-  // ---- 0.16.0 standard assertions (C2–C5), first-class allowlist ----
+  // ---- standard assertions (C2–C5), first-class allowlist ----
   // Order is fixed so the claim's assertion list is deterministic.
   const standardBoxes: Uint8Array[] = [];
   const standardLabels: string[] = [];
@@ -648,7 +648,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     standardBoxes.push(jumbBox(UUID_JPEG, LABEL_THUMBNAIL_CLAIM_JPEG, box('jpeg', p.thumbnailJpeg)));
     standardLabels.push(LABEL_THUMBNAIL_CLAIM_JPEG);
   }
-  // 0.16.1: the secondary viewpoint as a componentOf ingredient — its own
+  // the secondary viewpoint as a componentOf ingredient — its own
   // embedded thumbnail (a lead, self-evidently not the measurement pixels)
   // plus a data hash of the full-res bytes in the vault (the measurement).
   // Both boxes enter the claim's assertion list, so the signature covers the
@@ -1224,27 +1224,27 @@ export interface C2paManifest {
    */
   actions: { list: EditAction[]; referenced: boolean } | null;
   /**
-   * c2pa.metadata (0.16.0, C4) — signer-attributed standard metadata
+   * c2pa.metadata — signer-attributed standard metadata
    * (JSON-LD). DECLARED by the sealing software like actions: parsed for
    * display, claim-bound only when `referenced`.
    */
   c2paMetadata: { data: Record<string, unknown>; referenced: boolean } | null;
   /**
-   * c2pa.soft-binding (0.16.0, C3) — the declared soft binding (alg id +
+   * c2pa.soft-binding — the declared soft binding (alg id +
    * first block value, hex). RECOVERY METADATA, never a hard binding: the
    * spec forbids soft bindings as hard bindings, and no report string may
    * present a match here as asset integrity.
    */
   softBinding: { alg: string; valueHex: string | null; referenced: boolean } | null;
   /**
-   * c2pa.training-mining (0.16.0, C5) — the declared training/data-mining
+   * c2pa.training-mining — the declared training/data-mining
    * permissions, property → use (e.g. 'c2pa.ai_generative_training' →
    * 'notAllowed'). The signer/developer's stance, stated; not a runtime
    * enforcement signal.
    */
   trainingMining: { entries: Record<string, string>; referenced: boolean } | null;
   /**
-   * c2pa.asset-type / c2pa.asset-type.v2 (0.16.0, C5) — declared asset
+   * c2pa.asset-type / c2pa.asset-type.v2 — declared asset
    * types (e.g. ['image']). v1 (CBOR map) and v2 (JSON array) both parse.
    */
   assetType: { types: string[]; referenced: boolean } | null;
@@ -1255,7 +1255,7 @@ export interface C2paManifest {
    */
   thumbnails: { label: string; bytes: Uint8Array; referenced: boolean }[];
   /**
-   * c2pa.depthmap.GDepth (0.16.0, D1; §18.21) — the declared depth map:
+   * c2pa.depthmap.GDepth (D1; §18.21) — the declared depth map:
    * GDepth envelope fields plus the decoded map image. Optically captured
    * by the signer's claim; parsed for display/coherence, claim-bound only
    * when `referenced`. Self-asserted like every assertion — a scene-match
@@ -1275,7 +1275,7 @@ export interface C2paManifest {
     referenced: boolean;
   } | null;
   /**
-   * c2pa.hash.collection.data (0.16.0, D1; §18.8) — the declared
+   * c2pa.hash.collection.data (D1; §18.8) — the declared
    * multi-part set (photo + depth map), per-entry sha256 over ALL bytes of
    * each member. A HARD BINDING over set membership: validate with
    * verifyCollectionHash against the actual artifacts.
@@ -1753,7 +1753,7 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
   } catch { /* malformed PQ entry — treated as absent */ }
 
   // claim_generator: the software that sealed THIS manifest ("Adobe
-  // Photoshop 26.3", "ExhibitA/0.14.0"). Display only — self-asserted.
+  // Photoshop 26.3", "ExhibitA/ "). Display only — self-asserted.
   const claimGenerator = typeof claim['claim_generator'] === 'string' ? (claim['claim_generator'] as string) : null;
 
   return { claim, claimBytes, protectedHeader, signature, certDer, certChain: chain.map((c) => new Uint8Array(c)), certChainLength: chain.length, hashData, hashBmff, telemetry, manifestLabel: manifest.label, assertionHashes, referencedAssertionLabels, timestampTokens, pq, appAttestAssertion, transcript, exif, identity, customAssertions, actions, c2paMetadata, softBinding, trainingMining, assetType, thumbnails, depthmap, collectionHash, ingredients, claimGenerator, manifestCount };
@@ -2021,7 +2021,7 @@ export function verifyManifest(
 }
 
 // ---------------------------------------------------------------------------
-// c2pa.hash.collection.data validation (0.16.0, D1; spec §15.12.5)
+// c2pa.hash.collection.data validation (D1; spec §15.12.5)
 // ---------------------------------------------------------------------------
 
 export interface CollectionHashEntryResult {

@@ -1,10 +1,11 @@
-# Security notes — Source Kit 0.10.0 (audit history through 0.8.1)
+# Security notes — design, threat cases, and accepted risks
 
-How the system defends itself, what was audited, what was found, and what we
-consciously accept. If you find a hole, please open an issue — that is exactly
-why this repo exists. **The current threat model — named adversaries, the
+How the system defends itself, the threat cases it handles, and what it
+consciously accepts. If you find a hole, please open an issue — that is exactly
+why this repo exists. **The threat model — named adversaries, the
 AI-assisted-attacker assumption, and 26 scenarios with their honest statuses —
-lives in `THREAT-MODEL.md`; this file is the audit-and-fix record.**
+lives in `THREAT-MODEL.md`; this file details the cryptographic design and the
+specific attacks the verifier rejects.**
 
 ## Reporting a vulnerability (disclosure policy)
 
@@ -14,7 +15,7 @@ lives in `THREAT-MODEL.md`; this file is the audit-and-fix record.**
   remote DoS — email the maintainer privately first (address in the repo
   profile) and give us 90 days before public disclosure.
 - **What you get:** acknowledgment within 72 hours, credit in the fix commit
-  and in this file's audit record unless you ask otherwise, and a straight
+  unless you ask otherwise, and a straight
   answer about whether we agree it's a hole.
 - **Scope honesty:** this is a reference implementation in beta — it carries
   no production certificate and no conformance record. A finding that
@@ -22,7 +23,7 @@ lives in `THREAT-MODEL.md`; this file is the audit-and-fix record.**
   accepted risk* (see below), not a vulnerability, unless it defeats a
   protection we explicitly claim.
 - **Every confirmed finding becomes a permanent regression test** — that is
-  the standing rule of this repo since the 0.8.1 audit, and the fuzz suite
+ the standing rule of this repo, and the fuzz suite
   (`tests/test-fuzz.mts`) exists so the *class* of parser bugs stays dead,
   not just the instance.
 
@@ -36,8 +37,6 @@ lives in `THREAT-MODEL.md`; this file is the audit-and-fix record.**
 - Extracting identifying details (byline, GPS, sensors, transcript) from the
   on-device vault or from shared "de-identified" copies.
 - Abusing the attestation relay (request flooding, memory exhaustion).
-  (Pre-0.9.5 this included draining the Google Vision budget; that route,
-  its budget, and its app client were removed in 0.9.5.)
 
 **We do not defend against (and say so in-app):**
 - What the camera was pointed at. Signatures prove custody of bytes, not
@@ -71,7 +70,7 @@ lives in `THREAT-MODEL.md`; this file is the audit-and-fix record.**
   the seal queue are all encrypted at rest. GCM tag failure = read failure,
   not silent corruption.
 - **Timestamps**: RFC 3161 countersignatures from public TSAs, embedded as
-  COSE countersigns. Since 0.8.0 each token is **cryptographically verified
+  COSE countersigns. Each token is **cryptographically verified
   on-device** (`lib/rfc3161.ts`): messageImprint must match the exact
   timestamp message (RFC 5652 countersignature construction), the CMS
   signature must verify over correctly re-tagged signedAttrs (SET OF tag
@@ -82,7 +81,7 @@ lives in `THREAT-MODEL.md`; this file is the audit-and-fix record.**
   (OCSP/CRL) is not consulted. A token therefore proves "this TSA's key signed
   this imprint at genTime" — the trustworthiness of the TSA itself is, for
   now, the TSA's reputation.
-- **Certificate chains**: since 0.8.0 a real X.509 engine (`lib/x509.ts`)
+- **Certificate chains**: since a real X.509 engine (`lib/x509.ts`)
   verifies every link (ECDSA P-256/P-384 and RSA PKCS#1 v1.5 — RSA via
   constant-structure modpow, never `s**e` then mod), name chaining by
   byte-exact DER comparison, CA flags, and validity at the **verified signing
@@ -92,60 +91,54 @@ lives in `THREAT-MODEL.md`; this file is the audit-and-fix record.**
   chain to a self-asserted root is displayed as exactly that.
 - **Signer identity**: resolves only against anchors outside the file —
   this device's key, or an org credential chained to a real CA. Nothing
-  inside a file can claim or upgrade identity. 0.8.1 **removed** the manual
+  inside a file can claim or upgrade identity. There is no manual
   "known signers" list: a confirm-a-stranger's-key ritual is itself an
   attack surface (an attacker social-engineers their way onto the list and
-  is from then on displayed as trusted), and prefix-comparison habits made
+  is from then on displayed as trusted), and prefix-comparison habits make
   fingerprint grinding (~4 billion tries for 8 hex chars) practical.
-  Identity is now honestly "this device / org credential / unknown", with
+  Identity is honestly "this device / org credential / unknown", with
   the full 64-character fingerprint shown for out-of-band comparison. The
-  replacement is **key continuity** (roadmap): trust earned by a key's own
-  countersigned history, never by a manual ritual. Since 0.10.0 the roster
-  and trust-ladder layers are SHIPPED: editor-signed newsroom rosters
+  direction is **key continuity** (roadmap): trust earned by a key's own
+  countersigned history, never by a manual ritual. The roster
+  and trust-ladder layers ship: editor-signed newsroom rosters
   (desk-administered, app import-only; revocation semantics lab-pinned) and
   the five-rung trust ladder (`lib/trustLadder.ts`) — a projection of the
   verification report, never a second verdict engine. CAWG conformance and
-  Trust List anchoring remain roadmap (W10), not shipped.
+  Trust List anchoring remain roadmap, not shipped.
 - **PIN lockout**: the 6-digit app passcode now has an escalating lockout
   (`lib/pinLockout.ts`) — 4 free failures, then 30 s doubling to a 5-minute
   ceiling, persisted in SecureStore so force-quit does not reset it.
 
-## The 0.8.0 external audit — presence is not proof
+## Presence is not proof
 
-An independent reviewer audited the 0.7.4 tree and found the signing side
-genuine but the verifying side checking **presence, not proof**. We verified
-every claim against the code before acting; the reviewer was right on the
-substance. Everything below was fixed before 0.8.0 shipped — nothing shipped
-in between.
+The verifier's contract is to check **proof, not presence**: no credibility
+badge is earned by the mere existence of a box. The guarantees below are each
+enforced by an on-device cryptographic check.
 
-**Badge overclaims (the core findings — each violated our own "every security
-claim literally true" rule):**
-1. "Hardware attested" badge required only that a `com.verify.app-attest`
-   box exist → now a full offline verification: chain to the pinned Apple
-   root, rpIdHash bound to this app, and Apple's nonce extension recomputed
-   against `SHA256(authData ‖ SHA256(challenge ‖ signingPublicKey))` for
-   exactly the manifest's signing key (`provenance/verifyAppAttest.ts`).
-2. "Timestamped" counted tokens and scraped their genTime with a regex →
-   now real RFC 3161 verification per token; a displayed capture time uses
-   only cryptographically valid tokens.
-3. "Certificate chain" was `chain.length > 1` — and worse, a multi-cert
-   chain *suppressed* the self-signed warning, so a forgery looked **more**
-   credible than a genuine capture → now real link verification; a valid
-   chain to a self-asserted root says so; the self-signed caveat cannot be
-   suppressed.
-4. Org credential import never verified the CA actually signed the leaf →
-   a self-issued "O=Reuters" cert imported cleanly → import now runs the
-   chain verifier and rejects the forgery at the door.
+**Badge discipline (each honors the "every security claim literally true"
+rule):**
+1. The "hardware attested" badge requires a full offline verification: chain
+   to the pinned Apple root, rpIdHash bound to this app, and Apple's nonce
+   extension recomputed against
+   `SHA256(authData ‖ SHA256(challenge ‖ signingPublicKey))` for exactly the
+   manifest's signing key (`provenance/verifyAppAttest.ts`). A box that merely
+   exists earns nothing.
+2. "Timestamped" means real RFC 3161 verification per token; a displayed
+   capture time uses only cryptographically valid tokens, never a regex scrape
+   of genTime.
+3. "Certificate chain" means real link verification, not `chain.length > 1`.
+   A valid chain to a self-asserted root says so, and the self-signed caveat
+   cannot be suppressed by adding intermediate certs.
+4. Org credential import runs the chain verifier and rejects a forgery at the
+   door — a self-issued "O=Reuters" cert does not import as genuine.
 
-**Trust-anchor and server findings:**
-5. The Apple root was fetched from the network at runtime → pinned, in the
-   app binary and embedded in the server source; anything fetched
-   at runtime is an input, never an anchor.
-6. Server nonce check was a substring scan (with an abandoned `void nonceOid`)
-   → real DER walking to the nonce extension, requiring exactly one 32-byte
-   value in context [1].
-7. `/devices` listed every registered device to the world → removed entirely.
-   A public roster of real journalist hardware is an opsec liability.
+**Trust anchors and the server:**
+5. The Apple root is pinned — in the app binary and embedded in the server
+   source. Anything fetched at runtime is an input, never an anchor.
+6. The server nonce check is a real DER walk to the nonce extension, requiring
+   exactly one 32-byte value in context [1] — never a substring scan.
+7. There is no `/devices` listing: a public roster of real journalist hardware
+   is an opsec liability, so the endpoint returns 404.
 8. The device registry was write-only from the app's perspective — attestation
    *displayed* credibility no one could check → the offline verifier (1) is
    the check; the registry remains for server-side abuse control only.
@@ -173,29 +166,26 @@ substring check was ugly but not exploitable (a forged nonce cannot survive
 the real chain check — the leaf is Apple-signed); eas.json PII never entered
 the public repo.
 
-## The 0.8.1 external audit — parser robustness and the human layer
+## Parser robustness and the human layer
 
-A second independent reviewer probed the 0.8.0 tree for implementation bugs
-and "inverse attacks" (using the verifier itself as the weapon). We again
-verified every claim against the code before acting. Four findings were real
-and exploitable; all four were fixed before 0.8.1 shipped, with the attack
-inputs as permanent regression tests.
+Implementation bugs and "inverse attacks" (using the verifier itself as the
+weapon) are their own threat class. Four such cases are handled below, each
+with its attack input kept as a permanent regression test.
 
 **Parser robustness (the critical findings):**
 1. **DER length arithmetic used 32-bit signed shifts — a one-file remote
    wedge.** `len = (len << 8) | byte` wraps in JavaScript: a 4-byte length of
-   `0xFFFFFFFA` decodes to **−6**, the overrun guard passes against a
-   negative, and the TLV walker loops forever. Reachable from any crafted
-   certificate inside a file handed to Source Kit — and, worse, from the public
-   unauthenticated `/attest` endpoint, whose parser had no guards at all (the
-   reviewer demonstrated exit=124, a wedged worker). Fixed everywhere
-   (`lib/x509.ts`, `lib/orgCert.ts`, `server/server.mjs`): multiply-accumulate
-   length decoding (exact to 2^53, never wraps), offset/length validation on
-   every TLV, and a hard **non-advancing-walker invariant**
-   (`next <= o` → throw) that kills the entire bug class regardless of what
-   the length field says. Regression: the reviewer's stall payload plus a
-   4000-buffer fuzz over every DER walker must terminate or throw — a future
-   regression now hangs CI loudly instead of shipping silently.
+   with a 32-bit signed shift, `0xFFFFFFFA` would decode to **−6**, an
+   overrun guard would pass against a negative, and a TLV walker would loop
+   forever — reachable from any crafted certificate, including via the public
+   unauthenticated `/attest` endpoint. Every DER walker
+   (`lib/x509.ts`, `lib/orgCert.ts`, `server/server.mjs`) uses
+   multiply-accumulate length decoding (exact to 2^53, never wraps),
+   offset/length validation on every TLV, and a hard
+   **non-advancing-walker invariant** (`next <= o` → throw) that closes the
+   entire bug class regardless of what the length field says. A 4000-buffer
+   fuzz over every walker must terminate or throw, so a regression hangs CI
+   loudly instead of shipping silently.
 2. **NaN validity-window bypass.** An unparseable certificate date produced
    `NaN`; `atMs < NaN` is always false, so the validity check silently passed
    for any date. Fixed: non-finite validity dates are a parse error, never a
@@ -225,7 +215,7 @@ inputs as permanent regression tests.
   signature (up to three per photo). A 15-second `LAContext` session is now
   primed at the shutter and reused across that capture's signatures.
 
-**Inverse attacks acknowledged, not fixable in code** (the reviewer's larger
+**Inverse attacks acknowledged, not fixable in code** (the larger
 point, which we endorse): screenshot-the-green, strip-and-discredit,
 tamper-to-red, and the liar's dividend attack *readers*, not cryptography.
 The defense is claim discipline — a green badge means "these bytes are
@@ -238,11 +228,11 @@ suites exist to protect.
 (the counter exposes cloned keys; costs network-at-capture), key continuity
 trust (above), moving the vault key into the Enclave, re-keying on
 de-identify to break fingerprint linkability. (The reverse-image lookup this
-list once mentioned was removed outright in 0.9.5 instead of gated.)
+list once mentioned was removed outright in instead of gated.)
 
-## The 0.11.0 external audit — the container boundary and the TSA's papers
+## The container boundary and the TSA's papers
 
-Seven findings from an adversarial review of the shipped 0.11.0 tree.
+Seven findings from an adversarial review of the shipped tree.
 
 1. **Trust tier lived in the verdict enum's presentation, not the data
    model (F1) — fixed.** `verifyPhotoBytes`/`verifyVideoBytes` accept an
@@ -272,7 +262,7 @@ Seven findings from an adversarial review of the shipped 0.11.0 tree.
    whole token — certs are dropped individually and validity is decided
    by cryptography, not parser error handling.
 5. **Video seal reads whole files (F4) — documented honestly, streaming
-   seal deferred to 0.12.0** (the README's "chunked" claim was wrong for
+ seal deferred to ** (the README's "chunked" claim was wrong for
    the seal path; memory numbers are the audit's).
 6. **ITSAppUsesNonExemptEncryption (F6) —** flipped to `true` with the
    exemption analysis documented; final posture is a counsel question.
@@ -280,14 +270,13 @@ Seven findings from an adversarial review of the shipped 0.11.0 tree.
    limitation (no CRL/OCSP anywhere in the ecosystem); the Swift
    `isAvailable()` stub became a real Secure Enclave probe.
 
-## The 0.11.0 standing self-audit — the attach attack
+## The attach attack
 
-Two passes over the finished 0.11.0 tree under the standing workflow
-(cryptographic adversary + cross-examiner). Three fixed, two deferred with
-reasons.
+Five hostile-file cases the verifier must be safe against; three are enforced
+in code, two are deferred with reasons.
 
-1. **A-1: a binding the signed claim doesn't reference could lend arbitrary
-   media a false INTACT — fixed (the attach attack).** A genuinely signed
+1. **A-1: a binding the signed claim doesn't reference must never lend
+   arbitrary media a false INTACT (the attach attack).** A genuinely signed
    claim that references no `c2pa.hash.*` assertion (a foreign signer's, or a
    crafted one) plus a self-consistent binding box added AFTER signing
    verified INTACT over media the signer never saw. Three related mislabels
@@ -311,63 +300,46 @@ reasons.
    SIGNATURE_INVALID subline now covers all three void causes (exclusions
    exempt the media, malformed exclusion set, no referenced binding).
 4. **A-4: unsupported BMFF structures reported SIGNATURE_INVALID — fixed
-   (adopted into 0.11.0).** A foreign manifest using structures we can't
+ (adopted into).** A foreign manifest using structures we can't
    parse (e.g. merkle aux boxes) now reports a dedicated UNSUPPORTED verdict
    — "unchecked", never condemned credentials we never evaluated — with the
    reason disclosed in checksNotPerformed. Rippled through the report type,
    the app UI (neutral, "can't check this one here"), and the desk.
-5. **0.12.0 backlog: duplicate assertion labels are last-wins.** A manifest
+5. ** backlog: duplicate assertion labels are last-wins.** A manifest
    with two same-labeled assertion boxes parses the last; consistency between
    the claim-hash check and the binding walk makes this unexploitable today,
    but rejecting duplicates outright is the stricter read of the spec.
-   Bundled with the 0.12.0 foreign-manifest hardening.
+ Bundled with the foreign-manifest hardening.
 
-## Audit history (0.7.0 cycle)
+## Attacks the verifier rejects — red team
 
-Three independent passes plus a final two-agent cleanup; every fix
-re-validated in the lab.
+**13/13 crypto attacks correctly rejected**, each a permanent regression test:
+manifest transplant to different media, claim tamper (JPEG & PNG),
+assertion/telemetry tamper, pixel tamper, ECDSA high-S malleability,
+exclusion-range tamper, truncated files, trailing garbage after IEND, random
+garbage, and unsigned files. A tampered or transplanted file fails the hard
+binding; a malleated signature fails the low-S check; a junk or truncated
+container fails the parser closed.
 
-**Crypto red team — 13/13 attacks correctly rejected.** Manifest transplant
-to different media, claim tamper (JPEG & PNG), assertion/telemetry tamper,
-pixel tamper, ECDSA high-S malleability, exclusion-range tamper, truncated
-files, trailing garbage after IEND, random garbage, unsigned files.
+**Data-at-rest guarantees the suites pin:**
+- De-identified JPEGs carry no EXIF — a lossless segment stripper removes
+  APP1/APP13/COM while leaving pixels byte-identical.
+- Vault attestation records and the background seal queue (byline, GPS,
+  transcript) are AES-256-GCM sealed with the vault key, never plaintext.
+- De-identified copies carry the **original** capture time, so every claim
+  stays literally true.
 
-**Data layer — 3 findings, all fixed.**
-1. De-identified JPEGs kept their EXIF (make/model/timestamps) → added a
-   lossless segment stripper (APP1/APP13/COM out; pixels byte-identical).
-2. Vault attestation records were plaintext JSON (byline/location) → now
-   AES-256-GCM sealed with the vault key (plaintext fallback for pre-0.7
-   items).
-3. The background seal queue was plaintext (GPS + byline + transcript) →
-   sealed the same way.
-
-**Server — 3 findings, all fixed and live-tested.**
-1. No rate limiting anywhere → zero-dependency sliding-window limiter per
-   client IP; global hourly/daily caps on the paid Google Vision route.
-2. Expired challenges never swept (memory DoS) → sweep + hard cap.
-3. Unbounded request bodies on /attest → 2 MB cap; the connection is killed
-   and the handler rejects cleanly.
-
-**Final cleanup audit — 2 findings, all fixed.**
-1. Pinch-zoom used a multiplicative mapping that could never engage from
-   zoom 0 (0 × anything = 0) → additive mapping.
-2. De-identified copies stamped "captured" with de-identification time →
-   they now carry the original capture time, so every claim stays literally
-   true.
-
-**Post-audit hardening (0.7.0 build 3).**
-1. Server state (challenges, rate buckets, forensics budget) was in-memory
-   and reset on redeploy → now checkpointed to the mounted volume
-   (debounced, expired entries skipped on restore), verified across a live
-   SIGTERM/restart cycle.
-2. iOS audio interruptions (phone call, Siri) lost partial recordings → the
-   native module now finalizes the .m4a at the last good frame on
-   `AVAudioSession.interruptionNotification` and the app seals it like a
-   manual stop.
+**Relay hardening:**
+- A zero-dependency sliding-window rate limiter, keyed after verification on
+  the unforgeable attested keyId.
+- Expired challenges are swept under a hard cap; request bodies on `/attest`
+  are capped at 2 MB and the connection is killed on overflow.
+- Server state (challenges, rate buckets) is checkpointed to the mounted
+  volume and survives a SIGTERM/restart cycle.
 
 ## Accepted residual risks (documented, not hidden)
 
-- **No revocation checking anywhere (0.11.0, auditor F7c).** Device certs,
+- **No revocation checking anywhere (auditor F7c).** Device certs,
   org chains, and TSA certs are verified for structure, validity window, and
   (for TSAs) EKU — never against CRLs or OCSP. A compromised-but-unexpired
   key keeps verifying until its cert expires. Mitigations that exist today:
@@ -375,7 +347,7 @@ files, trailing garbage after IEND, random garbage, unsigned files.
   editor-signed and replaceable, so a leaked key is removed by re-issuing
   the roster (the roster's own timestamp bounds its membership). A real
   revocation story needs ecosystem infrastructure (CRL distribution for
-  org CAs, roster re-issue playbooks) — tracked for 0.12.0, not claimed now.
+ org CAs, roster re-issue playbooks) — tracked for, not claimed now.
 - Server state persistence is best-effort (5 s debounce): a hard crash — not
   a deploy, which flushes on SIGTERM — can lose a few seconds of rate-limit
   counts. Challenges expire in 5 minutes regardless.
@@ -387,7 +359,7 @@ files, trailing garbage after IEND, random garbage, unsigned files.
 - c2patool labels self-signed device certificates "untrusted issuer" until an
   org credential chains them to a real organization. Expected; the app
   explains it.
-- **TSA trust is reputational (0.8.0, stated in-app).** Timestamp tokens are
+- **TSA trust is reputational (stated in-app).** Timestamp tokens are
   fully verified, but TSA chains are not anchored to a curated trust list —
   no mature public TSA root store exists. A valid token proves the TSA's key
   signed the imprint; whether to trust that TSA is a separate judgment. The
@@ -398,7 +370,7 @@ files, trailing garbage after IEND, random garbage, unsigned files.
   Listed under "not checked" in-app.
 - **Emulated key attestation is a binding, not a key.** Apple deliberately
   gives apps no SecKey access to App Attest keys. Our construction binds the
-  Enclave *signing* key into the attestation (the reviewer called this "the
+  Enclave *signing* key into the attestation (one framing calls this "the
   right design"); it proves "Apple-certified genuine device/app, bound to
   this signing key" — it does not make the signing key itself an App Attest
   key.

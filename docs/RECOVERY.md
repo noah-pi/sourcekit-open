@@ -1,15 +1,15 @@
-# Proof↔media recovery — matching proofs to pixels at the desk (0.9.2)
+# Proof↔media recovery — matching proofs to pixels at the desk
 
 When proof travels separately from media (hash-only claims, proof-only
 bundles, de-identified copies), the desk eventually needs to answer: *which
 file does this proof belong to?* This document defines the recovery index
-the desk tool (0.9.4) builds locally, and the honesty rules for matches.
+the desk tool builds locally, and the honesty rules for matches.
 
 ## The three match grades — never merged
 
 1. **Exact** — the media's SHA-256 equals the proof's `mediaSha256`.
    Certain. Bit-for-bit the signed file.
-2. **Exact after metadata strip (0.10.0, W5.5)** — a platform removed the
+2. **Exact after metadata strip** — a platform removed the
    credentials in transit (APP11 segment, caBX chunk, uuid box), so the file
    reports NO_ATTESTATION on its own. When a proof bundle in the intake
    carries the detached manifest, the desk tries the asset hash with the

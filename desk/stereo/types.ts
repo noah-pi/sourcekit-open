@@ -107,7 +107,7 @@ export interface StereoCommitment {
   /** Hardware sync delta between the two frames, milliseconds. */
   syncTimestampDeltaMs: number;
   /**
-   * The per-capture metadata block. OPTIONAL since 0.13.0: photo
+   * The per-capture metadata block. OPTIONAL since photo
    * commitments carry it; VIDEO pair commitments carry none (the module
    * commits no per-pair block), so the distance gate then weighs the
    * disparity cue alone. The planarity gate's use was already

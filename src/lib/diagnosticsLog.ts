@@ -2,8 +2,8 @@
 /**
  * Diagnostics log — because a 3-second toast is not a record.
  *
- * Capture and seal failures used to evaporate: the toast faded, the seal
- * queue kept its error string on a job nobody rendered, and the user was
+ * A capture or seal failure can otherwise evaporate: the toast fades, the
+ * seal queue keeps its error string on a job nobody renders, and the user is
  * left with an empty Exhibits tab and no explanation. This module is the
  * small, plain memory of what happened: a ring buffer of the last 30
  * capture/seal events, persisted as JSON under documentDirectory, read
@@ -34,7 +34,7 @@ export interface DiagnosticEvent {
     | 'seal-failed'
     | 'retry'
     | 'discard'
-    // Pure information (0.18.2): native pipeline diagnostics — connection
+    // Pure information: native pipeline diagnostics — connection
     // census, format picks, interruption boundaries. Never a failure.
     | 'info';
   /** The verbatim error/reason string, when one exists. */

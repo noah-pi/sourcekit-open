@@ -6,7 +6,7 @@
  * from the principal point and points along the radius (lens-consistent
  * direction). Screens, renders, and recompressions have no physical reason
  * to carry a consistent radial displacement field between color channels.
- * Geometric measurement, not ML (Plan-0.13.0 P5 item 22).
+ * Geometric measurement, not ML.
  *
  * METHOD (pure, deterministic):
  *   1. A coarse lattice of patch cells across the frame. Per cell, the

@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * LibraryPanel — the main-pane media library (0.15.1).
+ * LibraryPanel — the main-pane media library.
  *
  * Grid/list views, sort, kind filters, text search, multi-select (checkboxes
  * and shift-range) with a single bulk action (remove), and per-item "Keep in

@@ -1,4 +1,4 @@
-# Exhibit — the newsroom verification tool (0.15.0)
+# Exhibit — the newsroom verification tool
 
 Exhibit is the second half of the trust model: the camera proves custody
 at capture, the desk checks custody at the newsroom. It is a local web app
@@ -13,7 +13,7 @@ npm install
 npm run dev      # or: npm run build && npm run preview
 ```
 
-## The CLI (0.10.0, W7.1)
+## The CLI
 
 The same shared core, scriptable — for batch intake, conformance runs, and
 reports that travel:

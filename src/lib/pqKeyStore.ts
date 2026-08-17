@@ -34,7 +34,7 @@ let cached: PqCaptureKey | null = null;
 
 /**
  * Returns this device's PQ layer, generating and enrolling it on first use
- * (first capture after the 0.10.0 upgrade). `enrolledAt` is recorded once at
+ * (first capture after the upgrade). `enrolledAt` is recorded once at
  * generation and travels in every committed pqKey block — device-reported,
  * like every timestamp this app makes.
  */

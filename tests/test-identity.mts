@@ -74,7 +74,7 @@ async function signJpegWithIdentity(org: string | null): Promise<Uint8Array> {
 }
 
 // ---------- 1. emission + binding ----------
-// The lab cert builder hardcodes the chain top's org (Source Kit); the 0.18.x
+// The lab cert builder hardcodes the chain top's org (Source Kit); the
 // cross-check requires the identity assertion to match it, so the lab identity
 // uses the same org. (This seam tests the assertion plumbing, not chain validity.)
 const signed = signJpegWithIdentity ? await signJpegWithIdentity('Source Kit') : null;

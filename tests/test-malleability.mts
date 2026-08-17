@@ -102,7 +102,7 @@ const expected = new Set<number>();
 const addRange = (start: number, end: number) => { for (let j = start; j < end; j++) expected.add(j); };
 const addField = (name: string) => { const f = byName.get(name)!; addRange(f.start, f.end); };
 addField('APP11 En');
-// Z's low three bytes are load-bearing since the 0.18.x chain-hardening
+// Z's low three bytes are load-bearing since the chain-hardening
 // (extractC2paStore: a broken/renumbered Z chain is stated absence, never a
 // guess) — flipping them is DETECTED, so they leave the allowlist. Only the
 // high byte stays malleable: app11Envelope ignores payload[4] on read

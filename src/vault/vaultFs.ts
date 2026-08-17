@@ -43,7 +43,7 @@ import type { AttestationRecord } from '../provenance/manifest';
 
 const KEY_STORE = 'verify_vault_key_v1';
 /**
- * 0.9.0 source protection: when the app lock is set, the vault key moves
+ * source protection: when the app lock is set, the vault key moves
  * behind the OS keychain's own access control (requireAuthentication →
  * kSecAccessControlUserPresence). iOS itself then demands Face ID / device
  * passcode before ANY process can read the key — enforcement by the OS
@@ -131,10 +131,10 @@ export interface VaultIndexEntry {
   motionVerdict: string | null;
   hasLocation: boolean;
   /**
-   * Grid badge flags (0.11.1, §4) — what's embedded, visible at a glance on
+   * Grid badge flags — what's embedded, visible at a glance on
    * the exhibits grid. Computed at seal time; legacy entries gain it on
    * first grid read via ensureEntryFlags (backfilled from the record, never
-   * by decrypting media). Optional for data compat with pre-0.11.1 indexes.
+   * by decrypting media). Optional for data compat with older indexes.
    *   sealed      — always true for vault items (the lock is the default state)
    *   location    — GPS coordinates embedded
    *   identifying — byline OR sensor log OR transcript OR face-check flag OR wifi claim
@@ -151,7 +151,7 @@ export interface VaultIndexEntry {
   phash: string | null;
 }
 
-/** Grid badge flags (0.11.1, §4) — see VaultIndexEntry.flags. */
+/** Grid badge flags — see VaultIndexEntry.flags. */
 export interface VaultFlags {
   sealed: true;
   location: boolean;
@@ -406,7 +406,7 @@ async function writeIndex(items: VaultIndexEntry[]): Promise<void> {
 }
 
 /**
- * Brief-notice subscription (0.18.2): fires when the vault repaired itself
+ * Brief-notice subscription: fires when the vault repaired itself
  * — currently the only case is an automatic index rebuild after a
  * VaultIndexCorruptedError. The tab chrome renders it as a short banner.
  */
@@ -425,11 +425,11 @@ export async function listItems(): Promise<VaultIndexEntry[]> {
     items = await readIndex();
   } catch (e) {
     if (!(e instanceof VaultIndexCorruptedError)) throw e;
-    // 0.18.2: self-repair, replacing the manual "Rebuild index" row. A
-    // corrupted index fails the vault CLOSED (reads throw, writes refuse),
-    // so waiting for a user to find a recovery button in Settings meant a
-    // permanently empty-looking collection. Rebuild from the sealed
-    // records on disk and re-read; if the rebuild fails, the original
+    // self-repair. A corrupted index fails the vault CLOSED (reads throw,
+    // writes refuse), so waiting for a user to find a recovery button in
+    // Settings would leave a permanently empty-looking collection. Rebuild
+    // from the sealed records on disk and re-read; if the rebuild fails, the
+    // original
     // corruption error stands and nothing is written over it.
     await rebuildIndexFromRecords();
     items = await readIndex();
@@ -448,19 +448,19 @@ export interface SaveItemParams {
   audioUri?: string;
   record: AttestationRecord;
   /**
-   * Seal-time hint for the badge flags (0.11.1): an audio transcript lives
+   * Seal-time hint for the badge flags: an audio transcript lives
    * in the embedded manifest, not the record — the seal queue is the one
    * place that knows it exists. Never re-derived from media later.
    */
   transcriptPresent?: boolean;
   /**
-   * Audio "thumbnail" (0.14.0): the first ~140 chars of the on-device
+   * Audio "thumbnail": the first ~140 chars of the on-device
    * transcript, sealed beside the media so the grid can show words instead
    * of a bare mic icon. Absent when transcription was off — never invented.
    */
   transcriptSnippet?: string;
   /**
-   * D1 (0.16.0): the capture-side depth artifact, sealed beside the media
+   * D1: the capture-side depth artifact, sealed beside the media
    * as `${id}.depth.bin` with the same vault key — the exact privacy
    * contract the media has. Its sha256 is committed pre-signing in the
    * record (context.depth) and in c2pa.hash.collection.data; this is the
@@ -500,7 +500,7 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
     // never fail a save, so this whole block is best-effort.
     let phash: string | null = null;
     if (params.kind === 'video' && uri) {
-      // Video grid thumbnail (0.14.0): a frame ~0.5 s in, resized small,
+      // Video grid thumbnail: a frame ~0.5 s in, resized small,
       // sealed with the same vault key — the exact privacy contract photos
       // already had. The frame extraction reads the still-on-disk draft at
       // seal time; a failure degrades to the placeholder icon, never a
@@ -540,7 +540,7 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
     }
     if (params.kind === 'audio' && params.transcriptSnippet) {
       // The audio "thumbnail" is words, not pixels: the first breath of the
-      // on-device transcript, sealed like the media (0.14.0). Best-effort —
+      // on-device transcript, sealed like the media. Best-effort —
       // the grid falls back to the mic icon.
       try {
         await writeFileBytes(
@@ -571,7 +571,7 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
         // pHash: a 32×32 grayscale reduction → DCT hash → 8
         // bytes in the index. Lossy JPEG at 32×32 is exactly what pHash is
         // robust against. Best-effort like the thumbnail — null, never fatal.
-        // Since 0.16.0 (C3) the pHash is ALSO computed pre-signing in the
+        // the pHash is ALSO computed pre-signing in the
         // attest path (attest.ts photoPhashHex) and committed under the
         // COSE claim as c2pa.soft-binding — this post-embed computation is
         // now at most a cross-check of that signed value plus the vault
@@ -657,7 +657,7 @@ export async function getRecord(id: string): Promise<AttestationRecord | null> {
 
 /**
  * Re-writes an item's encrypted record through `mutate`. Used for data that
- * legitimately arrives after sealing — OTS receipt upgrades (0.9.1), which
+ * legitimately arrives after sealing — OTS receipt upgrades, which
  * are excluded from the signed payload precisely so this can happen without
  * breaking the signature. Returns the updated record, or null if the item
  * is gone. Never throws.
@@ -802,7 +802,7 @@ export async function decryptThumbToCache(id: string, opts?: { fallbackToFull?: 
 }
 
 /**
- * Legacy-video thumbnail backfill (0.14.0 — "videos still need
+ * Legacy-video thumbnail backfill ("videos still need
  * thumbnails"): videos sealed before grid thumbnails existed have no
  * .thumb.bin and would show the bare icon forever. This generates one
  * lazily, on first grid view: the media decrypts into the plain cache

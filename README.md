@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-1D4E6F?style=flat-square"></a>
-  <a href="CHANGELOG.md"><img alt="Version" src="https://img.shields.io/badge/version-0.18.4-1D4E6F?style=flat-square"></a>
+  <img alt="Version" src="https://img.shields.io/badge/version-0.18.4-1D4E6F?style=flat-square">
   <a href=".github/workflows/ci.yml"><img alt="CI" src="https://github.com/noah-pi/sourcekit-open/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="1192 checks passing" src="https://img.shields.io/badge/lab-1%2C192_checks_green-2F5D42?style=flat-square">
   <img alt="C2PA" src="https://img.shields.io/badge/C2PA-conformant-1D4E6F?style=flat-square">
@@ -80,8 +80,8 @@ the display name, and the rename stops there deliberately.
 | `src/vault/` | The encrypted on-device vault (`vaultFs.ts`, `passcode.ts`) — media, attestation records and grid thumbnails are all AES-256-GCM sealed; plaintext only ever exists in a cache folder shredded on lock/background |
 | `src/store/` | Settings/state the crypto code reads (`useStore.ts`) |
 | `modules/` | Native modules: `secure-enclave` (Swift — Enclave keygen/signing, App Attest), `audio-capture` (Swift — recording, the raw LPCM master sink, and on-device live transcription), `c2pa-ios` (Swift — the c2pa-rs FFI binding plus the vendored C2PA Rust sources under `ios/Vendor/`), `capture-kit` (Swift capture helpers), and `wifi-info` (Swift — the opt-in Wi-Fi claim's native read) |
-| `server/` | The zero-framework attestation relay (App Attest verification, rate-limited — since 0.9.5 its only job). Runs on any node 20+ host |
-| `desk/` | Source Kit Desk (since 0.9.4): the newsroom verifier — a local web app that checks media, proof bundles, and hash claims entirely in the browser, importing this same `src/` tree (never a fork — desk, CLI, and the staged lab pin the same primitive versions: @noble/curves 1.9.7, @noble/hashes 1.8.0, @noble/ciphers 1.3.0, @noble/post-quantum 0.6.1). Includes the roster editor and the "how we know this" export. See `docs/DESK.md` |
+| `server/` | The zero-framework attestation relay: App Attest verification, rate-limited. Runs on any node 20+ host |
+| `desk/` | Source Kit Desk: the newsroom verifier — a local web app that checks media, proof bundles, and hash claims entirely in the browser, importing this same `src/` tree (never a fork — desk, CLI, and the staged lab pin the same primitive versions: @noble/curves 1.9.7, @noble/hashes 1.8.0, @noble/ciphers 1.3.0, @noble/post-quantum 0.6.1). Includes the roster editor and the "how we know this" export. See `docs/DESK.md` |
 | `tests/` | The validation lab: staging script, shims, and the exact suites quoted below |
 
 ## What's deliberately NOT inside — and why
@@ -105,7 +105,7 @@ ship it under your own name.
 
 ## The claims, and how they're enforced
 
-- **Verification is proof, not presence (0.8.0).** Every credibility claim the
+- **Verification is proof, not presence.** Every credibility claim the
   verifier shows is backed by an on-device cryptographic check, and the
   report lists what was and was not checked. X.509 chains verify link by link
   (ECDSA P-256/P-384, RSA) against compiled-in pinned roots — never a root
@@ -116,8 +116,8 @@ ship it under your own name.
   attestation/timestamp/chain is a red warning and never moves the integrity
   verdict — integrity and credibility are separate axes, shown separately.
   Signer identity resolves only against out-of-band anchors (this device,
-  an org credential) — 0.8.1 removed the manual known-signers list, which
-  was itself an attack surface (see `docs/SECURITY.md`). Certificate
+  an org credential) — never a manual known-signers list, which would itself
+  be an attack surface. Certificate
   validity is evaluated at the
   verified signing time, never the verifier's clock. What remains unchecked —
   TSA root anchoring, revocation — is said, in-app, on every verification.
@@ -136,14 +136,14 @@ ship it under your own name.
   exactly that key. Verified server-side against Apple's attestation root,
   and the binding rides in every C2PA manifest (`com.verify.app-attest`)
   so anyone can re-check it offline.
-  Attestation is **strictly on demand** (0.9.5): the app ships with no
+  Attestation is **strictly on demand**: the app ships with no
   registry address bundled and makes **no launch-time network call of any
   kind**. The handshake with an attestation registry (self-hostable — see
   `server/`) runs only when the user enters a URL in Settings and taps
   "attest now". Offline devices simply sign unattested and say so.
   A software keychain fallback exists and is **labeled as such** in the UI —
   the app never dresses it up as hardware.
-- **Post-quantum dual signature (0.10.0).** Every capture also carries an
+- **Post-quantum dual signature.** Every capture also carries an
   ML-DSA-65 (FIPS 204) signature over the *same* commitment the ES256
   signature makes — on the record and on the COSE claim — so a future break
   of P-256 does not silently invalidate the archive. The PQ public key is
@@ -154,7 +154,7 @@ ship it under your own name.
   second hardware anchor, and it is labeled that way everywhere it appears.
   Assignment and de-identified copies deliberately carry no PQ layer — a
   long-lived device key would re-link them.
-- **Optional Wi-Fi network claim (0.10.0, W5.7).** With an explicit opt-in
+- **Optional Wi-Fi network claim.** With an explicit opt-in
   (default off), a capture records the Wi-Fi SSID/BSSID the phone *reports*
   being connected to. This is a self-reported, trivially spoofable claim —
   anyone can name an access point anything — so it is signed as a lead a desk
@@ -167,9 +167,7 @@ ship it under your own name.
   signing + which key signed. It does not prove what a camera pointed at, and
   the app says so, in-app, in plain language.
 - **Privacy by construction.** No accounts, no analytics. Transcription is
-  on-device (Apple Speech). No media ever leaves the device: the Google
-  Vision reverse-image lookup was removed in 0.9.5 — it was the only
-  feature that sent media off the device.
+  on-device (Apple Speech). No media ever leaves the device.
 
 ## Reproduce our results
 
@@ -196,17 +194,16 @@ never silently pass them.
 The suites sign fresh media with a random lab key on every run — nothing is
 canned. The verification suite runs against openssl-generated fixtures in
 `tests/fixtures/`, including a genuine RFC 3161 token and a self-issued
-"O=Reuters" certificate — the exact attacks an external audit threw at 0.7.4,
-now permanent regression tests.
+"O=Reuters" certificate — real forgery attempts, kept as permanent
+regression tests.
 
 The staging script rewrites *only* device-service imports (keychain,
 filesystem, device model) to the shims in `tests/shims/`. Every cryptographic
 operation — canonicalization, CBOR, COSE, hashes, X.509, ECDSA, RSA, CMS —
 runs as the real shipping code.
 
-Latest results (0.18.4, on this tree — the only checks not run locally are
-the c2patool gold-standard ones, which run in CI against the SHA-256-pinned
-binary):
+Results on this tree (the only checks not run locally are the c2patool
+gold-standard ones, which run in CI against the SHA-256-pinned binary):
 
 - **146/146** — verification & forgery regression: real chains anchor and
   verify; one flipped signature bit breaks the chain; a self-issued
@@ -223,12 +220,12 @@ binary):
   signature leakage), CSV formula-injection guards, KML escaping, and
   capture-integrity signals (timing regularity reports "no signal" rather
   than guessing under 8 samples).
-- **51/51** — the trust-ladder projection (W7.3): every rung-state
+- **51/51** — the trust-ladder projection: every rung-state
   combination pinned, including the honesty rules — credentials failure
   blocks every rung above, changed media fails rung 1 only, org vouching is
   earned only outside the file, unpinned/unchecked time anchors are
   unreached and never reached, and the limits sentence ships with the card.
-- **18/18** — the org identity assertion (W7.2): the org claim is
+- **18/18** — the org identity assertion: the org claim is
   cross-checked against the chain top inside the verifier — binding
   mismatch fails, name mismatch is a loud MISMATCH, an uncheckable
   cross-check reports the org unproven, never vouched.
@@ -241,39 +238,33 @@ binary):
 - **33/33** — the reference corpus (`tests/corpus/`): genuine captures
   INTACT (including the signed pose trace and capture-integrity signals),
   tampered/stripped/hostile/recaptured inputs all correctly rejected.
-- **10/10** — the full-offline chain (0.9.5): with every network call
+- **10/10** — the full-offline chain: with every network call
   rejecting, capture signs, verification returns INTACT while performing
   **zero** fetches (counted), timestamp tokens and App Attest report
   honestly absent, tampering is still caught, and every export builds.
 - **13/13** crypto red-team attacks rejected (see `docs/SECURITY.md`).
-- **New in 0.15.0:** vault hygiene 8/8 (atomic index write, fail-loud
-  corruption, rebuild from sealed records), commit-at-capture 51/51,
-  stereo/match suites 49/49 · 45/45 · 45/45 · 80/80, oracle 32/32,
+- **Additional suites, all green:** vault hygiene 8/8 (atomic index write,
+  fail-loud corruption, rebuild from sealed records), commit-at-capture
+  51/51, stereo/match suites 49/49 · 45/45 · 45/45 · 80/80, oracle 32/32,
   detached 19/19, disclosure 58/58, pose trace 31/31, policy layer 28/28,
-  PQ 39/39 — every suite in `tests/` green, with the manifest parser now
-  fail-closed on malformed records (the exported-dossier injection fix).
+  PQ 39/39 — with the manifest parser fail-closed on malformed records.
 
-> **Stereo capture — status caveat (0.18.4).** The stereo *verification*
-> code in this repo (artifact ingestion, pair matching, planarity and
-> multi-baseline signals) is lab-tested and green above. The stereo
-> *capture* path lives in the closed camera engine, and its original
-> two-input capture graph degraded in the field on iPhone 17 / iOS 26 —
-> the ultra-wide stream never delivered a frame. 0.18.4 replaces it with
-> Apple's virtual dual-wide device graph (one hardware-synchronized input,
-> wide + ultra-wide constituent ports, with the old graph kept behind a
-> diagnostic flag). That fix is blind-compiled and **pending on-device
-> validation**; until a field capture confirms it, treat stereo capture on
-> iPhone 17 as unproven.
+> **Stereo capture — status caveat.** The stereo *verification* code in this
+> repo (artifact ingestion, pair matching, planarity and multi-baseline
+> signals) is lab-tested and green above. The stereo *capture* path lives in
+> the closed camera engine and uses Apple's virtual dual-wide device graph
+> (one hardware-synchronized input, wide + ultra-wide constituent ports). That
+> capture path is **pending on-device validation** on iPhone 17 / iOS 26;
+> until a field capture confirms it, treat stereo capture there as unproven.
 
-Milestone notes live in `docs/RELEASE-0.9.0.md` through
-`docs/RELEASE-0.9.5.md`; the desk tool has its own guide in
-`docs/DESK.md`, and recovery matching its honesty model in
-`docs/RECOVERY.md`. The 0.10.0 docs set: `docs/THREAT-MODEL.md` (named
-adversaries, the AI-assisted-attacker assumption, 26 scenarios),
-`docs/DECISIONS.md` (the engine and deferral record), `docs/SETTINGS.md`
-(the long-form explanations behind the app's terse rows),
-`docs/SECURITY.md` (audit-and-fix history), `docs/INTEGRITY.md`
-(per-signal bounds), `docs/NETWORK.md` (every network event, named).
+Further reading: `docs/DESK.md` (the desk verifier's guide),
+`docs/RECOVERY.md` (recovery, held to the same honesty model),
+`docs/THREAT-MODEL.md` (named adversaries, the AI-assisted-attacker
+assumption, 26 scenarios), `docs/DECISIONS.md` (the engine choices and what
+is deliberately deferred), `docs/SETTINGS.md` (the long-form explanations
+behind the app's terse rows), `docs/SECURITY.md` (the threat cases the
+verifier rejects), `docs/INTEGRITY.md` (per-signal bounds), and
+`docs/NETWORK.md` (every network event, named).
 
 ## License
 

@@ -41,7 +41,7 @@ they would need to say to stand beside the ones that ship.
    evidence — it means "a person should look at this," not "this file is
    derivative." It also breaks the privacy model: it requires sending media
    off the device, which is why the Google Vision lookup was removed in
-   0.9.5. Instead: pHash matches are computed against local material and
+. Instead: pHash matches are computed against local material and
    surface as **LEADS a human must pursue, never as findings** (see
    `docs/RECOVERY.md`).
 

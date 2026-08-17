@@ -161,7 +161,7 @@ struct EvidenceToggles {
 }
 
 /// Which media track a hashed byte stream belongs to (SPEC §3: chunking is
-/// per-track, tracked separately). Legacy 0.11.x commitment only — see the
+/// per-track, tracked separately). Legacy commitment only — see the
 /// StreamingHasher class header for what each track's stream really contains
 /// (video: nothing; audio: pre-encode LPCM, not delivery bytes).
 enum HashTrack: String {

@@ -82,7 +82,7 @@ export function restoreCaseItems(c: ExhibitCase): DeskItem[] {
       id: `case-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`,
       name: ci.path,
       sha256Hex: ci.sha256,
-      // DeskItem.addedAt (0.15.1): a restore enters the workspace now — the
+      // DeskItem.addedAt: a restore enters the workspace now — the
       // case format saves no intake times, so restore time is the honest value.
       addedAt: Date.now(),
     };

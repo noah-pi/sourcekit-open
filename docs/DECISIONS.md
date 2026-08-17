@@ -1,10 +1,10 @@
-# Decision record — Exhibit A 0.10.0
+# Decision record — Exhibit A 
 
 Decisions that were deliberate, who made them, and the trade-offs accepted.
-Newest first. For audit history see `SECURITY.md`; for what we defend and
+Newest first. For the security design see `SECURITY.md`; for what we defend and
 accept see `THREAT-MODEL.md`.
 
-## D1. Hand-rolled provenance engine, not a c2pa-rs binding (noah-pi, 0.10.0)
+## D1. Hand-rolled provenance engine, not a c2pa-rs binding
 
 **Decision.** Exhibit A's C2PA reading, verification, and trust projection are
 hand-rolled in TypeScript (`src/provenance/`, `src/lib/x509.ts`,
@@ -23,14 +23,14 @@ c2pa-rs / the CAI native SDK.
   projection-not-verdict) are *our* display semantics. A general-purpose
   SDK answers "is this C2PA-valid"; it does not answer "what may this UI
   honestly claim" — that layer had to be ours regardless.
-- **The audit trail demands it.** The 0.8.0/0.8.1 external audits reviewed
+- **The audit trail demands it.** The / external audits reviewed
   this exact code; the regression suites pin this exact behavior. Switching
   engines would invalidate the reviewed surface.
 
 **Trade-offs accepted (stated, not hidden).**
 - **Standards-tracking burden is ours.** C2PA evolves; every spec revision
   must be tracked and ported by hand. Multi-manifest update-chain handling
-  (0.8.1) is the kind of detail a maintained SDK gets for free.
+ is the kind of detail a maintained SDK gets for free.
 - **Conformance claims wait.** We make no `cawg.identity` or C2PA-conformance
   claim until the W10 conformance work (Trust List cert, third-party audit)
   lands; org identity ships under the vendor-labeled `com.verify.identity`
@@ -85,7 +85,7 @@ user compelled to "prove" they've checked in.
 matrix, plus a shipped answer to indistinguishability. Until then the app
 makes no duress claim of any kind.
 
-## D4. Known-signers list removed (0.8.1, from the external audit)
+## D4. Known-signers list removed (from the external audit)
 
 The manual confirm-a-key ritual was itself the attack surface (social
 engineering onto the list; 8-hex-prefix fingerprint grinding). Identity is
@@ -95,7 +95,7 @@ engineering onto the list; 8-hex-prefix fingerprint grinding). Identity is
 a trust feature on purpose" is a decision future maintainers must not
 accidentally undo.
 
-## D5. src/lib carries desk-only modules — by design, not dead code (0.11.0, auditor F5)
+## D5. src/lib carries desk-only modules — by design, not dead code (auditor F5)
 
 The audit flagged `shamir.ts`, `rephoto.ts`, `roc.ts`, `imuflow.ts`,
 `opticalflow.ts` as unimported in the app tree. They are app-unused but

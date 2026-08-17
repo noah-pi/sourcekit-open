@@ -184,7 +184,7 @@ export function analyzeMotion(raw: MotionSample[]): MotionSummary {
 
 
 // ---------------------------------------------------------------------------
-// The signed pose trace (0.10.0) — gyro evidence replacing the parallax clip
+// The signed pose trace — gyro evidence of camera motion during capture
 // ---------------------------------------------------------------------------
 
 /**

@@ -57,7 +57,7 @@ export interface AudioStopResult {
   sensorLogState?: SensorLogState;
   /**
    * Uncompressed LPCM master (CAF) for this take — present only when
-   * rawPcmState is 'recorded'. ABSENT (undefined) on pre-0.18.3 native
+   * rawPcmState is 'recorded'. ABSENT (undefined) on older native
    * builds; callers map that to the toggle's null (enabled-but-failed is
    * not distinguishable there, and the path was never produced at all).
    */

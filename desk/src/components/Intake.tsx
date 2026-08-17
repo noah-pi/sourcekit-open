@@ -23,8 +23,8 @@
  *  - Every finished file gets a one-line, plain-language result; failures
  *    are stated, never swallowed.
  *
- * The item list that used to render here moved to LibraryPanel (0.15.1);
- * props are the narrowed IntakeProps from contracts.ts.
+ * The item list lives in LibraryPanel; props are the narrowed
+ * IntakeProps from contracts.ts.
  */
 import React, { useRef, useState } from 'react';
 import { sha256 } from '@noble/hashes/sha256';

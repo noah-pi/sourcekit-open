@@ -1,4 +1,4 @@
-# Threat model — Source Kit 0.10.0
+# Threat model — Source Kit 
 
 Who attacks this system, what we assume, what happens in each scenario, and
 what we consciously accept. The register is deliberate: every scenario gets
@@ -6,7 +6,7 @@ its honest status — **defended (lab-tested)**, **defended (by design)**,
 **partial (stated honestly)**, **accepted risk**, or **out of scope** — and
 "accepted" is always said out loud in the product, never buried here only.
 
-Related: `SECURITY.md` (audit history and fixes), `INTEGRITY.md` (per-signal
+Related: `SECURITY.md` (cryptographic design and threat cases), `INTEGRITY.md` (per-signal
 bounds), `NETWORK.md` (every network event), `DECISIONS.md` (why the engine
 is built the way it is).
 
@@ -28,7 +28,7 @@ is built the way it is).
   copies that still leak PII, network observation.
 - **The coercer** — compels the user directly: device seizure, forced
   unlock, forced check-ins, legal compulsion of infrastructure providers.
-- **The cross-examiner** (0.11.0, auditor's "Angles") — the adversary the
+- **The cross-examiner** (auditor's "Angles") — the adversary the
   first five get *presented to*: opposing counsel, a hostile editor, a
   fact-checker's comment section. Forges nothing; attacks the *weight* of
   the evidence in front of a decision-maker. "The app signs its own
@@ -122,7 +122,7 @@ test-roundtrip).*
 **2. Manifest transplant onto different media.** The credentials block is
 copied byte-perfect onto a different photo → the hash covers the media, not
 the container → fails exactly as scenario 1. *Defended (lab-tested — the
-0.7.0 red team's core attack, a permanent regression test).*
+ red team's core attack, a permanent regression test).*
 
 **3. Claim/metadata/manifest surgery.** Editing an assertion inside the
 manifest (byline, timestamps, telemetry) invalidates the COSE signature over
@@ -134,14 +134,14 @@ integrity, rungs 2–5 show *cannot be evaluated* — never a partial green.
 verifiers reject non-canonical signatures. *Defended (lab-tested).*
 
 **5. Truncation and trailing garbage.** Short files, cut streams, bytes after
-IEND → parse or hash failure, FAILED verdict, never a wedge (the 0.8.1 audit's
+IEND → parse or hash failure, FAILED verdict, never a wedge (the audit's
 DER-walker invariant: a non-advancing parser throws). *Defended (lab-tested —
 including the 4000-buffer fuzz over every DER walker).*
 
 **6. Multi-manifest store confusion.** A file carrying several manifests (the
 C2PA update-chain rule says the *last* is active) → Source Kit verifies the
 active one and states that the earlier ones were not evaluated. Two verifiers
-no longer produce two verdicts. *Defended (lab-tested since 0.8.1).*
+no longer produce two verdicts. *Defended (lab-tested since).*
 
 **7. Credential stripping.** Anyone can delete the manifest from a file.
 What remains is an ordinary unsigned file → the neutral card: "No signature
@@ -172,7 +172,7 @@ chain cannot produce green. A *valid* chain to a self-asserted root says so.
 **11. Fingerprint grinding and the stranger-trust ritual.** An attacker
 grinds a key whose fingerprint shares an 8-hex prefix with a victim's, or
 social-engineers their way onto a manual "trusted" list → there is no manual
-list (removed in 0.8.1: the ritual was the attack surface), and identity
+list (removed in: the ritual was the attack surface), and identity
 surfaces show the full 64-character fingerprint for out-of-band comparison.
 *Defended (by design).*
 
@@ -261,7 +261,7 @@ exactly this). *Partial (stated honestly).*
 **23. De-identified-copy leakage.** Sharing strips byline, location, Wi-Fi,
 sensors, transcript, and device identity, re-signs as a fresh de-identified
 identity, and the copy *says* it is de-identified and which fields were
-removed. The 0.7.0 audit's EXIF-survival finding is a permanent regression
+removed. The audit's EXIF-survival finding is a permanent regression
 test (segment stripper; pixels byte-identical). Face regions are never
 persisted, never signed, and never leave the redaction path. *Defended
 (lab-tested — test-bmff-deid, roundtrip de-id suites).*

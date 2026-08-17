@@ -6,7 +6,7 @@ Five minutes, from a new terminal.
 cd ~/Downloads/sourcekit-open
 git init
 git add -A
-git commit -m "Source Kit open provenance core (0.18.3)"
+git commit -m "Source Kit open provenance core"
 ```
 
 Create the GitHub repo and push. If you have the GitHub CLI:

@@ -1,8 +1,8 @@
 # Settings, in full
 
 The Settings screen keeps every row short. This document carries the long-form
-explanations that used to live in the app — same honesty standard: every claim
-here is literally true of the implementation.
+explanations behind those rows — same honesty standard: every claim here is
+literally true of the implementation.
 
 ## Capture
 

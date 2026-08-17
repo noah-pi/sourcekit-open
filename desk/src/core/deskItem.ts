@@ -4,7 +4,7 @@
  *
  * The desk's standing rule is "nothing leaves this tab" — but "stays in the
  * tab" also means "doesn't exhaust the tab". Multi-hundred-megabyte videos
- * used to be read whole into React state; these constants make the memory
+ * must never be read whole into React state; these constants make the memory
  * contract explicit and every limit below fails CLOSED with a plain-language
  * message, never a silent truncation:
  *

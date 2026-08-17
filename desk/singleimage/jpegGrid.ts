@@ -1,7 +1,7 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * P5 single-image physics: 8×8 DCT periodicity ("JPEG grid") in a buffer
- * that claims to be RAW/uncompressed (Plan-0.13.0 P5 item 23).
+ * that claims to be RAW/uncompressed.
  *
  * JPEG compression quantizes 8×8-pixel DCT blocks; the blocking leaves an
  * 8-px-periodic signal in the pixel domain, visible in the 2D FFT as peaks

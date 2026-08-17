@@ -1,7 +1,7 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * P5 single-image physics: Poisson–PRNU independence profile
- * (Plan-0.13.0 P5 item 24).
+ *.
  *
  * Photon shot noise is SIGNAL-DEPENDENT: in a linear-light readout its
  * variance grows with the local mean (Poisson: variance ∝ mean; in practice

@@ -1,5 +1,5 @@
 /**
- * Stereo ingestion glue (0.13.0): maps the ExhibitCamera CaptureResult's
+ * Stereo ingestion glue: maps the ExhibitCamera CaptureResult's
  * three-state EvidencePaths onto the commitStereoArtifacts input contract
  * (src/provenance/stereoArtifacts.ts — the ONLY ingestion-library touch
  * point; src/ never imports desk/).

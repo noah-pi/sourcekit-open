@@ -56,7 +56,7 @@ const STAGE = [
   'src/lib/roster.ts', 'src/lib/signingProvider.ts', 'src/lib/ots.ts', 'src/lib/proofBundle.ts',
   'src/lib/seal.ts', 'src/lib/shamir.ts', 'src/lib/pq.ts',
   'src/lib/trustLadder.ts', 'src/lib/trustProvider.ts', 'src/lib/rosterStore.ts',
-  // Persistent on-device diagnostics log (0.18.x) — attest.ts appends to it
+  // Persistent on-device diagnostics log — attest.ts appends to it
   // at seal time, so the lab stages it too (filesystem via shim-fs).
   'src/lib/diagnosticsLog.ts',
   // The vault itself — staged for the disclosure-store hygiene suite:
@@ -225,7 +225,7 @@ if (hasFfmpeg) {
 // resolve to on the day the lab is staged. tsx stays a range — it is the
 // runner, not the code under test.
 // @contentauth/c2pa-wasm is the upstream C2PA engine pinned EXACTLY. The
-// target binding is @contentauth/c2pa-node@0.8.1, but it declares
+// target binding is @contentauth/c2pa-node@, but it declares
 // engines: node>=22 and the harness runs node 20 — the wasm build
 // (same c2pa-rs core) is the documented fallback. upstreamEngine
 // prefers c2pa-node automatically on node>=22 hosts.

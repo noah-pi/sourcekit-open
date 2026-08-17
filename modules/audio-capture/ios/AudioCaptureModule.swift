@@ -92,12 +92,12 @@ public class AudioCaptureModule: Module {
   private var motionLogState = "unavailable" // "recorded" | "failed" | "unavailable"
   private var motionLogPath: String?
 
-  // Raw-audio sink for audio takes (0.18.3): the uncompressed LPCM master
+  // Raw-audio sink for audio takes: the uncompressed LPCM master
   // (CAF), same three-state contract as the video session's raw sink. The
   // tap delivers hardware-format LPCM buffers, so the master writes with
   // NO converter — the exact frames the AAC delivery file sees. Until this
   // existed the sink was structurally 'never-recorded' for audio captures
-  // even with the Raw audio toggle on (TestFlight 0.18.2 field report).
+  // even with the Raw audio toggle on (TestFlight field report).
   private var rawFile: AVAudioFile?
   private var rawFileURL: URL?
   private var rawState = "unavailable" // "recorded" | "failed" | "unavailable"

@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * P5 single-image physics checks — orchestration (Plan-0.13.0 P5, items
+ * P5 single-image physics checks — orchestration (P5, items
  * 22–24; Lumethic-derived, geometric/statistical, no ML).
  *
  * analyzeSingleImage runs every applicable check on ONE decoded image and

@@ -599,8 +599,8 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   check('ots: receipt for a different digest is refused',
     !verifyOtsReceipt(pending, sha256(utf8ToBytes('some other signature'))).receiptValid);
 
-  // Confirmed receipt, built by hand in the REAL wire format (0.18.1 — the
-  // old fixtures encoded the 0.18.0 framing bug): header is
+  // Confirmed receipt, built by hand in the REAL wire format (the
+  // old fixtures encoded the framing bug): header is
   // MAGIC || version(0x01) || hash-op tag(0x08) || raw 32-byte digest; ops
   // are 0xf0 append / 0xf1 prepend; an attestation is
   // 0x00 || tag(8 raw bytes) || varbytes(payload). Chain:

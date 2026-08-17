@@ -1,5 +1,5 @@
 /**
- * contracts-ext.ts — Source Kit Desk 0.15.1 W2 extension types.
+ * contracts-ext.ts — Source Kit Desk W2 extension types.
  *
  * Same discipline as contracts.ts: TYPES ONLY (no runtime code), safe to
  * import from anywhere. This file EXTENDS the orchestrator-owned interface

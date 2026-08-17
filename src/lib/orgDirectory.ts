@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Org credential over HTTPS — "signet-org/1" (0.18.0).
+ * Org credential over HTTPS — "signet-org/1".
  *
  * The SSL integration: instead of hand-importing a credential file, a member
  * enters their organization's domain and the app fetches a STATIC document

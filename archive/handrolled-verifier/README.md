@@ -34,13 +34,13 @@ Shared libraries these files import back from `src/` (`lib/sign`, `lib/pq`,
 NOT archived — the signing path (`src/provenance/attest.ts`) uses the same
 code, and archiving them would fork capture-side crypto for no audit gain.
 
-## The A-1 audit history (why the binding guard exists)
+## Why the binding guard exists
 
-0.11.0 audit finding **A-1**: a hash binding is honored ONLY when the signed
-claim references it. Before the guard, three defective-credential shapes were
-mislabeled — including a false-green attach attack (a genuinely signed
-telemetry-only claim plus a binding box added post-signing over different
-media verified INTACT). The guard lives in `c2pa.ts` (`verifyManifest`): an
+A hash binding is honored ONLY when the signed claim references it. Without
+this guard, three defective-credential shapes would be mislabeled — including
+a false-green attach attack (a genuinely signed telemetry-only claim plus a
+binding box added post-signing over different media verifying INTACT). The
+guard lives in `c2pa.ts` (`verifyManifest`): an
 unreferenced or malformed binding is **void** — `assetHashFailure:
 'void-binding'`, verdict `SIGNATURE_INVALID` (defective credentials,
 integrity UNPROVEN), never `CONTENT_MODIFIED` (proven tamper). Regression
