@@ -5,33 +5,58 @@
 <p align="center">
   <a href="LICENSE"><img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-1F6B45?style=flat-square"></a>
   <a href=".github/workflows/ci.yml"><img alt="CI" src="https://github.com/noah-pi/sourcekit-open/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="C2PA conformant" src="https://img.shields.io/badge/C2PA-conformant-1F6B45?style=flat-square">
+  <img alt="Opens in c2patool" src="https://img.shields.io/badge/C2PA-opens%20in%20c2patool-1F6B45?style=flat-square">
   <img alt="Platform iOS" src="https://img.shields.io/badge/platform-iOS-6E6E73?style=flat-square">
   &nbsp;<a href="https://noah-pi.github.io/sourcekit-open/"><b>Deep dive →</b></a>
 </p>
 
 ---
 
-I built a camera that signs what it records, at the moment it records it. The
-cryptography, the native modules, the interface and the test lab are all in this repo.
+# Fuck deepfakes. Prove your work.
+
+**Source Kit is a cryptographic camera app that signs every photo and video at the
+shutter** — on the device, offline, in the iPhone's Secure Enclave — and writes the
+signature and the capture context into the file itself. Any C2PA reader can open it.
+
+I'm a journalist who became a product designer. I'm not a cryptographer, and I'm not a
+career engineer. This is a side project, published in full — camera, cryptography, native
+modules, interface, test suite — because people who know more than I do will get further
+with it than I will.
+
+### Where this comes from
+
+I was a journalist at the New York Times and I'm now a product designer at Google. Source
+Kit isn't either of those jobs. It's a side project, built nights and weekends, because I
+wanted a camera that could show its work and couldn't find one. It isn't affiliated with or
+endorsed by either organization.
+
+So the honest framing: I've read the specifications closely and tested this as carefully as
+I know how — 27 suites, cross-checked against the C2PA reference implementation on every
+run. I've also almost certainly missed things a cryptographer or a career iOS engineer
+would catch in an afternoon. If that's you, I would genuinely rather you found them than
+didn't.
+
+The people working on this properly — Apple, Google, the C2PA working group, newsrooms with
+real security teams — have resources I don't. What a solo project can do is try things
+quickly, publish all of it, and be straight about where the limits are.
+
+### Why provenance, and not detection
 
 There was never a golden age of photographic truth. Conan Doyle published two schoolgirls'
 paper cut-outs as evidence of fairies in 1920, after Kodak experts confirmed the negatives
-showed no tampering — which was true, and beside the point. Soviet censors airbrushed the
-disgraced out of group portraits for fifty years before Photoshop shipped. What a photograph
-had was never self-evidence. It was friction: a darkroom, a skill, an afternoon.
+showed no tampering — which was true, and beside the point. What a photograph had was never
+self-evidence. It was friction: a darkroom, a skill, an afternoon. Generative models didn't
+make images forgeable, they made forgery free and fast.
 
-Generative models didn't make images forgeable. They made forgery free and fast.
+Detection is the obvious replacement and I think it's the wrong one: a detector is a
+classifier guessing at the output of a generator, and it gets worse exactly as the generator
+gets better. Provenance is the alternative — not proof that a scene was real, but a
+checkable record of where a file came from and what has happened to it since. It's a much
+smaller claim than most people want, and it's the one I could see a way to actually keep.
 
-Detection is the obvious replacement and the wrong one — a detector is a classifier guessing
-at the output of a generator, and it gets worse exactly as the generator gets better.
-Provenance is the alternative: not proof that a scene was real, but a checkable record of
-where a file came from and what has happened to it since. That's a smaller claim than most
-people want. It's also the only one that survives contact with someone determined to lie.
-
-Provenance is cheap at exactly one instant — capture. Everything after that is
-reconstruction. So the design collapses to one problem: commit to everything you can, at the
-shutter, in a form anyone can check later without asking me for anything.
+Provenance is cheap at exactly one instant: capture. Everything after that is
+reconstruction. So the whole thing collapses to one problem — commit to as much as you can,
+at the shutter, in a form anyone can check later without needing anything from me.
 
 **[Read the deep dive →](https://noah-pi.github.io/sourcekit-open/)**
 
@@ -62,8 +87,10 @@ certificate then vouches for *exactly that key*, not merely for some key on some
 device.
 
 The binding rides inside every manifest, so it can be re-checked offline years later with
-nothing running anywhere. `src/lib/appAttest.ts` and `server/server.mjs`. It's the piece I'd
-most like someone to reuse, or break.
+nothing running anywhere. `src/lib/appAttest.ts` and `server/server.mjs`.
+
+As far as I can tell this holds, but it's the piece where I'm furthest outside my depth, and
+the one I'd most like a cryptographer to either reuse or tell me is wrong.
 
 ## What it can't do
 
@@ -106,16 +133,15 @@ Most of it is platform-neutral TypeScript with no build step.
 
 ## The interface
 
-Getting the cryptography right is the easier half. The harder half is saying what a
-signature means without overstating it, and that lives in the UI.
+This is the part I'm actually qualified for, and I think it matters as much as the
+cryptography: saying what a signature means without overstating it.
 
-The verdict surface is a **ladder, not a badge** — five separate questions, each with
-its own answer, and an unreached rung that says why. There are no seals, shields or
-checkmarks anywhere in the product, and the reason is worth stating plainly. A
-checkmark is an institutional gesture. It works by borrowing the authority of some
-body that has supposedly done the checking — a notary, a ratings board, a verification
-team. No such body exists here. A badge in this app would be a piece of borrowed
-furniture, and the borrowing would be the dishonest part, not the cryptography.
+The verdict surface is a **ladder, not a badge** — five separate questions, each with its
+own answer, and an unreached rung that says why. There are no seals, shields or checkmarks
+anywhere in the product. A checkmark is an institutional gesture: it works by borrowing the
+authority of some body that has supposedly done the checking, a notary or a ratings board or
+a verification team. No such body exists here, so a badge would be borrowed furniture — and
+the borrowing, rather than the cryptography, would be the dishonest part.
 
 So the card carries its title and limits *inside* the frame, where they survive being
 screenshotted. Unsigned renders neutral grey, never red: the absence of a credential is
@@ -128,8 +154,8 @@ verbs. That test kept the copy honest as the feature count grew, because the pre
 round a qualified result up to a confident one is constant, and a fair amount of it came
 from me.
 
-All of it is in `src/theme.ts` and `src/components/`. Lift it — none of it is specific
-to this app.
+All of it is in `src/theme.ts` and `src/components/`. Lift it if it's useful — none of it is
+specific to this app, and I'd be glad to see it somewhere better engineered.
 
 ## Run the lab
 
@@ -175,10 +201,13 @@ No coordination needed, no permission to ask.
 - **Stereo capture is unvalidated on iPhone 17 / iOS 26.** The verification side is
   lab-tested. The capture side moved to Apple's virtual dual-wide device graph and I
   haven't confirmed it in the field yet.
-- **Beta software**, written with AI assistance and held to account by the test lab, an
-  independent reference verifier, and the differential oracle — see
-  [`docs/PROVENANCE.md`](docs/PROVENANCE.md). No conformance certification. Don't keep
-  your only copy of anything important in it.
+- **No conformance certification.** Files carry standard C2PA manifests and `c2patool`
+  reads them on every CI run, but nothing here has been through the conformance program.
+- **Beta software, written by one person with AI assistance**, and held to account by the
+  test lab, an independent reference verifier and the differential oracle — see
+  [`docs/PROVENANCE.md`](docs/PROVENANCE.md). Don't keep your only copy of anything
+  important in it, and please don't stake anything serious on it without reading the code
+  yourself.
 
 ## Building it
 
@@ -202,6 +231,7 @@ Apache-2.0 ([LICENSE](LICENSE), with [NOTICE](NOTICE) for attribution that trave
 "Source Kit" is a trademark and isn't licensed for derivative use
 ([TRADEMARK.md](TRADEMARK.md)) — fork it, ship it under your own name.
 
-If you build something with this, I'd like to hear about it.
+If you build something with this, or find something I got wrong, I'd really like to hear
+about it.
 
 — Noah Bassetti-Blum

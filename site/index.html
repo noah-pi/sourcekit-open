@@ -213,8 +213,8 @@ footer a:hover{color:var(--accent)}
 <header style="padding:var(--s-xxl) 0 var(--s-xl)"><div class="wrap" style="display:grid;grid-template-columns:1fr 330px;gap:var(--s-xxl);align-items:center">
   <div>
     <h1>Fuck deepfakes.<br>Prove your work.</h1>
-    <p class="lede">Source Kit is an iPhone camera. It signs every photo and video at the shutter — on the device, offline, in the Secure Enclave — and writes the signature and the capture context into the file. Any C2PA reader opens it.</p>
-    <p style="color:var(--textDim);max-width:46ch">The camera, the cryptography, the native modules and the interface are all here, under Apache-2.0.</p>
+    <p class="lede">Source Kit is a cryptographic camera app that signs every photo and video at the shutter — on the device, offline, in the iPhone's Secure Enclave — and writes the signature and the capture context into the file itself. Any C2PA reader can open it.</p>
+    <p style="color:var(--textDim);max-width:48ch">I'm a journalist who became a product designer. I'm not a cryptographer, and I'm not a career engineer. This is a side project, published in full — camera, cryptography, native modules, interface, test suite — because people who know more than I do will get further with it than I will.</p>
     <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
       <a class="btn ghost" href="#seal">How it works</a>
@@ -239,6 +239,16 @@ footer a:hover{color:var(--accent)}
   </div>
 </div></header>
 
+
+<!-- ===================== WHO ===================== -->
+<section class="block" style="border-top:none;padding-top:var(--s-lg)"><div class="wrap">
+  <div class="card" style="border-left:3px solid var(--accent)">
+    <h3 style="margin-top:0">Where this comes from</h3>
+    <p style="color:var(--textDim);margin-bottom:var(--s-sm)">I was a journalist at the New York Times and I'm now a product designer at Google. Source Kit isn't either of those jobs. It's a side project, built nights and weekends, because I wanted a camera that could show its work and couldn't find one. It isn't affiliated with or endorsed by either organization.</p>
+    <p style="color:var(--textDim);margin-bottom:var(--s-sm)">So the honest framing: I've read the specifications closely and tested this as carefully as I know how — 27 suites, cross-checked against the C2PA reference implementation on every run. I've also almost certainly missed things a cryptographer or a career iOS engineer would catch in an afternoon. If that's you, I would genuinely rather you found them than didn't.</p>
+    <p style="color:var(--textDim);margin:0">The people working on this properly — Apple, Google, the C2PA working group, newsrooms with real security teams — have resources I don't. What a solo project can do is try things quickly, publish all of it, and be straight about where the limits are. That's what this is for.</p>
+  </div>
+</div></section>
 
 <!-- ===================== HISTORY ===================== -->
 <section class="block" id="history"><div class="wrap">
@@ -479,10 +489,10 @@ footer a:hover{color:var(--accent)}
   </figure>
 
   <h2 style="margin-top:var(--s-xxl)">Tying the signature to the hardware</h2>
-  <p class="dek">This is the part I'd most like someone to reuse, or break.</p>
+  <p class="dek">This is the piece I'd most like a cryptographer to look at — either to reuse it or to tell me it doesn't hold.</p>
 
   <div class="col">
-    <p>Apple's App Attest certifies that a genuine build of your app is running on a genuine device. But it gives apps no access to the attested key, so you can't just attest your signing key with it. The workaround is a commitment.</p>
+    <p>Apple's App Attest certifies that a genuine build of your app is running on a genuine device. But it gives apps no access to the attested key, so you can't simply attest your signing key with it. What I ended up doing is a commitment, and as far as I can tell it's sound — though I'd feel better if someone qualified confirmed that.</p>
   </div>
 
   <figure>
@@ -941,10 +951,10 @@ footer a:hover{color:var(--accent)}
   <div class="col">
     <p class="pull">Prove your work.</p>
     <p style="margin-top:var(--s-lg);color:var(--textDim)">One last thing about the fairies. Everything here would have sealed them, cleanly. Elsie Wright used a real camera and a real plate. The cut-outs were propped up with hatpins at a real distance, in a real garden, in real light. Two lenses would measure genuine depth, because there was genuine depth. The shadows would fall where the sun put them. The motion trace would look exactly like a girl holding a quarter-plate camera. Every rung on the ladder would be reached, and every one of them would be telling the truth.</p>
-    <p style="color:var(--textDim)">That isn't a hole in the design. It's the edge of what any of this can do, and it's worth being exact about where the edge sits. Provenance can tell you a file is what it claims to be, and came from where it claims to have come from. It cannot tell you the world was as the picture says. That was always the reader's job, and the desk's, and it still is. Anyone selling a camera that settles it is selling you something.</p>
-    <p style="color:var(--textDim)">Provenance doesn't solve misinformation, and I'd distrust anyone who told you it did. It does something narrower: it gives an honest photographer a way to show their work, and it makes the alternative expensive again.</p>
-    <p style="color:var(--textDim)">The platform layer is coming and that's good news. It will attest sensors better than any app can. It will also stay silent on what the sensor was pointed at, it will mostly want a network, and — on the evidence of the first independent audit — the standard beneath it needs work before anyone stakes a court case on it. Those gaps are where this sits.</p>
-    <p style="color:var(--textDim)">So it's all here. Take the parts that are useful, fork the whole thing under your own name, or read it and tell me where I'm wrong. I'd rather this became five better projects than stayed one.</p>
+    <p style="color:var(--textDim)">That isn't a hole in this design so much as the edge of what any of it can do. Provenance can tell you a file is what it claims to be and came from where it claims to have come from. It can't tell you the world was as the picture says. That was always the reader's job, and the desk's, and it still is.</p>
+    <p style="color:var(--textDim)">Provenance doesn't solve misinformation. I don't think anything does. It does something narrower and, I hope, useful: it gives an honest photographer a way to show their work, and it makes the alternative more expensive than it currently is.</p>
+    <p style="color:var(--textDim)">The platform layer is coming, and that's good news — Apple and Google will attest sensors better than any app can. It will still be silent on what the sensor was pointed at, it will mostly want a network, and the standard underneath has real problems the UMBC paper lays out. Those gaps are where something like this can be useful for a while. Eventually it shouldn't need to exist, and that would be the right outcome.</p>
+    <p style="color:var(--textDim)">So it's all here. Take whatever's useful, fork the whole thing under your own name, or read it and tell me where I've got it wrong — I'd count that as the most valuable thing anyone could do with it. I'd much rather this turned into five better projects than stayed one.</p>
     <p style="font-weight:600">— Noah Bassetti-Blum</p>
     <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
