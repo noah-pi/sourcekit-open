@@ -75,6 +75,13 @@ Attestation closes *injection*: substituted frames, virtual camera drivers, forg
 data. It does nothing about *rephotography*: real photons, fake scene. Closing injection
 doesn't reduce rephotography — it concentrates every attacker on it.
 
+The Cottingley photographs are the clean illustration. Everything here would have
+sealed them: real camera, real plate, cut-outs propped up with hatpins at a real
+distance in real light. Two lenses would measure genuine depth, because there was
+genuine depth. Every rung on the ladder would be reached, and every one would be
+telling the truth. That's the edge of what provenance can do — it speaks to the file,
+never to the world the file depicts.
+
 Rephotography is geometric. A flat screen three metres away is a plane, and two lenses
 with a known baseline can measure that. The stereo capture path and the parallax work
 exist for this reason, and the honest status is in the limits below. Everything in the
