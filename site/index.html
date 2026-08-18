@@ -4,46 +4,31 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Source Kit — prove your work</title>
-<meta name="description" content="An open cryptographic camera. Every capture sealed at the shutter, on the device, offline, with Content Credentials any C2PA reader can open — and the whole build published to work from." />
+<meta name="description" content="An open cryptographic camera. Every photo and video sealed at the shutter, on the device, offline, with Content Credentials any C2PA reader can open." />
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Source Kit — prove your work" />
-<meta property="og:description" content="Signed at the shutter, on the device, into the file itself. Built to be taken apart." />
+<meta property="og:description" content="A camera that signs what it records, at the moment it records it. Open source." />
 <meta property="og:url" content="https://noah-pi.github.io/sourcekit-open/" />
 <meta property="og:image" content="https://noah-pi.github.io/sourcekit-open/banner.png" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Source Kit — prove your work" />
 <meta name="twitter:image" content="https://noah-pi.github.io/sourcekit-open/banner.png" />
 <style>
-/* ===========================================================================
-   Tokens — lifted verbatim from the app's src/theme.ts so the site and the
-   product speak the same visual language.
-   =========================================================================== */
+/* Tokens lifted from the app's src/theme.ts. */
 :root {
-  --bg:        #F6F6F8;
-  --surface:   #FFFFFF;
-  --surface2:  #EEEEF2;
-  --border:    #E6E6EB;
-  --borderSoft:#EFEFF3;
-  --text:      #1D1D1F;
-  --textDim:   #6E6E73;
-  --textFaint: #78787D;
-  --accent:    #1F6B45;
-  --accentSoft: rgba(31,107,69,0.10);
-  --gradStart: #2E9E66;
-  --gradEnd:   #1B7A4B;
-  --warn:      #8A5F12;
-  --warnSoft:  rgba(164,116,28,0.10);
-  --danger:    #C03527;
-  --dangerSoft:rgba(192,53,39,0.08);
-  --info:      #3D6B8E;
-  --infoSoft:  rgba(61,107,142,0.10);
-  --onAccent:  #FFFFFF;
-
-  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --mono: Menlo, ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
-
-  --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-full: 999px;
-  --s-xs: 4px; --s-sm: 8px; --s-md: 16px; --s-lg: 24px; --s-xl: 32px; --s-xxl: 48px;
+  --bg:#F6F6F8; --surface:#FFFFFF; --surface2:#EEEEF2;
+  --border:#E6E6EB; --borderSoft:#EFEFF3;
+  --text:#1D1D1F; --textDim:#6E6E73; --textFaint:#78787D;
+  --accent:#1F6B45; --accentSoft:rgba(31,107,69,0.10);
+  --gradStart:#2E9E66; --gradEnd:#1B7A4B;
+  --warn:#8A5F12; --warnSoft:rgba(164,116,28,0.10);
+  --danger:#C03527; --dangerSoft:rgba(192,53,39,0.08);
+  --info:#3D6B8E; --infoSoft:rgba(61,107,142,0.10);
+  --onAccent:#FFFFFF;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:Menlo,ui-monospace,SFMono-Regular,"SF Mono",Consolas,monospace;
+  --r-sm:10px; --r-md:14px; --r-lg:20px; --r-full:999px;
+  --s-xs:4px; --s-sm:8px; --s-md:16px; --s-lg:24px; --s-xl:32px; --s-xxl:48px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -68,78 +53,104 @@
   --info:#86ADCB; --infoSoft:rgba(134,173,203,0.14);
 }
 
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto } *{animation:none!important;transition:none!important} }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{animation:none!important;transition:none!important} }
 body {
   margin:0; background:var(--bg); color:var(--text);
-  font-family:var(--sans); font-size:17px; line-height:1.6;
+  font-family:var(--sans); font-size:17px; line-height:1.62;
   -webkit-font-smoothing:antialiased;
 }
-.wrap { max-width:1080px; margin:0 auto; padding:0 var(--s-lg); }
-.measure { max-width:64ch; }
+.wrap { max-width:1020px; margin:0 auto; padding:0 var(--s-lg); }
+.col  { max-width:62ch; }
 a { color:var(--accent); text-underline-offset:2px; }
 a:focus-visible,button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:4px; }
 code { font-family:var(--mono); font-size:.86em; background:var(--surface2); padding:2px 6px; border-radius:6px; }
+p { margin:0 0 var(--s-md); }
 
-/* --- app primitives, on the web ------------------------------------------ */
+/* primitives from the app */
 .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s-md); }
-.seclabel {
-  font-size:10.5px; font-weight:800; letter-spacing:1.9px; text-transform:uppercase;
-  color:var(--textFaint); margin:0 0 var(--s-sm);
-}
-.chip {
-  display:inline-flex; align-items:center; gap:5px; border-radius:var(--r-full);
-  padding:5px 10px; font-size:11px; font-weight:600; letter-spacing:.2px;
-}
+.chip { display:inline-flex; align-items:center; gap:5px; border-radius:var(--r-full); padding:5px 10px; font-size:11px; font-weight:600; }
 .chip.good{background:var(--accentSoft);color:var(--accent)}
 .chip.warn{background:var(--warnSoft);color:var(--warn)}
 .chip.info{background:var(--infoSoft);color:var(--info)}
 .chip.neutral{background:var(--surface2);color:var(--textDim)}
-.btn {
-  display:inline-flex; align-items:center; justify-content:center; gap:7px;
-  border-radius:var(--r-sm); border:1px solid transparent; padding:13px 20px;
-  font-size:14px; font-weight:700; letter-spacing:.1px; text-decoration:none; cursor:pointer;
-}
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; border-radius:var(--r-sm);
+  border:1px solid transparent; padding:13px 20px; font-size:14px; font-weight:700; text-decoration:none; cursor:pointer; }
 .btn.primary { background:var(--text); color:var(--bg); }
 .btn.ghost { background:transparent; color:var(--textDim); border-color:var(--border); }
 .btn.ghost:hover { color:var(--accent); border-color:var(--accent); }
 
-/* --- nav ------------------------------------------------------------------ */
-.nav {
-  position:sticky; top:0; z-index:50; background:color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter:blur(12px); border-bottom:1px solid var(--border);
-}
+/* nav */
+.nav { position:sticky; top:0; z-index:50; background:color-mix(in srgb,var(--bg) 88%,transparent);
+  backdrop-filter:blur(12px); border-bottom:1px solid var(--border); }
 .nav .wrap { display:flex; align-items:center; gap:var(--s-lg); height:58px; }
 .brand { display:flex; align-items:center; gap:9px; font-weight:700; font-size:15px; letter-spacing:-.2px; margin-right:auto; }
 .navlinks { display:flex; gap:var(--s-lg); font-size:14px; }
 .navlinks a { color:var(--textDim); text-decoration:none; }
 .navlinks a:hover { color:var(--text); }
-@media (max-width:820px){ .navlinks{display:none} }
+@media (max-width:860px){ .navlinks{display:none} }
 
-/* --- hero ----------------------------------------------------------------- */
-.hero { padding:var(--s-xxl) 0 var(--s-xl); }
-.hero-grid { display:grid; grid-template-columns:1fr 340px; gap:var(--s-xxl); align-items:center; }
-@media (max-width:900px){ .hero-grid{grid-template-columns:1fr; gap:var(--s-xl)} }
-h1 {
-  font-size:clamp(38px,6vw,60px); font-weight:700; letter-spacing:-1.6px; line-height:1.04;
-  margin:var(--s-md) 0; text-wrap:balance;
-}
-.lede { font-size:clamp(18px,2.2vw,21px); color:var(--textDim); line-height:1.5; margin:0 0 var(--s-lg); max-width:44ch; }
+/* type */
+h1 { font-size:clamp(40px,6.4vw,64px); font-weight:700; letter-spacing:-1.8px; line-height:1.02; margin:var(--s-md) 0; text-wrap:balance; }
+h2 { font-size:clamp(25px,3.2vw,34px); font-weight:700; letter-spacing:-.9px; line-height:1.14; margin:0 0 var(--s-sm); text-wrap:balance; }
+h3 { font-size:17px; font-weight:700; margin:var(--s-lg) 0 var(--s-sm); letter-spacing:-.2px; }
+.lede { font-size:clamp(18px,2.2vw,21px); color:var(--textDim); line-height:1.5; margin:0 0 var(--s-lg); max-width:46ch; }
+.dek { color:var(--textDim); font-size:18px; margin:0 0 var(--s-xl); max-width:58ch; }
+.note { font-size:14px; color:var(--textFaint); line-height:1.6; }
 .cta { display:flex; flex-wrap:wrap; gap:var(--s-sm); }
 
-/* --- phone ---------------------------------------------------------------- */
-.phone {
-  border-radius:38px; border:1px solid var(--border); background:var(--surface);
-  padding:10px; box-shadow:0 30px 60px -40px rgba(0,0,0,.5); margin:0 auto; max-width:320px;
-}
+section.block { padding:var(--s-xxl) 0; border-top:1px solid var(--border); scroll-margin-top:70px; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-lg); }
+.grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:var(--s-md); }
+@media (max-width:820px){ .grid2{grid-template-columns:1fr} }
+
+/* ---- figures: the page is built around these ---------------------------- */
+figure { margin:var(--s-xl) 0; }
+.fig { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s-lg); }
+.fig.plain { background:none; border:none; padding:0; }
+.fighead { font-size:10.5px; font-weight:800; letter-spacing:1.9px; text-transform:uppercase; color:var(--textFaint); margin:0 0 var(--s-md); }
+figcaption { font-size:14px; color:var(--textDim); line-height:1.55; margin-top:var(--s-md);
+  padding-top:var(--s-sm); border-top:1px solid var(--border); max-width:70ch; }
+figcaption b { color:var(--text); font-weight:600; }
+.photo { display:block; width:100%; border-radius:var(--r-sm); }
+.photo-fallback { display:none; padding:var(--s-xl) var(--s-md); text-align:center; background:var(--surface2);
+  border-radius:var(--r-sm); color:var(--textFaint); font-size:13.5px; line-height:1.7; }
+
+/* svg diagram vocabulary — everything themed, nothing hardcoded */
+svg text { font-family:var(--sans); }
+.s-txt{fill:var(--text)} .s-dim{fill:var(--textDim)} .s-faint{fill:var(--textFaint)}
+.s-ac{fill:var(--accent)} .s-warn{fill:var(--warn)} .s-info{fill:var(--info)}
+.f-none{fill:none} .f-surf{fill:var(--surface)} .f-soft{fill:var(--surface2)}
+.f-acsoft{fill:var(--accentSoft)} .f-warnsoft{fill:var(--warnSoft)}
+.k-line{stroke:var(--border)} .k-ac{stroke:var(--accent)} .k-dim{stroke:var(--textFaint)}
+.k-warn{stroke:var(--warn)} .k-txt{stroke:var(--text)} .k-info{stroke:var(--info)}
+.lbl{font-size:9.5px;font-weight:800;letter-spacing:1.5px}
+.hd{font-size:13px;font-weight:700}
+.cap{font-size:11.5px}
+.num{font-family:var(--mono);font-size:11px}
+
+/* tables */
+.tw { overflow-x:auto; border:1px solid var(--border); border-radius:var(--r-md); background:var(--surface); }
+table { border-collapse:collapse; width:100%; font-size:14px; min-width:600px; }
+th,td { text-align:left; padding:11px var(--s-md); border-bottom:1px solid var(--border); vertical-align:top; }
+th { font-size:10.5px; font-weight:800; letter-spacing:1.9px; text-transform:uppercase; color:var(--textFaint); }
+tbody tr:last-child td{border-bottom:none}
+td.p { font-family:var(--mono); font-size:12.5px; color:var(--accent); white-space:nowrap; }
+.bar { display:inline-block; width:34px; height:5px; border-radius:3px; background:var(--surface2); position:relative; margin-right:7px; vertical-align:middle; }
+.bar i { position:absolute; inset:0 auto 0 0; border-radius:3px; background:var(--accent); }
+.bar.w i { background:var(--warn); }
+
+/* phone + app components */
+.phone { border-radius:38px; border:1px solid var(--border); background:var(--surface); padding:10px;
+  box-shadow:0 30px 60px -40px rgba(0,0,0,.5); margin:0 auto; max-width:320px; }
+.phone.sm { max-width:280px; border-radius:32px; padding:8px; }
 .screen { border-radius:29px; overflow:hidden; background:var(--bg); }
-.statusbar { display:flex; justify-content:space-between; padding:9px 18px 4px; font-size:11px; font-weight:600; color:var(--text); }
+.phone.sm .screen { border-radius:25px; }
+.statusbar { display:flex; justify-content:space-between; padding:9px 18px 4px; font-size:11px; font-weight:600; }
 .screenpad { padding:var(--s-md) 14px var(--s-lg); }
 .screentitle { font-size:26px; font-weight:700; letter-spacing:-.9px; margin:2px 0 3px; }
-.screensub { font-size:13px; color:var(--textDim); margin:0 0 var(--s-md); line-height:1.45; }
-
-/* trust ladder (faithful to src/components/TrustLadder.tsx) */
+.screensub { font-size:13px; color:var(--textDim); margin:0 0 var(--s-md); }
 .ladder-title { font-size:16px; font-weight:700; margin:0 0 var(--s-md); }
 .rung { display:flex; align-items:flex-start; gap:6px; }
 .rail-col { width:22px; display:flex; flex-direction:column; align-items:center; flex:none; }
@@ -151,84 +162,15 @@ h1 {
 .rung-label { font-size:13px; font-weight:700; line-height:19px; }
 .rung-label.dim { color:var(--textDim); }
 .rung-detail { font-size:11px; line-height:16px; color:var(--textDim); margin-top:1px; }
-
-/* kv rows */
-.kv { display:flex; justify-content:space-between; gap:var(--s-md); padding:7px 0; font-size:13px; }
-.kv .k { color:var(--textFaint); }
-.kv .v { color:var(--text); text-align:right; font-family:var(--mono); font-size:12px; }
-.hair { height:1px; background:var(--border); margin:var(--s-sm) 0; }
-
-/* --- sections ------------------------------------------------------------- */
-section.block { padding:var(--s-xxl) 0; border-top:1px solid var(--border); scroll-margin-top:70px; }
-h2 { font-size:clamp(26px,3.4vw,36px); font-weight:700; letter-spacing:-.9px; line-height:1.12; margin:0 0 var(--s-sm); text-wrap:balance; }
-.sub { color:var(--textDim); font-size:17px; margin:0 0 var(--s-xl); max-width:58ch; }
-h3 { font-size:17px; font-weight:700; margin:var(--s-lg) 0 var(--s-sm); letter-spacing:-.2px; }
-p { margin:0 0 var(--s-md); }
-
-.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-lg); }
-.grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:var(--s-md); }
-@media (max-width:820px){ .grid2{grid-template-columns:1fr} }
-
-.step { display:grid; grid-template-columns:28px 1fr; gap:var(--s-md); padding:var(--s-md) 0; border-bottom:1px solid var(--borderSoft); }
-.step:last-child{border-bottom:none}
-.step-n { font-family:var(--mono); font-size:12px; color:var(--accent); padding-top:3px; }
-.step h4 { margin:0 0 4px; font-size:16px; font-weight:700; }
-.step p { margin:0; font-size:15px; color:var(--textDim); }
-.step .where { font-family:var(--mono); font-size:12px; color:var(--textFaint); }
-
-pre { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s-md); overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.7; margin:0 0 var(--s-md); }
-pre code { background:none; padding:0; }
-.c-dim { color:var(--textFaint); }
-.c-ok  { color:var(--accent); }
-
-.tw { overflow-x:auto; border:1px solid var(--border); border-radius:var(--r-md); background:var(--surface); }
-table { border-collapse:collapse; width:100%; font-size:14px; min-width:560px; }
-th,td { text-align:left; padding:12px var(--s-md); border-bottom:1px solid var(--border); vertical-align:top; }
-th { font-size:10.5px; font-weight:800; letter-spacing:1.9px; text-transform:uppercase; color:var(--textFaint); }
-tbody tr:last-child td{border-bottom:none}
-td.p { font-family:var(--mono); font-size:12.5px; color:var(--accent); white-space:nowrap; }
-
-.pull { font-size:clamp(22px,3vw,30px); font-weight:700; letter-spacing:-.7px; line-height:1.28; text-wrap:balance; margin:0; }
-.pull span { color:var(--textFaint); }
-
-footer { border-top:1px solid var(--border); padding:var(--s-xl) 0 var(--s-xxl); }
-.foot { display:grid; grid-template-columns:2fr 1fr 1fr; gap:var(--s-lg); }
-@media (max-width:820px){ .foot{grid-template-columns:1fr} }
-footer a { display:block; color:var(--textDim); text-decoration:none; font-size:14px; margin-bottom:6px; }
-footer a:hover{color:var(--accent)}
-.fine { font-size:13px; color:var(--textFaint); line-height:1.6; }
-
-/* --- additions for the long-form page ------------------------------------- */
-.kicker-h2 { display:flex; align-items:baseline; gap:var(--s-md); flex-wrap:wrap; }
-.tagline {
-  font-size:clamp(30px,4.4vw,46px); font-weight:700; letter-spacing:-1.4px;
-  line-height:1.08; margin:0 0 var(--s-md); text-wrap:balance;
-}
-.note { font-size:14px; color:var(--textFaint); line-height:1.6; }
-.cite { font-size:13.5px; color:var(--textFaint); line-height:1.6; border-left:2px solid var(--border); padding-left:var(--s-md); margin:var(--s-md) 0; }
-.cite a { color:var(--textDim); }
-
-/* screen strip — several phones side by side */
-.strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:var(--s-lg); align-items:start; }
-.phone.sm { max-width:270px; border-radius:32px; padding:8px; }
-.phone.sm .screen { border-radius:25px; }
-.caption { font-size:13.5px; color:var(--textFaint); text-align:center; margin-top:var(--s-sm); line-height:1.5; }
-
-/* camera viewfinder mock */
-.vf { background:#141414; aspect-ratio:9/15; position:relative; display:flex; flex-direction:column; justify-content:space-between; }
+.vf { background:#141414; aspect-ratio:9/15; display:flex; flex-direction:column; justify-content:space-between; }
 .vf-top { display:flex; gap:6px; padding:12px 12px 0; flex-wrap:wrap; }
-.vf-pill {
-  font-size:10px; font-weight:700; letter-spacing:.3px; padding:4px 8px; border-radius:var(--r-full);
-  background:rgba(255,255,255,.14); color:#F5F5F7; backdrop-filter:blur(6px);
-}
+.vf-pill { font-size:10px; font-weight:700; padding:4px 8px; border-radius:var(--r-full); background:rgba(255,255,255,.14); color:#F5F5F7; }
 .vf-pill.on { background:rgba(126,214,164,.22); color:#7ED6A4; }
 .vf-mid { flex:1; display:flex; align-items:center; justify-content:center; }
 .vf-scene { width:62%; height:38%; border-radius:8px; background:linear-gradient(160deg,#2c3a33,#1a2420); border:1px solid rgba(255,255,255,.07); }
 .vf-bot { padding:0 12px 16px; display:flex; align-items:center; justify-content:space-between; }
 .shutter { width:52px; height:52px; border-radius:50%; border:3px solid #F5F5F7; background:rgba(255,255,255,.15); }
 .vf-lens { font-size:10px; color:#C7C7CC; font-family:var(--mono); }
-
-/* evidence row (nutrition-label style) */
 .nut { border:1px solid var(--border); border-radius:var(--r-md); background:var(--surface); overflow:hidden; }
 .nut-head { padding:10px var(--s-md); border-bottom:2px solid var(--text); font-size:10.5px; font-weight:800; letter-spacing:1.9px; text-transform:uppercase; }
 .nut-row { display:flex; justify-content:space-between; gap:var(--s-md); padding:9px var(--s-md); border-bottom:1px solid var(--borderSoft); font-size:13.5px; }
@@ -236,42 +178,48 @@ footer a:hover{color:var(--accent)}
 .nut-row .n { color:var(--textDim); }
 .nut-row .v { font-family:var(--mono); font-size:12.5px; text-align:right; }
 .v-ok{color:var(--accent)} .v-dim{color:var(--textFaint)} .v-warn{color:var(--warn)}
+.caption { font-size:13.5px; color:var(--textFaint); text-align:center; margin-top:var(--s-sm); line-height:1.5; }
 
-/* two-lens diagram */
-.lens-fig { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s-lg); }
+.cite { font-size:14px; color:var(--textDim); line-height:1.6; border-left:2px solid var(--border); padding-left:var(--s-md); margin:var(--s-lg) 0; }
+.pull { font-size:clamp(22px,3vw,30px); font-weight:700; letter-spacing:-.7px; line-height:1.28; margin:0; }
 
+footer { border-top:1px solid var(--border); padding:var(--s-xl) 0 var(--s-xxl); }
+.foot { display:grid; grid-template-columns:2fr 1fr 1fr; gap:var(--s-lg); }
+@media (max-width:820px){ .foot{grid-template-columns:1fr} }
+footer a { display:block; color:var(--textDim); text-decoration:none; font-size:14px; margin-bottom:6px; }
+footer a:hover{color:var(--accent)}
+.fine { font-size:13px; color:var(--textFaint); line-height:1.6; }
 </style>
 </head>
 <body>
+
 <nav class="nav"><div class="wrap">
   <div class="brand">
-    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.4" fill="none" stroke="var(--accent)" stroke-width="1.7"/><circle cx="10" cy="10" r="3.4" fill="var(--accent)"/></svg>
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.4" class="f-none k-ac" stroke-width="1.7"/><circle cx="10" cy="10" r="3.4" class="s-ac"/></svg>
     Source Kit
   </div>
   <div class="navlinks">
-    <a href="#history">Where we are</a>
+    <a href="#history">History</a>
     <a href="#seal">The seal</a>
     <a href="#label">The label</a>
     <a href="#stereo">Two lenses</a>
     <a href="#inspect">Inspect</a>
     <a href="#privacy">Privacy</a>
-    <a href="#next">What's next</a>
+    <a href="#next">Next</a>
   </div>
   <a class="btn ghost" style="padding:8px 14px;font-size:13px" href="https://github.com/noah-pi/sourcekit-open">GitHub ↗</a>
 </div></nav>
 
-<header class="hero"><div class="wrap hero-grid">
+<header style="padding:var(--s-xxl) 0 var(--s-xl)"><div class="wrap" style="display:grid;grid-template-columns:1fr 330px;gap:var(--s-xxl);align-items:center">
   <div>
-    <p class="seclabel">Open source · Apache-2.0</p>
     <h1>Fuck deepfakes.<br>Prove your work.</h1>
-    <p class="lede">Source Kit is a camera. Every photo and video it takes is cryptographically sealed at the shutter, on the device, with the capture context bound into the signature and Content Credentials written into the file itself.</p>
-    <p class="lede" style="font-size:17px">It works offline. Nothing is uploaded. Any C2PA reader can open the result, and the whole thing — cryptography, native modules, interface — is published here.</p>
-    <div class="cta">
+    <p class="lede">Source Kit is an iPhone camera. It signs every photo and video at the shutter — on the device, offline, in the Secure Enclave — and writes the signature and the capture context into the file. Any C2PA reader opens it.</p>
+    <p style="color:var(--textDim);max-width:46ch">The camera, the cryptography, the native modules and the interface are all here, under Apache-2.0.</p>
+    <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
       <a class="btn ghost" href="#seal">How it works</a>
     </div>
   </div>
-
   <div class="phone">
     <div class="screen">
       <div class="statusbar"><span>9:41</span><span style="display:inline-flex;gap:5px;align-items:center"><svg width="17" height="11" viewBox="0 0 17 11" aria-hidden="true"><rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="currentColor"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="currentColor"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="currentColor" opacity=".35"/></svg><svg width="24" height="11" viewBox="0 0 24 11" aria-hidden="true"><rect x="0.5" y="0.5" width="20" height="10" rx="3" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="14" height="7" rx="1.6" fill="currentColor"/><rect x="21.6" y="3.6" width="1.6" height="3.8" rx="0.8" fill="currentColor" opacity=".4"/></svg></span></div>
@@ -291,68 +239,353 @@ footer a:hover{color:var(--accent)}
   </div>
 </div></header>
 
-<!-- =================== WHERE WE ARE =================== -->
-<section class="block" id="history"><div class="wrap">
-  <p class="seclabel">Where we are</p>
-  <h2>The provenance stack, and the holes in it</h2>
-  <p class="sub">There was never a golden age of photographic truth. Retouching is as old as the negative, and the Soviet censors were airbrushing the disgraced out of group portraits for fifty years before Photoshop shipped in 1990. What photographs had was friction — a darkroom, a skill, an afternoon — plus picture desks and wire services and libel law that made lying expensive by other means.</p>
 
-  <div class="grid2">
-    <div>
-      <p style="color:var(--textDim)">Generative models didn't make images forgeable. They made forgery free, and fast. The friction is gone and the scaffolding is thinner, so the industry went looking for a replacement and settled, sensibly, on provenance: sign the file at the source and carry a manifest with it.</p>
-      <p style="color:var(--textDim)">That's C2PA, and it is now real infrastructure. The <b style="color:var(--text)">Pixel 10</b> ships native Content Credentials on every JPEG from the camera app, with claim keys in the Titan M2 and signing inside the image pipeline — the first phone to do it, at C2PA Assurance Level 2. <b style="color:var(--text)">Apple</b> is close behind: strings in an iOS 27 beta describe an "Apple Reference Image" mode that captures sensor signatures and hardware identifiers.</p>
+<!-- ===================== HISTORY ===================== -->
+<section class="block" id="history"><div class="wrap">
+  <h2>A photograph has never been proof</h2>
+  <p class="dek">It only used to be expensive to fake.</p>
+
+  <figure>
+    <div class="fig plain">
+      <img class="photo" src="assets/cottingley.jpg" alt="The 1917 Cottingley Fairies photograph: a young girl resting her chin on her hand, with paper cut-out fairies dancing in front of her."
+           onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <div class="photo-fallback">
+        <b>Frances Griffiths and the Cottingley Fairies, 1917.</b><br>
+        Image not bundled — run <code>site/assets/fetch.sh</code> to pull the public-domain original from Wikimedia Commons.
+      </div>
     </div>
-    <div>
-      <p style="color:var(--textDim)">Both are genuine progress. Both also have limits worth naming plainly, because a provenance layer that oversells itself does more damage than none at all.</p>
-      <p style="color:var(--textDim)">Apple's design sends <b style="color:var(--text)">the raw image, sensor signatures, capture window and hardware identifiers to Private Cloud Compute</b>, and returns an authenticated copy. Whatever the privacy engineering around it, the architecture requires a network round trip and a relationship with Apple. A journalist working in a hostile environment, on a burner, offline, cannot use that.</p>
-      <p style="color:var(--textDim)">And the standard underneath both has just had its first serious independent audit.</p>
-    </div>
+    <figcaption>
+      Elsie Wright and Frances Griffiths, aged sixteen and nine, photographed paper cut-outs propped up with hatpins.
+      <b>Arthur Conan Doyle published the pictures as evidence of fairies in <i>The Strand</i> in 1920.</b>
+      Two Kodak experts had already said the negatives showed no sign of tampering — which was true, and beside the point.
+      The girls admitted the hoax in 1983.
+      <span class="note">Public domain via Wikimedia Commons.</span>
+    </figcaption>
+  </figure>
+
+  <div class="col">
+    <p>Retouching is as old as the negative. Soviet censors airbrushed the disgraced out of group portraits for fifty years before Photoshop shipped in 1990. What a photograph had was never self-evidence. It was friction — a darkroom, a skill, an afternoon — plus picture desks and wire services and libel law that made lying expensive some other way.</p>
+    <p>Generative models didn't make images forgeable. They made forgery free and fast. So the industry went looking for a replacement for friction and settled on provenance: sign the file where it's made, and carry the record with it.</p>
   </div>
 
-  <div class="cite" style="margin-top:var(--s-lg)">
-    Golaszewski et al., <i>Verifying Provenance of Digital Media: Why the C2PA Specifications Fall Short</i> (2026) — the first comprehensive independent security analysis of C2PA, including a formal-methods treatment of its core protocols. Among the findings: generators and validators disagree on the trusted timestamp; revocation policy is inadequate enough that conforming validators accept manifests signed with known-compromised certificates; <b>the exclusion range permits undetectable alterations</b>; conforming validators produce inconsistent results; and the conformance program certifies products without technical review. Their conclusion is that C2PA should not yet be relied on for journalism or legal evidence.
+  <figure>
+    <div class="fig">
+      <p class="fighead">Sequence of events</p>
+      <svg viewBox="0 0 920 172" width="100%" role="img" aria-label="Timeline from the 1917 Cottingley fairies to Apple's 2026 Reference Image">
+        <line x1="40" y1="78" x2="880" y2="78" class="k-line" stroke-width="1.5"/>
+        <line x1="640" y1="78" x2="880" y2="78" class="k-ac" stroke-width="2.5"/>
+
+        <text x="70"  y="58" class="num s-faint" text-anchor="middle">1917</text>
+        <circle cx="70" cy="78" r="4.5" class="s-faint"/>
+        <text x="70"  y="104" class="cap s-txt" text-anchor="middle">Cottingley</text>
+        <text x="70"  y="119" class="cap s-dim" text-anchor="middle">paper cut-outs</text>
+
+        <text x="232" y="58" class="num s-faint" text-anchor="middle">1937</text>
+        <circle cx="232" cy="78" r="4.5" class="s-faint"/>
+        <text x="232" y="104" class="cap s-txt" text-anchor="middle">Soviet retouching</text>
+        <text x="232" y="119" class="cap s-dim" text-anchor="middle">by hand, at scale</text>
+
+        <text x="394" y="58" class="num s-faint" text-anchor="middle">1990</text>
+        <circle cx="394" cy="78" r="4.5" class="s-faint"/>
+        <text x="394" y="104" class="cap s-txt" text-anchor="middle">Photoshop 1.0</text>
+        <text x="394" y="119" class="cap s-dim" text-anchor="middle">friction drops</text>
+
+        <text x="556" y="58" class="num s-faint" text-anchor="middle">2022</text>
+        <circle cx="556" cy="78" r="4.5" class="s-faint"/>
+        <text x="556" y="104" class="cap s-txt" text-anchor="middle">C2PA 1.0</text>
+        <text x="556" y="119" class="cap s-dim" text-anchor="middle">as diffusion goes mass-market</text>
+
+        <text x="718" y="58" class="num s-ac" text-anchor="middle">2025</text>
+        <circle cx="718" cy="78" r="5.5" class="s-ac"/>
+        <text x="718" y="104" class="cap s-txt" text-anchor="middle">Pixel 10</text>
+        <text x="718" y="119" class="cap s-dim" text-anchor="middle">signs in silicon</text>
+
+        <text x="856" y="58" class="num s-ac" text-anchor="middle">2026</text>
+        <circle cx="856" cy="78" r="5.5" class="s-ac"/>
+        <text x="856" y="104" class="cap s-txt" text-anchor="middle">Reference Image</text>
+        <text x="856" y="119" class="cap s-dim" text-anchor="middle">Apple, in beta</text>
+
+        <path d="M640 142 v8 h240 v-8" class="f-none k-ac" stroke-width="1.5"/>
+        <text x="760" y="167" class="lbl s-ac" text-anchor="middle">SIGNING MOVES INTO THE HARDWARE</text>
+      </svg>
+    </div>
+    <figcaption>Ordered, not to scale. C2PA — the Coalition for Content Provenance and Authenticity — published its first specification in 2022; the Pixel 10 was the first phone to sign every camera JPEG with keys held in a hardware security module.</figcaption>
+  </figure>
+
+  <div class="col">
+    <p>This is real infrastructure now, and both implementations are good. The Pixel 10 signs inside the imaging pipeline with claim keys in the Titan M2, at C2PA Assurance Level 2. Apple's Reference Image, visible in an iOS 27 beta, captures sensor signatures and hardware identifiers alongside the frame.</p>
+    <p>Two things are still open. The first is architectural: Apple's design sends the raw image, the sensor signatures and hardware identifiers to Private Cloud Compute and returns an authenticated copy. Whatever the privacy engineering, it needs a network and a relationship with Apple. A reporter on a burner in a hostile place has neither.</p>
+    <p>The second is that the standard underneath has now had its first independent audit, and it did not go well.</p>
+  </div>
+
+  <div class="cite">
+    Golaszewski et al., <i>Verifying Provenance of Digital Media: Why the C2PA Specifications Fall Short</i> (UMBC, 2026).
+    Generators and validators disagree on which timestamp to trust. Revocation is weak enough that conforming validators accept manifests signed with certificates already known to be compromised.
+    <b style="color:var(--text)">The exclusion range permits alterations that no validator detects.</b>
+    Conforming validators return different answers on the same file. And the conformance program certifies products without technical review.
+    Their conclusion: don't stake journalism or legal evidence on C2PA yet.
     <a href="https://eprint.iacr.org/2026/804">eprint.iacr.org/2026/804</a>
   </div>
 
-  <h3>Two ways to defeat a signed photo without breaking any cryptography</h3>
-  <div class="grid2">
-    <div class="card">
-      <span class="chip warn" style="margin-bottom:var(--s-sm)">rephotography</span>
-      <h3 style="margin-top:0">Point a real camera at a fake scene</h3>
-      <p style="color:var(--textDim);margin:0">Display a generated image on a good monitor, photograph it with a genuine attested device, and every cryptographic guarantee holds perfectly. The sensor really did see those photons. Sensor attestation — Apple's, Google's, anyone's — is definitionally incapable of touching this, because it certifies that photons hit the sensor and says nothing about what they depicted.</p>
-      <p class="note" style="margin-top:var(--s-sm)">Worse: closing injection attacks concentrates all attacker effort here. The better attestation gets, the more this becomes the only road in.</p>
+  <p class="col">Neither of those is the deepest problem, though. The deepest problem is what a signature is for.</p>
+
+  <figure>
+    <div class="fig">
+      <p class="fighead">What a camera signature can and cannot reach</p>
+      <svg viewBox="0 0 920 350" width="100%" role="img" aria-label="Diagram: cryptography covers the path from sensor to file, but not the scene in front of the lens">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,1 L9,5 L0,9 z" fill="var(--textFaint)"/>
+          </marker>
+          <marker id="ahw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,1 L9,5 L0,9 z" fill="var(--warn)"/>
+          </marker>
+        </defs>
+
+        <!-- attack labels, above -->
+        <text x="115" y="20" class="lbl s-warn" text-anchor="middle">REPHOTOGRAPHY</text>
+        <text x="115" y="38" class="cap s-dim" text-anchor="middle">point the camera at a screen</text>
+        <line x1="115" y1="46" x2="115" y2="76" class="k-warn" stroke-width="1.6" marker-end="url(#ahw)"/>
+
+        <text x="535" y="20" class="lbl s-dim" text-anchor="middle">INJECTION</text>
+        <text x="535" y="38" class="cap s-dim" text-anchor="middle">substituted frames, virtual camera drivers</text>
+        <line x1="535" y1="46" x2="535" y2="86" class="k-dim" stroke-width="1.6"/>
+        <line x1="524" y1="55" x2="546" y2="77" class="k-ac" stroke-width="2.6" stroke-linecap="round"/>
+        <line x1="546" y1="55" x2="524" y2="77" class="k-ac" stroke-width="2.6" stroke-linecap="round"/>
+        <text x="558" y="62" class="cap s-ac">blocked by</text>
+        <text x="558" y="77" class="cap s-ac">hardware attestation</text>
+
+        <!-- the chain -->
+        <rect x="40"  y="88" width="150" height="86" rx="8" class="f-warnsoft k-warn" stroke-width="1.4"/>
+        <text x="115" y="122" class="hd s-txt" text-anchor="middle">The scene</text>
+        <text x="115" y="142" class="cap s-dim" text-anchor="middle">real room, or a monitor</text>
+
+        <rect x="250" y="88" width="140" height="86" rx="8" class="f-surf k-line" stroke-width="1.4"/>
+        <text x="320" y="122" class="hd s-txt" text-anchor="middle">Lens + sensor</text>
+        <text x="320" y="142" class="cap s-dim" text-anchor="middle">photons → pixels</text>
+
+        <rect x="450" y="88" width="170" height="86" rx="8" class="f-acsoft k-ac" stroke-width="1.4"/>
+        <text x="535" y="116" class="hd s-txt" text-anchor="middle">Hash, context, sign</text>
+        <text x="535" y="134" class="cap s-dim" text-anchor="middle">Secure Enclave</text>
+        <text x="535" y="150" class="cap s-dim" text-anchor="middle">key never leaves the chip</text>
+
+        <rect x="680" y="88" width="200" height="86" rx="8" class="f-surf k-ac" stroke-width="1.4"/>
+        <text x="780" y="122" class="hd s-txt" text-anchor="middle">The file</text>
+        <text x="780" y="142" class="cap s-dim" text-anchor="middle">media + C2PA manifest</text>
+
+        <line x1="192" y1="131" x2="244" y2="131" class="k-dim" stroke-width="1.4" marker-end="url(#ah)"/>
+        <line x1="392" y1="131" x2="444" y2="131" class="k-dim" stroke-width="1.4" marker-end="url(#ah)"/>
+        <line x1="622" y1="131" x2="674" y2="131" class="k-dim" stroke-width="1.4" marker-end="url(#ah)"/>
+
+        <!-- brackets -->
+        <path d="M40 198 v10 h150 v-10" class="f-none k-warn" stroke-width="1.5"/>
+        <text x="40" y="232" class="lbl s-warn">OUT OF REACH</text>
+        <text x="40" y="252" class="cap s-dim">No signature, from anyone, says</text>
+        <text x="40" y="268" class="cap s-dim">anything about what was in front</text>
+        <text x="40" y="284" class="cap s-dim">of the lens.</text>
+
+        <path d="M250 198 v10 h630 v-10" class="f-none k-ac" stroke-width="1.5"/>
+        <text x="250" y="232" class="lbl s-ac">COVERED</text>
+        <text x="250" y="252" class="cap s-dim">These exact bytes. This key, on this device, certified by Apple. This instant,</text>
+        <text x="250" y="268" class="cap s-dim">and everything the sensors reported at it. Any later edit breaks the hash.</text>
+        <text x="250" y="284" class="cap s-dim">Checkable offline, by anyone, years from now, without asking me for anything.</text>
+
+        <line x1="40" y1="312" x2="880" y2="312" class="k-line"/>
+        <text x="40" y="336" class="cap s-faint">Closing injection doesn't reduce rephotography. It concentrates every attacker on it.</text>
+      </svg>
     </div>
-    <div class="card">
-      <span class="chip warn" style="margin-bottom:var(--s-sm)">forgeable claims</span>
-      <h3 style="margin-top:0">Sign a true record of false facts</h3>
-      <p style="color:var(--textDim);margin:0">A signature binds the sensor readings into the file. It does not make the readings true. GPS is the clearest case: civilian GNSS is unauthenticated, spoofers are commodity hardware, and a phone will report a confidently wrong position with no idea anything is wrong. The same goes for the system clock, and for any network-derived location.</p>
-      <p class="note" style="margin-top:var(--s-sm)">The failure isn't cryptographic. It's presentational — showing a spoofable claim in the same visual register as a proven one.</p>
-    </div>
+    <figcaption>Shoot a generated video off a good monitor with a genuine attested phone and every cryptographic guarantee holds perfectly. The sensor really did see those photons. This is the shape of the remaining problem, and most of the design below is aimed at it.</figcaption>
+  </figure>
+
+  <div class="col">
+    <p>There's a second gap, smaller but easier to trip over. A signature binds the sensor readings into the file. It doesn't make them true. Civilian GPS is unauthenticated and spoofers are commodity hardware; a phone will report a confidently wrong position and never know. Same for the system clock, and for any network-derived location.</p>
+    <p>That failure isn't cryptographic. It's presentational — showing a spoofable claim in the same visual register as a proven one. Which is a design problem, and solvable.</p>
   </div>
 </div></section>
 
-<!-- =================== THE SEAL =================== -->
+<!-- ===================== THE SEAL ===================== -->
 <section class="block" id="seal"><div class="wrap">
-  <p class="seclabel">The seal</p>
-  <h2>What Source Kit does at the shutter</h2>
-  <p class="sub">Source Kit doesn't try to replace the platform layer. It assumes it — and does the work that layer can't, because it sits above the sensor rather than inside it.</p>
+  <h2>What happens when you press the shutter</h2>
+  <p class="dek">Six things, before the file exists. All of them on the device, all of them offline.</p>
 
-  <div class="grid2" style="align-items:start">
-    <div>
-      <h3 style="margin-top:0">It starts with hardware attestation</h3>
-      <p style="color:var(--textDim)">Signing keys are generated inside the Secure Enclave and cannot be extracted. Apple's App Attest then certifies that a genuine build is running on genuine hardware — but Apple gives apps no direct access to App Attest keys, so you can't simply attest your signing key.</p>
-      <p style="color:var(--textDim)">The workaround is a commitment. Set the App Attest <code>clientDataHash</code> to <code>SHA256(challenge ‖ signingPublicKey)</code>. Apple's nonce extension in the attestation certificate then vouches for <em>exactly that key</em>, not merely for some key on some genuine device. The binding rides inside every manifest, so anyone can re-check it offline, years later, with no server involved.</p>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 920 200" width="100%" role="img" aria-label="The six steps of the shutter path, left to right">
+        <g class="f-surf k-line" stroke-width="1.4">
+          <rect x="25" y="34" width="135" height="120" rx="8"/>
+          <rect x="172" y="34" width="135" height="120" rx="8"/>
+          <rect x="319" y="34" width="135" height="120" rx="8"/>
+          <rect x="466" y="34" width="135" height="120" rx="8"/>
+          <rect x="613" y="34" width="135" height="120" rx="8"/>
+          <rect x="760" y="34" width="135" height="120" rx="8"/>
+        </g>
+        <g class="k-dim" stroke-width="1.3">
+          <path d="M162 94 l8 0 M166 90 l5 4 -5 4" class="f-none"/>
+          <path d="M309 94 l8 0 M313 90 l5 4 -5 4" class="f-none"/>
+          <path d="M456 94 l8 0 M460 90 l5 4 -5 4" class="f-none"/>
+          <path d="M603 94 l8 0 M607 90 l5 4 -5 4" class="f-none"/>
+          <path d="M750 94 l8 0 M754 90 l5 4 -5 4" class="f-none"/>
+        </g>
 
-      <h3>It's designed to sit on top of what's coming</h3>
-      <p style="color:var(--textDim)">Reference Image and Pixel's pipeline signing attest the sensor. Source Kit attests the app, the context and the custody. These compose: when a platform credential exists, it becomes an ingredient in the record rather than a competitor to it. The strongest future file carries both — the platform saying <i>this sensor saw these photons</i>, and the record saying <i>here is everything else that was true at that instant, and here is what you should not believe about it.</i></p>
+        <text x="38" y="56" class="num s-ac">01</text>
+        <text x="38" y="80" class="hd s-txt">Hash the bytes</text>
+        <text x="38" y="102" class="cap s-dim">SHA-256, chunked, so</text>
+        <text x="38" y="117" class="cap s-dim">verifying a video</text>
+        <text x="38" y="132" class="cap s-dim">never loads it whole.</text>
+        <text x="38" y="180" class="num s-faint">src/lib/fileHash.ts</text>
 
-      <h3>Then it seals, twice</h3>
-      <p style="color:var(--textDim)">ECDSA P-256 over a canonical record, and an ML-DSA-65 signature over the same commitment so a future break of P-256 doesn't quietly invalidate an archive. A minor note today; archives are long.</p>
-      <p style="color:var(--textDim)">The manifest itself is spec-conformant C2PA — CBOR claim, hard binding, COSE_Sign1 — written into the JPEG, PNG, MP4, MOV or M4A. <b style="color:var(--text)">Any C2PA reader opens it</b>, including <code>c2patool</code> and the Content Credentials verifier, and CI cross-checks every build against the reference implementation.</p>
+        <text x="185" y="56" class="num s-ac">02</text>
+        <text x="185" y="80" class="hd s-txt">Read the sensors</text>
+        <text x="185" y="102" class="cap s-dim">Time, GPS, heading,</text>
+        <text x="185" y="117" class="cap s-dim">altitude, motion.</text>
+        <text x="185" y="132" class="cap s-dim">Each one optional.</text>
+        <text x="185" y="180" class="num s-faint">src/sensors/</text>
+
+        <text x="332" y="56" class="num s-ac">03</text>
+        <text x="332" y="80" class="hd s-txt">Sign it</text>
+        <text x="332" y="102" class="cap s-dim">ECDSA P-256 in the</text>
+        <text x="332" y="117" class="cap s-dim">Secure Enclave. The</text>
+        <text x="332" y="132" class="cap s-dim">key never leaves</text>
+        <text x="332" y="147" class="cap s-dim">the chip.</text>
+        <text x="332" y="180" class="num s-faint">src/lib/deviceKey.ts</text>
+
+        <text x="479" y="56" class="num s-ac">04</text>
+        <text x="479" y="80" class="hd s-txt">Sign it again</text>
+        <text x="479" y="102" class="cap s-dim">ML-DSA-65 over the</text>
+        <text x="479" y="117" class="cap s-dim">same commitment.</text>
+        <text x="479" y="132" class="cap s-dim">Archives outlive</text>
+        <text x="479" y="147" class="cap s-dim">their curves.</text>
+        <text x="479" y="180" class="num s-faint">src/lib/pq.ts</text>
+
+        <text x="626" y="56" class="num s-ac">05</text>
+        <text x="626" y="80" class="hd s-txt">Write the manifest</text>
+        <text x="626" y="102" class="cap s-dim">CBOR claim, hard</text>
+        <text x="626" y="117" class="cap s-dim">binding, COSE_Sign1</text>
+        <text x="626" y="132" class="cap s-dim">— into the JPEG, PNG,</text>
+        <text x="626" y="147" class="cap s-dim">MP4 or MOV.</text>
+        <text x="626" y="180" class="num s-faint">src/c2pa/</text>
+
+        <text x="773" y="56" class="num s-ac">06</text>
+        <text x="773" y="80" class="hd s-txt">Anchor the time</text>
+        <text x="773" y="102" class="cap s-dim">RFC 3161 if there's</text>
+        <text x="773" y="117" class="cap s-dim">a network, plus</text>
+        <text x="773" y="132" class="cap s-dim">OpenTimestamps.</text>
+        <text x="773" y="147" class="cap s-dim">Offline: none.</text>
+        <text x="773" y="180" class="num s-faint">src/lib/timestamp.ts</text>
+
+      </svg>
     </div>
+    <figcaption>Step six is the only one that can want a network, and it fails open: offline, the capture signs without an anchor and the record says the anchor is missing. Nothing else in the app makes a network call at all — the full list is in <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/NETWORK.md">NETWORK.md</a>.</figcaption>
+  </figure>
 
+  <h2 style="margin-top:var(--s-xxl)">Tying the signature to the hardware</h2>
+  <p class="dek">This is the part I'd most like someone to reuse, or break.</p>
+
+  <div class="col">
+    <p>Apple's App Attest certifies that a genuine build of your app is running on a genuine device. But it gives apps no access to the attested key, so you can't just attest your signing key with it. The workaround is a commitment.</p>
+  </div>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 920 300" width="100%" role="img" aria-label="How the App Attest client data hash binds Apple's attestation to the signing key">
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,1 L9,5 L0,9 z" fill="var(--textFaint)"/>
+          </marker>
+        </defs>
+
+        <rect x="20"  y="40"  width="170" height="48" rx="8" class="f-surf k-line" stroke-width="1.4"/>
+        <text x="105" y="70" class="cap s-txt" text-anchor="middle">Fresh challenge</text>
+
+        <rect x="20"  y="112" width="170" height="48" rx="8" class="f-surf k-line" stroke-width="1.4"/>
+        <text x="105" y="136" class="cap s-txt" text-anchor="middle">Signing public key</text>
+        <text x="105" y="151" class="cap s-faint" text-anchor="middle">Secure Enclave, P-256</text>
+
+        <path d="M192 64 h20 v36" class="f-none k-dim" stroke-width="1.3"/>
+        <path d="M192 136 h20 v-36" class="f-none k-dim" stroke-width="1.3"/>
+        <text x="222" y="94" class="hd s-dim">‖</text>
+        <line x1="232" y1="100" x2="246" y2="100" class="k-dim" stroke-width="1.3" marker-end="url(#ah2)"/>
+
+        <rect x="252" y="76"  width="118" height="48" rx="8" class="f-surf k-line" stroke-width="1.4"/>
+        <text x="311" y="105" class="cap s-txt" text-anchor="middle">SHA-256</text>
+        <line x1="374" y1="100" x2="404" y2="100" class="k-dim" stroke-width="1.3" marker-end="url(#ah2)"/>
+
+        <rect x="410" y="76"  width="170" height="48" rx="8" class="f-acsoft k-ac" stroke-width="1.4"/>
+        <text x="495" y="99"  class="cap s-txt" text-anchor="middle">clientDataHash</text>
+        <text x="495" y="114" class="cap s-faint" text-anchor="middle">32 bytes</text>
+        <line x1="584" y1="100" x2="614" y2="100" class="k-dim" stroke-width="1.3" marker-end="url(#ah2)"/>
+
+        <rect x="620" y="76"  width="180" height="48" rx="8" class="f-surf k-line" stroke-width="1.4"/>
+        <text x="710" y="99"  class="cap s-txt" text-anchor="middle">Apple App Attest</text>
+        <text x="710" y="114" class="cap s-faint" text-anchor="middle">on device, no key access</text>
+
+        <path d="M710 128 v34" class="f-none k-ac" stroke-width="1.5" marker-end="url(#ah2)"/>
+
+        <rect x="410" y="176" width="470" height="86" rx="8" class="f-none k-ac" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text x="430" y="200" class="lbl s-ac">APPLE ATTESTATION CERTIFICATE</text>
+        <text x="430" y="224" class="num s-txt">nonce ext 1.2.840.113635.100.8.2</text>
+        <text x="430" y="246" class="num s-ac">= SHA256(challenge ‖ signingPublicKey)</text>
+
+        <text x="20"  y="200" class="cap s-dim">Apple's certificate now names</text>
+        <text x="20"  y="218" class="cap s-dim">this exact key — not merely</text>
+        <text x="20"  y="236" class="cap s-dim">some key on some genuine</text>
+        <text x="20"  y="254" class="cap s-dim">device.</text>
+      </svg>
+    </div>
+    <figcaption>The binding rides inside every manifest, so it can be re-checked offline years later with nothing running anywhere. <span class="note">Code in <code>src/lib/appAttest.ts</code>; the relay is one dependency-free file in <code>server/</code>. Run your own or skip it — an offline device signs unattested and says so.</span></figcaption>
+  </figure>
+
+  <h2 style="margin-top:var(--s-xxl)">It sits on top of the platform, not against it</h2>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 920 220" width="100%" role="img" aria-label="Three layers: silicon attestation, Source Kit context, and the resulting file">
+        <rect x="50" y="18"  width="440" height="54" rx="8" class="f-surf k-ac" stroke-width="1.5"/>
+        <text x="70" y="42" class="hd s-txt">The file</text>
+        <text x="70" y="60" class="cap s-dim">One C2PA manifest, both layers inside it</text>
+        <text x="516" y="42" class="cap s-dim">Opens in c2patool, the Content Credentials</text>
+        <text x="516" y="60" class="cap s-dim">verifier, or anything else that reads C2PA.</text>
+
+        <rect x="50" y="83"  width="440" height="54" rx="8" class="f-acsoft k-ac" stroke-width="1.5"/>
+        <text x="70" y="107" class="hd s-txt">Source Kit</text>
+        <text x="70" y="125" class="cap s-dim">App identity, capture context, custody</text>
+        <text x="516" y="107" class="cap s-dim">Everything else that was true at that instant —</text>
+        <text x="516" y="125" class="cap s-dim">and what you should not believe about it.</text>
+
+        <rect x="50" y="148" width="440" height="54" rx="8" class="f-soft k-line" stroke-width="1.5"/>
+        <text x="70" y="172" class="hd s-txt">Silicon</text>
+        <text x="70" y="190" class="cap s-dim">Sensor attestation — Pixel now, Apple next</text>
+        <text x="516" y="172" class="cap s-dim">This sensor saw these photons. Nothing an app</text>
+        <text x="516" y="190" class="cap s-dim">can do reaches this far down.</text>
+      </svg>
+    </div>
+    <figcaption>When a platform credential exists, it becomes an ingredient in the record rather than a competitor to it. The strongest future file carries both.</figcaption>
+  </figure>
+
+  <h2 style="margin-top:var(--s-xxl)">What gets collected, and what each thing is worth</h2>
+  <p class="dek">Everything here is optional and individually switchable, live in the viewfinder. The last column is the one that matters.</p>
+
+  <div class="grid2" style="align-items:start;margin-bottom:var(--s-xl)">
     <div>
-      <div class="phone sm" style="max-width:300px">
+      <div class="tw" style="min-width:0"><table style="min-width:420px">
+        <thead><tr><th>Signal</th><th>Strength</th></tr></thead>
+        <tbody>
+          <tr><td class="p">Multiple lenses</td><td><span class="bar"><i style="width:100%"></i></span>speaks to the scene</td></tr>
+          <tr><td class="p">Time anchors</td><td><span class="bar"><i style="width:88%"></i></span>independent of the device</td></tr>
+          <tr><td class="p">Motion log</td><td><span class="bar"><i style="width:76%"></i></span>cross-checkable</td></tr>
+          <tr><td class="p">Raw audio</td><td><span class="bar"><i style="width:64%"></i></span>enables later work</td></tr>
+          <tr><td class="p">Shutter burst</td><td><span class="bar"><i style="width:56%"></i></span>contextual</td></tr>
+          <tr><td class="p">Face check</td><td><span class="bar"><i style="width:40%"></i></span>a boolean</td></tr>
+          <tr><td class="p">Transcript</td><td><span class="bar"><i style="width:34%"></i></span>convenience</td></tr>
+          <tr><td class="p">Byline</td><td><span class="bar w"><i style="width:30%"></i></span>identity, and a liability</td></tr>
+          <tr><td class="p">Location</td><td><span class="bar w"><i style="width:22%"></i></span>spoofable</td></tr>
+          <tr><td class="p">Wi-Fi</td><td><span class="bar w"><i style="width:12%"></i></span>trivially spoofable</td></tr>
+        </tbody>
+      </table></div>
+      <p class="caption" style="text-align:left">Ranked by how much weight a check can carry, not by how impressive it sounds.</p>
+    </div>
+    <div>
+      <div class="phone sm">
         <div class="screen">
           <div class="vf">
             <div class="vf-top">
@@ -364,49 +597,69 @@ footer a:hover{color:var(--accent)}
               <span class="vf-pill on">MOTION</span>
             </div>
             <div class="vf-mid"><div class="vf-scene"></div></div>
-            <div class="vf-bot">
-              <span class="vf-lens">0.5×</span>
-              <div class="shutter"></div>
-              <span class="vf-lens">RAW</span>
-            </div>
+            <div class="vf-bot"><span class="vf-lens">0.5×</span><div class="shutter"></div><span class="vf-lens">RAW</span></div>
           </div>
         </div>
       </div>
-      <p class="caption">Every capture toggle is live in the viewfinder. What's on is what gets bound into the signature — and what's off is recorded as deliberately absent, never silently missing.</p>
+      <p class="caption">What's on is bound into the signature. What's off is recorded as deliberately absent — a different fact from silently missing.</p>
     </div>
   </div>
 
-  <h3 style="margin-top:var(--s-xl)">What can be collected, and what each thing is actually worth</h3>
-  <p style="color:var(--textDim);max-width:58ch">All of it is optional and individually switchable. The column that matters is the last one.</p>
   <div class="tw"><table>
     <thead><tr><th>Signal</th><th>What it records</th><th>What it's worth</th></tr></thead>
     <tbody>
-      <tr><td class="p">Location</td><td>GPS fix and accuracy radius at capture.</td><td><b>Spoofable.</b> Civilian GNSS is unauthenticated. A lead for a desk to corroborate, never proof of place.</td></tr>
-      <tr><td class="p">Motion log</td><td>Gyro, attitude and user acceleration around the shutter, decimated and signed.</td><td><b>Strong, and cross-checkable.</b> Hard to fabricate consistently with the optical flow of the frames it accompanies.</td></tr>
-      <tr><td class="p">Multiple lenses</td><td>A second, downsampled view from a different physical camera, plus calibration.</td><td><b>The strongest single signal.</b> Geometric, measurable, and the only one that speaks to the scene rather than the file. See below.</td></tr>
-      <tr><td class="p">Raw audio</td><td>Uncompressed LPCM master alongside the delivery file.</td><td><b>Enabling.</b> Codecs filter exactly the frequencies forensic analysis needs. Without the raw master, ENF and onset work are impossible later.</td></tr>
-      <tr><td class="p">Shutter burst</td><td>A short ring of frames from around the shutter moment.</td><td><b>Contextual.</b> Supports parallax and display-beat analysis; shows the seconds either side of the frame you kept.</td></tr>
-      <tr><td class="p">Transcript</td><td>On-device speech recognition of captured audio.</td><td><b>Convenience, with teeth.</b> Never leaves the device; strippable from shared copies at byte level.</td></tr>
-      <tr><td class="p">Byline / Organization</td><td>Author name and affiliation.</td><td><b>Identity, and a liability.</b> Off by default, and always stripped from de-identified copies.</td></tr>
-      <tr><td class="p">Wi-Fi</td><td>The SSID/BSSID the phone reports being joined to.</td><td><b>Trivially spoofable</b> — anyone can name an access point anything. Signed as a lead only; BSSID lookup happens desk-side.</td></tr>
-      <tr><td class="p">Face check</td><td>Whether an OS biometric check passed at capture start.</td><td><b>A boolean, nothing more.</b> No face geometry, template or image is recorded or transmitted.</td></tr>
-      <tr><td class="p">Time anchors</td><td>RFC 3161 countersignature; OpenTimestamps receipt.</td><td><b>Real independence.</b> The one context claim not sourced from the device itself.</td></tr>
+      <tr><td class="p">Multiple lenses</td><td>A second, downsampled view from a different physical camera, plus calibration.</td><td>Geometric and measurable. The only signal that speaks to the scene rather than the file.</td></tr>
+      <tr><td class="p">Time anchors</td><td>RFC 3161 countersignature; OpenTimestamps receipt.</td><td>The one context claim not sourced from the device itself.</td></tr>
+      <tr><td class="p">Motion log</td><td>Gyro, attitude and user acceleration around the shutter, decimated and signed.</td><td>Hard to fabricate consistently with the optical flow of the frames it accompanies.</td></tr>
+      <tr><td class="p">Raw audio</td><td>Uncompressed LPCM master alongside the delivery file.</td><td>Delivery codecs filter exactly the frequencies forensic work needs. Capture it now or lose it.</td></tr>
+      <tr><td class="p">Shutter burst</td><td>A short ring of frames from around the shutter moment.</td><td>Supports parallax and display-beat analysis. Shows the seconds either side of the frame you kept.</td></tr>
+      <tr><td class="p">Face check</td><td>Whether an OS biometric check passed at capture start.</td><td>A boolean. No face geometry, template or image is recorded or transmitted.</td></tr>
+      <tr><td class="p">Transcript</td><td>On-device speech recognition of captured audio.</td><td>Never leaves the device. Strippable from shared copies at byte level.</td></tr>
+      <tr><td class="p">Byline / org</td><td>Author name and affiliation.</td><td>Off by default. Always stripped from de-identified copies.</td></tr>
+      <tr><td class="p">Location</td><td>GPS fix and accuracy radius at capture.</td><td>Civilian GNSS is unauthenticated. A lead for a desk to corroborate, never proof of place.</td></tr>
+      <tr><td class="p">Wi-Fi</td><td>The SSID and BSSID the phone reports joining.</td><td>Anyone can name an access point anything. Signed as a lead; BSSID lookup happens desk-side.</td></tr>
     </tbody>
   </table></div>
 </div></section>
 
-<!-- =================== THE LABEL =================== -->
+<!-- ===================== THE LABEL ===================== -->
 <section class="block" id="label"><div class="wrap">
-  <p class="seclabel">The label</p>
   <h2>A nutrition label and a tamper-evident seal</h2>
-  <p class="sub">Two objects, doing two different jobs. The seal is binary and cryptographic: intact, or not. The label is descriptive, itemised, and makes no claim to be a verdict. Most of the design work went into keeping them apart.</p>
+  <p class="dek">Two objects, two jobs. The seal is binary: intact, or not. The label is itemised and makes no claim to be a verdict. Most of the design work went into keeping them apart.</p>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 920 262" width="100%" role="img" aria-label="A badge gives one bit; a ladder gives five separate answers">
+        <text x="20" y="26" class="lbl s-faint">A BADGE</text>
+        <circle cx="88" cy="112" r="38" class="f-soft k-line" stroke-width="1.5"/>
+        <path d="M70 112 l13 14 l24 -28" class="f-none k-dim" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="20" y="184" class="cap s-dim">One bit. It works by borrowing the</text>
+        <text x="20" y="202" class="cap s-dim">authority of a body that supposedly did</text>
+        <text x="20" y="220" class="cap s-dim">the checking — a notary, a ratings</text>
+        <text x="20" y="238" class="cap s-dim">board, a verification team.</text>
+        <text x="20" y="258" class="cap s-txt" font-weight="700">No such body exists here.</text>
+
+        <line x1="460" y1="10" x2="460" y2="250" class="k-line"/>
+
+        <text x="500" y="26" class="lbl s-ac">A LADDER</text>
+        <line x1="512" y1="62" x2="512" y2="206" class="k-line" stroke-width="1.5"/>
+        <circle cx="512" cy="62"  r="6" class="s-ac"/><text x="536" y="66"  class="cap s-txt">Media unchanged since signing</text>
+        <circle cx="512" cy="98"  r="6" class="s-ac"/><text x="536" y="102" class="cap s-txt">Signer identified</text>
+        <circle cx="512" cy="134" r="8" class="f-none k-ac" stroke-width="2.5"/><circle cx="512" cy="134" r="3.5" class="s-ac"/><text x="536" y="138" class="cap s-txt">Key attested by Apple hardware</text>
+        <circle cx="512" cy="170" r="6" class="f-none k-dim" stroke-width="1.5"/><text x="536" y="174" class="cap s-faint">Accessioned by an organization</text>
+        <circle cx="512" cy="206" r="6" class="f-none k-dim" stroke-width="1.5"/><text x="536" y="210" class="cap s-faint">Time bracketed by an independent anchor</text>
+        <text x="500" y="240" class="cap s-dim">Five questions, answered separately. The</text>
+        <text x="500" y="258" class="cap s-dim">unreached ones say why they weren't reached.</text>
+      </svg>
+    </div>
+    <figcaption>Unsigned files render neutral grey, never red. The absence of a credential is not evidence of tampering, and colouring it like a failure smuggles in a claim nobody checked.</figcaption>
+  </figure>
 
   <div class="grid2" style="align-items:start">
-    <div>
-      <p style="color:var(--textDim)">The vocabulary follows from that. Words like <i>verified</i>, <i>authentic</i> and <i>trusted</i> describe a conclusion somebody reached; nothing in this software reaches conclusions. So the interface says what happened instead — <i>signature mathematically valid</i>, <i>media unchanged since signing</i>, <i>proven tamper</i> — verbs attached to operations that actually ran. A test fails the build if a verdict word appears in a summary position, which sounds fussy until you notice how constant the pressure is to round a qualified result up to a confident one.</p>
-      <p style="color:var(--textDim)">There are no badges either, and the reason is worth stating. A checkmark is an institutional gesture: it borrows the authority of some body that has supposedly done the checking — a notary, a ratings board, a verification team. No such body exists here. A badge would be borrowed furniture, and the borrowing would be the dishonest part, not the cryptography.</p>
-      <p style="color:var(--textDim)">What replaces it is a ladder of five separate questions, each answered on its own terms, with an unreached rung saying why it wasn't reached. Unsigned renders neutral grey rather than red: the absence of a credential is not evidence of tampering, and colouring it like a failure would smuggle in a claim nobody checked.</p>
-      <p class="note">The card carries its title and limits inside its own frame, because the most common way this gets read is as a cropped screenshot in a group chat.</p>
+    <div class="col">
+      <p>The vocabulary follows from the same rule. <i>Verified</i>, <i>authentic</i> and <i>trusted</i> all describe a conclusion somebody reached, and nothing in this software reaches conclusions. So the interface names the operation instead: <i>signature mathematically valid</i>, <i>media unchanged since signing</i>, <i>proven tamper</i>. Verbs attached to things that actually ran.</p>
+      <p>A test fails the build if a verdict word turns up in a summary position. That kept the copy honest as the feature count grew, because the pressure to round a qualified result up to a confident one is constant, and a fair amount of it came from me.</p>
+      <p class="note">The card carries its own title and limits inside its frame, because the way this actually gets read is as a cropped screenshot in a group chat.</p>
     </div>
     <div>
       <div class="nut">
@@ -425,178 +678,272 @@ footer a:hover{color:var(--accent)}
         <div class="nut-row"><span class="n">TSA root anchoring</span><span class="v v-dim">not checked</span></div>
         <div class="nut-row"><span class="n">Revocation</span><span class="v v-dim">not checked</span></div>
       </div>
-      <p class="caption">Every row is a fact with a provenance of its own. Nothing is summed. There is no score.</p>
+      <p class="caption">Nothing is summed. There is no score.</p>
     </div>
   </div>
 </div></section>
 
-<!-- =================== TWO LENSES =================== -->
+
+<!-- ===================== TWO LENSES ===================== -->
 <section class="block" id="stereo"><div class="wrap">
-  <p class="seclabel">Two lenses</p>
-  <h2>The one check that speaks to the scene</h2>
-  <p class="sub">Everything else in the record concerns the file. This concerns the world in front of it — and it's the only part of the design aimed squarely at rephotography.</p>
+  <h2>Two lenses</h2>
+  <p class="dek">A screen is a plane. A room is not. That difference is measurable, and it is the only part of the design that reaches past the file and into the scene.</p>
 
-  <div class="grid2" style="align-items:center">
-    <div>
-      <p style="color:var(--textDim)">A screen is a plane. A room is not. Two cameras separated by a known baseline see a plane identically up to a single projective transform, and see a real scene with residual disagreement that no homography can remove. That difference is measurable, and it's geometry rather than machine learning: there's no model to fool, no training distribution to drift, and no probability to launder into a score.</p>
-      <p style="color:var(--textDim)">So a stereo capture takes the frame you asked for, plus a downsampled view from a second physical lens, plus the calibration data — intrinsics, extrinsics, distortion — and commits <b style="color:var(--text)">all of it</b> into the signed record.</p>
-      <p style="color:var(--textDim)">Committing the second view, rather than just the computed answer, is the whole point. If only the number were stored, you'd have to trust the device's arithmetic. With the frame committed, anyone can undistort both views, match features, fit a homography and measure the residual themselves. It's the difference between a claim and evidence.</p>
-      <p style="color:var(--textDim)">And it degrades honestly. Disparity falls off with distance, so past a few metres the baseline can no longer separate a plane from a scene. At that point the answer is <b style="color:var(--text)">insufficient</b> — never <i>passed</i>. A test that silently turns into a pass when it stops working is worse than no test at all.</p>
-      <p class="note"><b>Status:</b> the verification side is lab-tested and green. The capture path moved to Apple's virtual dual-wide device graph and is pending on-device validation on iPhone 17 / iOS 26. Said plainly because it isn't finished.</p>
-    </div>
-    <div class="lens-fig">
-      <svg viewBox="0 0 320 250" width="100%" role="img" aria-label="Two lenses viewing a flat screen versus a real scene">
-        <text x="8" y="14" font-size="10" font-weight="800" letter-spacing="1.6" fill="#78787D">FLAT SCREEN — ONE PLANE</text>
-        <rect x="120" y="26" width="150" height="62" rx="3" fill="none" stroke="#8A5F12" stroke-width="1.6"/>
-        <circle cx="30" cy="46" r="7" fill="none" stroke="#1F6B45" stroke-width="1.6"/>
-        <circle cx="30" cy="74" r="7" fill="none" stroke="#1F6B45" stroke-width="1.6"/>
-        <line x1="37" y1="46" x2="120" y2="34" stroke="#6E6E73" stroke-width="1" stroke-dasharray="3 3"/>
-        <line x1="37" y1="74" x2="120" y2="80" stroke="#6E6E73" stroke-width="1" stroke-dasharray="3 3"/>
-        <text x="120" y="104" font-size="10.5" fill="#8A5F12">residual ≈ 0 · a single homography fits both views</text>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 920 430" width="100%" role="img" aria-label="Two cameras with a known baseline see a flat screen identically but disagree about a scene with depth">
+        <text x="20" y="24" class="lbl s-warn">FLAT SCREEN — ONE PLANE</text>
+        <circle cx="60" cy="105" r="9" class="f-none k-ac" stroke-width="1.8"/>
+        <circle cx="60" cy="165" r="9" class="f-none k-ac" stroke-width="1.8"/>
+        <line x1="60" y1="114" x2="60" y2="156" class="k-ac" stroke-width="1.2"/>
+        <text x="76" y="139" class="cap s-faint">baseline</text>
+        <rect x="300" y="58" width="110" height="155" rx="3" class="f-warnsoft k-warn" stroke-width="1.6"/>
+        <g class="k-dim" stroke-width="1" stroke-dasharray="3 3">
+          <line x1="69" y1="105" x2="300" y2="62"/><line x1="69" y1="105" x2="300" y2="209"/>
+          <line x1="69" y1="165" x2="300" y2="62"/><line x1="69" y1="165" x2="300" y2="209"/>
+        </g>
+        <text x="20" y="248" class="cap s-warn">A single homography fits both views. Residual ≈ 0.</text>
 
-        <line x1="8" y1="124" x2="312" y2="124" stroke="#E6E6EB"/>
+        <line x1="450" y1="10" x2="450" y2="262" class="k-line"/>
 
-        <text x="8" y="150" font-size="10" font-weight="800" letter-spacing="1.6" fill="#78787D">REAL SCENE — DEPTH</text>
-        <circle cx="30" cy="182" r="7" fill="none" stroke="#1F6B45" stroke-width="1.6"/>
-        <circle cx="30" cy="210" r="7" fill="none" stroke="#1F6B45" stroke-width="1.6"/>
-        <rect x="130" y="160" width="34" height="34" rx="2" fill="#1F6B45" opacity=".18" stroke="#1F6B45"/>
-        <rect x="196" y="186" width="46" height="46" rx="2" fill="#1F6B45" opacity=".1" stroke="#1F6B45"/>
-        <line x1="37" y1="182" x2="130" y2="168" stroke="#6E6E73" stroke-width="1" stroke-dasharray="3 3"/>
-        <line x1="37" y1="210" x2="196" y2="206" stroke="#6E6E73" stroke-width="1" stroke-dasharray="3 3"/>
-        <text x="120" y="246" font-size="10.5" fill="#1F6B45">residual &gt; 0 · no homography removes the disagreement</text>
+        <text x="480" y="24" class="lbl s-ac">REAL SCENE — DEPTH</text>
+        <circle cx="520" cy="105" r="9" class="f-none k-ac" stroke-width="1.8"/>
+        <circle cx="520" cy="165" r="9" class="f-none k-ac" stroke-width="1.8"/>
+        <line x1="520" y1="114" x2="520" y2="156" class="k-ac" stroke-width="1.2"/>
+        <rect x="672" y="72"  width="52" height="52" rx="2" class="f-acsoft k-ac" stroke-width="1.4"/>
+        <rect x="700" y="168" width="44" height="44" rx="2" class="f-acsoft k-ac" stroke-width="1.4"/>
+        <rect x="800" y="112" width="68" height="68" rx="2" class="f-acsoft k-ac" stroke-width="1.4"/>
+        <g class="k-dim" stroke-width="1" stroke-dasharray="3 3">
+          <line x1="529" y1="105" x2="672" y2="80"/><line x1="529" y1="105" x2="800" y2="130"/><line x1="529" y1="105" x2="700" y2="176"/>
+          <line x1="529" y1="165" x2="672" y2="112"/><line x1="529" y1="165" x2="800" y2="160"/><line x1="529" y1="165" x2="700" y2="204"/>
+        </g>
+        <text x="480" y="248" class="cap s-ac">No homography removes the disagreement. Residual &gt; 0.</text>
+
+        <line x1="20" y1="286" x2="900" y2="286" class="k-line"/>
+        <text x="20" y="316" class="lbl s-faint">HOW FAR THE CHECK REACHES</text>
+
+        <line x1="20" y1="356" x2="420" y2="356" class="k-ac" stroke-width="4" stroke-linecap="round"/>
+        <line x1="420" y1="356" x2="880" y2="356" class="k-line" stroke-width="4" stroke-linecap="round"/>
+        <g class="s-faint">
+          <text x="20"  y="345" class="num">0.5 m</text>
+          <text x="220" y="345" class="num">2 m</text>
+          <text x="404" y="345" class="num">4 m</text>
+          <text x="860" y="345" class="num" text-anchor="end">10 m +</text>
+        </g>
+        <text x="20"  y="382" class="cap s-ac">MEASURABLE — a plane separates from a scene</text>
+        <text x="440" y="382" class="cap s-faint">INSUFFICIENT — the baseline can no longer tell them apart</text>
+        <text x="20"  y="410" class="cap s-dim">Past that distance the answer is <tspan class="s-txt" font-weight="700">insufficient</tspan>, never <tspan class="s-txt" font-weight="700">passed</tspan>. A test that quietly becomes a pass when it stops working is worse than no test.</text>
       </svg>
     </div>
-  </div>
+    <figcaption>A stereo capture commits the frame you asked for, a downsampled view from the second physical lens, and the full calibration — intrinsics, extrinsics, distortion. <b>Committing the second view rather than the computed answer is the point:</b> anyone can undistort both, match features, fit a homography and measure the residual themselves. Otherwise you're trusting the device's arithmetic.</figcaption>
+  </figure>
+
+  <p class="col note"><b>Status, plainly:</b> the verification side is lab-tested and green. The capture path moved to Apple's virtual dual-wide device graph and hasn't been confirmed in the field on iPhone 17 / iOS 26. It isn't finished.</p>
 </div></section>
 
-<!-- =================== INSPECT =================== -->
+
+<!-- ===================== INSPECT ===================== -->
 <section class="block" id="inspect"><div class="wrap">
-  <p class="seclabel">Inspect</p>
-  <h2>Checks a person can do, on the phone, with no model in the loop</h2>
-  <p class="sub">The Inspect tab opens any sealed file and shows the record. It uploads nothing, runs no classifier, and returns no probability. What it does instead is put the committed data next to the physics, in a form a human can adjudicate in about four seconds.</p>
+  <h2>Checks a person can do, with no model in the loop</h2>
+  <p class="dek">Inspect opens any sealed file and shows the record. It uploads nothing, runs no classifier, and returns no probability. It puts the signed claim next to the physics and lets you adjudicate.</p>
 
-  <div class="grid2">
-    <div>
-      <p style="color:var(--textDim)">This is a deliberate reversal of the usual arrangement. A detector takes an image and returns a number nobody can audit. These checks take a <em>signed claim</em> and render it against an independent expectation — where the sun was, where the horizon should sit, what the weather was doing, how the phone moved — and let the reader see whether the two agree.</p>
-      <p style="color:var(--textDim)">The reader is doing the inference. That's the feature. It means there's no training distribution to drift, no ROC curve to hide, and no failure mode where the model is confidently wrong about something a person would catch instantly.</p>
-      <p class="note">It also means the checks are honest about silence. Insufficient data reports <i>insufficient</i>. A check that didn't run says it didn't run. Nothing is inferred from absence.</p>
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 920 280" width="100%" role="img" aria-label="Three forensic checks: sun position, horizon versus gyro attitude, and pose trace">
+        <text x="20" y="24" class="lbl s-faint">SUN POSITION</text>
+        <text x="20" y="42" class="cap s-dim">from signed time + place</text>
+        <circle cx="150" cy="150" r="72" class="f-none k-line" stroke-width="1.4"/>
+        <circle cx="150" cy="150" r="3" class="s-faint"/>
+        <g class="s-faint cap" text-anchor="middle">
+          <text x="150" y="70">N</text><text x="232" y="154">E</text><text x="150" y="240">S</text><text x="68" y="154">W</text>
+        </g>
+        <line x1="150" y1="150" x2="205" y2="197" class="k-warn" stroke-width="2"/>
+        <circle cx="211" cy="203" r="7" class="s-warn"/>
+        <text x="196" y="224" class="cap s-warn">sun</text>
+        <line x1="150" y1="150" x2="95" y2="103" class="k-ac" stroke-width="2" stroke-dasharray="4 3"/>
+        <text x="60" y="96" class="cap s-ac">shadow</text>
+        <text x="20" y="264" class="cap s-dim">Sun at 48° elevation, SE. Shadows fall NW.</text>
+
+        <line x1="300" y1="10" x2="300" y2="272" class="k-line"/>
+
+        <text x="330" y="24" class="lbl s-faint">HORIZON vs ATTITUDE</text>
+        <text x="330" y="42" class="cap s-dim">from the committed gyro trace</text>
+        <rect x="330" y="62" width="250" height="150" rx="4" class="f-soft k-line" stroke-width="1.4"/>
+        <line x1="330" y1="140" x2="580" y2="140" class="k-ac" stroke-width="1.8" stroke-dasharray="5 4"/>
+        <text x="330" y="132" class="cap s-ac">predicted level</text>
+        <line x1="330" y1="168" x2="580" y2="122" class="k-warn" stroke-width="2"/>
+        <text x="470" y="190" class="cap s-warn">visible horizon</text>
+        <text x="330" y="240" class="cap s-dim">A recapture of a screen inherits the</text>
+        <text x="330" y="258" class="cap s-dim">screen's horizon, not the phone's.</text>
+
+        <line x1="610" y1="10" x2="610" y2="272" class="k-line"/>
+
+        <text x="640" y="24" class="lbl s-faint">POSE TRACE</text>
+        <text x="640" y="42" class="cap s-dim">signed motion vs optical flow</text>
+        <path d="M645 128 l9 -13 l7 19 l11 -7 l6 14 l12 -24 l8 21 l10 -6 l7 -15 l9 22 l11 -9 l8 13 l10 -21 l7 8 l9 12 l11 -18 l8 6 l10 -9 l9 17 l11 -12 l8 5"
+              class="f-none k-ac" stroke-width="1.8" stroke-linejoin="round"/>
+        <text x="645" y="162" class="cap s-ac">handheld — unmistakable</text>
+        <path d="M645 205 h208" class="f-none k-dim" stroke-width="2" stroke-dasharray="4 4"/>
+        <text x="645" y="234" class="cap s-faint">synthetic — too clean</text>
+        <text x="640" y="264" class="cap s-dim">Faking both consistently is hard.</text>
+      </svg>
     </div>
-    <div class="grid3" style="grid-template-columns:1fr">
-      <div class="card"><h3 style="margin:0 0 4px">Shadows and sun position</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">From the signed time and location, the sun's true elevation and azimuth are computable. The card shows where shadows should fall. A scene lit from the wrong side at the claimed hour is visible without any analysis.</p></div>
-      <div class="card"><h3 style="margin:0 0 4px">Horizon and attitude</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">The committed gyro attitude predicts where level sits in frame. Compare to the horizon you can see. A recapture of a screen inherits the screen's horizon, not the phone's.</p></div>
-      <div class="card"><h3 style="margin:0 0 4px">Environment</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">Barometric altitude, heading and the conditions recorded at capture, laid beside what the file depicts.</p></div>
-      <div class="card"><h3 style="margin:0 0 4px">Pose trace</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">The signed motion trace drawn as a path, next to the optical flow of the frames. Handheld motion is unmistakable, and consistent fabrication across both is genuinely hard.</p></div>
-      <div class="card"><h3 style="margin:0 0 4px">Multiple lenses</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">The parallax measurement, computed on-device from the committed second view, with its validity range stated.</p></div>
-    </div>
+    <figcaption>This reverses the usual arrangement. A detector takes an image and returns a number nobody can audit; these take a signed claim and render it against an independent expectation. The reader does the inference — which means there's no training distribution to drift, no ROC curve to hide, and no failure mode where a model is confidently wrong about something a person catches instantly.</figcaption>
+  </figure>
+
+  <div class="grid3">
+    <div class="card"><h3 style="margin:0 0 4px">Shadows</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">The sun's true elevation and azimuth are computable from the signed time and place. A scene lit from the wrong side at the claimed hour is visible without analysis.</p></div>
+    <div class="card"><h3 style="margin:0 0 4px">Horizon</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">The committed gyro attitude predicts where level sits in frame. Compare to what you can see.</p></div>
+    <div class="card"><h3 style="margin:0 0 4px">Environment</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">Barometric altitude, heading and recorded conditions, laid beside what the file depicts.</p></div>
+    <div class="card"><h3 style="margin:0 0 4px">Pose trace</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">The signed motion path drawn against the optical flow of the frames.</p></div>
+    <div class="card"><h3 style="margin:0 0 4px">Parallax</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">Computed on-device from the committed second view, with its validity range stated.</p></div>
+    <div class="card" style="border-style:dashed"><h3 style="margin:0 0 4px">When nothing ran</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">A check that didn't run says it didn't run. Insufficient data reports insufficient. Nothing is inferred from absence.</p></div>
   </div>
 
-  <p class="measure" style="margin-top:var(--s-lg);color:var(--textDim)">None of this is a panacea, and I want to be careful not to imply otherwise. Any single check can be defeated by someone who knows it's there. What the stack does is restore <b style="color:var(--text)">friction</b> — it raises forgery from a prompt to a coordinated physical production, consistent across geometry, optics, motion, audio and time, all of it committed before the forger knew which checks would be run. That's not proof. It's the thing photographs used to have.</p>
+  <p class="col" style="margin-top:var(--s-lg)">None of this is a panacea. Any single check falls to someone who knows it's there. What the stack restores is friction — it raises forgery from a prompt to a coordinated physical production that has to stay consistent across geometry, optics, motion, audio and time, all of it committed before the forger knew which checks would be run. That isn't proof. It's what photographs used to have.</p>
 </div></section>
 
-<!-- =================== PRIVACY =================== -->
+<!-- ===================== PRIVACY ===================== -->
 <section class="block" id="privacy"><div class="wrap">
-  <p class="seclabel">Privacy</p>
   <h2>The people who need this most are the people it can most endanger</h2>
-  <p class="sub">A provenance record is, by construction, a dossier: where you were, when, which device, sometimes who you are. For a photographer working somewhere hostile, that file is a threat as much as a defence. So disclosure is a first-class feature rather than an export option.</p>
+  <p class="dek">A provenance record is a dossier: where you were, when, on which device, sometimes who you are. So disclosure is built in, not bolted on as an export option.</p>
 
-  <div class="grid2" style="align-items:start">
-    <div>
-      <h3 style="margin-top:0">Decide before, not after</h3>
-      <p style="color:var(--textDim)">Every signal is a live toggle in the viewfinder, so the decision happens at capture, in context, rather than in a settings screen months earlier. What's off isn't quietly missing — the record marks it deliberately absent, which is a different and more useful fact.</p>
+  <div class="col">
+    <p>Every signal is a live toggle in the viewfinder, which puts the decision at capture, in context, rather than in a settings screen from months ago. And every field is committed under its own salt, so you can reveal one later and have it check out against the original signature. Withholding doesn't break the seal.</p>
+  </div>
 
-      <h3>Selective disclosure</h3>
-      <p style="color:var(--textDim)">Every field is committed at capture under its own salt, so a later reveal is verifiable against the original signature. You can hand someone a file that proves the media is unchanged and the time is anchored, while disclosing nothing about location or identity — and they can still check what you did disclose. Withholding doesn't break the seal.</p>
-
-      <h3>De-identified copies</h3>
-      <p style="color:var(--textDim)">A share mode that re-signs with a fresh key and strips byline, organization, precise location, network claims, transcript and the device-key linkage that would otherwise connect two of your photographs to each other. The copy carries a <code>deidentified</code> marker, so a verifier reads the absence as a deliberate redaction rather than as evidence of stripping — and the original capture time is preserved, so every remaining claim stays literally true.</p>
-
-      <h3>Identifiable content is tagged as such</h3>
-      <p style="color:var(--textDim)">When a record includes something that can identify a person — a byline, a fine-grained location, a transcript — the interface says so at the point of sharing, not in a policy document.</p>
-
-      <h3>And it burns</h3>
-      <p style="color:var(--textDim)">Destroying the master seed for an item makes the withheld fields permanently underivable. Not hidden — gone. The record says that too.</p>
+  <figure>
+    <div class="fig">
+      <p class="fighead">What travels, by export type</p>
+      <div class="tw" style="border:none;background:none">
+        <table>
+          <thead><tr>
+            <th>Field</th>
+            <th style="text-align:center">Sealed original</th>
+            <th style="text-align:center">De-identified copy</th>
+            <th style="text-align:center">Hash-only claim</th>
+          </tr></thead>
+          <tbody style="font-size:14px">
+            <tr><td>Media + seal</td><td align="center" class="v-ok">●</td><td align="center" class="v-ok">● re-signed</td><td align="center" class="v-ok">● hash</td></tr>
+            <tr><td>Time anchor</td><td align="center" class="v-ok">●</td><td align="center" class="v-ok">●</td><td align="center" class="v-ok">●</td></tr>
+            <tr><td>Motion, lenses</td><td align="center" class="v-ok">●</td><td align="center" class="v-ok">●</td><td align="center" class="v-dim">○</td></tr>
+            <tr><td>Precise location</td><td align="center" class="v-ok">●</td><td align="center" class="v-dim">○ stripped</td><td align="center" class="v-dim">○</td></tr>
+            <tr><td>Byline / organization</td><td align="center" class="v-ok">●</td><td align="center" class="v-dim">○ stripped</td><td align="center" class="v-dim">○</td></tr>
+            <tr><td>Network claims</td><td align="center" class="v-ok">●</td><td align="center" class="v-dim">○ stripped</td><td align="center" class="v-dim">○</td></tr>
+            <tr><td>Transcript</td><td align="center" class="v-ok">●</td><td align="center" class="v-dim">○ stripped</td><td align="center" class="v-dim">○</td></tr>
+            <tr><td>Device-key linkage</td><td align="center" class="v-ok">●</td><td align="center" class="v-warn">✕ broken</td><td align="center" class="v-warn">✕</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note" style="margin-top:var(--s-md)">● included &nbsp;·&nbsp; ○ withheld, still verifiable if you later reveal it &nbsp;·&nbsp; ✕ unlinkable by construction</p>
     </div>
+    <figcaption>The de-identified copy carries a <code>deidentified</code> marker, so a verifier reads the gaps as deliberate redaction rather than as evidence of stripping. The original capture time is preserved, so every claim that remains stays literally true. <b>And you can burn a field</b> — destroy its master seed and it becomes permanently underivable. Not hidden. Gone, and the record says so.</figcaption>
+  </figure>
 
-    <div>
-      <div class="nut" style="margin-bottom:var(--s-md)">
-        <div class="nut-head">Share · choose what travels</div>
-        <div class="nut-row"><span class="n">Sealed original</span><span class="v">everything committed</span></div>
-        <div class="nut-row"><span class="n">De-identified copy</span><span class="v v-ok">re-signed, unlinkable</span></div>
-        <div class="nut-row"><span class="n">Hash-only claim</span><span class="v v-ok">leaks nothing</span></div>
-      </div>
-      <div class="card">
-        <p class="seclabel">Included in this export</p>
-        <div class="kv"><span class="k">Media + seal</span><span class="v">yes</span></div>
-        <div class="hair"></div>
-        <div class="kv"><span class="k">Time anchor</span><span class="v">yes</span></div>
-        <div class="hair"></div>
-        <div class="kv"><span class="k">Location</span><span class="v" style="color:var(--textFaint)">withheld</span></div>
-        <div class="hair"></div>
-        <div class="kv"><span class="k">Byline</span><span class="v" style="color:var(--textFaint)">withheld</span></div>
-        <div class="hair"></div>
-        <div class="kv"><span class="k">Transcript</span><span class="v" style="color:var(--textFaint)">burned</span></div>
-      </div>
-      <p class="caption">Withheld fields stay verifiable in principle. Burned ones are gone for good, and the record says which is which.</p>
+  <h3>Offline is the architecture, not a mode</h3>
+
+  <figure>
+    <div class="fig">
+      <svg viewBox="0 0 920 252" width="100%" role="img" aria-label="Source Kit seals entirely on device; Apple's Reference Image round-trips through Private Cloud Compute">
+        <defs>
+          <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,1 L9,5 L0,9 z" fill="var(--textFaint)"/>
+          </marker>
+        </defs>
+
+        <text x="20" y="22" class="lbl s-ac">SOURCE KIT</text>
+        <rect x="20" y="36" width="130" height="52" rx="8" class="f-surf k-ac" stroke-width="1.5"/>
+        <text x="85" y="67" class="cap s-txt" text-anchor="middle">Phone</text>
+        <line x1="154" y1="62" x2="208" y2="62" class="k-dim" stroke-width="1.3" marker-end="url(#ah3)"/>
+        <rect x="214" y="36" width="180" height="52" rx="8" class="f-acsoft k-ac" stroke-width="1.5"/>
+        <text x="304" y="67" class="cap s-txt" text-anchor="middle">Sealed file</text>
+        <text x="430" y="58" class="cap s-dim">Radio off. Sealing and verifying both</text>
+        <text x="430" y="76" class="cap s-dim">complete with no network at all.</text>
+
+        <line x1="20" y1="112" x2="900" y2="112" class="k-line"/>
+
+        <text x="20" y="146" class="lbl s-faint">APPLE REFERENCE IMAGE</text>
+        <rect x="20" y="160" width="130" height="52" rx="8" class="f-surf k-line" stroke-width="1.5"/>
+        <text x="85" y="191" class="cap s-txt" text-anchor="middle">Phone</text>
+        <line x1="154" y1="186" x2="208" y2="186" class="k-dim" stroke-width="1.3" marker-end="url(#ah3)"/>
+        <rect x="214" y="160" width="232" height="52" rx="8" class="f-soft k-line" stroke-width="1.5"/>
+        <text x="330" y="184" class="cap s-txt" text-anchor="middle">Private Cloud Compute</text>
+        <text x="330" y="201" class="cap s-faint" text-anchor="middle">raw image · sensor signatures · hardware IDs</text>
+        <line x1="450" y1="186" x2="500" y2="186" class="k-dim" stroke-width="1.3" marker-end="url(#ah3)"/>
+        <rect x="506" y="160" width="190" height="52" rx="8" class="f-surf k-line" stroke-width="1.5"/>
+        <text x="601" y="191" class="cap s-txt" text-anchor="middle">Authenticated copy</text>
+
+        <line x1="182" y1="158" x2="182" y2="240" class="k-warn" stroke-width="1.4" stroke-dasharray="5 4"/>
+        <text x="188" y="236" class="cap s-warn">network boundary</text>
+
+        <text x="430" y="122" class="cap s-dim"> </text>
+        <text x="710" y="180" class="cap s-dim">A reasonable trade for most</text>
+        <text x="710" y="198" class="cap s-dim">people. Not available to</text>
+        <text x="710" y="216" class="cap s-dim">someone who can't afford to</text>
+        <text x="710" y="234" class="cap s-dim">be seen talking to a server.</text>
+      </svg>
+    </div>
+    <figcaption>No accounts, no analytics, no launch-time network calls; the app ships with no registry address bundled at all. The optional calls that exist — a timestamp authority, a Bitcoin anchor, an attestation registry you choose and host — are named individually in the docs.</figcaption>
+  </figure>
+</div></section>
+
+
+<!-- ===================== NEXT ===================== -->
+<section class="block" id="next"><div class="wrap">
+  <h2>Where the interesting work is</h2>
+  <p class="dek">Including honest assessments of the ideas I like most. All of it is open — take any of it, no permission needed.</p>
+
+  <div class="grid3">
+    <div class="card">
+      <h3 style="margin-top:0">ENF <span class="chip warn">narrow</span></h3>
+      <p style="font-size:14.5px;color:var(--textDim);margin:0">Mains hum leaves a timestampable frequency signature in audio. It needs a grid reference database, indoor mains-lit sound and a long enough take. What matters today is capturing the raw LPCM master, because every delivery codec filters exactly the band ENF lives in. Do that now and the analysis stays possible later.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">PRNU <span class="chip warn">needs a corpus</span></h3>
+      <p style="font-size:14.5px;color:var(--textDim);margin:0">Sensor-noise fingerprinting is well established and close to useless without a reference corpus for the specific device. As a <i>double</i>-PRNU rephotography check it's far more interesting — a photograph of a photograph carries two sensors' fingerprints.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Single-image rephotography <span class="chip good">compelling</span></h3>
+      <p style="font-size:14.5px;color:var(--textDim);margin:0">Chromatic aberration follows a radial polynomial with quadrant asymmetry from real lens decentering; screen-originated CA is uniform. JPEG 8×8 block structure from a displayed image survives into the recapturing sensor's RAW as periodic Fourier peaks. Both are physics, both need no second lens, both work on a stranger's file.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Inherit platform credentials <span class="chip good">when they ship</span></h3>
+      <p style="font-size:14.5px;color:var(--textDim);margin:0">Ingest Reference Image and Pixel's pipeline signature as ingredients rather than competing with them. Sensor attestation plus contextual commitment beats either alone.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Android, properly <span class="chip info">an opportunity</span></h3>
+      <p style="font-size:14.5px;color:var(--textDim);margin:0">Camera2 exposes what iOS doesn't: per-frame capture results, concurrent physical camera streams with published intrinsics and pose translation, and RAW that's an actual Bayer mosaic rather than a computational render. A serious Android build could commit more than this one does. The core is platform-neutral; what's missing is the Keystore and Play Integrity equivalent of <code>modules/secure-enclave</code>.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">LiDAR on pro hardware <span class="chip info">underused</span></h3>
+      <p style="font-size:14.5px;color:var(--textDim);margin:0">A depth map committed at capture answers the flat-plane question directly, with no feature matching at all.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Desk-side services <span class="chip neutral">off-device</span></h3>
+      <p style="font-size:14.5px;color:var(--textDim);margin:0">Reverse image search and AI-watermark checks are useful and inherently require sending something somewhere. They belong in the newsroom, behind an explicit consent step, never on the capture device by default.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Published error rates <span class="chip good">the real bar</span></h3>
+      <p style="font-size:14.5px;color:var(--textDim);margin:0">Every check above should ship with a measured false-positive rate against a named, open corpus — screens and prints at graded distances, lighting and device classes. Anything that can't state its error rate shouldn't show a number. This is the long pole, and it's mostly shoe leather.</p>
     </div>
   </div>
 
   <div class="card" style="margin-top:var(--s-lg);border-left:3px solid var(--accent)">
-    <h3 style="margin-top:0">Offline is the architecture, not a mode</h3>
-    <p style="color:var(--textDim);margin:0">Sealing and verifying both complete with the radio off. There are no accounts, no analytics and no launch-time network calls of any kind — the app ships with no registry address bundled at all. The optional calls that exist (a timestamp authority, a Bitcoin anchor, an attestation registry you choose and host) are enumerated by name, and an offline capture simply signs without them and says so on the record.</p>
-    <p class="note" style="margin-top:var(--s-sm)">This is the sharpest architectural difference from Apple's announced design, which sends the raw image and sensor identifiers to Private Cloud Compute and returns an authenticated copy. That is a reasonable trade for most people. It is not available to someone who cannot afford to be seen talking to a server, and that person is precisely who this was built for.</p>
+    <h3 style="margin-top:0">Two other things worth doing</h3>
+    <p style="color:var(--textDim);margin:0 0 var(--s-sm)"><b style="color:var(--text)">A standalone verifier CLI.</b> <code>src/c2pa/verifyAsset.ts</code> has no platform dependencies. Someone should make <code>npx</code> check a file.</p>
+    <p style="color:var(--textDim);margin:0"><b style="color:var(--text)">A TSA trust list.</b> Timestamping has no mature public root store the way the web PKI does. That's a gap for everyone in this space.</p>
   </div>
 </div></section>
 
-<!-- =================== WHAT'S NEXT =================== -->
-<section class="block" id="next"><div class="wrap">
-  <p class="seclabel">What's next</p>
-  <h2>Where I think the interesting work is</h2>
-  <p class="sub">Honest assessments, including of the ideas I like most. Everything here is open — take any of it.</p>
 
-  <div class="grid3">
-    <div class="card">
-      <h3 style="margin-top:0">ENF <span class="chip warn">promising, narrow</span></h3>
-      <p style="font-size:14.5px;color:var(--textDim);margin:0">Mains hum leaks a timestampable frequency signature into recordings. Genuinely exciting and genuinely limited: it needs a grid reference database, indoor mains-lit audio, and a long enough take. The thing that matters <em>now</em> is capturing the raw LPCM master, because every delivery codec filters exactly the band ENF lives in. Do that today and the analysis stays possible later.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">PRNU <span class="chip warn">needs a corpus</span></h3>
-      <p style="font-size:14.5px;color:var(--textDim);margin:0">Sensor noise fingerprinting is well-established and near-useless without a reference corpus for the specific device. As a single-image check it's weak. As a <em>double</em>-PRNU rephotography check — looking for a second sensor's fingerprint layered under the first — it's much more interesting, because a photograph of a photograph carries both.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">Single-image rephotography <span class="chip good">compelling</span></h3>
-      <p style="font-size:14.5px;color:var(--textDim);margin:0">Chromatic aberration follows a radial polynomial with quadrant asymmetry from real lens decentering; screen-originated CA is uniform and symmetric. JPEG 8×8 block structure from a displayed image survives into the recapturing sensor's RAW as periodic Fourier peaks. Both are physics, both need no second lens, and both work on a stranger's file.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">Inherit the platform credentials <span class="chip good">when they ship</span></h3>
-      <p style="font-size:14.5px;color:var(--textDim);margin:0">When Reference Image and Pixel's pipeline signing are broadly available, ingest them as ingredients rather than competing with them. Sensor attestation plus contextual commitment is strictly better than either alone.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">Android, properly <span class="chip info">an opportunity</span></h3>
-      <p style="font-size:14.5px;color:var(--textDim);margin:0">Camera2 exposes things iOS doesn't: per-frame capture results, concurrent physical camera streams with published intrinsics and pose translation, and RAW that's actually a Bayer mosaic rather than a computational render. A serious Android build could commit more, and better, than this one does. The core is platform-neutral; what's missing is the Keystore and Play Integrity equivalent of <code>modules/secure-enclave</code>.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">LiDAR, on pro hardware <span class="chip info">underused</span></h3>
-      <p style="font-size:14.5px;color:var(--textDim);margin:0">A depth map committed at capture answers the flat-plane question directly, without feature matching. It's the cleanest possible rephotography check on the devices that have the sensor.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">Desk-side services <span class="chip neutral">off-device, by choice</span></h3>
-      <p style="font-size:14.5px;color:var(--textDim);margin:0">Reverse image search and AI-watermark checks are useful and inherently require sending something somewhere. They belong to the newsroom, behind an explicit consent step, and never on the capture device by default.</p>
-    </div>
-    <div class="card">
-      <h3 style="margin-top:0">Published error rates <span class="chip good">the real bar</span></h3>
-      <p style="font-size:14.5px;color:var(--textDim);margin:0">Every check above should ship with a measured false-positive rate against a named, open corpus — screens and prints at graded distances, lighting and device classes. Anything that can't state its error rate shouldn't be showing a number. This is the long pole, and it's mostly shoe leather rather than code.</p>
-    </div>
-  </div>
-</div></section>
-
-<!-- =================== CLOSE =================== -->
+<!-- ===================== CLOSE ===================== -->
 <section class="block"><div class="wrap">
-  <div class="measure">
-    <p class="tagline">Prove your work.</p>
-    <p style="color:var(--textDim)">I don't think provenance solves misinformation, and I'd distrust anyone who told you it did. What it does is narrower and more durable: it gives an honest photographer a way to show their work, and it makes the alternative expensive again.</p>
-    <p style="color:var(--textDim)">The platform layer is arriving and it's good news. It will attest sensors better than any app can. But it will still be silent on what the sensor was pointed at, it will mostly want a network, and — on the evidence of the first independent audit — the standard beneath it needs work before anyone stakes a court case on it. Those gaps are where this sits.</p>
-    <p style="color:var(--textDim)">So all of it is here: the C2PA engine, the crypto, the native modules, the interface, the test lab. Take the parts that are useful, fork the whole thing under your own name, or just read it and tell me where I'm wrong. I'd rather this became five better projects than stayed one.</p>
-    <p style="color:var(--text);font-weight:600">— Noah Pisner</p>
+  <div class="col">
+    <p class="pull">Prove your work.</p>
+    <p style="margin-top:var(--s-lg);color:var(--textDim)">Provenance doesn't solve misinformation, and I'd distrust anyone who told you it did. It does something narrower: it gives an honest photographer a way to show their work, and it makes the alternative expensive again.</p>
+    <p style="color:var(--textDim)">The platform layer is coming and that's good news. It will attest sensors better than any app can. It will also stay silent on what the sensor was pointed at, it will mostly want a network, and — on the evidence of the first independent audit — the standard beneath it needs work before anyone stakes a court case on it. Those gaps are where this sits.</p>
+    <p style="color:var(--textDim)">So it's all here. Take the parts that are useful, fork the whole thing under your own name, or read it and tell me where I'm wrong. I'd rather this became five better projects than stayed one.</p>
+    <p style="font-weight:600">— Noah Pisner</p>
     <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
       <a class="btn ghost" href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">Threat model</a>
@@ -608,21 +955,21 @@ footer a:hover{color:var(--accent)}
   <div class="foot">
     <div>
       <div class="brand" style="margin-bottom:var(--s-sm)">
-        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.4" fill="none" stroke="var(--accent)" stroke-width="1.7"/><circle cx="10" cy="10" r="3.4" fill="var(--accent)"/></svg>
+        <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.4" class="f-none k-ac" stroke-width="1.7"/><circle cx="10" cy="10" r="3.4" class="s-ac"/></svg>
         Source Kit
       </div>
       <p class="fine">An open cryptographic camera, published so the next one is easier to build. Apache-2.0 — fork it, ship it under your own name.</p>
     </div>
     <div>
-      <p class="seclabel">Repository</p>
+      <p class="fighead">Repository</p>
       <a href="https://github.com/noah-pi/sourcekit-open">Source ↗</a>
       <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/ARCHITECTURE.md">Architecture</a>
       <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">Threat model</a>
       <a href="https://github.com/noah-pi/sourcekit-open/blob/main/SECURITY.md">Report an issue</a>
     </div>
     <div>
-      <p class="seclabel">On this page</p>
-      <a href="#history">Where we are</a>
+      <p class="fighead">On this page</p>
+      <a href="#history">History</a>
       <a href="#seal">The seal</a>
       <a href="#stereo">Two lenses</a>
       <a href="#privacy">Privacy</a>
@@ -630,6 +977,5 @@ footer a:hover{color:var(--accent)}
   </div>
   <p class="fine" style="margin-top:var(--s-xl);padding-top:var(--s-md);border-top:1px solid var(--border)">© 2026 Noah Pisner · Apache-2.0 · “Source Kit” is a trademark and isn’t licensed for derivative use — fork freely, rename proudly.</p>
 </div></footer>
-
 </body>
 </html>

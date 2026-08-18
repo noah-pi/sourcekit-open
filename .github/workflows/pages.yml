@@ -33,6 +33,8 @@ jobs:
           # Enable Pages (build_type: workflow) via the API on first run, so
           # no manual Settings -> Pages step is needed.
           enablement: true
+      - name: Fetch public-domain historical images
+        run: ./site/assets/fetch.sh
       - name: Upload site/ as the Pages artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:

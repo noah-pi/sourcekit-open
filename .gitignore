@@ -5,3 +5,5 @@ tests/.staged/
 # Server runtime state — never commit checkpoints or the registry counter.
 server/state.json
 server/registry.json
+site/assets/*.jpg
+site/assets/*.png

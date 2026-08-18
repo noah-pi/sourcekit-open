@@ -12,35 +12,28 @@
 
 ---
 
-I built a camera that signs what it records, at the moment it records it. This is all of
-it — the cryptography, the native modules, the interface, and the test lab.
+I built a camera that signs what it records, at the moment it records it. The
+cryptography, the native modules, the interface and the test lab are all in this repo.
 
-The anxiety about synthetic images tends to assume a prior age in which photographs
-could be believed. There wasn't one. Retouching is as old as the negative. Conan Doyle
-was taken in by two schoolgirls with paper cutouts in 1917, and the Soviet censors were
-airbrushing the disgraced out of group portraits for half a century before Photoshop
-shipped in 1990. What photographs had was never self-evidence. It was friction — faking
-one took a darkroom, a skill, and an afternoon — plus a scaffolding of picture desks,
-wire services and libel law that made lying expensive by other means.
+There was never a golden age of photographic truth. Conan Doyle published two schoolgirls'
+paper cut-outs as evidence of fairies in 1920, after Kodak experts confirmed the negatives
+showed no tampering — which was true, and beside the point. Soviet censors airbrushed the
+disgraced out of group portraits for fifty years before Photoshop shipped. What a photograph
+had was never self-evidence. It was friction: a darkroom, a skill, an afternoon.
 
-Generative models did not make images forgeable. They made forgery free, and they made
-it fast. The friction is gone, the scaffolding is thinner than it was, and what remains
-is a medium that was always susceptible, now cheap to abuse at volume.
+Generative models didn't make images forgeable. They made forgery free and fast.
 
-So the interesting question isn't how to restore a credibility photographs never quite
-had. It's what you can put in its place. Detection is the obvious candidate and the
-wrong one: a detector is a classifier guessing at the output of a generator, and it
-gets worse precisely as the generator gets better. The alternative is provenance — not
-proof that a scene was real, but an unbroken, checkable record of where a file came from
-and what has happened to it since.
+Detection is the obvious replacement and the wrong one — a detector is a classifier guessing
+at the output of a generator, and it gets worse exactly as the generator gets better.
+Provenance is the alternative: not proof that a scene was real, but a checkable record of
+where a file came from and what has happened to it since. That's a smaller claim than most
+people want. It's also the only one that survives contact with someone determined to lie.
 
-That is a smaller claim than most people want. It is also the only one that survives
-contact with someone determined to lie.
+Provenance is cheap at exactly one instant — capture. Everything after that is
+reconstruction. So the design collapses to one problem: commit to everything you can, at the
+shutter, in a form anyone can check later without asking me for anything.
 
-And provenance is cheap at exactly one instant — capture. Everything after that is
-reconstruction. So the whole design collapses into a single problem: commit to
-everything you can, at the shutter, in a form anyone can check later without asking me
-for anything.
+**[Read the deep dive →](https://noah-pi.github.io/sourcekit-open/)**
 
 ## The shutter path
 
@@ -59,28 +52,28 @@ Sealing and verifying both work with the radio off. No accounts, no analytics, n
 launch-time network calls. Every optional network event is named in
 [`docs/NETWORK.md`](docs/NETWORK.md).
 
-## The part I find most interesting
+## Tying the signature to the hardware
 
-Apple gives apps no direct access to App Attest keys, so you can't simply attest your
-signing key. The workaround is a commitment: set the App Attest `clientDataHash` to
+App Attest certifies that a genuine build is running on genuine hardware, but Apple gives
+apps no access to the attested key — so you can't simply attest your signing key. The
+workaround is a commitment: set the App Attest `clientDataHash` to
 `SHA256(challenge ‖ signingPublicKey)`. Apple's nonce extension in the attestation
-certificate then vouches for *exactly that key* — not merely for some key on some
-genuine device.
+certificate then vouches for *exactly that key*, not merely for some key on some genuine
+device.
 
-The binding rides inside every manifest, so anyone can re-check it offline years later
-with no server involved. It's in `src/lib/appAttest.ts` and `server/server.mjs`, and
-it's the piece I'd most like someone to either reuse or break.
+The binding rides inside every manifest, so it can be re-checked offline years later with
+nothing running anywhere. `src/lib/appAttest.ts` and `server/server.mjs`. It's the piece I'd
+most like someone to reuse, or break.
 
-## What it can't do, and why that's the interesting part
+## What it can't do
 
 A signature proves custody of bytes. It cannot prove what the lens was pointed at. Shoot
 a monitor showing a generated video and you get a perfectly valid seal over a perfectly
 real recording of a fake scene.
 
-That's not a caveat to bolt onto the end — it's the shape of the remaining problem.
-Attestation closes *injection*: substituted frames, virtual camera drivers, forged
-sensor data. It does nothing to *rephotography*: real photons, fake scene. Closing
-injection doesn't reduce rephotography, it concentrates attacker effort there.
+Attestation closes *injection*: substituted frames, virtual camera drivers, forged sensor
+data. It does nothing about *rephotography*: real photons, fake scene. Closing injection
+doesn't reduce rephotography — it concentrates every attacker on it.
 
 Rephotography is geometric. A flat screen three metres away is a plane, and two lenses
 with a known baseline can measure that. The stereo capture path and the parallax work
@@ -104,7 +97,7 @@ Most of it is platform-neutral TypeScript with no build step.
 | `server/` | An App Attest relay in one dependency-free file. Run your own or skip it — offline devices sign unattested and say so. |
 | `tests/` | 27 suites, 769 checks, run against the real shipping code. |
 
-## The interface is part of the argument
+## The interface
 
 Getting the cryptography right is the easier half. The harder half is saying what a
 signature means without overstating it, and that lives in the UI.
@@ -122,12 +115,11 @@ screenshotted. Unsigned renders neutral grey, never red: the absence of a creden
 not evidence of tampering, and colouring it like a failure would smuggle in a claim
 nobody checked.
 
-There's also a test that fails the build if *verified*, *authentic*, *trusted*,
-*proven*, *real*, *secure* or *guaranteed* appears in a verdict position. Operations
-that actually ran keep their precise verbs. It sounds fussy. It is the single thing
-that kept the copy honest as the feature count grew, because the pressure to round a
-qualified result up to a confident one is constant and comes from everywhere,
-including from me.
+A test fails the build if *verified*, *authentic*, *trusted*, *proven*, *real*, *secure* or
+*guaranteed* turns up in a verdict position. Operations that actually ran keep their precise
+verbs. That test kept the copy honest as the feature count grew, because the pressure to
+round a qualified result up to a confident one is constant, and a fair amount of it came
+from me.
 
 All of it is in `src/theme.ts` and `src/components/`. Lift it — none of it is specific
 to this app.
