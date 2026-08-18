@@ -113,7 +113,7 @@ const darkColors: ColorPalette = {
   // end — mirroring light's lighter-start/accent-end shape.
   accentGradStart: '#5E9D7B',
   accentGradEnd: '#4E7A62',
-  // 0.18.2: was the approved Reader warn #F5B301 — a pure yellow that
+  // Was the approved Reader warn #F5B301 — a pure yellow that
   // clashes with the landed palette (sage/cream/clay). Now a muted, warmer
   // amber in the same family; 7.4:1 on bg, 7.0:1 on surface (AA).
   warn: '#C9974F',

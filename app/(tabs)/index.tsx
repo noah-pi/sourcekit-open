@@ -172,7 +172,7 @@ const AnimatedBlur = Animated.createAnimatedComponent(BlurView);
 type Mode = 'audio' | 'picture' | 'video';
 
 // ---------------------------------------------------------------------------
-// The single pro-param model (0.18.2). Every capsule in the tray and every
+// The single pro-param model. Every capsule in the tray and every
 // precision-bar session is described by this ONE uniform shape — no
 // special-cased dials, no per-param control types. 'ladder' params (FLASH/
 // FOCUS/WB) ride the bar as integer rung indices with a detent per rung;
@@ -419,7 +419,7 @@ export default function CaptureScreen() {
   // now; it is always off in photo mode (the strobe does the lighting) and
   // re-derived from the incoming mode's preference on every mode switch.
   const [torch, setTorch] = useState(false);
-  // Zoom (0.15.0 Drop 2): tracked as the factor RELATIVE to the wide lens's
+  // Zoom: tracked as the factor RELATIVE to the wide lens's
   // 1x — the number on the pills. `zoomFactor` is the COMMITTED value
   // (gesture end / lens switch); live gesture values ride zoomChannel so a
   // pinch or wheel scrub never re-renders the viewfinder tree.
@@ -465,7 +465,7 @@ export default function CaptureScreen() {
   // W2.3 sweep ceiling: the native per-device quality-cap ceiling when the
   // caps have reported (a quality choice, honestly exposed by the bridge),
   // else the MAX_RELATIVE_ZOOM fallback — never a guessed-tight cap.
-  // 0.17.1 (the Halide model): the sweep's ceiling is per-stack — the
+  // The sweep's ceiling is per-stack — the
   // current lens's stop × its quality cap. Crossing into another stack is
   // an explicit pill tap, never an automatic mid-gesture hand-off.
   const zoomCeiling = () => stackZoomCeiling(stopsRef.current, lensCapsRef.current, lensRef.current);
@@ -555,19 +555,19 @@ export default function CaptureScreen() {
   // mode, flip, light buttons) are untouched. Zoom is a factor relative to
   // wide 1x driving the camera's own optical+digital zoom — it never touches
   // the pixels-after-the-fact, so the signing pipeline is unaffected.
-  // Gesture arbitration (0.14.0): two-finger pinch zooms; a single-finger
+  // Gesture arbitration: two-finger pinch zooms; a single-finger
   // HORIZONTAL swipe switches capture mode (the Apple Camera pattern —
   // TestFlight 0.13.0 had tap-only mode switching). The responder claims a
   // gesture only once intent is clear (24 px of dominant horizontal travel),
   // so taps still reach tap-to-focus untouched.
-  // 0.15.0 Drop 2 ("too quickly, no in-between"): the pinch target follows
+  // The pinch target follows
   // the finger ratio 1:1, but the APPLIED factor lerps toward it on a rAF
   // loop capped at PINCH_MAX_LOG2_PER_FRAME — and the loop writes the live
   // channel + throttled native calls, never React state.
   const gestureKind = useRef<'pinch' | 'swipe' | null>(null);
   const swipeFired = useRef(false);
   const modeSwipeRef = useRef<(dir: 1 | -1) => void>(() => {});
-  // Mode-swipe exclusion zones (0.18.1): a horizontal drag that STARTS on
+  // Mode-swipe exclusion zones: a horizontal drag that STARTS on
   // the pro tray or the docked precision bar is a dial adjustment, never a
   // mode switch — the root responder used to claim those drags mid-dial
   // ("adjusting the dials gets interpreted as slide between modes"). The
@@ -734,19 +734,19 @@ export default function CaptureScreen() {
   useEffect(() => { torchRef.current = torch; }, [torch]);
   useEffect(() => { recordingRef.current = recording; }, [recording]);
 
-  // 0.14.2: photo and video ride ONE native session (startVideo/stopVideo
+  // Photo and video ride ONE native session (startVideo/stopVideo
   // reconfigure it in place); only audio mode needs the camera torn down.
   const needsCamera = mode !== 'audio';
 
   /**
-   * Session lifecycle (0.13.0): ONE native session, configured when the
+   * Session lifecycle: ONE native session, configured when the
    * screen is focused in photo/video mode, stopped on blur and whenever
    * audio mode owns the microphone. Chrome state (torch, zoom) is
    * re-applied after each configure — a fresh session starts at defaults.
    * The 10 s watchdog is the 0.12.x lesson: a wedged native start must
    * surface as an honest card, never a frozen screen.
    *
-   * 0.14.2: the effect keys on `needsCamera`, not `mode` — photo↔video hops
+   * The effect keys on `needsCamera`, not `mode` — photo↔video hops
    * ride the SAME running native session (startVideo/stopVideo reconfigure
    * in place), so rebuilding per hop was pure churn: blocking startRunning,
    * a calibration one-shot, and PiP death on every switch, i.e. the
@@ -793,7 +793,7 @@ export default function CaptureScreen() {
           try {
             start = await doConfigure();
           } catch (e) {
-            // 0.14.1 wedge: a session orphaned by an interrupted teardown
+            // a session orphaned by an interrupted teardown
             // rejects E_BUSY "already running", after which every capture
             // and mode tap dead-loops until an app restart. Force-stop the
             // orphan and retry ONCE; if the retry fails, the honest error
@@ -895,7 +895,7 @@ export default function CaptureScreen() {
         }
       };
       // needsCamera collapses photo+video into one session lifetime —
-      // photo↔video hops no longer rebuild the native session (0.14.2).
+      // photo↔video hops no longer rebuild the native session.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [needsCamera, facing, sessionEpoch])
   );
@@ -940,7 +940,7 @@ export default function CaptureScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Stall escalation (0.14.0): the native watchdog already tried one cheap
+  // Stall escalation: the native watchdog already tried one cheap
   // synchronizer rebind; still stalled → rebuild the session by bumping the
   // epoch. Skipped mid-recording: a rebuild would kill the take, and
   // recording failures surface through their own error path.
@@ -951,7 +951,7 @@ export default function CaptureScreen() {
     });
   }, []);
 
-  // Native pipeline diagnostics (0.18.2): graph wiring outcomes, format
+  // Native pipeline diagnostics: graph wiring outcomes, format
   // picks, the live connection census, interruption boundaries — forwarded
   // verbatim into the persistent log so a field screenshot self-explains.
   useEffect(() => {
@@ -995,7 +995,7 @@ export default function CaptureScreen() {
   // pose trace. A null component skips
   // the sample rather than fabricating zeros.
   //
-  // RATE AUDIT (0.14.3): this is the COMMITTED path — poseBuffer feeds
+  // RATE AUDIT: this is the COMMITTED path — poseBuffer feeds
   // collectContext's signed pose trace on every capture — so it stays at
   // the full 100 Hz and keeps the full BUFFER_LIMIT window. Slowing it
   // would thin the evidence. There is no display-only IMU subscription in
@@ -1205,7 +1205,7 @@ export default function CaptureScreen() {
       const stamp = Date.now();
       const evidenceDir = `${FileSystem.documentDirectory}capture/evidence-${stamp}/`;
       await FileSystem.makeDirectoryAsync(evidenceDir, { intermediates: true }).catch(() => {});
-      // 0.14.2: a stalled pipeline now kicks its own synchronizer rebind at
+      // a stalled pipeline now kicks its own synchronizer rebind at
       // the freshness deadline, so one quiet retry after a beat usually lands
       // on a live frame. Only genuinely fresh pairs ever commit — the retry
       // changes WHEN we ask, never which pixels get sealed.
@@ -1262,7 +1262,7 @@ export default function CaptureScreen() {
       });
       showToast(
         result.stereoStatus === 'unavailable'
-          // 0.15.1 degraded fallback: the still LANDED (single-lens,
+          // The still LANDED (single-lens,
           // full-sensor photo) — the toast states the degradation, it
           // never pretends stereo happened.
           ? 'Captured · single-lens; stereo unavailable at shutter'
@@ -1551,7 +1551,7 @@ export default function CaptureScreen() {
       // capture-evidence sensors toggle is on — off means 'never-recorded',
       // stated as such, never silently skipped.
       const sensorLogPath = settings.includeSensors ? `${dir}note-${stamp}.sensors.jsonl` : null;
-      // Raw-audio sink (0.18.3): the toggle that video honors now records an
+      // Raw-audio sink: the toggle that video honors now records an
       // uncompressed LPCM master for audio takes too — the tap's hardware
       // frames written straight through, sealed as captureEvidence.rawPcmPath.
       const rawPcmPath = settings.captureEvidence.rawPcm ? `${dir}note-${stamp}.raw.caf` : null;
@@ -1636,7 +1636,7 @@ export default function CaptureScreen() {
 
   const switchMode = (m: Mode) => {
     if (recording) return;
-    // The light is per mode (0.15.0 Drop 2): entering a mode re-derives
+    // The light is per mode: entering a mode re-derives
     // the applied light from THAT mode's persisted preference — photo's
     // flash pref and video's torch never carry into each other, and the
     // trip to audio always goes dark. (0.14.2: photo↔video hops ride the
@@ -1881,7 +1881,7 @@ export default function CaptureScreen() {
   };
 
   // ------------------------------------------------------------------
-  // The precision bar (0.18.2) — the ONLY adjustment surface. Every pro
+  // The precision bar — the ONLY adjustment surface. Every pro
   // param docks here: ladder params scrub integer rung indices (snap 1, a
   // detent per rung, rung 0 = AUTO where the hardware has one), continuous
   // params scrub their native range (SHTR in stops, so a uniform drag is a
@@ -1913,7 +1913,7 @@ export default function CaptureScreen() {
     p: ProParamId | null,
   ): { config: RibbonConfig; onLive: (v: number) => void; onCommit: (v: number) => void; onReset: () => void } | null => {
     switch (p) {
-      // 0.18.4-R5 (owner directive): FLASH/TORCH has no ribbon — it is a
+      // FLASH/TORCH has no ribbon — it is a
       // preference with two or three states, so the capsule itself
       // alternates on tap (see cycleLight). The default arm keeps
       // ribbonFor honest if a stale ribbonParam ever names it.
@@ -1938,7 +1938,7 @@ export default function CaptureScreen() {
           onReset: () => void applyBias(0),
         };
       case 'focus': {
-        // 0.18.4 (Noah: "the focus has huge jumps"): the five-rung ladder
+        // The five-rung ladder
         // made the whole manual range four coarse jumps. [0,1) stays the
         // AUTO zone; [1, 11] is now CONTINUOUS lensPosition ((v−1)/10 with
         // snap 0.05 = 0.005 motor steps), with haptic detents and tick marks
@@ -2168,7 +2168,7 @@ export default function CaptureScreen() {
   }
 
   // ------------------------------------------------------------------
-  // Light, per mode (0.15.0 Drop 2): PHOTO has a flash preference
+  // Light, per mode: PHOTO has a flash preference
   // (auto/on/off, bolt glyph + state badge), VIDEO has the torch (on/off,
   // flashlight glyph). The preferences persist in settings; the two modes
   // never share a light state and never conflate icons.
@@ -2195,7 +2195,7 @@ export default function CaptureScreen() {
     if (modeRef.current === 'video') setTorch(on);
   };
 
-  // 0.18.4-R5 (owner directive): the light capsule is an alternating
+  // The light capsule is an alternating
   // BUTTON, not a slider — each tap advances the mode's preference one
   // rung and applies it immediately: photo auto → on → off → auto; video
   // torch off → on → off. The capsule's valueText states the new rung.
@@ -2788,7 +2788,7 @@ function HudPillToggle({
 }
 
 /**
- * Param capsule (0.18.2): the tray's ONE component — an equal-width
+ * Param capsule: the tray's ONE component — an equal-width
  * (flex:1) glass capsule with the param's label, its bridge-APPLIED value
  * in mono, and a 5px clay state dot when the param is manual (glyph +
  * hairline, never color alone). The capsule has NO gestures of its own:
@@ -2983,7 +2983,7 @@ const buildStyles = () => StyleSheet.create({
   // Full-width wrapper for the tray/ribbon inside the centered `controls`
   // column — without it the stretch below has nothing to stretch against.
   trayWrap: { alignSelf: 'stretch' },
-  // The tray row (0.18.2): flex-equalized capsules, 6px gutters, screen
+  // The tray row: flex-equalized capsules, 6px gutters, screen
   // padding both sides. No scroll, no wrap — every param the hardware
   // reports fits at once at 393pt (6 capsules ≈ 55pt each; the longest
   // value text, '1/4000' at 11px mono ≈ 40px, fits with room).

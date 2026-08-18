@@ -1,77 +1,78 @@
-# Proof↔media recovery — matching proofs to pixels at the desk
+# Matching a proof back to its media
 
-When proof travels separately from media (hash-only claims, proof-only
-bundles, de-identified copies), the desk eventually needs to answer: *which
-file does this proof belong to?* This document defines the recovery index
-a desk-side tool builds locally, and the honesty rules for matches.
+Proof sometimes travels separately from the file: a detached manifest, a
+hash-only claim, a de-identified copy. Or a platform strips the credentials in
+transit, which most of them do. In all of those cases something has to answer
+which file a given proof belongs to.
 
-## The three match grades — never merged
+There are three ways to answer that, and they are not interchangeable.
 
-1. **Exact** — the media's SHA-256 equals the proof's `mediaSha256`.
-   Certain. Bit-for-bit the signed file.
-2. **Exact after metadata strip** — a platform removed the
-   credentials in transit (APP11 segment, caBX chunk, uuid box), so the file
-   reports NO_ATTESTATION on its own. When a proof bundle in the intake
-   carries the detached manifest, the desk tries the asset hash with the
-   manifest's own bytes excluded — exactly what the c2pa.hash.data /
-   c2pa.hash.bmff.v2 exclusion construction commits to. A match is
-   cryptographic, never similarity: the manifest's signature verifies AND
-   its asset hash commits to these exact media bytes. For BMFF the hash
-   binds absolute box offsets, so the matcher reconstructs the removed
-   box's length from the store payload and tries every root-box boundary —
-   a full hash evaluation per candidate, never a heuristic. Reported as its
-   own grade: the file WAS altered (its metadata is gone) and the custody
-   chain is intact. What does not match: recompressed or remuxed media —
-   the asset hash commits to bytes, and those bytes no longer exist.
-3. **Visual (pHash)** — the media was re-encoded, resized, or recompressed
-   since signing (messaging apps do this silently), so the hash no longer
-   matches but the perceptual hash is close. **A pHash match is a LEAD,
-   never a verdict.** The UI must say "likely match — confirm visually"
-   and must never render it with the same weight as an exact match.
+## Exact
 
-## Index format (`verify-recovery-index/1`)
+The media's SHA-256 equals the proof's `mediaSha256`. Certain — bit for bit the
+signed file.
 
-Built and stored locally by a desk-side tool at intake; never uploaded.
+## Exact after a metadata strip
 
-```json
-{
-  "format": "verify-recovery-index/1",
-  "builtAt": "2026-08-03T00:00:00Z",
-  "entries": [
-    {
-      "sha256": "<hex, exact-match key>",
-      "phash": "<64-bit DCT pHash, hex>",
-      "deskLabel": "desk-supplied filename or note",
-      "receivedAt": "ISO-8601",
-      "source": "email|shared-drive|direct",
-      "proofRefs": ["<payloadDigestHex of matched proofs, if any>"]
-    }
-  ]
-}
-```
+A platform removed the credentials — the APP11 segment, the `caBX` chunk, the
+BMFF `uuid` box — so the file reports NO_ATTESTATION on its own even though
+nothing about the picture changed.
 
-## pHash algorithm (the soft binding)
+When a detached manifest is available, `src/provenance/detached.ts`
+reconstructs the stripped bytes and re-evaluates the hash. This is
+cryptographic, not similarity: a match means the signature verifies *and* the
+asset hash commits to these exact media bytes, which is what the
+`c2pa.hash.data` and `c2pa.hash.bmff.v2` exclusion construction commits to.
 
-64-bit DCT perceptual hash: downscale to 32×32 grayscale, 2D DCT-II, keep
-the top-left 8×8 coefficients, threshold each (except DC) against the
-median, 64 bits row-major. Hamming distance ≤ 6 = "likely match, confirm
-visually"; ≤ 10 = "possible — weak"; beyond = no match. These thresholds
-are starting points from common practice, stated as tuning parameters, not
-science; the desk UI exposes them in trust configuration.
+For BMFF the hash binds absolute box offsets, so the matcher reconstructs the
+removed box's length from the store payload and tries every root-box boundary —
+a full hash evaluation per candidate, not a heuristic.
 
-Watermarks were evaluated and rejected: visible watermarks deface evidence,
-invisible ones are stripped by the same recompressions that motivate
-recovery, and both create a false sense of binding. pHash is honest
-because it claims only what it is: a similarity signal.
+It reports its own grade, because both halves are true: the file *was* altered,
+its metadata is gone, and the custody chain is intact.
 
-## What the desk does with a hash-only claim
+Recompressed or remuxed media does not match this way. The asset hash commits
+to bytes, and those bytes no longer exist.
 
-A hash-only claim (`verify-hash-claim/1`) contains no media and no record —
-only hashes, times, and the signer fingerprint. Recovery against it is
-exact-match only by construction (there is nothing else to compare). When
-media later arrives and its SHA-256 equals the claim's `mediaSha256`, the
-desk upgrades the claim to a full verification. If the media was
-re-encoded in transit, the claim can never match — the desk must say so
-plainly rather than approximate. This is the deliberate cost of the
-source-protection primitive, and it is stated in the share sheet that
-creates the claim.
+## Visual, by perceptual hash
+
+The media was re-encoded, resized or recompressed since signing — messaging apps
+do this silently — so the hash no longer matches but the perceptual hash is
+close.
+
+**A pHash match is a lead.** Anything showing one has to say "likely match,
+confirm visually" and must not render it with the weight of an exact match.
+
+### The recipe
+
+`src/lib/phash.ts`: downscale to 32×32 grayscale, 2D DCT-II, keep the top-left
+8×8 coefficients, threshold each against their median with DC excluded, read 64
+bits row-major.
+
+Hamming distance ≤ 6 reads as a likely match, ≤ 10 as possible and weak, and
+beyond that as no match. Those numbers are starting points from common practice,
+not calibrated results — treat them as tuning parameters.
+
+Each photo carries two copies. One is computed pre-signing and embedded in the
+manifest as a `c2pa.soft-binding` assertion, so it travels with the file under
+the claim signature. The vault index keeps its own as a cross-check and for
+local search.
+
+Watermarking was considered instead and rejected: visible marks deface the
+evidence, invisible ones are stripped by the same recompressions that make
+recovery necessary in the first place, and both suggest a binding that isn't
+there. A pHash is honest because it only ever claims to be a similarity signal.
+
+## Hash-only claims
+
+A hash-only claim (`verify-hash-claim/1`, built in `src/lib/proofBundle.ts`)
+carries no media and no record — only hashes, times and the signer fingerprint.
+It's the source-protection primitive: you can prove a file existed and was
+sealed without handing over the file.
+
+Recovery against one is exact-match only, because there's nothing else to
+compare. When matching media turns up later, the claim upgrades to a full
+verification. If the media was re-encoded in transit, the claim can never match
+it, and the honest answer is to say so rather than approximate.
+
+That cost is stated in the share sheet that creates the claim.

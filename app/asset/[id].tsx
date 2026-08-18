@@ -321,7 +321,7 @@ function NlRow({ label, value, valueColor, detail, detailColor, mono }: {
 }
 
 // ---------------------------------------------------------------------------
-// Plan A (0.14.0): the collapsible group card — icon, title, chevron, and a
+// Plan A: the collapsible group card — icon, title, chevron, and a
 // one-line peek that stays visible whether open or closed. Three of these
 // (Capture / Integrity / Advanced) replace the old always-visible nutrition
 // label plus drawer.
@@ -480,7 +480,7 @@ function fmtAt(iso: string): string {
 }
 
 /**
- * The timestamp row (0.18.1): a standard nutrition-label row — label left,
+ * The timestamp row: a standard nutrition-label row — label left,
  * value right — never a giant heading. The value is the countersigned
  * authority time when a pinned token exists, the device clock otherwise;
  * the countersign state rides as the smaller sub-line in the app's existing
@@ -700,7 +700,7 @@ export default function AssetScreen() {
   const [ownFingerprint, setOwnFingerprint] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
-  // Plan A (0.14.0): the nutrition-label drawer is gone — three collapsible
+  // Plan A: the nutrition-label drawer is gone — three collapsible
   // groups carry the same facts (Capture open by default; Integrity and
   // Advanced collapsed behind a one-line peek each).
   const [groupOpen, setGroupOpen] = useState({ capture: true, integrity: false, advanced: false });
@@ -713,7 +713,7 @@ export default function AssetScreen() {
   // rows, and the raw manifest shown open at the bottom of Advanced.
   const [manifest, setManifest] = useState<C2paManifest | null>(null);
   const [legacyVideo, setLegacyVideo] = useState(false);
-  // The export sheet (0.15.0 Drop 2): one bottom sheet with the four bundle
+  // The export sheet: one bottom sheet with the four bundle
   // options — Basic / Full / Proof-Only / Custom — replacing the old two-step
   // share menu + share sheet.
   const [exportOpen, setExportOpen] = useState(false);
@@ -1193,7 +1193,7 @@ export default function AssetScreen() {
     ]);
   };
 
-  // The raw manifest reel is the shared ManifestReel component (0.18.3) —
+  // The raw manifest reel is the shared ManifestReel component —
   // the FULL manifest, uncapped, windowed so a video manifest's telemetry
   // actually renders. See src/components/ManifestReel.tsx.
 

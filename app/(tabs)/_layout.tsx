@@ -23,7 +23,7 @@ import { subscribeVaultNotices } from '../../src/vault/vaultFs';
 // Mockup (.pillbar / app-0.17.0.html): a floating translucent pill, 64pt tall,
 // radius 32, hairline border, blurred backdrop, active tab wrapped in a soft
 // green pill. The bar overlays content rather than pushing it up.
-// 0.18.1 contrast fix: the mockup's #7ED6A4 active green fails WCAG on the
+// The mockup's #7ED6A4 active green fails WCAG on the
 // light-mode bar (≈1.6:1 on white). Dark mode keeps it; light mode uses the
 // theme accent (#1F6B45, 5.6:1 on white) with accentSoft as the pill wash.
 const ACTIVE_GREEN_DARK = '#7ED6A4'; // mockup --ok-bright

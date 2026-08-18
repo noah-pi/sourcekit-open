@@ -474,7 +474,7 @@ export interface CaptureResult extends SensorLogEvidence {
    * preview the user composed on) and commits the read-back value. null
    * when no connection existed to read. */
   frontMirrored?: boolean | null;
-  // ---- D1 (0.16.0): depth artifacts (additive; ABSENT on pre-D1 native
+  // ---- D1: depth artifacts (additive; ABSENT on pre-D1 native
   // builds AND on some early-exit branches — callers treat undefined as
   // "not committed this capture") ----
   /** Primary photo output's depth map: 16-bit grayscale PNG, min/max-
@@ -972,7 +972,7 @@ export async function setLens(lens: ExhibitLens): Promise<ChromeResult> {
 }
 
 /**
- * Selectable stereo partner (0.17.2): 'auto' restores the native UW↔W/T
+ * Selectable stereo partner: 'auto' restores the native UW↔W/T
  * pairing; an explicit rear stack (e.g. 'telephoto' on a triple-lens Pro)
  * pins the partner. Applies live on a running back session, else stored
  * for the next configureSession. A conflict with the primary lens or an
@@ -1099,7 +1099,7 @@ export async function capabilities(): Promise<ExhibitCameraCapabilities | null> 
   return native.capabilities();
 }
 
-// ---- wave-7 isolation debug flags ----
+// ---- diagnostic debug flags ----
 
 /**
  * Wave-7 isolation switches (native UserDefaults suite "exhibit.debug",
@@ -1122,9 +1122,9 @@ export interface ExhibitDebugFlags {
   /** 0.17.2 keys (native returns them from getDebugFlags; absent on older
    * builds — consumers default them off). */
   depthCapture?: boolean;
-  /** The session-calibration dual-photo one-shot — the primary suspect for
-   * the 0.17.1 dead-secondary flood, OFF by default. Flip ON only to A/B
-   * on hardware; takes effect at the next configureSession. */
+  /** The session-calibration dual-photo one-shot. Off by default: a photo
+   * capture can leave the secondary video output unwilling to deliver.
+   * Takes effect at the next configureSession. */
   sessionCalibrationPhoto?: boolean;
   /** UNTESTED third-view extension-point gate. OFF by default; MUST stay
    * off in shipping builds. Intentionally has no settings row. */
@@ -1148,7 +1148,7 @@ interface SetDebugFlagResult {
 
 /**
  * Flip one isolation flag. Graceful absence like the other chrome setters:
- * a missing module or a pre-wave-7 build without the method reports
+ * a missing module, or an older build without the method, reports
  * applied:false — never a thrown wedge into a settings toggle.
  */
 export async function setExhibitDebugFlag(

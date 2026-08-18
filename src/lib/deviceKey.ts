@@ -218,7 +218,7 @@ export async function getDeviceCert(): Promise<Uint8Array> {
   const stored = await SecureStore.getItemAsync(certKey, OPTIONS);
   if (stored) {
     const storedDer = base64ToBytes(stored);
-    // 0.18.2 staleness migration: the subject is the only place the app name
+    // The subject is the only place the app name
     // lives in the cert, and a Keychain-cached cert minted under the old name
     // ("Exhibit A") survives the update. Same key, same storage key — when
     // the cached subject no longer matches the current constants, fall

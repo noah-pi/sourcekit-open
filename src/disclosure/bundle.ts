@@ -61,7 +61,7 @@ export interface DisclosureBundle {
   /** Number of COMMITTED claims (the tree holds treeSize + 1 leaves). */
   treeSize: number;
   /**
-   * The commit-time inventory entries the root binds (1.0.0 audit
+   * The commit-time inventory entries the root binds
    * A-01/B-5): digest = SHA-256('inventory-v1' ‖ canonical(entries)) is
    * the tree's meta-leaf at index 0, proven by `inventoryProof`. The
    * never-recorded declaration is therefore immutable under the root —
@@ -77,7 +77,7 @@ export interface DisclosureBundle {
   neverRecorded: string[];
   /**
    * Selection preset label. Verified, never decorative (1.0.0
-   * audit B-6): named profiles are recomputed against the opened set and
+   * Named profiles are recomputed against the opened set and
    * a mismatch fails by name; 'custom' requires `customClaimIds`.
    */
   profile?: DisclosureProfile;
@@ -134,7 +134,7 @@ export function profileSelection(
  * Open the subset of committed leaves selected by `selection`.
  *
  * Salts are DERIVED FROM THE MASTER SEED on demand, for the selected
- * leaves only (1.0.0 audit A-02): commitContext never hands out a salt
+ * leaves only: commitContext does not hand out a salt
  * table, so the seed is the ONLY way to open a leaf. After a burn the
  * seed exists nowhere and this function cannot be called — withheld
  * leaves stay closed for everyone, including us.
@@ -245,7 +245,7 @@ export function verifyBundle(
 
   const treeSize = bundle.treeSize; // committed claims; the tree holds treeSize + 1 leaves (meta-leaf at 0)
 
-  // --- the inventory meta-leaf: recompute + prove (audit A-01/B-5) -----
+  // --- the inventory meta-leaf: recompute + prove ---------------------
   // Entries are validated for shape; the digest is recomputed from the
   // bundle's OWN entries, so any edit to the never-recorded declaration
   // (including a count-preserving swap) changes the digest and fails the
@@ -285,7 +285,7 @@ export function verifyBundle(
     }
   }
 
-  // --- profile label: verified, never decorative (audit B-6) -----------
+  // --- profile label: recomputed, not decorative -----------------------
   if (bundle.profile !== undefined) {
     const openedIds = new Set(bundle.opened.map((l) => l?.claim?.claimId));
     const committedIds = committedEntries.map((e) => e.claimId);

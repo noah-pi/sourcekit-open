@@ -48,7 +48,7 @@ const JOB_ICON: Record<SealJobSnapshot['kind'], keyof typeof Ionicons.glyphMap> 
 };
 
 /**
- * Seal-failure visibility (0.15.1): vault insertion is the LAST step of
+ * Seal-failure visibility: vault insertion is the LAST step of
  * sealing, so a failed seal used to leave no trace here at all. This row
  * states the failed job plainly — what kind, when it was captured, the
  * verbatim error — and offers a retry (the queue's own failure logic is
@@ -119,7 +119,7 @@ function FailedSealRow({ job }: { job: SealJobSnapshot }) {
 /**
  * A queued or in-flight seal renders IN THE GRID as a loading square —
  * the capture already has a place here; it just isn't sealed yet.
- * 0.18.3 (Noah): a QUEUED job is selectable like any sealed cell — Select
+ * a QUEUED job is selectable like any sealed cell — Select
  * mode can cancel it. An in-flight ('sealing') job is not: the pump has
  * claimed it and a seal in progress never loses work to a stray tap.
  */
@@ -184,7 +184,7 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
   // Badge flags: sealed entries carry them in the index;
   // legacy entries are backfilled once from the record — never from media.
   const [flags, setFlags] = useState<VaultFlags | null>(item.flags ?? null);
-  // Pin badge fact #2 (0.17.0): wifi embedded. The index flags bundle wifi
+  // Pin badge fact #2: wifi embedded. The index flags bundle wifi
   // into `identifying`, so the wifi claim itself is read from the sealed
   // record — but only when location alone doesn't already justify the pin.
   const [wifi, setWifi] = useState(false);
@@ -281,7 +281,7 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
           {selected ? <Ionicons name="checkmark" size={12} color="#fff" /> : null}
         </View>
       ) : (
-        // Badge row (0.17.0): at most two quiet discs, bottom-left. The lock
+        // Badge row: at most two quiet discs, bottom-left. The lock
         // is always there — sealed is the default state. The pin appears
         // only when location OR wifi data is actually embedded. No identity
         // badge, no bright colors: small dim glyphs on translucent discs.
@@ -349,7 +349,7 @@ export default function VaultScreen() {
     const m = jobIds.length;
     if ((n === 0 && m === 0) || deleting) return;
     const sealedCopy = 'These are the only sealed copies. The collection is encrypted on this device and its key never leaves the OS keychain, so no readable copy exists anywhere else. Deleted exhibits cannot be recovered or re-created. Shared/exported copies elsewhere are unaffected.';
-    // 0.18.4: sealing jobs are cancellable too — the copy states the one
+    // Sealing jobs are cancellable too — the copy states the one
     // case a discard can't intercept (a seal already past its final step).
     const queuedCopy = 'Queued or sealing captures are discarded unsealed — their encrypted drafts are deleted. A seal already past its final step completes and lands as a sealed exhibit. This cannot be undone.';
     Alert.alert(
@@ -425,7 +425,7 @@ export default function VaultScreen() {
 
   const exportSelected = () => {
     // Queued captures have no sealed record yet — nothing to export; only
-    // real exhibits count toward the metadata export (0.18.3).
+    // real exhibits count toward the metadata export.
     const n = items.filter((i) => selected.has(i.id)).length;
     if (n === 0 || exporting) return;
     Alert.alert(
@@ -548,7 +548,7 @@ export default function VaultScreen() {
       />
 
       {selecting ? (
-        // 0.18.4 (Noah: the bar overlapped the tab bar): the pill tab bar
+        // The pill tab bar
         // is absolutely positioned OVER this screen — the select bar must
         // clear it (the layout's own convention: inset + 64px pill + 10).
         <View style={[styles.selectBar, { marginBottom: Math.max(insets.bottom, 12) + 64 + 10 }]}>

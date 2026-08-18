@@ -80,7 +80,7 @@ const CLAIM_ID = /^(location|time|identity|sensor|context)\.[a-z0-9][a-z0-9-]*$/
 const CLAIM_KEYS = new Set(['claimId', 'family', 'rung', 'value']);
 
 /**
- * The inventory meta-leaf (1.0.0 audit A-01/B-5): the never-recorded
+ * The inventory meta-leaf: the never-recorded
  * declaration was previously asserted but NOT committed — the root covered
  * only the committed claims' leaf digests, so a bundle maker holding the
  * seed could retroactively reclassify a withheld claim as never-recorded.

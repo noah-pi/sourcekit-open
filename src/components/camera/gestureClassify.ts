@@ -1,5 +1,5 @@
 /**
- * Gesture classifier (0.18.2) — the ONE place touch intent is decided for
+ * Gesture classifier — the ONE place touch intent is decided for
  * the camera screen's bottom controls. Pure and dependency-free so the
  * whole decision matrix is unit-tested (scripts/test-protray-gestures.mts).
  *

@@ -174,7 +174,7 @@ public class C2paIosModule: Module {
   /**
    * Preserve the upstream error text: the TS classifier is an ORDERED chain
    * over message substrings (tamper first, then no-manifest, unsupported,
-   * unreadable; 1.0.0 audit A-05/B-8) and consumes it verbatim.
+   * unreadable) and consumes it verbatim.
    */
   private func mapError(_ error: Error, code: String) -> Exception {
     if let c2paError = error as? C2PAError {

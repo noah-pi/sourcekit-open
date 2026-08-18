@@ -17,7 +17,7 @@
  *                      kind. Rendered as never-recorded — never confused
  *                      with a failure, never suspicion.
  *
- * 0.14.0 (Noah's pass): the rows are DRAWERS — tap one to reveal the specific
+ * The rows are DRAWERS — tap one to reveal the specific
  * data that was captured (the sealed path, the pair counts, the coordinates).
  * Row order is the capture story itself: the lenses, then what the device
  * reported, then the media-adjacent masters. The roster:

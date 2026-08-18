@@ -20,7 +20,7 @@ import AVFoundation
  * Output: evidenceDir/master-<sessionId>.caf — LPCM, mono, 16 kHz, 16-bit,
  * little-endian — 16 kHz ≫ Nyquist for the 120/180/240 Hz ENF harmonics.
  *
- * 0.17.2: (a) the append-time format check no longer compares the
+ * (a) the append-time format check no longer compares the
  * interleaved flag for the mono master — a settings-derived vs
  * commonFormat-derived AVAudioFormat can disagree on that flag for
  * 1-channel formats, and the strict comparison made every append throw
@@ -107,7 +107,7 @@ final class PcmMasterWriter {
     // Structural format check — AVAudioFormat inherits NSObject identity
     // equality, so `==` would reject every buffer.
     let bufFmt = pcmBuffer.format
-    // 0.17.2: do NOT compare isInterleaved for the MONO master. The writer's
+    // Do NOT compare isInterleaved for the MONO master. The writer's
     // format is settings-derived and the converter's output format is
     // commonFormat-derived; the two initializers can legitimately disagree
     // on the interleaved flag for a 1-channel format, where interleaving

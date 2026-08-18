@@ -34,7 +34,7 @@ export interface DiagnosticEvent {
     | 'seal-failed'
     | 'retry'
     | 'discard'
-    // Pure information (0.18.2): native pipeline diagnostics — connection
+    // Pure information: native pipeline diagnostics — connection
     // census, format picks, interruption boundaries. Never a failure.
     | 'info';
   /** The verbatim error/reason string, when one exists. */

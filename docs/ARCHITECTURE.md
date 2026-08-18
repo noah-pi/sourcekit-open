@@ -78,7 +78,7 @@ The manifest parser follows the C2PA update-chain rule: the **last** manifest
 in the store is the active one, and the verification report says so when a
 store carries more than one. All DER/TLV walkers enforce strict length
 decoding (multiply-accumulate, no 32-bit shifts) and a non-advancing-walker
-invariant — hostile length fields throw instead of hanging (audit).
+invariant — hostile length fields throw instead of hanging.
 
 Trust anchors are compiled-in or user-pinned only. Anything fetched at runtime
 is an input, not an anchor. No network is required; nothing about verification

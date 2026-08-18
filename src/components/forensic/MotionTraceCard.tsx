@@ -40,7 +40,7 @@ type TraceState =
       mags: number[];
       /** Distinct primary capture timestamps across the committed frames,
        *  from the ring's own index — null when the index is absent or
-       *  unreadable (0.18.4). Fewer than `committed` means the retained
+       *  unreadable. Fewer than `committed` means the retained
        *  frames did not advance: the flatline is a stated fact, not a
        *  "no motion" reading. */
       distinctTimestamps: number | null;
@@ -239,7 +239,7 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
       try {
         const dir = toFileUri(ringBufferDir as string).replace(/\/$/, '');
         const dirNames = await FileSystem.readDirectoryAsync(dir);
-        // 0.18.4: PRIMARY frames only. The glob used to take every JPEG in
+        // PRIMARY frames only. The glob used to take every JPEG in
         // the ring dir — sorted, the -secondary.jpg files interleave with
         // the primaries, and consecutive "pairs" then measured cross-CAMERA
         // jumps as frame motion (the two lenses see different views).

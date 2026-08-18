@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Zoom model (0.15.0 Drop 2) — pure math, no React.
+ * Zoom model — pure math, no React.
  *
  * Zoom is tracked as ONE number: the factor relative to the wide lens's 1x,
  * the same number Apple prints on its pills (".5", "1", "5"). A relative

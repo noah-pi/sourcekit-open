@@ -1,4 +1,4 @@
-# Network calls — the complete audit
+# Network calls
 
 Every network call the app can make, what triggers it, what leaves the
 device, and what happens offline. The rule: **capture, sign, verify, and
@@ -20,64 +20,49 @@ Calls 3–7 are hash-or-nothing flows: digests out, receipts in. Custom TSA
 endpoints and custom OTS calendars are configurable in Settings (every
 trust claim is swappable); the defaults are free, accountless public goods.
 
-**The dead-man's switch was REMOVED.** It was the largest
-blast radius in the app — an automatic upload of the entire vault — and its
-mitigation (sealing to a desk key whose private half exists only as Shamir
-shares) was never wired to a real intake flow. With the switch gone, no
-flow sends capture bytes off the device at all. (The desk-key Shamir
-custody itself lives on in the desk's key manager; it was never the
-switch's code.)
-
-** removed the Google Cloud Vision reverse-image lookup** — its app
-client and its relay route. It was the only feature that sent media off
-the device and the only one with a recurring bill; neither fit a
-zero-dependency tool.
-
-## What is NOT here (and never will be)
+## What there isn't
 
 - No analytics, no telemetry, no crash reporting, no ads.
-- **No launch-time phone-home of any kind.** Attestation is on
-  demand: the app ships with **no registry address bundled** and contacts
-  one only when the user enters a URL and taps "attest now".
-- No account system of any kind. No push tokens. No device fingerprinting.
-- No bundled API keys — and, since, no bundled server endpoints of
-  any kind. The remaining defaults (TSA URLs, OTS calendars, the Esplora
-  base) are free public-goods protocols, each overridable in Settings.
+- **No launch-time phone-home of any kind.** Attestation is on demand: the app
+  ships with no registry address bundled and contacts one only after the user
+  enters a URL and taps "attest now".
+- No account system, no push tokens, no device fingerprinting.
+- No bundled API keys and no bundled server endpoints. The remaining defaults
+  (TSA URLs, OTS calendars, the Esplora base) are free public protocols, each
+  overridable in Settings.
+- No flow sends capture bytes off the device.
 
-## The CaptureKit capture module (1.0.0, WS1) — no network at all
+## The capture module makes no calls at all
 
-The native capture module (`modules/capture-kit`) — streamed chunk hashing,
-raw audio master, sensor log, stills ring buffer — performs **no network I/O
-of any kind**. It opens no socket, makes no request, and has no endpoint to
-configure: capture and the `camera.streamedChunks` commitment are computed
-entirely on-device. `camera.streamedChunks` is a **project-specific label,
-not a `c2pa.*` label** (the upstream binding migration is WS3); in this
-build it rides as a field inside the signed record's capture-metadata block
-(the real JUMBF assertion lands in Phase 2). One honesty note (1.0.0
-audits): the Merkle leaves are ordered by the timing-dependent video/audio
-interleave, which nothing yet records, so the root is **not recomputable
-from the delivery file alone** in this build — desk-side re-chunk
-verification waits for the per-track roots in the next fix wave; byte
-equality of the delivery file is enforced today by the unchanged
-`c2pa.hash.bmff.v2` hard binding. Nothing
-about the module hides a network event, because it causes none.
+`modules/capture-kit` — streamed chunk hashing, raw audio master, sensor log,
+stills ring buffer — performs no network I/O. It opens no socket, makes no
+request, and has no endpoint to configure. Capture and the
+`camera.streamedChunks` commitment are computed entirely on-device.
+
+`camera.streamedChunks` is a project-specific label rather than a `c2pa.*` one,
+and rides as a field inside the signed record's capture-metadata block. See
+[INTEGRITY.md](INTEGRITY.md) for what that commitment does and doesn't bound.
 
 ## Server-side (the relay, `server/server.mjs`)
 
-The relay is optional and self-hostable, and since does exactly one
-thing: App Attest registration. It holds: an aggregate registration counter
-(no key IDs, no fingerprints, no per-device records — the registry was
-reduced to a count because the entries were write-only and accumulated a
-hardware roster nobody read), single-use 5-minute challenges, and
-rate-limit buckets. State checkpoints to a volume so redeploys don't reset
-abuse controls. There is deliberately no `/devices` listing — a public
-roster of real hardware is an opsec liability.
+The relay is optional and self-hostable, and does exactly one thing: App Attest
+registration.
+
+It holds an aggregate registration counter, single-use 5-minute challenges, and
+rate-limit buckets. No key IDs, no fingerprints, no per-device records — a
+count, because a per-device registry is a roster of real hardware and nobody
+needs one. State checkpoints to a volume so redeploys don't reset the abuse
+controls. There is no `/devices` listing.
 
 ## Verifying this document
 
-`grep -rn "fetch\|XMLHttpRequest\|WebSocket" src/ app/ modules/` — every real
-call site maps to a row above. (audit A7: the grep must be the bare
-word, not `fetch(` — two surfaces call the network through an injectable
-wrapper whose DEFAULT is the global fetch: `otsClient.fetchFn` and
-`beacon.fetchImpl`. A paren-grep silently misses both.) If you find a call
-site that doesn't map to a row, that is a bug: please report it.
+```sh
+grep -rn "fetch\|XMLHttpRequest\|WebSocket" src/ app/ modules/
+```
+
+Every call site maps to a row above. Grep the bare word rather than `fetch(`:
+two surfaces reach the network through an injectable wrapper defaulting to the
+global fetch (`otsClient.fetchFn` and `beacon.fetchImpl`), and a paren-grep
+misses both.
+
+A call site that doesn't map to a row is a bug. Please report it.

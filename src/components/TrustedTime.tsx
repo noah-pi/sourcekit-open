@@ -1,7 +1,7 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * TrustedTime — the TIME section, shared by the Inspect result and the
- * exhibit detail screen. Copy v5 (0.17.0): icon rows, minimal words.
+ * exhibit detail screen. Copy v5: icon rows, minimal words.
  *
  *   ● Certificate authority · Aug 12, 7:41 PM
  *   ○ Public ledger · pending

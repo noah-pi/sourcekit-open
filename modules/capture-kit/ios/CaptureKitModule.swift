@@ -669,7 +669,7 @@ public class CaptureKitModule: Module {
 
   /// Commit sample-buffer bytes to the legacy (0.11.x) streaming hasher.
   ///
-  /// AUDIT NOTE (0.12.0): this does NOT hash delivery/compressed bytes.
+  /// AUDIT NOTE: this does NOT hash delivery/compressed bytes.
   /// Video: AVCaptureVideoDataOutput frames wrap a CVPixelBuffer and carry
   /// no CMBlockBuffer, so the guard below ALWAYS yields nil for capture
   /// frames — no video byte is ever hashed and the video root is the
@@ -679,7 +679,7 @@ public class CaptureKitModule: Module {
   /// reproduction only; 0.12.0 seals use v2 delivery-file roots.
   private func hashBytes(track: HashTrack, from sampleBuffer: CMSampleBuffer) {
     // Nil for every video capture frame (CVPixelBuffer-backed, no
-    // CMBlockBuffer) — see the audit note above.
+    // CMBlockBuffer) — see the note above.
     guard let block = CMSampleBufferGetDataBuffer(sampleBuffer) else { return }
     let length = CMBlockBufferGetDataLength(block)
     guard length > 0 else { return }

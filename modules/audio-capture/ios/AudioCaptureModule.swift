@@ -92,7 +92,7 @@ public class AudioCaptureModule: Module {
   private var motionLogState = "unavailable" // "recorded" | "failed" | "unavailable"
   private var motionLogPath: String?
 
-  // Raw-audio sink for audio takes (0.18.3): the uncompressed LPCM master
+  // Raw-audio sink for audio takes: the uncompressed LPCM master
   // (CAF), same three-state contract as the video session's raw sink. The
   // tap delivers hardware-format LPCM buffers, so the master writes with
   // NO converter — the exact frames the AAC delivery file sees. Until this

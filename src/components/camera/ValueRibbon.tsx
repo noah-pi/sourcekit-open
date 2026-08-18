@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Value Ribbon — the camera's ONE adjustment surface (0.18.2). Every pro
+ * Value Ribbon — the camera's ONE adjustment surface. Every pro
  * param, ladder or continuous, is edited HERE and nowhere else: a capsule
  * tap docks the ribbon with that param, a horizontal drag scrubs it, and
  * the ribbon's own AUTO pill returns the param to auto. There are no

@@ -1,5 +1,5 @@
 /**
- * Juxtapose — the "What should be true" cards (0.17.0).
+ * Juxtapose — the "What should be true" cards.
  *
  * The pivot: these cards never detect and never conclude. Each puts what was
  * SEALED next to what SHOULD BE true, and leaves the match to the person
@@ -461,7 +461,7 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
   const sel = (Math.min(pos.elevationDeg, 90) * Math.PI) / 180;
   const sunX = DIAL_CX + Math.sin(saz) * Math.cos(sel) * GROUND_RX;
   const sunY = DIAL_CY - Math.cos(saz) * Math.cos(sel) * GROUND_SQUASH * GROUND_RX - Math.sin(sel) * SKY_LIFT;
-  // 0.18.5 (Noah: "show it moving on a dotted path"): the sun's track for
+  // The sun's track for
   // THIS day at THIS place, sampled every 20 minutes across ±12 h around
   // the capture moment and projected with the same sky formula as the dot
   // — the dot then visibly rides its arc up and over the pole. Only
@@ -708,7 +708,7 @@ const buildStyles = () => StyleSheet.create({
   },
   // Overlay lines sit on arbitrary photos: a bright-green core (readable on
   // dark and light scenes) over a dark backing halo — never subtle. Bumped
-  // a second time (0.18.2): still too faint over a bright sky at 7+3 px /
+  // a second time: still too faint over a bright sky at 7+3 px /
   // 0.55 alpha, so the halo goes to 9 px / 0.70 and the core to 4 px, the
   // core now CENTERED in the halo (marginTop splits the height difference).
   horizonOverlayBacking: {
@@ -722,7 +722,7 @@ const buildStyles = () => StyleSheet.create({
   },
 
   // gravity / plumb overlay (same second bump as the horizon line)
-  // 0.18.2: top/bottom insets now come inline (∝ the projection magnitude)
+  // Top/bottom insets now come inline (∝ the projection magnitude)
   // and the bob is gone — it sat at a fixed bottom offset while the line
   // rotated, floating off the line's end ("the offset anchor looks wrong").
   plumbReference: {
@@ -786,9 +786,9 @@ const buildStyles = () => StyleSheet.create({
   },
   sunBadgeText: { color: '#fff', fontSize: fontSize.xs, fontWeight: '600' },
 
-  // shadows — the perspective sundial (0.18.2): a tilted ground plane
+  // shadows — the perspective sundial: a tilted ground plane
   // (hairline ellipse over a soft fill), N on the far edge, a shaded
-  // charcoal gnomon, ONE sage shadow line — and (0.18.3) the clay sun dot
+  // charcoal gnomon, ONE sage shadow line — and the clay sun dot
   // moving with azimuth AND elevation, opposite its shadow.
   sundialPersp: {
     width: 2 * DIAL_CX, height: 114,
@@ -818,7 +818,7 @@ const buildStyles = () => StyleSheet.create({
     position: 'absolute', width: 12, height: 12, borderRadius: 6,
     backgroundColor: '#C08552',
   },
-  // 0.18.5: the dotted day-track the sun dot rides (same clay, quiet).
+  // The dotted day-track the sun dot rides (same clay, quiet).
   sunPathDot: {
     position: 'absolute', width: 3, height: 3, borderRadius: 1.5,
     backgroundColor: 'rgba(192,133,82,0.45)',

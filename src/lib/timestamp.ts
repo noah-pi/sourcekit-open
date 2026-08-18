@@ -25,7 +25,7 @@ export const TSA_URLS = ['https://timestamp.digicert.com', 'https://freetsa.org/
 const TIMEOUT_MS = 8000;
 
 /**
- * Organizations can run or contract their own TSAs (0.9.1) — every trust
+ * Organizations can run or contract their own TSAs — every trust
  * claim must be swappable. Settings inject the override at load; the pool
  * below is only the default witness set.
  */
@@ -98,7 +98,7 @@ export async function fetchTimestampTokens(message: Uint8Array): Promise<Uint8Ar
   return results.filter((t): t is Uint8Array => t !== null && t.length > 0);
 }
 
-// --- Seal-latency machinery (0.18.0) ---------------------------------------
+// --- Seal-latency machinery ---------------------------------------
 //
 // A token's size is TSA-fixed (same signer chain, same 32-byte imprint), so
 // the manifest builder's sizing probe no longer burns a network round: it

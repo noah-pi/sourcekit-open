@@ -204,4 +204,4 @@ Apache-2.0 ([LICENSE](LICENSE), with [NOTICE](NOTICE) for attribution that trave
 
 If you build something with this, I'd like to hear about it.
 
-— Noah Pisner
+— Noah Bassetti-Blum

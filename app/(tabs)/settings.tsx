@@ -144,7 +144,7 @@ export default function SettingsScreen() {
   const handleDebugFlag = (key: ExhibitDebugFlagKey, value: boolean) => {
     void (async () => {
       const res = await setExhibitDebugFlag(key, value).catch(() => ({ applied: false, reason: 'error' }));
-      // 0.18.4-R5: a flip is recorded in the on-device log either way — the
+      // a flip is recorded in the on-device log either way — the
       // log then answers "did my switch take?" without guessing — and a
       // rejection is STATED, never a silent snap-back of the switch.
       logDiagnostic({
@@ -171,7 +171,7 @@ export default function SettingsScreen() {
     })();
   };
 
-  // 0.18.4-R3: which diagnostics switches differ from their native defaults
+  // Which diagnostics switches differ from their native defaults
   // (absent key = default). Drives the banner above the switches.
   const nonDefaultFlags = debugFlags
     ? (Object.keys(DEBUG_FLAG_DEFAULTS) as ExhibitDebugFlagKey[]).filter(
@@ -185,7 +185,7 @@ export default function SettingsScreen() {
       setPublicKey(k.publicKeyBase64);
       setKeyBackend(k.backend);
     }).catch(() => {});
-    // Attestation is set-and-forget (0.18.0): the launch path ensures it
+    // Attestation is set-and-forget: the launch path ensures it
     // silently; here we simply read the stored state for display.
     getAttestState().then(setAttestState).catch(() => {});
     getAttestServerUrl().then((u) => setAttestServer(u ?? ''));
@@ -925,7 +925,7 @@ export default function SettingsScreen() {
 }
 
 /**
- * 0.18.4-R3 (external camera-pipeline review R1): the native defaults for
+ * The native defaults for
  * every debug flag, mirrored for the non-default banner. A flag flipped and
  * left in the exhibit.debug suite survives TestFlight updates — only
  * deleting the app resets it — so a stale A/B switch can silently
@@ -951,7 +951,7 @@ const DEBUG_FLAG_LABELS: Record<ExhibitDebugFlagKey, string> = {
 };
 
 // Toggle-board color language, paralleling the camera HUD icon palette
-// (0.18.1): muted terracotta marks the identifying signals, sage green the
+//: muted terracotta marks the identifying signals, sage green the
 // evidence sinks, violet keeps the face check's own lane. No pure yellow,
 // no blue — the same anchors the HUD uses.
 const IDENTIFYING_TINT = '#C08552'; // warm clay / terracotta
@@ -977,7 +977,7 @@ function GroupLabel({ text, tint }: { text: string; tint: string }) {
 }
 
 /** Toggle row — same icon+label language as the HUD and grid badges.
- *  0.18.2: subs are NEVER truncated (field report: ellipsized copy reads as
+ *  Subs are NEVER truncated (field report: ellipsized copy reads as
  *  a bug). Every sub reserves two lines (proofSubMin) so rows are evenly
  *  spaced whether the copy runs one line or two. */
 function ProofToggle({ icon, label, sub, value, onChange, tint, disabled, recommended }: {

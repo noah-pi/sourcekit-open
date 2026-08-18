@@ -15,7 +15,7 @@ import { setAppearancePreference, type AppearancePreference } from '../theme';
 const SETTINGS_FILE = `${FileSystem.documentDirectory}settings.json`;
 
 /**
- * CAWG-aligned identity disclosure, per capture (0.9.0):
+ * CAWG-aligned identity disclosure, per capture:
  *   anonymous     — no byline, no org claim ('redacted' in the record)
  *   organization  — the installed org credential vouches for the org, no
  *                   personal byline (the stringer-in-a-hostile-country
@@ -43,7 +43,7 @@ export interface Settings {
    */
   includeTranscript: boolean;
   /**
-   * Face check (0.11.1): when on, capture runs an OS Face ID check at
+   * Face check: when on, capture runs an OS Face ID check at
    * capture start and the seal records ONLY the boolean outcome in the
    * record telemetry (`captureIntegrity.biometricGatePassed`). An event
    * record, not an identity — no face geometry or template is ever stored.
@@ -69,7 +69,7 @@ export interface Settings {
    */
   assignmentId: string;
   /**
-   * Ledger anchoring (0.9.1): submit each capture's payload digest to the
+   * Ledger anchoring: submit each capture's payload digest to the
    * free public OpenTimestamps calendars (Bitcoin-anchored time). Hash-only —
    * no media, no account, no cost. Default on. When off, captures carry
    * RFC 3161 authority time only and the record says nothing about OTS.
@@ -80,7 +80,7 @@ export interface Settings {
   /** Custom RFC 3161 TSA URLs; null = the built-in witness pool. */
   tsaUrls: string[] | null;
   /**
-   * Bitcoin beacon endpoint (0.10.0): one Esplora base URL pinned by the
+   * Bitcoin beacon endpoint: one Esplora base URL pinned by the
    * user/newsroom; null = the default public pool. Tips are fetched on a
    * jittered schedule decoupled from shutter events — never per capture.
    */
@@ -94,7 +94,7 @@ export interface Settings {
    * enabled-but-failed null). The evidence is on-device input for later
    * desk-side analysis; the phone never analyzes it.
    *
-   * 0.18.1: two fields retired —
+   * Two fields retired —
    *   • sensors: the full-rate (100 Hz) sensor log now follows the single
    *     Motion log toggle (includeSensors); there is no 10 Hz option.
    *   • secondaryLens: the stereo partner is always the native 'auto'
@@ -107,7 +107,7 @@ export interface Settings {
     altView: boolean;
   };
   /**
-   * Light preferences, per capture mode (0.15.0 Drop 2) — the two modes
+   * Light preferences, per capture mode — the two modes
    * never share a light state, and their icons never conflate:
    *  - photoFlash: the PHOTO capture-light preference (auto/on/off, bolt
    *    glyph + state badge). INTERIM: the bridge has no photo-strobe API
@@ -200,7 +200,7 @@ export const useStore = create<AppState>((set, get) => ({
           stored.identityMode = stored.includeIdentity === true ? 'named' : 'anonymous';
         }
         delete stored.includeIdentity;
-        // 0.13.0: CaptureKit retired (the 0.12.x two-session-owners lesson)
+        // CaptureKit retired (the 0.12.x two-session-owners lesson)
         // — the experimental toggle key is dropped from stored settings.
         delete stored.captureKitEnabled;
         // 0.11.0 → 0.11.1 migration — one-time, guarded:
@@ -231,7 +231,7 @@ export const useStore = create<AppState>((set, get) => ({
           delete stored.appearance;
         }
         const merged = { ...DEFAULT_SETTINGS, ...stored };
-        // 0.18.1: coerce retired captureEvidence keys out of the stored
+        // Coerce retired captureEvidence keys out of the stored
         // object BEFORE the merge — otherwise the spread below would carry
         // them forward forever (full-rate is now implied by includeSensors;
         // the stereo partner is always the native 'auto' pairing).

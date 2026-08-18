@@ -1,7 +1,7 @@
 # Threat model — Source Kit 
 
 Who attacks this system, what we assume, what happens in each scenario, and
-what we consciously accept. The register is deliberate: every scenario gets
+what we consciously accept. Every scenario gets
 its honest status — **defended (lab-tested)**, **defended (by design)**,
 **partial (stated honestly)**, **accepted risk**, or **out of scope** — and
 "accepted" is always said out loud in the product, never buried here only.
@@ -28,7 +28,7 @@ is built the way it is).
   copies that still leak PII, network observation.
 - **The coercer** — compels the user directly: device seizure, forced
   unlock, forced check-ins, legal compulsion of infrastructure providers.
-- **The cross-examiner** (auditor's "Angles") — the adversary the
+- **The cross-examiner** — the adversary the
   first five get *presented to*: opposing counsel, a hostile editor, a
   fact-checker's comment section. Forges nothing; attacks the *weight* of
   the evidence in front of a decision-maker. "The app signs its own
@@ -48,7 +48,7 @@ is built the way it is).
 ## Assumptions
 
 1. The Secure Enclave does what Apple documents: non-extractable keys, on-chip
-   signing. We cannot audit the silicon; we assume it and say so.
+   signing. The silicon can't be inspected from here; this is an assumption.
 2. The iOS sandbox and Data Protection work as documented against
    non-privileged attackers.
 3. Apple's App Attest root key is honest **at verification time** — see the
@@ -81,7 +81,7 @@ independent of device honesty.** Signature math (an edited byte fails the
 hash no matter how smart the attacker), time-anchoring (an RFC 3161 token or
 Bitcoin binding verified against independent infrastructure), roster
 revocation semantics (a signed roster resolves the same way for everyone),
-and desk-side content analysis (a different machine, a different trust
+and content analysis run elsewhere (a different machine, a different trust
 domain). An AI that has read all of this repo cannot talk its way past
 modular arithmetic.
 
@@ -110,7 +110,7 @@ a broken hash, a wrong fingerprint, or a missing time anchor; and every
 surface that displays attestation displays the four rungs it does *not*
 cover beside it.
 
-## The 26 scenarios
+## The 25 scenarios
 
 ### A. Forgery & tamper
 
@@ -134,8 +134,8 @@ integrity, rungs 2–5 show *cannot be evaluated* — never a partial green.
 verifiers reject non-canonical signatures. *Defended (lab-tested).*
 
 **5. Truncation and trailing garbage.** Short files, cut streams, bytes after
-IEND → parse or hash failure, FAILED verdict, never a wedge (the audit's
-DER-walker invariant: a non-advancing parser throws). *Defended (lab-tested —
+IEND → parse or hash failure, FAILED verdict, never a wedge: the DER-walker
+invariant means a non-advancing parser throws. *Defended (lab-tested —
 including the 4000-buffer fuzz over every DER walker).*
 
 **6. Multi-manifest store confusion.** A file carrying several manifests (the
@@ -147,7 +147,7 @@ no longer produce two verdicts. *Defended (lab-tested since).*
 What remains is an ordinary unsigned file → the neutral card: "No signature
 found — this means nothing either way." Absence is never rendered as
 suspicion, and a stripped file can never be passed off *as verified*.
-*Defended (by design — the inverse attacks live in scenario 26).*
+*Defended (by design — the inverse attacks live in scenario 25).*
 
 ### B. Identity & impersonation
 
@@ -187,9 +187,9 @@ honestly — the human step is the control, and the UI says so).*
 a revocation). The roster is genuinely signed, so it verifies — and the
 capture resolves by *that* roster's contents. The deployed mitigation is
 semantics, not versioning: revocations are dated, a capture signed before
-the revocation stays *active-then-revoked* (genuine), and desk practice is to
-re-issue and redistribute rosters on every edit. A monotonic version
-counter is roadmap, not shipped. *Partial (stated honestly).*
+the revocation stays *active-then-revoked* (genuine), and the practice is to
+re-issue and redistribute rosters on every edit. A monotonic version counter
+would close this properly and isn't built. *Partial (stated honestly).*
 
 ### C. Time
 
@@ -261,8 +261,8 @@ exactly this). *Partial (stated honestly).*
 **23. De-identified-copy leakage.** Sharing strips byline, location, Wi-Fi,
 sensors, transcript, and device identity, re-signs as a fresh de-identified
 identity, and the copy *says* it is de-identified and which fields were
-removed. The audit's EXIF-survival finding is a permanent regression
-test (segment stripper; pixels byte-identical). Face regions are never
+removed. EXIF survival is a permanent regression test (segment stripper;
+pixels byte-identical). Face regions are never
 persisted, never signed, and never leave the redaction path. *Defended
 (lab-tested — test-bmff-deid, roundtrip de-id suites).*
 
@@ -272,14 +272,7 @@ hides that a network event happened. Submissions are hashes, never media;
 there is no Tor, no domain fronting, no anonymity claim anywhere. *Accepted
 risk (stated in product — NETWORK.md enumerates every event).*
 
-**25. Dead-man endpoint compromise and coerced check-in.** OBSOLETE — the
-dead-man's switch was removed (see NETWORK.md): it was the largest blast
-radius in the app, and its desk-key mitigation was never wired to a real
-intake flow. No automatic upload path remains, so there is no endpoint to
-compromise and no check-in to coerce. The duress-PIN design that referenced
-it stays deferred — see DECISIONS.md. *Closed by removal.*
-
-**26. Reader-layer attacks (the discrediter's toolkit).**
+**25. Reader-layer attacks (the discrediter's toolkit).**
 Screenshot-the-green (a photo of a green verdict, recirculated after the
 file is tampered), tamper-to-red (deliberately corrupting a genuine file to
 produce a scary verdict), strip-and-discredit, and the liar's dividend.

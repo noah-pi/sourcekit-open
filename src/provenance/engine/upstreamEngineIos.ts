@@ -294,7 +294,7 @@ const TRUST_INFO_CODES = new Set([
 ]);
 
 /**
- * ORDERED thrown-error classification chain (1.0.0 audit A-05/B-8):
+ * Ordered thrown-error classification chain:
  * thrown messages are free text — an unstable engine API surface — so the
  * order is load-bearing and documented:
  *
@@ -482,9 +482,9 @@ async function normalizeRead(
     r.claimAssertionsMatch = r.claimAssertionsMatch ?? true;
     r.assetHashMatches = r.assetHashMatches ?? true;
   } else if (r.signatureValid === null && failures.length > 0) {
-    // Fail closed on UNKNOWN failure classes (verbatim desk rule, 1.0.0
-    // audit B-8): an unrecognized failure is a signature-invalid fact,
-    // never quietly ignored — even alongside an unsupported class.
+    // Fail closed on unknown failure classes: an unrecognized failure counts
+    // as signature-invalid rather than being ignored, even when it arrives
+    // alongside an unsupported class.
     const unknown = failures.filter((c) => !TRUST_INFO_CODES.has(c) && !UNSUPPORTED_CODES.has(c)
       && !SIGNATURE_FAILURE_CODES.has(c) && !ASSET_MISMATCH_CODES.has(c) && !VOID_BINDING_CODES.has(c)
       && c !== 'assertion.hashedURI.mismatch');

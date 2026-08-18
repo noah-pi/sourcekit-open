@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * OpenTimestamps anchor + queue lifecycle (0.9.1).
+ * OpenTimestamps anchor + queue lifecycle.
  *
  * At seal time we submit the record's payload digest (SHA-256 of the
  * canonical signed payload — the same digest the device signature signs)

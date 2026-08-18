@@ -40,7 +40,7 @@
  * unparseable-structure AND proven-tamper is reported as proven tamper, with
  * the unsupported structure still disclosed in the facts.
  *
- * CONSUME ENGINE OUTPUTS ONLY THROUGH THIS LAYER (1.0.0 audit M-06 footgun):
+ * Consume engine outputs only through this layer:
  * callers must never hand-compose verdicts out of NormalizedEngineResult
  * fields — this module is the single verdict authority. (resolve.ts is the
  * one legitimate no-verdict consumer: it reports engine output verbatim and
@@ -183,7 +183,7 @@ async function compose(
   if (n.unsupported) {
     return fail(n, 5, 'UNSUPPORTED',
       `the manifest uses a structure this build cannot check (${n.unsupportedReason ?? 'unsupported structure'}) — not a broken file, not tamper: unchecked`,
-      [`everything — ${n.unsupportedReason ?? 'unsupported structure'}. Declining to evaluate is the true statement; "signature invalid" would condemn credentials never evaluated (0.11.0 audit A-4).`]);
+      [`everything — ${n.unsupportedReason ?? 'unsupported structure'}. Declining to evaluate is the true statement; "signature invalid" would condemn credentials that were never evaluated.`]);
   }
   // Row 10 gate — INTACT requires POSITIVE facts on ALL THREE rungs:
   // signature, assertion-store cross-check, AND asset hash.

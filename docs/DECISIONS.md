@@ -1,129 +1,88 @@
-# Decision record — Exhibit A 
+# Why it's built this way
 
-Decisions that were deliberate, who made them, and the trade-offs accepted.
-Newest first. For the security design see `SECURITY.md`; for what we defend and
-accept see `THREAT-MODEL.md`.
+Four choices that aren't obvious from reading the code, and what they cost.
 
-## D1. Hand-rolled provenance engine, not a c2pa-rs binding
+## Two verification engines, checked against each other
 
-**Decision.** Exhibit A's C2PA reading, verification, and trust projection are
-hand-rolled in TypeScript (`src/provenance/`, `src/lib/x509.ts`,
-`src/lib/rfc3161.ts`, `src/lib/trustLadder.ts`) rather than bound to
-c2pa-rs / the CAI native SDK.
+C2PA reading, verification and trust projection are written in TypeScript
+(`src/c2pa/`, `src/lib/x509.ts`, `src/lib/rfc3161.ts`, `src/lib/trustLadder.ts`)
+rather than bound to c2pa-rs or the CAI native SDK. On iOS the upstream engine
+runs too, and `src/provenance/engine/oracle.ts` runs both against the same asset
+and flags disagreement.
 
-**Why.**
-- **No native dependency.** The whole verifier runs in the app's JS engine
-  and in CI with zero platform code — offline, auditable line by line, and
-  identical on device, desk, and test runner. A native binding would add an
-  unauditable binary surface to the one component whose entire job is being
-  auditable.
-- **Claim discipline is enforceable in our own code.** The honesty
-  invariants (unsigned → neutral, failed ≠ unreached, org vouching earned
-  only outside the file, self-asserted roots named as such, the ladder as
-  projection-not-verdict) are *our* display semantics. A general-purpose
-  SDK answers "is this C2PA-valid"; it does not answer "what may this UI
-  honestly claim" — that layer had to be ours regardless.
-- **The audit trail demands it.** The / external audits reviewed
-  this exact code; the regression suites pin this exact behavior. Switching
-  engines would invalidate the reviewed surface.
+The TypeScript engine exists for two reasons. It runs in the app's JS engine and
+in CI with no platform code, so it behaves identically on device and on a test
+runner, offline, and can be read line by line. And the display rules — unsigned
+renders neutral, failed is distinct from unreached, org vouching is earned
+outside the file, self-asserted roots are named as such — are decisions about
+what the UI may honestly claim. A general-purpose SDK answers "is this
+C2PA-valid". It doesn't answer that question, so that layer had to be local
+either way.
 
-**Trade-offs accepted (stated, not hidden).**
-- **Standards-tracking burden is ours.** C2PA evolves; every spec revision
-  must be tracked and ported by hand. Multi-manifest update-chain handling
- is the kind of detail a maintained SDK gets for free.
-- **Conformance claims wait.** We make no `cawg.identity` or C2PA-conformance
-  claim until the W10 conformance work (Trust List cert, third-party audit)
-  lands; org identity ships under the vendor-labeled `com.verify.identity`
-  assertion and says so.
-- **Interoperability is read-mostly.** Files we produce carry standard C2PA
-  manifests (c2patool reads them; the lab verifies that in CI), but exotic
-  manifests produced by other tools may parse as "unsupported" rather than
-  being fully evaluated — and the report says when that happens.
+What it costs:
 
-**Revisit when:** W10 conformance work starts, or a maintained RN/JS binding
-with reproducible builds appears.
+- **Standards tracking is manual.** C2PA evolves and every revision has to be
+  ported by hand. Multi-manifest update chains are the kind of detail a
+  maintained SDK handles for you.
+- **Interoperability is read-mostly.** Files produced here carry standard C2PA
+  manifests and `c2patool` reads them, which CI checks on every run. But exotic
+  manifests from other tools may parse as `unsupported` rather than being fully
+  evaluated. The report says when that happens.
+- **No conformance claim.** There's no conformance certification behind this.
 
-## D2. Roster administration lives on the desk, never the app (W7.4)
+## Verdicts come from one place
 
-**Decision.** Create/edit/revoke/rotate/re-sign of newsroom rosters exists
-only in the desk web tool. The app imports, lists, and removes — nothing
-else. **Why:** the app is a capture-and-verify endpoint; key-management
-ceremonies on the same device that captures would collapse the separation
-that makes an editor's vouch mean anything. The import flow instructs
-out-of-band editor-fingerprint confirmation. **Accepted:** a newsroom
-without desk infrastructure can't mint rosters — they can still use org
-credentials or per-device fingerprints.
+`src/provenance/engine/policyLayer.ts` composes every verdict — INTACT,
+CONTENT_MODIFIED, SIGNATURE_INVALID, NO_ATTESTATION, UNSUPPORTED — from
+normalized engine facts.
 
-## D3. Duress PIN — designed, deferred pending legal review (W5.3)
+Engines return facts; the policy layer decides. Reading a verdict directly off
+an engine's fields will drift from what the UI shows, so don't. For the
+TypeScript engine a parity assertion compares the composed verdict against the
+archived one and throws on any difference rather than absorbing it.
 
-**Status.** NOT IMPLEMENTED, deliberately. (Update: the dead-man's switch
-this design referenced has since been REMOVED — see NETWORK.md — so the
-duress scenario it answered no longer has a switch to coerce; the deferral
-reasoning below stands on its own.)
+A `trustListHit` on a non-INTACT result is context, not an upgrade. A trust-list
+hit on a SIGNATURE_INVALID asset describes who the broken credential chained to.
 
-**The design on paper:** a second passcode that behaves like success while
-silently skipping dead-man check-ins (or silently arming an upload) — for a
-user compelled to "prove" they've checked in.
+## The known-signers list was removed on purpose
 
-**Why deferred.**
-- **Legal exposure varies by jurisdiction and must be named before ship.**
-  In some jurisdictions a duress feature could be construed as obstruction,
-  and in others failing to have one is the greater risk. A jurisdiction
-  matrix (at minimum: US, UK, EU member states, and the jurisdictions of the
-  first deploying newsrooms) needs review by counsel with
-  press-freedom/safety expertise before any code lands.
-- **The coercion model is unresolved.** A duress PIN protects against
-  compelled check-in only if the coercer can't distinguish duress from
-  success — which requires the app to be *indistinguishably* normal under
-  the duress code, including vault contents. That is a much larger promise
-  than a PIN gate, and promising less would violate the honesty rules.
-- **What exists instead (and is honest):** desk key shares (Shamir) stay
-  desk-side, and sealed-to-newsroom capture means a seized device holds
-  ciphertext the photographer cannot open.
+There used to be a flow for manually confirming a key into a trusted list. It
+was itself the attack surface — social engineering onto the list, and grinding
+an 8-hex-prefix fingerprint.
 
-**Trigger to revisit:** counsel's written guidance on the jurisdiction
-matrix, plus a shipped answer to indistinguishability. Until then the app
-makes no duress claim of any kind.
+Identity is now one of: this device, a roster, an org credential, a trust list,
+or unknown, with full 64-character fingerprints for out-of-band comparison.
 
-## D4. Known-signers list removed (from the external audit)
+This is written down because "a trust feature was removed deliberately" is
+something a future maintainer could otherwise undo by accident. Key-continuity
+trust through countersigned history would be a reasonable thing to build; a
+confirm-this-key button would not.
 
-The manual confirm-a-key ritual was itself the attack surface (social
-engineering onto the list; 8-hex-prefix fingerprint grinding). Identity is
-"this device / roster / org credential / trust list / unknown", with full
-64-character fingerprints for out-of-band comparison. Key-continuity trust
-(countersigned history) remains roadmap. Recorded here because "we removed
-a trust feature on purpose" is a decision future maintainers must not
-accidentally undo.
+## The noble version split is deliberate
 
-## D5. src/lib carries desk-only modules — by design, not dead code (auditor F5)
+`@noble/post-quantum@0.6.1`, which backs the ML-DSA-65 layer, is written against
+the noble 2.x API line and imports 2.x-only modules such as
+`@noble/curves/abstract/fft.js`. The rest of the tree pins 1.x:
+`@noble/hashes@1.8.0`, `@noble/curves@1.9.7`, `@noble/ciphers@1.3.0`. So the
+lockfile carries two copies of every noble primitive.
 
-The audit flagged `shamir.ts`, `rephoto.ts`, `roc.ts`, `imuflow.ts`,
-`opticalflow.ts` as unimported in the app tree. They are app-unused but
-**ecosystem-live**: `shamir` backs the desk key manager, `rephoto`/
-`imuflow`/`opticalflow` are the desk-side analyzers named in
-docs/INTEGRITY.md ("signals deliberately left to desk-side analysis"), and `roc`
-is the error-rate math behind the corpus gate (no UI signal without
-characterized error rates). The app and desk share one mirrored `src/lib`
-by deliberate repo-boundary design — the desk imports the same tree, never
-a fork — so the files ship in both. Disposition: kept and documented here,
-not removed; removing them from the app copy would fork the mirror, and
-removing them outright would delete shipped desk features.
+Collapsing them with npm `overrides` was tried and rejected — forcing either
+line onto the other consumer breaks it, and the break is silent until the PQ
+suite runs. `tests/test-pq.mts` pins the behaviour against the split as shipped.
 
-## D6. The noble 1.x/2.x version split is accepted, and the budget gate counts versions
+Instead of collapsing, the dependency-budget gate
+(`scripts/check-dependency-budget.mjs`) counts resolved versions rather than
+names. Every multi-version package has to be declared in `KNOWN_VERSION_SPLITS`
+with its exact version set and a reason, so a new split fails CI instead of
+accumulating quietly.
 
-`@noble/post-quantum@0.6.1` (the ML-DSA-65 layer) is written against the
-noble **2.x** API line — it imports 2.x-only modules such as
-`@noble/curves/abstract/fft.js` — while the rest of the tree pins the 1.x
-line (`@noble/hashes@1.8.0`, `@noble/curves@1.9.7`, `@noble/ciphers@1.3.0`).
-The lockfile therefore carries two copies of every noble primitive.
-Collapsing them with npm `overrides` was evaluated and rejected: forcing
-either line onto the other consumer breaks it (the 2.x-only imports have no
-1.x counterpart), and the failure would be silent until the PQ suite ran.
-`tests/test-pq.mts` (39 checks) pins the PQ behavior against the split as
-shipped. Mitigation instead of collapse: the dependency-budget gate
-(`scripts/check-dependency-budget.mjs`) now counts RESOLVED VERSIONS, not
-just names — every multi-version package must be declared in
-`KNOWN_VERSION_SPLITS` with its exact version set and reason, so a new
-split fails CI instead of accumulating quietly. Re-vet on every bump;
-when a post-quantum release targets a noble line the rest of the tree can
-adopt wholesale, unify then — not piecemeal.
+Worth revisiting when a post-quantum release targets a noble line the rest of
+the tree can adopt.
+
+## A note on unused modules in `src/lib`
+
+`shamir.ts`, `rephoto.ts`, `roc.ts`, `imuflow.ts` and `opticalflow.ts` are not
+imported by the app. They're working library code — secret sharing,
+rephotography checks, ROC/error-rate math, IMU and optical flow — kept here
+because they're useful to build on. They are not dead code the app depends on,
+and removing them breaks nothing.

@@ -6,19 +6,21 @@
  * coefficients → one bit per coefficient against their median (DC excluded
  * from the median, per the reference algorithm) → 64 bits, 8 bytes.
  *
- * WHY: near-duplicate detection and sidecar re-association. Two photos
- * of the same scene — or one photo and its recompressed/cropped derivative —
- * land within a few bits of each other; unrelated photos sit ~32 bits apart.
+ * Used for near-duplicate detection and for re-associating a sidecar with its
+ * media. Two photos of the same scene — or one photo and its recompressed or
+ * cropped derivative — land within a few bits of each other; unrelated photos
+ * sit around 32 bits apart.
  *
- * HONESTY: a pHash match is a LEAD, never a verdict. It says "these look
- * alike", nothing more — cropping, collages, and coincidental similarity all
- * produce matches, and an adversary can engineer them. Distance thresholds
- * are corpus-calibrated before any UI leans on them.
+ * A pHash match is a lead, not a verdict. It says these look alike and nothing
+ * more: cropping, collages and coincidence all produce matches, and an
+ * adversary can engineer one. Thresholds need corpus calibration before any UI
+ * leans on them.
  *
- * PRIVACY: the hash lives in the vault index (app-sandbox plaintext, like
- * the exact sha256 already stored there). It is a coarse perceptual
- * fingerprint — a holder of a known-image hash list could approximate-match
- * it. Never embedded in the signed record, never transmitted.
+ * Two copies exist per photo. The capture-time hash is computed pre-signing and
+ * embedded in the manifest as a c2pa.soft-binding assertion, so it travels with
+ * the file under the claim signature. The vault index keeps its own copy
+ * alongside the exact sha256, as a cross-check and for local search. Anyone
+ * holding a list of known-image hashes can approximate-match either one.
  */
 
 export const PHASH_SIZE = 32;

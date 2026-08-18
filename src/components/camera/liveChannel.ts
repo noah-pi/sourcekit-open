@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Tiny synchronous pub/sub channel for gesture-live values (0.15.0 Drop 2).
+ * Tiny synchronous pub/sub channel for gesture-live values.
  *
  * The camera screen's hard perf rule: a drag gesture must never re-render
  * the viewfinder tree. Gesture sources (pinch, zoom wheel, value ribbon)

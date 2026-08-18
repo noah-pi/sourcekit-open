@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Inspect — check a file against its seal (0.18.2). The result is a
+ * Inspect — check a file against its seal. The result is a
  * forensic reader, not a trophy case — and it mirrors the exhibit details
  * page 1:1 (Noah: "almost identical, especially the manifest points"):
  * the verdict card first, then ONE Capture claims card in the exhibit's
@@ -102,7 +102,7 @@ interface VerdictContext {
  * key and a "valid signature" in 200 milliseconds; intact bytes alone never
  * earn green.
  *
- * Copy v5 (0.17.0): seven verdicts, plain register. No "confirmed", no
+ * Copy v5: seven verdicts, plain register. No "confirmed", no
  * "checks out" — icons carry status, words carry facts.
  */
 function verdictCopy(v: VerdictCode, ctx: VerdictContext): { headline: string; subline: string; tone: 'good' | 'bad' | 'warn' | 'neutral'; icon: keyof typeof Ionicons.glyphMap } {
@@ -492,7 +492,7 @@ function bitcoinCalendarValue(ots: OtsView): { text: string; color?: string } {
 }
 
 /**
- * The seal rows (0.18.2) — the manifest lines that used to sit in the
+ * The seal rows — the manifest lines that used to sit in the
  * "Manifest details" drawer, merged into the Capture claims card in the
  * exhibit page's row format. The old Signature detail section's copy rides
  * as the rows' details, so a failure still says exactly what failed. These
@@ -1072,7 +1072,7 @@ export default function InspectScreen() {
   const editFlag = useMemo(() => {
     if (!editHistory) return null;
     const actions = editHistory.actions?.list ?? [];
-    // 0.18.1: the flag exists for declarations that say something — edit
+    // The flag exists for declarations that say something — edit
     // actions, MULTIPLE sources, or derivation from an earlier file. A
     // straight single-source capture declares nothing of the kind:
     // Source's own manifests carry exactly one componentOf ingredient (the
@@ -1762,7 +1762,7 @@ const buildStyles = () => StyleSheet.create({
   verdictHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   verdictText: { fontFamily: type.display, fontSize: fontSize.xl, fontWeight: '700', flex: 1, lineHeight: 28 },
   verdictSubline: { color: colors.textDim, fontSize: fontSize.sm, lineHeight: 20, marginTop: spacing.sm },
-  // 0.18.2 parity: these ARE the exhibit page's NlRow styles (buildNl) —
+  // These ARE the exhibit page's NlRow styles (buildNl) —
   // plain small label left, value right-aligned, 7px row rhythm.
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md, paddingVertical: 7 },
   labelRowLabel: { color: colors.textFaint, fontSize: fontSize.sm, width: 110 },
@@ -1805,7 +1805,7 @@ const buildStyles = () => StyleSheet.create({
   warnTextFlush: { color: colors.danger, fontSize: fontSize.xs, lineHeight: 17, marginBottom: spacing.sm },
 
   // --- the accordion body: sections of the ONE extended card, separated by
-  //     hairlines — never detached squircles (0.15.0 Drop 2) ---
+  //     hairlines — never detached squircles ---
   detailBody: { marginTop: spacing.xs },
   detailSection: {
     borderTopWidth: StyleSheet.hairlineWidth,

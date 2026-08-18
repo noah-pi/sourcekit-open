@@ -1,19 +1,17 @@
 # Contributing
 
-Contributions are welcome. This repository is the published, auditable core
-of a shipping product — the bar for changes is set by that, not by anything
-about you.
+Contributions are welcome. This is the core of a shipping app, so changes need
+to hold up on a real device.
 
-## The rules that matter here
+## Four rules
 
 1. **Every claim is pinned by a test.** If your change alters a behavior
    the lab checks, the suite must change with it in the same commit. A
    green suite that no longer tests what it names is worse than a red one.
 2. **Honesty rules are load-bearing.** Product copy bans adjudication words
    (verified, authentic, trusted, proven, real, secure, guaranteed) in
-   verdict position; unsigned is neutral, red is reserved for proven
-   tamper; forensic output juxtaposes, never concludes. See
-   `desk/src/core/bannedWords.ts` — it is enforced by tests.
+   verdict position; unsigned renders neutral; red is reserved for proven
+   tamper. A test enforces this — see `tests/`.
 3. **Dependencies are a budget, not a convenience.** Adding one means
    editing `scripts/check-dependency-budget.mjs` in the same commit, with
    the reason in the commit message. Version splits must be declared.
@@ -24,10 +22,13 @@ about you.
 
 ## Running the checks
 
-See README ▸ Reproduce our results. Before sending a change:
-`node scripts/check-dependency-budget.mjs` must exit 0, the staged suites
-touching your change must pass, and the desk must typecheck
-(`cd desk && npx tsc --noEmit`) and build (`npm run build`).
+See README ▸ Run the lab. Before sending a change:
+
+```sh
+node scripts/check-dependency-budget.mjs   # must exit 0
+npx tsc --noEmit                           # must be clean
+node tests/stage.mjs                       # then run the suites your change touches
+```
 
 ## Good first issues
 
@@ -48,6 +49,6 @@ Never in issues. See [SECURITY.md](SECURITY.md).
 
 ## Conduct
 
-Be precise and be kind, in that order. We don't have a separate code of
-conduct; we have a maintainer who reads everything. If that stops scaling,
-this file will grow the section.
+Be precise and be kind, in that order. There's no separate code of conduct —
+one maintainer reads everything. If that stops scaling, this file will grow a
+section.

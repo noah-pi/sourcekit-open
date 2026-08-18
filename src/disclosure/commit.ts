@@ -3,7 +3,7 @@
  * WS2 Phase 1: commit + burn semantics (docs/INTEGRITY.md — selective disclosure).
  * One Merkle root commits the full claim set; leaf 0 is the inventory meta-leaf,
  * so the root binds the never-recorded declaration at commit time. No salt table
- * ever leaves this module (1.0.0 audit A-02): salts are re-derived from the master
+ * ever leaves this module: salts are re-derived from the master
  * seed, so burning the seed closes unopened leaves for everyone, including us
  * (SPEC §0.3). The camera commits; it never concludes — no verdicts here.
  */
@@ -33,7 +33,7 @@ export interface CommittedContext {
 /**
  * Commit the full context-claim set under one root; buildInventory enforces
  * exact coverage of the expected claim set. Deterministic in (seed, claims,
- * declarations). No salt table is returned (1.0.0 audit A-02): salts exist
+ * declarations). No salt table is returned: salts exist
  * only as transient derivations and are re-derived from the seed at open time.
  */
 export function commitContext(

@@ -5,14 +5,13 @@ version: 0.18.4
 date-released: 2026-08-17
 license: Apache-2.0
 authors:
-  - family-names: Pisner
+  - family-names: Bassetti-Blum
     given-names: Noah
 abstract: >-
-  The auditable core of Source Kit, an iOS provenance camera:
-  on-device C2PA Content Credentials signing, hardware-backed key
-  custody with Apple App Attest binding, RFC 3161 and OpenTimestamps
-  time anchoring, a pure-TypeScript X.509/COSE verification stack,
-  and the validation lab that reproduces every claim offline.
+  The core of Source Kit, an iOS provenance camera: on-device C2PA
+  Content Credentials signing, hardware-backed key custody with Apple
+  App Attest binding, RFC 3161 and OpenTimestamps time anchoring, a
+  pure-TypeScript X.509/COSE verification stack, and the test suite.
 keywords:
   - provenance
   - C2PA

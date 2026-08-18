@@ -1,6 +1,6 @@
 # Trademark policy
 
-**Source Kit** and the Source Kit wordmark are trademarks of Noah Pisner.
+**Source Kit** and the Source Kit wordmark are trademarks of Noah Bassetti-Blum.
 They are **not** licensed by this repository's Apache-2.0 grant, which
 covers copyright in the code only.
 

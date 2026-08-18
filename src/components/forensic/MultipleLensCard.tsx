@@ -88,7 +88,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
       setSecondaryUri(null);
       return;
     }
-    // 0.18.5 stale-frame fix: the materialized path must be UNIQUE per
+    // The materialized path must be UNIQUE per
     // frame — expo-image caches decodes by URI, so a constant path showed
     // the FIRST exhibit's secondary frame on every later exhibit (the
     // bytes on disk were correct; the decode cache was not). Key the file
@@ -114,7 +114,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        // 0.18.1 field fix ("the compare slider doesn't work"): never cede
+        // Never cede
         // the drag to the enclosing ScrollView mid-gesture — the default
         // termination request lets a parent scroller steal the responder,
         // freezing the thumb.

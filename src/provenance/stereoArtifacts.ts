@@ -21,7 +21,7 @@
  *      (disclosure/captureCommit.ts). The claim VALUE states the outcome —
  *      'sha256:<hex>' when recorded, 'error:<string>' when the sink failed,
  *      'never-recorded[:<reason>]' when unreached — and the inventory
- *      meta-leaf at tree index 0 (disclosure/inventory.ts, audit A-01)
+ *      meta-leaf at tree index 0 (disclosure/inventory.ts)
  *      binds the full entries list into the signed root. The declaration is
  *      made AT COMMIT TIME and is immutable after — the same binding the
  *      fixed-ladder never-recorded states get. (The context family is

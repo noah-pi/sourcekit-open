@@ -1,8 +1,7 @@
 # Security Policy
 
-Source Kit is a security tool. Claims it makes are meant to be checked — and
-that includes by you. If you find a vulnerability, we want to hear about it
-before it is public.
+Source Kit makes claims that are meant to be checked. If you find a
+vulnerability, please tell us before it's public.
 
 ## Reporting
 
@@ -18,8 +17,7 @@ Please do not open a public issue for a vulnerability.
   demonstrates the problem — e.g. an exhibit that verifies when it should
   not, or fails when it should verify. The suites in `tests/` show the
   shape of a good repro.
-- The **app version** (Settings → version line) and/or the **desk version**
-  (`desk/package.json`) you tested against.
+- The **app version** you tested against — Settings ▸ version line.
 - What you expected the code to conclude, and what it actually concluded.
 
 ## Scope
@@ -33,7 +31,7 @@ In scope:
   plaintext cache hygiene.
 - Roster and trust-list handling: signature checks, revocation timing,
   trust resolution.
-- The desk verifier's judgment of media, proof bundles, and hash claims.
+- Verification of media, proof bundles and hash claims.
 
 Out of scope: issues in third-party dependencies already tracked upstream,
 and denial-of-service against the optional self-hosted relay (`server/`).
@@ -50,6 +48,7 @@ This is a small beta project, maintained part-time. In plain terms:
 - There is **no bug bounty**. Reports are thanks-in-advance work, same as
   ours.
 
-## Audit history
+## Security design
 
-The audit-and-fix history lives in [`docs/SECURITY.md`](docs/SECURITY.md).
+How the security properties are built, and their known gaps:
+[`docs/SECURITY.md`](docs/SECURITY.md).

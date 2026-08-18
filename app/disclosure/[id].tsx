@@ -104,7 +104,7 @@ export default function DisclosureScreen() {
   }, [state, profile, customIds]);
 
   /**
-   * The live bundle summary (0.15.0 Drop 2): what the bundle produced by the
+   * The live bundle summary: what the bundle produced by the
    * current selection WILL and WON'T contain, recomputed on every toggle.
    * Literal to the bundle format — opened leaves + proofs + root + inventory
    * + withheld count + never-recorded declaration; never the media, never a

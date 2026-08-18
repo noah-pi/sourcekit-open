@@ -42,7 +42,7 @@ export async function getCurrentWifi(): Promise<WifiClaim | null> {
     const net = await native.currentWifi();
     if (!net) return null;
     return {
-      // 0.14.0: the SSID is deliberately NOT embedded anymore. Anyone can
+      // The SSID is deliberately NOT embedded anymore. Anyone can
       // name a network anything (unreliable as evidence) and a network name
       // is a privacy leak ("Starbucks Wi-Fi" places you). The BSSID is the
       // corroboratable claim — a desk can look it up; the app never does.

@@ -75,7 +75,7 @@ export const LABEL_SOFT_BINDING = 'c2pa.soft-binding';
 export const LABEL_THUMBNAIL_CLAIM_JPEG = 'c2pa.thumbnail.claim.jpeg';
 export const LABEL_TRAINING_MINING = 'c2pa.training-mining';
 /**
- * D1 (0.16.0): signed stereo depth. Label spellings are the vendored SDK
+ * D1: signed stereo depth. Label spellings are the vendored SDK
  * 2.3 enum's (StandardAssertionLabel.depthmap / .collectionDataHash), which
  * are also the spec's (C2PA 2.2 §18.21 Depthmap, §18.8 Collection Data
  * Hash).
@@ -83,7 +83,7 @@ export const LABEL_TRAINING_MINING = 'c2pa.training-mining';
 export const LABEL_DEPTHMAP_GDEPTH = 'c2pa.depthmap.GDepth';
 export const LABEL_COLLECTION_HASH = 'c2pa.hash.collection.data';
 /**
- * 0.16.1: the secondary viewpoint baked into the manifest as a first-class
+ * The secondary viewpoint baked into the manifest as a first-class
  * standard ingredient (C2PA 2.2 §18.11, ingredient.v3 schema) with
  * relationship 'componentOf' — the wide-angle frame is a COMPONENT of this
  * exhibit, not a parent it was derived from. Its 512px thumbnail rides as
@@ -278,7 +278,7 @@ export interface C2paManifestParams {
   /** Returns every witness token obtained (empty array when offline). */
   fetchTimestamp?: (message: Uint8Array) => Promise<Uint8Array[]>;
   /**
-   * Sizing-only probe token lengths (0.18.0). Token sizes are TSA-fixed, so
+   * Sizing-only probe token lengths. Token sizes are TSA-fixed, so
    * the layout probe uses the last observed length per TSA instead of a
    * throwaway network fetch — that fetch used to cost a full TSA round per
    * seal. When absent, the probe falls back to fetchTimestamp (lab seam).
@@ -395,7 +395,7 @@ export interface C2paManifestParams {
    */
   collectionAssets?: { uri: string; bytes: Uint8Array; dcFormat?: string | null }[] | null;
   /**
-   * 0.16.1: the secondary (wide) viewpoint as a componentOf ingredient.
+   * The secondary (wide) viewpoint as a componentOf ingredient.
    * `thumbnailJpeg` is the embedded 512px lead; `fullResSha256` commits the
    * measurement-grade bytes that stay in the vault — the claim seals BOTH,
    * so the vault copy and the in-file lead cannot silently diverge. Absent
@@ -648,7 +648,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     standardBoxes.push(jumbBox(UUID_JPEG, LABEL_THUMBNAIL_CLAIM_JPEG, box('jpeg', p.thumbnailJpeg)));
     standardLabels.push(LABEL_THUMBNAIL_CLAIM_JPEG);
   }
-  // 0.16.1: the secondary viewpoint as a componentOf ingredient — its own
+  // The secondary viewpoint as a componentOf ingredient — its own
   // embedded thumbnail (a lead, self-evidently not the measurement pixels)
   // plus a data hash of the full-res bytes in the vault (the measurement).
   // Both boxes enter the claim's assertion list, so the signature covers the
@@ -806,7 +806,7 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
   const telemetryJson = utf8ToBytes(JSON.stringify(p.telemetry));
 
   let exclusionLength = 0;
-  // 0.18.5: 64 → 256 bytes. A TSA that alternates signing certs (or an OTS
+  // 64 → 256 bytes. A TSA that alternates signing certs (or an OTS
   // calendar whose response grew between probe and real fetch) can drift a
   // token by more than 64 bytes; the slack is reserved segment size, not
   // per-capture overhead anyone sees.
@@ -858,12 +858,11 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
         const segment = assembleReal(padForDelta(delta));
         if (segment.length === exclusionLength) return segment;
       }
-      // 0.18.5: token drift beyond the slack is no longer FATAL. The real
+      // Token drift beyond the slack is no longer FATAL. The real
       // witness tokens occasionally exceed their probes (TSA cert-chain or
       // calendar-response variance between two fetches seconds apart) —
-      // the 2026-08-17 field logs showed this throw on the first pass of
-      // nearly every seal, with the queue's blind retry then succeeding.
-      // Re-converge instead: grow the target past the signed assembly and
+      // which throws on the first pass of most seals. Rather than relying on
+      // a retry, re-converge: grow the target past the signed assembly and
       // iterate — the next pass re-signs with the larger exclusion sealed
       // inside the claim. Bounded by the 12-iteration loop; an unreached
       // fixpoint still throws below.
@@ -934,7 +933,7 @@ export async function buildC2paStorePng(p: C2paManifestParams, insertOffset: num
         const store = assembleReal(padForDelta(delta));
         if (store.length + CHUNK_OVERHEAD === exclusionLength) return store;
       }
-      // 0.18.5: same re-converge-instead-of-throw as the JPEG path — see
+      // Same re-converge-instead-of-throw as the JPEG path — see
       // buildC2paSegment's note. Bounded by the 12-iteration loop.
       exclusionLength = Math.max(bare.length + CHUNK_OVERHEAD, exclusionLength) + SLACK;
       continue;

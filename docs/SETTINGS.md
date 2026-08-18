@@ -1,8 +1,7 @@
 # Settings, in full
 
-The Settings screen keeps every row short. This document carries the long-form
-explanations behind those rows — same honesty standard: every claim here is
-literally true of the implementation.
+The Settings screen keeps every row short. This is the long-form version of
+what each row does.
 
 ## Capture
 
@@ -39,12 +38,12 @@ identical either way — this chooses what the signed record *says* about you.
 - **Save signed photos to camera roll** — copies leave the encrypted vault
   (still signed). Off by default.
 
-### Capture evidence (1.0.0, CaptureKit builds)
+### Capture evidence
 
 Three toggles — **parallax ring**, **raw audio master**, **full-rate sensor
 log** — all on by default. They control which evidence files the native
 capture session writes beside the delivery photo or video. The files stay on
-this device, for later analysis by your desk; the phone never analyzes them.
+this device for later analysis. The phone does not analyze them.
 Turning a toggle off means the evidence is **not collected at all**: future
 captures carry no such evidence and their signed record says so explicitly
 (`never-recorded`) — an off toggle is never indistinguishable from a failure.
@@ -52,10 +51,10 @@ captures carry no such evidence and their signed record says so explicitly
 What each captures:
 
 - **Parallax ring (stills only)** — about 8 JPEG frames straddling the
-  shutter, for desk-side depth review. Video keeps no ring.
+  shutter, for depth review. Video keeps no ring.
 - **Raw audio master (video)** — an uncompressed LPCM track (16 kHz mono
   `.caf`) converted on-device from the same native audio buffers that feed
-  the delivery file, for desk-side analysis (e.g. mains-hum work). Recording
+  the delivery file, for later analysis such as mains-hum work. Recording
   mode disables voice processing as far as the public API allows.
 - **Full-rate sensor log** — accelerometer/gyroscope at 100 Hz, barometer,
   and location fixes, as JSONL. Location is the fused `CLLocation` kind iOS
@@ -71,7 +70,7 @@ separately by the existing hard binding. And the record carries the
 (50/60 Hz), never measured — iOS exposes no anti-banding API, so the record
 says `region-derived` — plus the last known exposure duration.
 
-Every evidence sink is recorded three ways, exactly (E.04): the file's path
+Every evidence sink is recorded in exactly one of three states: the file's path
 when collected, an explicit `null` when the sink was on but failed, or
 `never-recorded` when the toggle was off, the sink doesn't apply to the
 media kind (PCM on a still, ring on a video), or the CaptureKit module is
@@ -84,7 +83,7 @@ always land.
 When set, every capture signs with a dedicated assignment key instead of this
 device's key — assignments can't be linked to each other or to your device. The
 honest cost: assignment keys are software-backed and carry no hardware
-attestation, and the signed record says so. Your desk can still vouch for an
+attestation, and the signed record says so. Your newsroom can still vouch for an
 assignment key by adding its fingerprint to the roster. Rotating an assignment
 key keeps past captures verifiable under the old fingerprint and breaks the
 link between before and after.
@@ -113,13 +112,11 @@ A roster is your newsroom's signed list of staff keys: names, roles, validity
 dates, vouched for by an editor's signature. Check a colleague's exhibit and
 their name shows — with who vouched and when. Revoking a departed member never
 erases their genuine past captures; signing after a revocation is a red flag.
-Roster files come from your desk, out of band — never from inside a file you're
+Roster files come from your newsroom, out of band — never from inside a file you're
 checking. When you install one, confirm the editor fingerprint out of band
-against what your newsroom actually distributed. A roster carrying a desk key
-also unlocks sealed-to-newsroom capture; only the desk's key-share holders can
-open that ciphertext. (The dead-man's switch that also lived behind this gate
-was removed: an automatic whole-vault upload was the largest blast radius in
-the app, and its safety story was never fully wired.)
+against what your newsroom actually distributed. A roster carrying a newsroom key
+also unlocks sealed-to-newsroom capture; only that key's share holders can open
+that ciphertext.
 
 ### Organization credential
 
@@ -137,17 +134,6 @@ verifiers. If the device key rotates, the installed credential no longer
 matches and stops being used until re-issued.
 
 ## Safety
-
-### Dead-man's switch
-
-If you go silent past the interval, every vault capture — sealed to the desk
-key of a roster you installed — uploads to your endpoint. The endpoint sees
-ciphertext and the fact of an upload, never the contents. iOS decides when a
-closed app may run: the upload fires when the app next runs after the deadline,
-including on the lock screen, and cannot be guaranteed from a device that stays
-off or is never reopened. A false alarm costs your desk ciphertext they cannot
-open without the key shares. There is no anonymity: the upload is visible as an
-upload.
 
 ### App lock and the vault
 

@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * EXIF sanitization for the signed com.verify.exif assertion (0.10.0).
+ * EXIF sanitization for the signed com.verify.exif assertion.
  *
  * The camera pipeline reports exposure and lens facts alongside every frame.
  * Signed into the manifest, they give a desk cross-checks that are awkward
