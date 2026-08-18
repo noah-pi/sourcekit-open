@@ -25,12 +25,12 @@ import type { ExhibitLens, LensZoomCap } from '../../lib/exhibitCamera';
 /**
  * Fallback digital-zoom ceiling, relative to wide 1x, used ONLY when the
  * native per-device quality caps haven't reported (pre-W2 native builds,
- * capabilities() not yet fetched, or a lens the caps omit).
+ * capabilities not yet fetched, or a lens the caps omit).
  *
  * Native Wave 2 (W2.3) landed the contract this constant was standing in
- * for: capabilities().lensZoomCaps carries each constituent device's
+ * for: capabilities.lensZoomCaps carries each constituent device's
  * hardware max AND an app-chosen digital-quality cap (a quality choice,
- * honestly documented — not a hardware limit). maxRelativeZoom() below
+ * honestly documented — not a hardware limit). maxRelativeZoom below
  * derives the ceiling from that data whenever it is available; this
  * conservative constant is the fallback, applied on top of the device's
  * own clamp. Digital zoom is resampling — stated by the DIGITAL marker.
@@ -93,7 +93,7 @@ export function stopFor(stops: OpticalStop[], lens: ExhibitLens): OpticalStop | 
 }
 
 /**
- * 0.17.1 — the Halide model. A pinch/wheel sweep stays on the CURRENT
+ * The Halide model: a pinch or wheel sweep stays on the current
  * physical stack and zooms digitally within it; lens switching is an
  * explicit pill tap (with haptic), never an automatic hand-off mid-
  * gesture. Rationale: mid-gesture hand-off requires the OS-managed

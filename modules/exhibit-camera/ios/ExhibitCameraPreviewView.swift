@@ -90,7 +90,7 @@ public final class ExhibitCameraPreviewView: ExpoView {
     onPreviewReady(["signal": signal])
   }
 
-  // MARK: - Alt-view PiP (0.14.0 — transparency: the second camera's feed
+  // MARK: - Alt-view PiP (transparency: the second camera's feed
   // is on screen exactly while it is attached)
 
   /// The PiP layer is a SUBLAYER of the preview layer — display-only; the

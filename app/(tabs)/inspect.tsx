@@ -2,7 +2,7 @@
 /**
  * Inspect — check a file against its seal. The result is a
  * forensic reader, not a trophy case — and it mirrors the exhibit details
- * page 1:1 (Noah: "almost identical, especially the manifest points"):
+ * page 1:1:
  * the verdict card first, then ONE Capture claims card in the exhibit's
  * own format (When & where / Device / The seal / Sensors / Camera
  * settings — the old Manifest details drawer merged in, each fact exactly
@@ -1098,7 +1098,7 @@ export default function InspectScreen() {
 
   // Parse the manifest once: the edit history and camera-settings claims
   // derive from it, and the parsed object itself feeds the Advanced group's
-  // raw-manifest reel (the shared ManifestReel — the FULL manifest, 0.18.3).
+  // raw-manifest reel (the shared ManifestReel — the FULL manifest,).
   useEffect(() => {
     setParsedManifest(null);
     setEditHistory(null);
@@ -1239,7 +1239,7 @@ export default function InspectScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* 0.18.2: the beta tag belongs on the screen header (Noah) — the
+        {/* the beta tag belongs on the screen header — the
             same ScreenTitle `tag` pill the Settings screen uses, verbatim. */}
         <ScreenTitle
           title="Inspect"
@@ -1250,7 +1250,7 @@ export default function InspectScreen() {
         <Card>
           {/* Local themed pill, not the shared Button: the shared primary
               tone pairs a `colors.text` fill with a hard-coded dark label —
-              dark-on-dark in light mode (0.18.1 field report). The pill is
+              dark-on-dark in light mode (report). The pill is
               the inverted-ink pair in BOTH schemes: dark pill / paper text
               in light, paper pill / dark text in dark. */}
           <Pressable
@@ -1311,7 +1311,7 @@ export default function InspectScreen() {
               />
             ) : null}
 
-            {/* DECLARED EDITS (0.18.3, Noah) — above Capture claims, only
+            {/* DECLARED EDITS — above Capture claims, only
                 when the file actually declares some, and only the C2PA
                 actions themselves: no ingredients ("includes other media"),
                 no disclaimer copy. Hidden entirely when there are none.
@@ -1339,7 +1339,7 @@ export default function InspectScreen() {
               </View>
             ) : null}
 
-            {/* CAPTURE — 0.18.3 (Noah): the same collapsible group card as
+            {/* CAPTURE — the same collapsible group card as
                 the exhibit details page, same time-outline icon. When &
                 where / Device / The seal / Sensors / Camera settings. */}
             {record || hasTimeRows ? (
@@ -1464,7 +1464,7 @@ export default function InspectScreen() {
                     </View>
                   ) : null}
 
-                  {/* THE SEAL — the manifest lines, merged (0.18.2). What
+                  {/* The seal: the manifest lines, merged. What
                       used to be the Manifest details drawer and the Signature
                       detail section: each fact once, failure copy riding as
                       the row's own detail. */}
@@ -1498,7 +1498,7 @@ export default function InspectScreen() {
                   ) : null}
 
                   {/* Media type + size ride at the bottom of Camera
-                      Settings, under White Balance (0.18.3, Noah) — the
+                      Settings, under White Balance — the
                       standalone Media section is gone. */}
                   {(manifestExif && Object.keys(manifestExif.data).filter((k) => k !== 'note').length > 0) || record ? (
                     <View style={styles.subSection}>
@@ -1528,9 +1528,8 @@ export default function InspectScreen() {
             ) : null}
 
             {/* INTEGRITY — the capture-integrity rows in the exhibit page's
-                Integrity group, with the same lock-closed-outline icon
-                (0.18.3, Noah). App Attest is NOT repeated here: it rides
-                in The seal above (0.18.2 merge — one fact, one place). */}
+                Integrity group, with the same lock-closed-outline icon. App Attest is NOT repeated here: it rides
+                in The seal above (one fact, one place). */}
             {record?.captureIntegrity ? (
               <View>
                 <GroupCard
@@ -1576,7 +1575,7 @@ export default function InspectScreen() {
               <View>
                 <SectionLabel text="Forensic checks" />
                 {/* Lens, motion-trace and environment checks read PICTURE
-                    evidence — hidden on audio captures (0.18.3, Noah); the
+                    evidence — hidden on audio captures; the
                     raw-audio master is the audio-applicable one. */}
                 {forensicKind !== 'audio' ? (
                   <>
@@ -1624,7 +1623,7 @@ export default function InspectScreen() {
               </View>
             ) : null}
 
-            {/* ADVANCED (0.18.3, Noah) — the same cog-outline group card as
+            {/* ADVANCED — the same cog-outline group card as
                 the exhibit details page, holding the raw C2PA manifest reel:
                 the FULL manifest, exactly as recovered, with copy as the way
                 it leaves the phone. The old Signer section is cut (redundant

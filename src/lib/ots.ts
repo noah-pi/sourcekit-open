@@ -48,7 +48,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { concatBytes, equalBytes, bytesToHex, bytesToUtf8, utf8ToBytes, base64ToBytes, bytesToBase64 } from './bytes';
 
 // Reference wire constants (python-opentimestamps op.py / notary.py /
-// timestamp.py — checked against live calendar responses, 0.18.1):
+// timestamp.py — checked against live calendar responses,):
 //   MAGIC tail is bf89e2e884e89294 (a wrong tail rejects every real .ots).
 export const OTS_MAGIC = concatBytes(
   new Uint8Array([0x00]),

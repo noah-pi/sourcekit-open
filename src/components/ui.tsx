@@ -90,9 +90,9 @@ export function Button({ label, onPress, tone = 'primary', icon, disabled, loadi
   small?: boolean;
 }) {
   const styles = useThemedStyles(buildStyles);
-  // Mockup spec (app-0.17.0.html .btn): primary is INK — the scheme's ink
-  // fill with the scheme's CANVAS as the label (0.18.1: was a hard-coded
-  // near-black label — black-on-black in light mode). Ghost is a hairline
+  // Primary is the scheme's ink fill with the scheme's canvas as the label,
+  // both from tokens — a hard-coded label goes black-on-black in one scheme.
+  // Ghost is a hairline
   // outline. Danger is a translucent red outline. No gradients on buttons.
   const stylesByTone = {
     primary: { bg: colors.text, fg: colors.bg, border: 'transparent' },
@@ -194,7 +194,6 @@ const buildStyles = () => StyleSheet.create({
   titleTag: { color: colors.textDim, fontSize: fontSize.xs, fontWeight: '600' },
   subtitle: { color: colors.textDim, fontSize: fontSize.md, marginTop: spacing.xs, lineHeight: 21 },
   card: {
-    // Mockup .card: flat surface with a 1px hairline border, radius 14.
     backgroundColor: colors.surface,
     borderRadius: radii.md,
     borderWidth: 1,
@@ -203,7 +202,6 @@ const buildStyles = () => StyleSheet.create({
     marginBottom: 10,
   },
   sectionLabel: {
-    // Mockup .sec h2: 10.5px / 800 / .18em tracking / dim / uppercase.
     color: colors.textFaint,
     fontSize: 10.5,
     fontWeight: '800',
@@ -222,7 +220,6 @@ const buildStyles = () => StyleSheet.create({
   },
   chipText: { fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.2 },
   button: {
-    // Mockup .btn: radius 10, 12px vertical padding, 12px/700 label.
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

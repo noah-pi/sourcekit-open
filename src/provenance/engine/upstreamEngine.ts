@@ -5,11 +5,11 @@
  * Verdicts are composed exclusively by policyLayer.ts.
  *
  * Binding (SPEC §1, WS3-Binding-Path §3a):
- *   - TARGET:  @contentauth/c2pa-node@0.8.1 (napi over c2pa-rs) —
+ *   - TARGET:  @contentauth/c2pa-node@ (napi over c2pa-rs) —
  *     requires **node >= 22** (its `engines` field). The staged harness
  *     and CI run node 20, so this binding cannot load there.
  *   - FALLBACK (documented in SPEC §1 for node < 22):
- *     @contentauth/c2pa-wasm@0.11.1 — the SAME c2pa-rs core compiled to
+ *     @contentauth/c2pa-wasm@ — the SAME c2pa-rs core compiled to
  *     wasm, pinned exactly, runs on node 20. This module prefers c2pa-node
  *     on node >= 22 and uses the wasm build otherwise; `engine` in the
  *     result says which one actually ran, so reports stay honest.
@@ -17,7 +17,7 @@
  * Node gaps in the wasm build that this module shims, explicitly:
  *   - wasm-bindgen glue uses FileReaderSync (a Web Worker API) to read
  *     Blobs. In Node we install a FileReaderSync polyfill backed by a
- *     WeakMap — every Blob handed to the engine is created by blobFrom()
+ *     WeakMap — every Blob handed to the engine is created by blobFrom
  *     below, so the bytes are always tracked. A foreign Blob throws rather
  *     than guessing.
  *   - Engine settings are process-global (c2pa-rs settings model). We load

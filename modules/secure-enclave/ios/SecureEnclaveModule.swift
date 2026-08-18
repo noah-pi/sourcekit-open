@@ -54,18 +54,18 @@ import MachO // _dyld_image_count/_dyld_get_image_name — not exposed to Swift 
  *    journalists' devices was the failure mode we deliberately avoided.
  *
  * API surface (synchronous unless noted; Security framework calls are fast):
- *   isAvailable()        -> Bool
- *   getPublicKey()       -> String?  — base64 65-byte X9.63 point
- *   generateKey()        -> String
+ *   isAvailable        -> Bool
+ *   getPublicKey       -> String?  — base64 65-byte X9.63 point
+ *   generateKey        -> String
  *   sign(digest:)        -> String   — DER signature base64
- *   deleteKey()          -> Void
- *   getBioPublicKey()    -> String?
- *   generateBioKey()     -> String
+ *   deleteKey          -> Void
+ *   getBioPublicKey    -> String?
+ *   generateBioKey     -> String
  *   signBio(digest:)     -> String   — signs behind Face ID/Touch ID
- *   deleteBioKey()       -> Void
+ *   deleteBioKey       -> Void
  *   seal(payload:)       -> String   — SHA-256 + sign, one call (standard key)
  *   sealBio(payloads:, reason:) -> [String]  — one scan, per-use (async)
- *   deviceIntegrity()    -> [String: Any]    — active-instrumentation findings
+ *   deviceIntegrity    -> [String: Any]    — active-instrumentation findings
  */
 public class SecureEnclaveModule: Module {
   private let keyTag = "com.verify.camera.signing-key"

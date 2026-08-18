@@ -72,7 +72,7 @@ public class C2paIosModule: Module {
     /**
      * Read + validate a DETACHED (sidecar) manifest against its asset
      * (WS3-Binding-Path §6c). Verified API: Reader(format:stream:manifest:) +
-     * Stream(readFrom:) + reader.json().
+     * Stream(readFrom:) + reader.json.
      */
     AsyncFunction("readManifestDetached") { (path: String, format: String, manifestBase64: String) throws -> String in
       guard let manifestData = Data(base64Encoded: manifestBase64) else {

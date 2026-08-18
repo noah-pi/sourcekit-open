@@ -11,8 +11,8 @@
  *
  * Leaf format (reproducible by any desk holding the exported trace):
  *
- *   leafDigest = SHA-256( 'pose-trace-v1' ‖ <trimmed JSONL line bytes,
- *                                             without the newline> )
+ *   leafDigest = SHA-256('pose-trace-v1' ‖ <trimmed JSONL line bytes,
+ *                                             without the newline>)
  *
  * Committing the TRIMMED line BYTES (not a re-serialization) means the
  * desk's recomputation needs no canonical-JSON agreement — the exported

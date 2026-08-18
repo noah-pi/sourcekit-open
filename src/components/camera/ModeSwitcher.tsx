@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Mode switcher (0.15.0 Drop 2, research §7) — AUDIO / PHOTO / VIDEO in a
+ * Mode switcher — AUDIO / PHOTO / VIDEO in a
  * horizontal track above the shutter, with a highlight pill that slides to
  * the active slot on every switch.
  *

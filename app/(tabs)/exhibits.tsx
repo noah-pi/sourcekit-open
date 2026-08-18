@@ -2,7 +2,7 @@
 /**
  * Exhibits — encrypted library of every exhibit this device has sealed.
  * Thumbnails are decrypted on demand into an ephemeral cache (wiped on lock).
- * Each cell carries at most two quiet badges (0.17.0 mockup language): the
+ * Each cell carries at most two quiet badges: the
  * lock — sealed is the default state — and a pin when location OR wifi
  * data is embedded. Small glyphs on translucent dark discs, bottom-left.
  */
@@ -34,7 +34,7 @@ import * as Sharing from 'expo-sharing';
 import { subscribeSeals, subscribeSealJobs, retrySealJob, discardSealJob, cancelSealJob, resumeSealQueue, type SealJobSnapshot } from '../../src/provenance/sealQueue';
 import { ScreenTitle, EmptyState, Chip, Button, Mono } from '../../src/components/ui';
 
-// Grid geometry per the 0.17.0 mockup: 3 columns, 9px gutters, 16px page
+// Grid geometry per the mockup: 3 columns, 9px gutters, 16px page
 // padding, square tiles (.grid{gap:9px;padding:4px 16px 0}).
 const COLS = 3;
 const GAP = 9;
@@ -55,7 +55,7 @@ const JOB_ICON: Record<SealJobSnapshot['kind'], keyof typeof Ionicons.glyphMap> 
  * unchanged; a retry that still fails is marked failed again).
  */
 /**
- * Seal-failure card (0.17.0 copy v5): the state, stated plainly — what
+ * Seal-failure card: the state, stated plainly — what
  * happened, that the capture is safe, two actions, and the verbatim error
  * one drawer down in Full details. Remove discards the queued draft.
  */
@@ -130,8 +130,7 @@ function PendingSealTile({ job, selecting, selected, onToggle }: {
   onToggle: () => void;
 }) {
   const styles = useThemedStyles(buildStyles);
-  // 0.18.4 (Noah: "allow you to also remove/cancel queued/sealing ones"):
-  // sealing tiles are selectable too — a mid-seal cancel is honored at the
+  // Sealing tiles are selectable too. A mid-seal cancel is honored at the
   // pump's pre-write checkpoints (sealQueue.cancelSealJob), never mid-write.
   // The selection dot was also missing here entirely; it now matches the
   // sealed cells exactly.
@@ -191,7 +190,7 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
   const hasLocation = item.hasLocation || flags?.location === true;
 
   useEffect(() => {
-    // Photos AND videos carry vault-sealed thumbnails (0.14.0 — videos were
+    // Photos AND videos carry vault-sealed thumbnails (videos were
     // bare icons before). Legacy videos without one get a lazy backfill: one
     // frame grabbed from the decrypted media, sealed beside it, then shown.
     // The full-item fallback is photo-only (a video decrypts to an
@@ -331,7 +330,7 @@ export default function VaultScreen() {
   };
 
   // The selection mixes sealed exhibits (bare ids) and queued captures
-  // ('job:<id>' keys, 0.18.3) — one Select mode, one Remove action; each
+  // ('job:<id>' keys,) — one Select mode, one Remove action; each
   // kind goes through its own discard path.
   const splitSelection = () => {
     const itemIds: string[] = [];
@@ -477,18 +476,15 @@ export default function VaultScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        {/* BETA tag: the same ScreenTitle tag prop the Settings header uses
-            for "in beta" — same tokens, same styling (0.18.2, Noah: the word
-            belongs on the screen header, not the tab-bar label). */}
+        {/* The same ScreenTitle tag prop the Settings header uses, so the
+            word sits on the screen header rather than the tab-bar label. */}
         <ScreenTitle title="Exhibits" tag="in beta" subtitle="Manage media. Stored locally." />
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           {items.length > 0 ? (
             <Chip label={`${items.length} exhibit${items.length === 1 ? '' : 's'}`} tone="neutral" icon="albums-outline" />
           ) : null}
-          {/* Select mode covers sealed exhibits AND queued captures (0.18.3,
-              Noah) — so it must be reachable when the grid holds only
-              queued work. 0.18.4: sealing jobs are selectable too, so any
-              active job keeps the toggle reachable. */}
+          {/* Select mode covers sealed exhibits, queued captures and sealing
+              jobs, so the toggle stays reachable whenever any of them exist. */}
           {items.length > 0 || activeJobs.length > 0 ? (
             <TouchableOpacity onPress={selecting ? exitSelect : () => setSelecting(true)}>
               <Text style={styles.selectToggle}>{selecting ? 'Cancel' : 'Select'}</Text>
@@ -585,7 +581,7 @@ const buildStyles = () => StyleSheet.create({
   // Each cell carries GAP/2 margin on every side, so the content container
   // insets by the remainder to land the outer edge exactly at PAD.
   gridContent: { paddingHorizontal: PAD - GAP / 2, paddingTop: 4 },
-  // Tile per the 0.17.0 mockup: square, 11px radius, 1px hairline border.
+  // Tile per the mockup: square, 11px radius, 1px hairline border.
   tile: {
     width: CELL,
     aspectRatio: 1,
@@ -678,7 +674,7 @@ const buildStyles = () => StyleSheet.create({
   thumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   thumbSnippet: { padding: spacing.sm, justifyContent: 'flex-start', gap: 5 },
   thumbSnippetText: { color: colors.textDim, fontSize: 10, lineHeight: 13, fontStyle: 'italic' },
-  // Badge row (0.17.0 mockup language): small translucent dark discs with a
+  // Badge row: small translucent dark discs with a
   // hairline light border, dim glyphs, bottom-left, 4px apart. Quiet by
   // design — the lock is the default state, not an alarm.
   badgeRow: {
@@ -689,9 +685,6 @@ const buildStyles = () => StyleSheet.create({
     gap: 4,
   },
   badge: {
-    // 0.18.5 visibility bump (Noah: "too subtle on thumbnails"): deeper
-    // disc, a visible ring, and a brighter glyph — still quiet, but
-    // legible against a busy photo.
     width: 22,
     height: 22,
     borderRadius: 11,

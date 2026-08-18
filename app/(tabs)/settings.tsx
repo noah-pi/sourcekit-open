@@ -297,8 +297,7 @@ export default function SettingsScreen() {
   };
 
   /**
-   * Each install path explains ITS OWN specifics before it runs (0.18.2 —
-   * the dense paragraph under the buttons became one quiet line; the
+   * Each install path explains ITS OWN specifics before it runs (* the dense paragraph under the buttons became one quiet line; the
    * mechanism lives here, at the moment of action). Both alerts state the
    * same enrollment fact: hand the org this device's key; the private key
    * never leaves the device.
@@ -604,7 +603,7 @@ export default function SettingsScreen() {
           </Text>
 
           <Divider />
-          {/* Same header rank as Alias (0.14.0) — this is a second kind of
+          {/* Same header rank as Alias — this is a second kind of
               signer identity, not a footnote under it. */}
           <View style={styles.aliasHeader}>
             <Text style={styles.rowTitle}>Organization Credential</Text>
@@ -669,7 +668,7 @@ export default function SettingsScreen() {
             evidence in the accent), one tight line per toggle. */}
         <SectionLabel text="What gets recorded" />
         <Card>
-          {/* Two explicit groups (0.18.1): terracotta marks the toggles that
+          {/* Two explicit groups: terracotta marks the toggles that
               seal WHO/WHERE-you-are into the file; sage marks evidence about
               the moment itself. One tight line per toggle. */}
           <GroupLabel tint={IDENTIFYING_TINT} text="Identifying · sealed into the file" />
@@ -847,7 +846,7 @@ export default function SettingsScreen() {
             error strings verbatim. */}
         <SectionLabel text="Diagnostics" />
         <Card>
-          {/* 0.18.4-R3: a flipped switch persists across app updates (only
+          {/*-R3: a flipped switch persists across app updates (only
               deleting the app resets the suite) and silently changes the
               camera pipeline under test. The banner states WHICH switches
               differ from defaults and how to reset — facts only, no verdict. */}
@@ -867,13 +866,12 @@ export default function SettingsScreen() {
             </View>
           ) : null}
           {/* Camera diagnostics switches — persisted natively (UserDefaults
-              suite "exhibit.debug"; the 12 MP clamp defaults ON as of
-              0.17.2, the others default off). A flip takes effect at the
+              suite "exhibit.debug"; the 12 MP clamp defaults ON as of, the others default off). A flip takes effect at the
               NEXT configureSession: the session rebuilds only in the
               camera tab's focus effect (photo connections and policies are
               constructed at session build), so the running session is
               untouched. The footnote says exactly that. */}
-          {/* 0.18.5: the rotation (wave 5) and legacy-graph switches are
+          {/* the rotation (wave 5) and legacy-graph switches are
               GONE — both hunts are settled (the four-run matrix exonerated
               every toggle; the virtual graph is the proven path). The
               native flags still exist for a future bisect, but a switch

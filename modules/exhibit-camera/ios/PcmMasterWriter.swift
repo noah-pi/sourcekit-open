@@ -59,7 +59,7 @@ final class PcmMasterWriter {
 
   // AVAudioFile finalizes the CAF header on deinit (it has no explicit close
   // API — the audio-capture module relies on the same behavior for .m4a), so
-  // the reference is optional and finish() drops it.
+  // the reference is optional and finish drops it.
   private var file: AVAudioFile?
   private let format: AVAudioFormat
   let url: URL

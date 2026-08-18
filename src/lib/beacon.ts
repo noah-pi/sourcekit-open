@@ -21,7 +21,7 @@
  *    the staleness is disclosed in the record (`observedAt`).
  *  - Cache aggressively: one cached tip serves every capture until the next
  *    scheduled refresh.
- *  - User-pinnable endpoint: setBeaconEndpoint() overrides the default pool
+ *  - User-pinnable endpoint: setBeaconEndpoint overrides the default pool
  *    (a newsroom can run its own Esplora instance and pin it).
  *  - Network presence is never hidden: refreshes happen on a schedule
  *    unrelated to captures, so an observer cannot correlate a fetch with a

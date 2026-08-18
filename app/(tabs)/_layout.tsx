@@ -20,9 +20,7 @@ import { colors, useEffectiveScheme } from '../../src/theme';
 import { subscribeSealJobs } from '../../src/provenance/sealQueue';
 import { subscribeVaultNotices } from '../../src/vault/vaultFs';
 
-// Mockup (.pillbar / app-0.17.0.html): a floating translucent pill, 64pt tall,
-// radius 32, hairline border, blurred backdrop, active tab wrapped in a soft
-// green pill. The bar overlays content rather than pushing it up.
+// The bar overlays content rather than pushing it up.
 // The mockup's #7ED6A4 active green fails WCAG on the
 // light-mode bar (≈1.6:1 on white). Dark mode keeps it; light mode uses the
 // theme accent (#1F6B45, 5.6:1 on white) with accentSoft as the pill wash.
@@ -36,7 +34,7 @@ const TAB_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   settings: 'menu-outline',
 };
 
-/** 0.18.2: BETA moved off the tab labels onto the screen headers (Noah). */
+/** BETA moved off the tab labels onto the screen headers. */
 
 function PillTabBar({ state, descriptors, navigation }: PillTabBarProps) {
   const scheme = useEffectiveScheme();
@@ -138,7 +136,7 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 8,
     paddingHorizontal: 4,
-    backgroundColor: '#C08552', // warm clay — 0.18.1 palette (no pure yellow)
+    backgroundColor: '#C08552', // warm clay palette (no pure yellow)
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -168,7 +166,7 @@ const styles = StyleSheet.create({
 export default function TabsLayout() {
   useEffectiveScheme(); // re-read the palette on flip — tab chrome follows the scheme
   const insets = useSafeAreaInsets();
-  // Brief vault notices (0.18.2: "Collection index repaired…") — a quiet
+  // Brief vault notices — a quiet
   // banner above the pill bar, auto-dismissing. This layout is always
   // mounted, so the notice surfaces whichever tab triggered the read.
   const [notice, setNotice] = useState<string | null>(null);

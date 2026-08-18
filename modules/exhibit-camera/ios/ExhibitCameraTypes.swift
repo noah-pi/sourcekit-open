@@ -394,7 +394,7 @@ enum JpegColorSpaceReader {
   }
 }
 
-// MARK: - Depth map export (D1, 0.16.0 — c2pa.depthmap capture side)
+// MARK: - Depth map export (D1, — c2pa.depthmap capture side)
 
 /**
  * Canonicalizes a delivered AVDepthData into the committed depth artifact:
@@ -858,7 +858,7 @@ enum MetadataBlockBuilder {
 }
 
 
-// MARK: - Rotation + mirroring policy (0.15.1 — per-device, never hardcoded)
+// MARK: - Rotation + mirroring policy
 
 /**
  * Every connection's horizon-level rotation angle comes from
@@ -947,7 +947,7 @@ enum ExhibitDebugFlags {
   static let photoMaxDimensionsPolicyKey = "photoMaxDimensionsPolicy"
   static let depthCaptureKey = "depthCapture"
   /// The session-calibration dual-photo one-shot on the live
-  /// multi-cam graph. Default FALSE — the 0.17.1 field flood (primary-half
+  /// multi-cam graph. Default FALSE — the field flood (primary-half
   /// A photo capture can leave a video output unwilling to deliver
   /// afterwards, so this one-shot is off by default. With it off the "full"
   /// calibration block commits 'unavailable'; per-frame intrinsics arrive on
@@ -956,7 +956,7 @@ enum ExhibitDebugFlags {
   /// EXTENSION-POINT GATE for the opportunistic third synchronized
   /// view. UNTESTED ON HARDWARE — must stay OFF in shipping builds until an
   /// on-device soak validates the path. Default FALSE; the probe result is
-  /// reported via capabilities().thirdViewCapable regardless.
+  /// reported via capabilities.thirdViewCapable regardless.
   static let thirdViewEnabledKey = "thirdViewEnabled"
   /// Rear stereo runs on the dual-wide virtual device by default: one input,
   /// constituent ports requested by name, hardware-synced. Setting this flag
@@ -980,7 +980,7 @@ enum ExhibitDebugFlags {
   static var sessionCalibrationPhoto: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: sessionCalibrationPhotoKey) ?? false
   }
-  /// Default FALSE — UNTESTED ON HARDWARE (0.17.2 extension-point gate).
+  /// Default FALSE — UNTESTED ON HARDWARE.
   static var thirdViewEnabled: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: thirdViewEnabledKey) ?? false
   }

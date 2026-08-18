@@ -9,7 +9,7 @@ import NetworkExtension
  * hold: wifi-info entitlement, location when-in-use (SSID is location data
  * since iOS 14), and an actual Wi-Fi association. Opt-in only (default off),
  * stripped on de-identify; BSSID→location lookup happens desk-side only.
- * API: currentWifi() -> [String: String]? — { ssid, bssid } or nil.
+ * API: currentWifi -> [String: String]? — { ssid, bssid } or nil.
  */
 public class WifiInfoModule: Module {
   public func definition() -> ModuleDefinition {

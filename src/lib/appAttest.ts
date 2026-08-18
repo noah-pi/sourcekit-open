@@ -26,7 +26,7 @@
  * a gate on signing.
  *
  * The app ships with no registry address and never
- * contacts one on its own. 0.18.0 (set-and-forget): attestation runs
+ * contacts one on its own. (set-and-forget): attestation runs
  * AUTOMATICALLY on first launch and silently retries on later launches while
  * absent — with a LOCALLY generated challenge, so no network or registry is
  * needed at all. The local challenge changes nothing a verifier checks:
@@ -92,7 +92,7 @@ export interface AttestState {
   /** SHA-256 of the bound Secure Enclave signing public key, hex. */
   boundFingerprint: string;
   registeredAt: string;
-  /** Where the challenge came from — absent on pre-0.18.0 states (registry). */
+  /** Where the challenge came from — absent on pre-states (registry). */
   origin?: 'local' | 'registry';
 }
 

@@ -111,7 +111,7 @@ export function inventoryDigest(entries: InventoryEntry[]): Uint8Array {
  */
 export function validateClaim(claim: ContextClaim): void {
   if (!claim || typeof claim !== 'object') throw new Error('inventory: claim is not an object');
-  // Schema-pinned: canonicalize() serializes ALL own
+  // Schema-pinned: canonicalize serializes ALL own
   // enumerable keys, so an unexpected key would digest differently across
   // implementations of "the same" claim. Reject them outright.
   for (const k of Object.keys(claim)) {

@@ -3,7 +3,7 @@
  * AES-256-GCM vault encryption. Pure — depends only on @noble/ciphers.
  *
  * File layout: [ 12-byte nonce ][ ciphertext ][ 16-byte GCM tag ]
- * (noble's gcm() appends the tag to the ciphertext.)
+ * (noble's gcm appends the tag to the ciphertext.)
  *
  * The vault key is a random 256-bit value kept in the OS keychain
  * (see src/vault/vaultFs.ts). This module never touches storage.

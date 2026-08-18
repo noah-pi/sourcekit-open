@@ -46,7 +46,7 @@ export async function getCurrentWifi(): Promise<WifiClaim | null> {
       // name a network anything (unreliable as evidence) and a network name
       // is a privacy leak ("Starbucks Wi-Fi" places you). The BSSID is the
       // corroboratable claim — a desk can look it up; the app never does.
-      // Records sealed before 0.14.0 may still carry a name: history,
+      // Records sealed before may still carry a name: history,
       // stated as it was claimed then.
       ssid: null,
       bssid: typeof net.bssid === 'string' && net.bssid.length > 0 ? net.bssid : null,

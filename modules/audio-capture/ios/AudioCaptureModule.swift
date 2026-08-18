@@ -23,10 +23,10 @@ import Speech
  * com.verify.poseTrace assertion (media parity with video).
  *
  * API:
- *   requestPermissions()        -> { microphone: Bool, speech: Bool }
- *   transcriptionAvailable()    -> Bool   (on-device recognition supported)
+ *   requestPermissions        -> { microphone: Bool, speech: Bool }
+ *   transcriptionAvailable    -> Bool   (on-device recognition supported)
  *   start(path, sensorLogPath?) -> { transcribing: Bool }
- *   stop()                      -> { path, durationMs, transcript, segments,
+ *   stop                      -> { path, durationMs, transcript, segments,
  *                                    fileState, fileError,
  *                                    sensorLogPath, sensorLogState }
  *
@@ -97,7 +97,7 @@ public class AudioCaptureModule: Module {
   // tap delivers hardware-format LPCM buffers, so the master writes with
   // NO converter — the exact frames the AAC delivery file sees. Until this
   // existed the sink was structurally 'never-recorded' for audio captures
-  // even with the Raw audio toggle on (TestFlight 0.18.2 field report).
+  // even with the Raw audio toggle on (TestFlight field report).
   private var rawFile: AVAudioFile?
   private var rawFileURL: URL?
   private var rawState = "unavailable" // "recorded" | "failed" | "unavailable"
@@ -312,7 +312,7 @@ public class AudioCaptureModule: Module {
 
     // IMU sink (media parity): the gyro log starts at the recording clock
     // anchor — the anchor line binds the sensor clock to startWall — and
-    // runs until finalizeMotionLog() at the exact end of the take (manual
+    // runs until finalizeMotionLog at the exact end of the take (manual
     // stop or interruption). A sink failure degrades the evidence, never
     // the recording (same rule as CaptureKit SensorLogger).
     motionLog = nil
@@ -375,7 +375,7 @@ public class AudioCaptureModule: Module {
 
   /**
    * Closes the IMU log at the exact end of the take — called where the
-   * engine stops (manual stop AND interruption), NOT in finishStop(): a
+   * engine stops (manual stop AND interruption), NOT in finishStop: a
    * manual stop waits up to 4s for the final transcript before finishStop
    * runs, and the gyro window must cover the recorded audio, not the
    * transcript wait. Idempotent.
@@ -429,7 +429,7 @@ public class AudioCaptureModule: Module {
       } catch {
         // Elegant fail, in the user's favor: remember the first error, tell
         // JS immediately (the take may be incomplete), and keep trying —
-        // later buffers may still land. stop() declares the outcome.
+        // later buffers may still land. stop declares the outcome.
         if firstWriteError == nil {
           firstWriteError = error.localizedDescription
           sendEvent("onError", ["message": "Audio save error — this recording may be incomplete: \(error.localizedDescription)"])

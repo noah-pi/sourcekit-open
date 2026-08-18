@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * ExportSheet (0.17.0, copy v5) — two cards up front, plain words:
+ * ExportSheet — two cards up front, plain words:
  *
  *   Share without identifying details  TOP + DEFAULT. A re-sealed copy with
  *                                      name, organization and location redacted.
@@ -81,9 +81,6 @@ export function ExportSheet({ visible, name, kind, pii, deskNewsroom, onBasic, o
         <Pressable style={styles.scrim} onPress={onCancel} accessibilityLabel="Dismiss export sheet" />
         <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
           <View style={styles.grabber} />
-          {/* Kind on its own quiet kicker line, the when as the title —
-              one quoted run-on ("Share "photo · Aug 15 at 6:13 PM"") read
-              cramped and jammed against the cards (0.18.1). */}
           <Text style={styles.titleKicker}>Share</Text>
           <Text style={styles.title}>{name}</Text>
 

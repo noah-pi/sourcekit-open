@@ -2,12 +2,10 @@
 /**
  * SealBreakDemo — the onboarding's one teach-by-watching beat.
  *
- * A mock photo drawn entirely from views (no assets, no network). The dot
- * travels from "as shot" to "edited" and back ON ITS OWN (0.18.3, Noah:
- * the drag interaction was janky — "it should just be an automatic
- * animation that plays on that page"): crossing the mark turns the
- * picture lurid and flips the seal chip from intact to broken. The point
- * lands in one loop — the seal covers the bytes, and any change breaks it.
+ * A mock photo drawn entirely from views — no assets, no network. The dot
+ * animates from "as shot" to "edited" and back on its own; crossing the mark
+ * turns the picture lurid and flips the seal chip from intact to broken. One
+ * loop makes the point: the seal covers the bytes, so any change breaks it.
  *
  * Honesty note: the chip says "changed", never "fake". An edit breaking
  * the seal says nothing about the scene — that line belongs to panel 3.

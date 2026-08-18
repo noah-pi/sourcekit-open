@@ -140,7 +140,7 @@ export function profileSelection(
  * leaves stay closed for everyone, including us.
  *
  * `inventoryEntries` is the commit-time inventory (from
- * commitContext().inventoryAssertion.entries): it is committed under the
+ * commitContext.inventoryAssertion.entries): it is committed under the
  * root via the meta-leaf at tree index 0, and the bundle carries it plus
  * its inclusion proof so a verifier can recompute and check the binding.
  * `neverRecordedIds` is denormalized out of it (sorted) for display.

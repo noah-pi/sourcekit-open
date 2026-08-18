@@ -265,7 +265,7 @@ export function SinkStates({ captureEvidence, altView, location, sensorSummary }
   location?: LocationSink | null;
   /** What the sensor log actually captured (samples, rates, channels), built
    *  from the sealed context. Shown INSTEAD of the on-device path — a file
-   *  path is not the data (Noah, 0.14.2). */
+   *  path is not the data. */
   sensorSummary?: string | null;
 }) {
   const styles = useThemedStyles(buildStyles);

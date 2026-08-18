@@ -3,7 +3,7 @@
  * Bridge to the native AudioCapture module (modules/audio-capture) — one
  * AVAudioEngine feeding both the .m4a file and on-device speech recognition.
  * Absent on web, Expo Go, Android, or old builds — callers must check
- * `audioCaptureAvailable()` first.
+ * `audioCaptureAvailable` first.
  */
 
 import { Platform } from 'react-native';
@@ -57,7 +57,7 @@ export interface AudioStopResult {
   sensorLogState?: SensorLogState;
   /**
    * Uncompressed LPCM master (CAF) for this take — present only when
-   * rawPcmState is 'recorded'. ABSENT (undefined) on pre-0.18.3 native
+   * rawPcmState is 'recorded'. ABSENT (undefined) on pre-native
    * builds; callers map that to the toggle's null (enabled-but-failed is
    * not distinguishable there, and the path was never produced at all).
    */
@@ -128,7 +128,7 @@ export function onCaptureError(cb: (e: { message: string }) => void): EventSubsc
 /**
  * Fired when iOS seizes the audio session mid-recording (phone call, Siri,
  * alarm). The native side has already finalized the .m4a at the last good
- * frame — the payload is the same shape as stop(), and the transcript may be
+ * frame — the payload is the same shape as stop, and the transcript may be
  * shorter than what the live partial showed (no 4s wait for a final result).
  */
 export function onInterrupted(cb: (e: AudioStopResult) => void): EventSubscription | null {

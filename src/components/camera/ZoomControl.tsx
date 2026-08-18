@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Zoom control (0.15.0 Drop 2, research §5) — replaces the "too fast, no
+ * Zoom control — replaces the "too fast, no
  * in-between" zoom UI.
  *
  * <ZoomWheel/> — the bottom row: optical pills (.5 / 1 / tele factor, only
@@ -138,7 +138,7 @@ export function ZoomWheel({
         const c = stopsRef.current;
         // Bounds re-derived per move: the lens inventory (and thus the
         // stack floor) can arrive after the responder was created. The
-        // wheel never leaves the current stack (0.17.1, the Halide model).
+        // wheel never leaves the current stack.
         const lo = stackZoomFloor(c, lensRef.current);
         const next = clampZoom(
           Math.pow(2, startLog.current + g.dx / PX_PER_OCTAVE),
@@ -232,8 +232,6 @@ const styles = StyleSheet.create({
   },
   // Apple's own zoom control language: translucent circles, factor text,
   // the live stop carries the ring. Labels are FOV-derived from hardware.
-  // Mockup .zp: 10.5/700 translucent pills; the active stop is the mockup's
-  // ok-bright green on its 13% wash.
   pill: {
     minWidth: 34,
     height: 34,

@@ -30,30 +30,28 @@ export interface Settings {
   includeLocation: boolean;
   includeSensors: boolean;
   /**
-   * Byline inclusion (0.11.1, the camera "Name" HUD toggle): when on AND
+   * Byline inclusion: when on AND
    * identityMode is 'named', the self-declared alias is embedded as the
    * byline. Default OFF — an embedded name is identifying by design, so it
    * is a deliberate, visible-at-a-glance choice, mirrored on the camera HUD.
    */
   includeByline: boolean;
   /**
-   * Audio transcript embedding (0.11.1 toggle board): when on, voice notes
+   * Audio transcript embedding: when on, voice notes
    * carry the on-device transcript inside the signed file. Off = the words
    * stay audio-only.
    */
   includeTranscript: boolean;
   /**
-   * Face check: when on, capture runs an OS Face ID check at
-   * capture start and the seal records ONLY the boolean outcome in the
-   * record telemetry (`captureIntegrity.biometricGatePassed`). An event
-   * record, not an identity — no face geometry or template is ever stored.
+   * Runs an OS Face ID check at capture start and records only the boolean
+   * outcome (`captureIntegrity.biometricGatePassed`). No face geometry or
+   * template is stored.
    */
   faceCheckEnabled: boolean;
   /**
-   * Wi-Fi network claim: record the SSID/BSSID the phone
-   * reports at capture. STRICTLY OPT-IN — default off. Self-reported and
-   * spoofable, so it is a lead for a desk, never proof of place. Always
-   * stripped from de-identified copies. On iOS it returns nothing unless the
+   * Records the SSID/BSSID the phone reports at capture. Off by default:
+   * self-reported and spoofable, so it's a lead rather than proof of place.
+   * Always stripped from de-identified copies. Returns nothing unless the
    * build carries the Wi-Fi Information entitlement and location permission.
    */
   includeWifi: boolean;
@@ -62,17 +60,15 @@ export interface Settings {
   biometricsEnabled: boolean;
   biometricSigning: boolean;
   /**
-   * Assignment mode (0.9.0 source protection): when non-empty, captures sign
-   * with a dedicated assignment key instead of the device key — assignments
-   * are unlinkable to each other and to the device. Honest cost, stated in
-   * the UI: software-backed key, no hardware attestation.
+   * When non-empty, captures sign with a dedicated assignment key instead of
+   * the device key, so assignments can't be linked to each other or to the
+   * device. The key is software-backed and carries no hardware attestation.
    */
   assignmentId: string;
   /**
-   * Ledger anchoring: submit each capture's payload digest to the
-   * free public OpenTimestamps calendars (Bitcoin-anchored time). Hash-only —
-   * no media, no account, no cost. Default on. When off, captures carry
-   * RFC 3161 authority time only and the record says nothing about OTS.
+   * Submits each capture's payload digest to the public OpenTimestamps
+   * calendars. Hash only — no media, no account. On by default. When off,
+   * captures carry RFC 3161 time only and the record says nothing about OTS.
    */
   otsEnabled: boolean;
   /** Custom OTS calendar base URLs; null = the free public defaults. */
@@ -80,26 +76,19 @@ export interface Settings {
   /** Custom RFC 3161 TSA URLs; null = the built-in witness pool. */
   tsaUrls: string[] | null;
   /**
-   * Bitcoin beacon endpoint: one Esplora base URL pinned by the
-   * user/newsroom; null = the default public pool. Tips are fetched on a
-   * jittered schedule decoupled from shutter events — never per capture.
+   * One pinned Esplora base URL; null uses the public pool. Tips are fetched
+   * on a jittered schedule, never per capture.
    */
   beaconEndpoint: string | null;
   /**
-   * Capture evidence collection (1.0.0, WS1 CaptureKit; E.04 three-state):
-   * which evidence sinks the native capture session runs — the stills
-   * parallax ring, the raw audio master. Default all on. OFF means DO NOT
-   * COLLECT: the evidence files are never written, and future captures say
-   * so explicitly in the record ('never-recorded' — distinct from an
-   * enabled-but-failed null). The evidence is on-device input for later
-   * desk-side analysis; the phone never analyzes it.
+   * Which evidence sinks the native capture session runs. All on by default.
+   * Off means the files are never written, and the record says
+   * 'never-recorded' — distinct from the null an enabled-but-failed sink
+   * leaves. The files stay on-device; the phone doesn't analyze them.
    *
-   * Two fields retired —
-   *   • sensors: the full-rate (100 Hz) sensor log now follows the single
-   *     Motion log toggle (includeSensors); there is no 10 Hz option.
-   *   • secondaryLens: the stereo partner is always the native 'auto'
-   *     pairing; the picker is gone.
-   * Both are coerced out of stored settings on load (see loadSettings).
+   * loadSettings drops two retired keys, `sensors` and `secondaryLens`, from
+   * stored settings: the sensor log follows includeSensors now, and the
+   * stereo partner is always the native 'auto' pairing.
    */
   captureEvidence: {
     ring: boolean;
@@ -125,9 +114,9 @@ export interface Settings {
    */
   appearance: AppearancePreference;
   /**
-   * One-time 0.11.0 → 0.11.1 migration marker.
+   * One-time → migration marker.
    * Persisted so the migration runs exactly once; absent on fresh installs
-   * and pre-0.11.1 stores (which then migrate on next load).
+   * and pre-stores (which then migrate on next load).
    */
   migrated_0_11_1?: boolean;
 }
@@ -195,7 +184,7 @@ export const useStore = create<AppState>((set, get) => ({
         const raw = await FileSystem.readAsStringAsync(SETTINGS_FILE);
         const parsed = JSON.parse(raw);
         const stored = parsed.settings ?? {};
-        // Pre-0.9.0 migration: includeIdentity (boolean) → identityMode.
+        // Pre-migration: includeIdentity (boolean) → identityMode.
         if (stored.identityMode === undefined) {
           stored.identityMode = stored.includeIdentity === true ? 'named' : 'anonymous';
         }
@@ -203,8 +192,8 @@ export const useStore = create<AppState>((set, get) => ({
         // CaptureKit retired (the 0.12.x two-session-owners lesson)
         // — the experimental toggle key is dropped from stored settings.
         delete stored.captureKitEnabled;
-        // 0.11.0 → 0.11.1 migration — one-time, guarded:
-        //   • named identity with a non-empty alias keeps its 0.11.0 behavior:
+        // One-time, guarded:
+        //   • named identity with a non-empty alias keeps its behavior:
         //     the byline was embedded then, so includeByline stays ON.
         //   • a stale assignmentId is cleared — the assignment UI is gone and
         //     a leftover id must not silently keep signing assignment-mode.
@@ -240,7 +229,7 @@ export const useStore = create<AppState>((set, get) => ({
           delete stored.captureEvidence.secondaryLens;
         }
         // Shallow merge would DROP keys added to nested objects after the
-        // user's store was written (0.14.0: captureEvidence.altView). Rebuild
+        // user's store was written. Rebuild
         // the nested evidence object over the defaults so new sinks default
         // ON and existing choices survive verbatim.
         merged.captureEvidence = { ...DEFAULT_SETTINGS.captureEvidence, ...(stored.captureEvidence ?? {}) };

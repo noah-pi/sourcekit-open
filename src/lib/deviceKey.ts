@@ -277,7 +277,7 @@ export async function regenerateDeviceKey(): Promise<DeviceSigner> {
     (enclaveAvailable() && !cached)
   ) {
     // The old attestation was bound to the old key and goes stale here;
-    // the user re-binds on demand (Settings → attest now, 0.9.5).
+    // the user re-binds on demand (Settings → attest now,).
     enclaveDeleteKey();
     const pub = enclaveGenerateKey();
     cached = enclaveSigner(pub);

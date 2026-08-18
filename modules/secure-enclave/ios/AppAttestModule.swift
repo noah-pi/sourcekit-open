@@ -23,11 +23,11 @@ import Security
  * re-derives and verifies the same construction.
  *
  * API:
- *   isSupported()                        -> Bool
- *   hasAttestedKey()                     -> Bool
- *   generateAttestKey()                  -> String (keyId)
+ *   isSupported                        -> Bool
+ *   hasAttestedKey                     -> Bool
+ *   generateAttestKey                  -> String (keyId)
  *   attestKey(keyId, clientDataHashB64)  -> String (attestation object, base64)
- *   deleteAttestKey()                    -> Void
+ *   deleteAttestKey                    -> Void
  */
 /**
  * promise.reject(code, description) silently DROPS the description on SDK 57:

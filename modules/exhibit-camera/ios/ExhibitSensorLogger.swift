@@ -20,7 +20,7 @@ import CoreMotion
  *     honest rate record; nothing is resampled or interpolated.
  *   - Buffer: a ring hard-capped at 12,000 samples (60 s at the
  *     100 Hz × 2-stream target, ~0.6 MB of value-type structs). Memory never
- *     grows with session length; stop() drops the contents — no buffer
+ *     grows with session length; stop drops the contents — no buffer
  *     retention beyond the ring.
  *   - File format: JSONL, EXACTLY the CaptureKit SensorLogger line format,
  *     so the desk speaks one sensor language for every media kind:

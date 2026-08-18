@@ -8,7 +8,7 @@
  * The camera commits, it never concludes (Spec-Camera-Module-0.13): this
  * module emits commit inputs, never computed answers. Absent on web,
  * Android, simulators, or old builds — callers check
- * `isExhibitCameraAvailable()` first; the fallback path is stated, never
+ * `isExhibitCameraAvailable` first; the fallback path is stated, never
  * faked.
  *
  * Honesty vocabulary used throughout:
@@ -343,21 +343,21 @@ export interface ConfigureSessionOptions {
    * log (sensorLog* fields on the results). Default false. Older native
    * builds ignore the flag and omit the fields — stated via absence. */
   sensorLog?: boolean;
-  /** Shutter-burst sink (native 0.17.2+): when true, each still commits the
+  /** Shutter-burst sink (newer native builds): when true, each still commits the
    * 3 pre-shutter + 4 post-shutter frames it was cut from into
    * evidenceDir/ring-<captureId>/ (ringBufferDir + ringFrameCount on the
    * result). A sink failure is an 'error' EvidencePath state — the capture
    * itself never rejects for the burst. Default false. Older builds ignore
    * the flag and omit the fields. */
   ring?: boolean;
-  /** Selectable stereo partner stack (native 0.17.2+): 'auto' (default —
+  /** Selectable stereo partner stack (newer native builds): 'auto' (default —
    * the UW↔W/T pairing) or an explicit rear stack. Applies at session
    * build; live swaps go through setSecondaryLens. Older builds ignore
    * the flag. */
   secondaryLens?: SecondaryLensPreference;
 }
 
-/** The selectable secondary stack vocabulary (0.17.2). 'auto' = the
+/** The selectable secondary stack vocabulary. 'auto' = the
  * native UW↔W/T pairing chosen by the primary lens. */
 export type SecondaryLensPreference = 'auto' | 'ultraWide' | 'wide' | 'telephoto';
 
@@ -368,10 +368,10 @@ export interface SessionStart {
    * the session started, so the probe ran). */
   stereo: 'available' | 'unsupported';
   hardwareCost: number | null;
-  /** 0.18.4 (additive; absent on older builds): which rear-stereo graph the
+  /** (additive; absent on older builds): which rear-stereo graph the
    * session runs — 'virtual-dual-wide' (one input, constituent ports,
-   * hardware-synced; the 0.18.4 default) or 'multi-input' (two device
-   * inputs, the pre-0.18.4 graph, restorable via Diagnostics A/B). */
+   * hardware-synced; the default) or 'multi-input' (two device
+   * inputs, the pre-graph, restorable via Diagnostics A/B). */
   graph?: 'virtual-dual-wide' | 'multi-input';
 }
 
@@ -386,7 +386,7 @@ export interface CaptureOptions {
 }
 
 /**
- * The native depth artifact's committed facts (D1, 0.16.0). Every field is
+ * The native depth artifact's committed facts (D1,). Every field is
  * a capture-side claim, verbatim — nothing is derived JS-side. The artifact
  * is a 16-bit grayscale PNG, min/max-normalized over
  * [normalizationMin, normalizationMax]; non-finite pixels were written as 0
@@ -453,8 +453,8 @@ export interface CaptureResult extends SensorLogEvidence {
    * honest degradation when the session died mid-capture (the device
    * reference was gone at commit time) — stated, never omitted silently. */
   captureSettings?: CaptureSettings | { unavailable: true; note: string };
-  // ---- 0.15.1: degraded single-lens fallback + mirroring truth (additive;
-  // ABSENT on pre-0.15.1 native builds — callers treat undefined as "not
+  // ---- degraded single-lens fallback + mirroring truth (additive;
+  // ABSENT on pre-native builds — callers treat undefined as "not
   // committed this capture") ----
   /** Stereo evidence state for THIS capture: 'ok' = a synchronized
    * secondary frame was committed; 'unavailable' = the capture degraded —
@@ -462,7 +462,7 @@ export interface CaptureResult extends SensorLogEvidence {
    * delivery still is the photo output's full-sensor still) or the
    * secondary half dropped at shutter — stereoUnavailableReason states why,
    * verbatim. Absent on single-cam sessions (the `stereo` capability
-   * string already says unsupported) and pre-0.15.1 builds. */
+   * string already says unsupported) and pre-builds. */
   stereoStatus?: 'ok' | 'unavailable';
   /** Machine-checkable reason when stereoStatus is 'unavailable' — e.g.
    * 'no fresh synchronized frame within 900ms at shutter (dropped pairs:
@@ -494,7 +494,7 @@ export interface CaptureResult extends SensorLogEvidence {
   depth?: EvidencePath;
   depthSha256?: string | null;
   depthMetadata?: DepthArtifactMetadata | null;
-  // ---- 0.17.2: shutter-burst sink (additive; ABSENT on pre-0.17.2 builds
+  // ---- shutter-burst sink (additive; ABSENT on pre-builds
   // and on sessions configured without `ring` — callers treat undefined as
   // "not committed this capture") ----
   /** Directory holding the 3 pre-shutter + 4 post-shutter frames the
@@ -542,8 +542,7 @@ export interface VideoResult extends SensorLogEvidence {
    * never arrives here — the caller owns the toggle and states
    * 'never-recorded' itself. */
   rawPcmPath: string | null;
-  /** ENF anchor + integrity summary for the committed master (0.17.2;
-   * present only when rawPcmPath is a string). firstSampleWallClockUtcMs
+  /** ENF anchor + integrity summary for the committed master (* present only when rawPcmPath is a string). firstSampleWallClockUtcMs
    * anchors the first WRITTEN sample to wall clock (mach-PTS → wall, or
    * the append instant — firstSampleAnchor states which, verbatim), so a
    * desk can cross-correlate the 50/60 Hz mains trace against a reference
@@ -557,7 +556,7 @@ export interface VideoResult extends SensorLogEvidence {
     sampleRate: number;
     fileSha256: string | null;
   } | null;
-  /** Audio tap liveness counter for the take (0.17.2; additive). 0 while
+  /** Audio tap liveness counter for the take. 0 while
    * the master was requested = the tap never delivered — an audio-session/
    * permission fact, stated, not a conversion failure. */
   audioBufferCount?: number;
@@ -601,7 +600,7 @@ export interface SyncStalledEvent {
   droppedPairCount: number;
   droppedPrimaryCount?: number;
   droppedSecondaryHalfCount?: number;
-  /** 0.17.2 diagnostics split (additive; absent on older builds):
+  /** diagnostics split (additive; absent on older builds):
    * secondary-absent = synchronizer returned NO secondary data object;
    * secondary-dropped = an object was present but failed the sync window;
    * complete-pairs / stale-shutters / reseat state isolate a dead
@@ -632,7 +631,7 @@ export interface ChromeResult {
 // ---------------------------------------------------------------------------
 // Pro controls (spec §14). Every setter no-ops safely ({ applied: false,
 // reason }) on hardware lacking the capability — they never throw into JS
-// for capability absence. Availability comes from capabilities().
+// for capability absence. Availability comes from capabilities.
 // ---------------------------------------------------------------------------
 
 export type ExposureModeSetting = 'auto' | 'locked' | 'custom';
@@ -809,7 +808,7 @@ export interface ZoomRange {
 /**
  * What this hardware can do — the UI hides controls that report false.
  * null fields mean "unknown without a session" (stated, never guessed);
- * absent lenses in listFormats() report present:false (unreached, never
+ * absent lenses in listFormats report present:false (unreached, never
  * red).
  */
 export interface ExhibitCameraCapabilities {
@@ -836,12 +835,12 @@ export interface ExhibitCameraCapabilities {
   /** W2.3: states verbatim that qualityCap is a quality choice, not a
    * hardware limit. Part of the contract. */
   zoomQualityNote?: string;
-  /** 0.17.2 (additive): the selectable secondary stack — every rear stack
+  /** (additive): the selectable secondary stack — every rear stack
    * present on this hardware in the bridge's lens vocabulary, and the
    * current preference ('auto' when unset). */
   secondaryLensOptions?: string[];
   secondaryLens?: string;
-  /** 0.17.2: hardware probe for an opportunistic third synchronized view.
+  /** hardware probe for an opportunistic third synchronized view.
    * The view itself is gated behind the thirdViewEnabled debug flag
    * (UNTESTED ON HARDWARE — off by default); this only states what the
    * hardware could do. */
@@ -907,7 +906,7 @@ function getEmitter(): InstanceType<typeof EventEmitter> | null {
 
 /**
  * Graceful absence (simulator / web / Android / older builds): when false,
- * callers use the fallback path and stereoAvailability() reports
+ * callers use the fallback path and stereoAvailability reports
  * 'unreached' — disclosed, never faked, never red.
  */
 export function isExhibitCameraAvailable(): boolean {
@@ -1040,7 +1039,7 @@ export async function setExposureBias(bias: number): Promise<ChromeResult> {
 
 // ---- pro controls (spec §14) ----
 // All no-op safely ({ applied: false, reason }) when the module or the
-// hardware capability is absent. Check capabilities() first to hide
+// hardware capability is absent. Check capabilities first to hide
 // controls the device doesn't have.
 
 export async function setExposureMode(opts: SetExposureModeOptions): Promise<ExposureModeResult> {
@@ -1119,7 +1118,7 @@ export type ExhibitDebugFlagKey =
 export interface ExhibitDebugFlags {
   photoConnectionRotation: boolean;
   photoMaxDimensionsPolicy: boolean;
-  /** 0.17.2 keys (native returns them from getDebugFlags; absent on older
+  /** keys (native returns them from getDebugFlags; absent on older
    * builds — consumers default them off). */
   depthCapture?: boolean;
   /** The session-calibration dual-photo one-shot. Off by default: a photo
@@ -1129,7 +1128,7 @@ export interface ExhibitDebugFlags {
   /** UNTESTED third-view extension-point gate. OFF by default; MUST stay
    * off in shipping builds. Intentionally has no settings row. */
   thirdViewEnabled?: boolean;
-  /** 0.18.4 A/B: ON restores the pre-0.18.4 two-device-input rear-stereo
+  /** A/B: ON restores the pre-two-device-input rear-stereo
    * graph. OFF (default) runs the dual-wide virtual-device graph — one
    * input, constituent ports, hardware-synced — the fix path for the
    * iPhone 17 dead-secondary-stream failure. Takes effect at the next
@@ -1162,7 +1161,7 @@ export async function setExhibitDebugFlag(
   return { applied: res.applied, reason: res.reason };
 }
 
-/** Current flag states. Module absence = the native defaults (0.17.2: the
+/** Current flag states. Module absence = the native defaults (the
  * 12 MP clamp defaults TRUE; the other flags default false). */
 export async function getExhibitDebugFlags(): Promise<ExhibitDebugFlags> {
   if (!native || typeof native.getDebugFlags !== 'function') {
@@ -1232,7 +1231,7 @@ export function onSyncStalled(cb: (e: SyncStalledEvent) => void): () => void {
   return () => sub?.remove();
 }
 
-/** Native pipeline diagnostics (0.18.2): verbatim one-line facts — graph
+/** Native pipeline diagnostics: verbatim one-line facts — graph
  * wiring outcomes, format picks, the live connection census, interruption
  * boundaries. Forwarded to the persistent diagnostics log; never errors. */
 export interface CameraDiagnosticEvent {

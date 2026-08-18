@@ -89,7 +89,7 @@ import { useStore } from '../../src/store/useStore';
 const W = Dimensions.get('window').width;
 
 /**
- * HUD accents for this screen (0.18.2 — the landed palette of the app icon:
+ * HUD accents for this screen (the landed palette of the app icon:
  * sage, cream, warm neutrals, muted clay). Identity/name and identifying
  * details share the muted warm clay, matching the camera HUD's byline and
  * location chips (app/(tabs)/index.tsx); the pure blue and pure yellow are
@@ -338,7 +338,7 @@ function GroupCard({ icon, title, peek, open, onToggle, children }: {
   const grp = useThemedStyles(buildGrp);
   return (
     <View style={grp.card}>
-      {/* The WHOLE header is the toggle (0.18.3, Noah): icon, title, peek
+      {/* The WHOLE header is the toggle: icon, title, peek
           line and chevron sit inside one Pressable — the old head-row-only
           target was a fingertip-miss machine. */}
       <Pressable style={grp.headBlock} onPress={onToggle} accessibilityLabel={`${title} section`} accessibilityRole="button">
@@ -1073,7 +1073,7 @@ export default function AssetScreen() {
    * Export sheet: every media/proof share routes through the one bottom
    * sheet — Basic (private, withheld-fields copy) is the pre-selected
    * default, Full is the honest identifying alternative. No Alert.alert in
-   * the share path. The sheet changes UX only; the freshUri() self-heal
+   * the share path. The sheet changes UX only; the freshUri self-heal
    * plumbing underneath stays.
    */
   const shareMedia = () => {
@@ -1237,9 +1237,6 @@ export default function AssetScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.topBar}>
         <Button small tone="ghost" icon="chevron-back" label="Exhibits" onPress={() => router.back()} />
-        {/* The corner status pill was removed (0.14.0): it duplicated the
-            trust ladder two scrolls down and read as decoration. State lives
-            in the ladder, once. */}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
@@ -1274,16 +1271,16 @@ export default function AssetScreen() {
           <MediaViewer uri={mediaUri} kind={entry.kind} onClose={() => setViewerOpen(false)} />
         ) : null}
 
-        {/* Plan A (0.14.0): one plain sentence up top — signer, when, where,
-            seal state, time anchor. Compression, never omission. */}
+        {/* One plain sentence up top: signer, when, where, seal state, time
+            anchor. Compressed, not omitted. */}
         {record ? (
           <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
             <SummaryLine record={record} report={report} signerTrust={signerTrust} placeName={placeName} />
           </View>
         ) : null}
 
-        {/* Exactly three actions (Noah's call, 0.14.0): Share opens the
-            export sheet (0.15.0 Drop 2 — Basic / Full / Proof-Only /
+        {/* Exactly three actions: Share opens the
+            export sheet (Basic / Full / Proof-Only /
             Custom); Download and Delete are their own buttons. */}
         <View style={styles.actions}>
           <View style={styles.actionCell}>
@@ -1319,7 +1316,7 @@ export default function AssetScreen() {
           </View>
         </View>
 
-        {/* 0.18.2: the export-defaults explainer was removed (stated in the
+        {/* the export-defaults explainer was removed (stated in the
             export sheet itself). The spacer keeps the rhythm the copy
             occupied — two lines at fontSize.xs — so the layout doesn't
             collapse upward. */}
@@ -1341,10 +1338,9 @@ export default function AssetScreen() {
           </View>
         ) : null}
 
-        {/* Plan A (0.14.0): three collapsible groups replace the nutrition
-            label + drawer. Capture (open by default) answers "when, where,
-            on what" — device-originated claims are grouped under heads that
-            carry the device-reported caveat once. */}
+        {/* Three collapsible groups. Capture, open by default, answers
+            "when, where, on what". Device-originated claims sit under heads
+            that carry the device-reported caveat once. */}
         {record ? (
           <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
             <GroupCard
@@ -1391,7 +1387,7 @@ export default function AssetScreen() {
                 <NlRow label="Wi-Fi" value="Unavailable at capture" />
               ) : ctx?.wifi ? (
                 <>
-                  {/* 0.14.0: the BSSID is the corroboratable claim; the
+                  {/* the BSSID is the corroboratable claim; the
                       network name is kept off this page (anyone can name
                       a network anything — and it's a privacy leak). */}
                   {ctx.wifi.bssid ? <NlRow label="Wi-Fi BSSID" value={ctx.wifi.bssid} mono /> : (
@@ -1407,9 +1403,8 @@ export default function AssetScreen() {
                   label="Platform"
                   value={record.device.platform === 'ios' ? 'iOS' : record.device.platform}
                 />
-                {/* 0.18.1: the capture software is a capture claim like any
-                    other — the sealed claim-generator string ("Source Kit/
-                    0.18.0 (com.verify.camera)"), the record's own app block
+                {/* the capture software is a capture claim like any
+                    other — the sealed claim-generator string ("Source Kit/ (com.verify.camera)"), the record's own app block
                     as the honest fallback. */}
                 <NlRow
                   label="Capture software"
@@ -1417,8 +1412,7 @@ export default function AssetScreen() {
                 />
                 {/* An absent org credential says nothing — never a warning. */}
                 {orgValue ? <NlRow label="Organization" value={orgValue} /> : null}
-                {/* Alias renders once — in When & Where above (0.14.0
-                    dedupe). */}
+                {/* Alias renders once — in When & Where above (dedupe). */}
               </View>
 
               {/* Sensors sit at the bottom of Capture; the head carries the
@@ -1428,7 +1422,7 @@ export default function AssetScreen() {
                   <Text style={nl.drawerHead}>Sensors (Device-reported)</Text>
                   {ctx?.headingDeg != null ? <NlRow label="Heading" value={`${ctx.headingDeg}°`} /> : null}
                   {ctx?.pressureHPa != null ? <NlRow label="Barometer" value={`${ctx.pressureHPa} hPa`} /> : null}
-                  {/* 0.18.1: altitude rides the same sensors block here as on
+                  {/* altitude rides the same sensors block here as on
                       the Inspect screen — same sealed claim, same row. */}
                   {ctx?.altitudeM != null ? <NlRow label="Altitude (baro.)" value={`${ctx.altitudeM} m`} /> : null}
                   {ctx?.motion ? (
@@ -1436,22 +1430,17 @@ export default function AssetScreen() {
                   ) : null}
                   {/* Sensor timing renders once — under Integrity, where
                       sampler regularity belongs as an integrity signal
-                      (0.14.0 dedupe). */}
+                      (dedupe). */}
                 </View>
               ) : null}
-
-              {/* Mains frequency (0.14.0): removed from this page. It was
-                  region-derived, never measured — decoration, not
-                  evidence. The ENF question moves to the raw-audio
-                  master, where it can be measured for real. */}
 
               {manifest?.exif && Object.keys(manifest.exif.data).filter((k) => k !== 'note').length > 0 ? (
                 <View style={nl.drawerSection}>
                   <Text style={nl.drawerHead}>Camera Settings (Device-reported)</Text>
                   {/* The sealed block's `note` key is provenance boilerplate
                       ("camera-pipeline-reported, signed as self-reported
-                      metadata"), not a camera setting — never a row (0.18.1).
-                      The head already carries the device-reported caveat. */}
+                      metadata"), not a camera setting, so it gets no row. The
+                      head already carries the device-reported caveat. */}
                   {Object.entries(manifest.exif.data).filter(([k]) => k !== 'note').map(([k, v]) => (
                     <NlRow key={k} label={EXIF_LABELS[k] ?? k} value={formatExifValue(k, v)} />
                   ))}
@@ -1534,7 +1523,7 @@ export default function AssetScreen() {
                   true. Each module measures on this device or fetches from a
                   stated source; none of them concludes. Lens, motion-trace
                   and environment checks read PICTURE evidence — they hide on
-                  audio captures (0.18.3, Noah); the raw-audio master is the
+                  audio captures; the raw-audio master is the
                   one audio-applicable check and always renders. */}
               <View style={{ marginBottom: spacing.md }}>
                 <Text style={nl.drawerHead}>Forensic Checks</Text>
@@ -1655,7 +1644,7 @@ export default function AssetScreen() {
                 <Button small icon="finger-print-outline" label="Hash-only claim" tone="secondary" onPress={() => void shareProofJson('hash-only')} loading={busy === 'Building proof…'} />
               </View>
 
-              {/* 0.14.2: the "Full report" drawer (AttestationView) was
+              {/* the "Full report" drawer (AttestationView) was
                   removed — it re-rendered signature timing, sensor-frame
                   timing, the pose trace and the signer fingerprint, all of
                   which already live once in the Capture / Integrity groups
@@ -1665,7 +1654,7 @@ export default function AssetScreen() {
               {/* The raw C2PA manifest: shown OPEN at the bottom of Advanced
                   — the FULL manifest, windowed, never behind a drawer. Copy
                   is how the manifest leaves the phone; what you see is what
-                  you copy (0.18.3, Noah: "it needs to be the FULL manifest"). */}
+                  you copy. */}
               {manifest ? <ManifestReel manifest={manifest} /> : null}
             </GroupCard>
           </View>
@@ -1678,7 +1667,7 @@ export default function AssetScreen() {
         )}
       </ScrollView>
 
-      {/* The four export bundles (0.15.0 Drop 2): Basic (private — withheld
+      {/* The four export bundles (2): Basic (private — withheld
           fields stated inside the copy), Full (identifying, unchanged),
           Proof-Only (no media), Custom (per-field toggles, one screen down).
           The desk handoff, when configured, rides below the four — transport,
@@ -1829,7 +1818,6 @@ const buildStyles = () => StyleSheet.create({
     marginBottom: spacing.md,
   },
   codeBox: {
-    // Mockup .hash: #101013 inset, radius 8, hairline border.
     backgroundColor: '#101013',
     borderWidth: 1,
     borderColor: colors.border,
@@ -1904,7 +1892,6 @@ const buildNl = () => StyleSheet.create({
     paddingTop: spacing.sm,
   },
   drawerSection: { marginTop: spacing.md },
-  // Mockup .sec h2: 10.5px / 800 / wide tracking / dim ink / uppercase.
   drawerHead: {
     color: colors.textFaint,
     fontSize: 10.5,
@@ -1918,7 +1905,6 @@ const buildNl = () => StyleSheet.create({
 /** Plan A group cards — paper surface, header row, peek, chevron body. */
 const buildGrp = () => StyleSheet.create({
   card: {
-    // Mockup .card: flat surface, 1px hairline border, radius 14.
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1943,7 +1929,6 @@ const buildGrp = () => StyleSheet.create({
  *  where a verdict was genuinely earned (green) or proven (red). */
 const buildSumStyles = () => StyleSheet.create({
   card: {
-    // Mockup .card: flat surface, 1px hairline border, radius 14.
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

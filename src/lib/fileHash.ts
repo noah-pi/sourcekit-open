@@ -3,7 +3,7 @@
  * File hashing and reading over expo-file-system.
  *
  * Hashing is chunked (4 MiB) so multi-hundred-megabyte videos never load
- * into memory at once. Whole-file reads are NOT photo-only — readFileBytes()
+ * into memory at once. Whole-file reads are NOT photo-only — readFileBytes
  * is called on video at attest.ts:680 and verifyFs.ts:42, on audio at
  * attest.ts:775, and on any picked media at verifyFs.ts:66. Each read costs
  * ~1.33× the file size in base64 plus the decoded copy, so a 200 MB clip

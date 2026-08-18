@@ -5,7 +5,7 @@ import CryptoKit
 /**
  * StreamingHasher — chunked SHA-256 + Merkle root (SPEC §3).
  *
- * LEGACY (0.11.x) — read this before trusting any root. As of 0.12.0 these
+ * LEGACY (0.11.x) — read this before trusting any root. As of these
  * roots are NO LONGER consumed for new seals: v2 delivery-file roots are
  * computed at seal time and carry the commitment. This machinery remains
  * only so 0.11.x records stay reproducible, and its actual coverage is:
@@ -21,7 +21,7 @@ import CryptoKit
  * Mechanics: bytes are grouped into fixed 1 MiB LOGICAL chunks over the
  * concatenated per-track byte stream; each completed chunk is committed as:
  *
- *   chunkDigest = SHA-256( trackId || chunkIndex || bytes )
+ *   chunkDigest = SHA-256(trackId || chunkIndex || bytes)
  *     trackId    — UTF-8 "video" / "audio"      (see HashTrack.idBytes)
  *     chunkIndex — UInt64 big-endian, per track, from 0
  *     bytes      — exactly the chunk's bytes, in append order
@@ -52,7 +52,7 @@ final class StreamingHasher {
   }
 
   /// Fires for EVERY committed chunk, on the caller's queue (SPEC §3: every
-  /// chunk must reach JS by stop(); at 1 MiB chunks this is ≤ ~2/s at typical
+  /// chunk must reach JS by stop; at 1 MiB chunks this is ≤ ~2/s at typical
   /// bitrates, well under any coalescing need).
   var onChunk: ((ChunkCommit) -> Void)?
 

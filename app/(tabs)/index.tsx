@@ -156,7 +156,7 @@ const MAX_VIDEO_SECONDS = 120;
 const VIDEO_CAP_NOTICE =
   "Clips are capped at two minutes in this build: sealing currently reads the whole file into memory. The cap lifts when sealing moves native. It's a limit of this build, not of the evidence.";
 
-// HUD color language (0.18.1 — the landed palette of the app icon: sage
+// HUD color language (the landed palette of the app icon: sage
 // green, cream, charcoal, warm neutrals). Inlined here rather than in
 // src/theme.ts. The identifying chips (Location, Byline) share a muted
 // warm clay; the seal green is the icon's sage and stays RESERVED for
@@ -229,8 +229,8 @@ function cameraSensorLogEvidence(result: SensorLogEvidence, sensorsEnabled: bool
 }
 
 /**
- * Shutter-burst sink (native 0.17.2+) mapped onto the same three-state
- * EvidencePath vocabulary: toggle off or a pre-0.17.2 build (field absent)
+ * Shutter-burst sink (newer native builds) mapped onto the same three-state
+ * EvidencePath vocabulary: toggle off or a pre-build (field absent)
  * commits 'never-recorded'; a native 'never-recorded' state (e.g. no
  * synchronized pair at shutter) is also 'never-recorded' — its reason rides
  * the CaptureResult into the record's exhibitCapture; a native 'error'
@@ -240,7 +240,7 @@ function cameraSensorLogEvidence(result: SensorLogEvidence, sensorsEnabled: bool
 function ringBufferEvidence(result: CaptureResult, ringEnabled: boolean): EvidencePath {
   if (!ringEnabled) return 'never-recorded'; // capture-evidence ring toggle off
   const ep = result.ringBufferDir;
-  if (ep === undefined) return 'never-recorded'; // pre-0.17.2 native build: no ring sink exists
+  if (ep === undefined) return 'never-recorded'; // pre-native build: no ring sink exists
   if (ep.state === 'path') return ep.path;
   if (ep.state === 'error') return null; // the sink was enabled and died: a failure, stated as one
   return 'never-recorded'; // native-stated reason (e.g. no-synchronized-pair-at-shutter)
@@ -258,7 +258,7 @@ function pinchDistance(evt: GestureResponderEvent): number {
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 // Physical lens stack selection (ExhibitCamera): genuine optical devices,
-// never a crop. Reported per device by the native module's listFormats().
+// never a crop. Reported per device by the native module's listFormats.
 const LENS_ORDER: ExhibitLens[] = ['ultraWide', 'wide', 'telephoto'];
 
 /** The single-stack zoom model (front camera, or a back inventory not yet
@@ -272,7 +272,7 @@ const MODE_ORDER: Mode[] = ['audio', 'picture', 'video'];
  * Apple-style chip labels ('.5', '1x', '4'). Display-only chrome — the
  * record commits the true per-format field of view; the chip just says
  * which physical stack is live, the way Apple's own camera labels them.
- * (0.14.0 lesson: a naive wide-FOV÷lens-FOV ratio reads '.7' on iPhone 17
+ * (a naive wide-FOV÷lens-FOV ratio reads '.7' on iPhone 17
  * because the reported active format crops the sensor. The ultra-wide is
  * Apple's ".5" on every model to date; the telephoto factor comes from the
  * FOVs via the focal-length ratio — tan cancels the sensor-width term —
@@ -299,7 +299,7 @@ function computeLensLabels(fmts: ListFormatsResult): Partial<Record<ExhibitLens,
 }
 
 // ---------------------------------------------------------------------------
-// PRO param ladders (0.18.2 — the single param model). Ladder params ride
+// PRO param ladders. Ladder params ride
 // the precision bar as integer rung indices (rung 0 = AUTO where the
 // hardware has one); continuous params scrub their native range. The
 // bridge clamps to the ACTIVE FORMAT's range (not the device-global range)
@@ -370,7 +370,7 @@ function toFileUri(p: string): string {
 
 /**
  * Watchdog for native ExhibitCamera awaits: a native call that never settles
- * must never freeze the app (the 0.12.0/0.12.1 lesson — a wedged session
+ * must never freeze the app (the/lesson — a wedged session
  * owner froze capture). On timeout the abandoned promise is swallowed (no
  * unhandled rejection when it eventually settles) and the caller surfaces
  * the failure honestly.
@@ -412,7 +412,7 @@ export default function CaptureScreen() {
   const [mode, setMode] = useState<Mode>('picture');
   const modeRef = useRef<Mode>('picture');
   const [facing, setFacing] = useState<'back' | 'front'>('back');
-  // The light is PER MODE (0.15.0 Drop 2; W2.2): PHOTO keeps a flash
+  // The light is PER MODE: PHOTO keeps a flash
   // preference (auto/on/off — the photo output's real strobe flashMode via
   // setPhotoFlashMode, since Native Wave 2), VIDEO keeps a torch on/off.
   // `torch` is the CONTINUOUS light actually applied to the session right
@@ -426,10 +426,10 @@ export default function CaptureScreen() {
   const [zoomFactor, setZoomFactor] = useState(1);
   const zoomFactorRef = useRef(1);
   const zoomChannel = useRef(new LiveChannel<LiveZoom>({ factor: 1, active: false })).current;
-  // Device-reported zoom range of the ACTIVE lens (capabilities());
+  // Device-reported zoom range of the ACTIVE lens (capabilities);
   // {1,1} until known — mapping onto an unknown range would be a guess.
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number; qualityCap?: number }>({ min: 1, max: 1 });
-  // W2.3: per-constituent-device quality caps from capabilities(). null
+  // W2.3: per-constituent-device quality caps from capabilities. null
   // until fetched / on pre-W2 builds — maxRelativeZoom then falls back to
   // MAX_RELATIVE_ZOOM.
   const [lensCaps, setLensCaps] = useState<LensZoomCap[] | null>(null);
@@ -441,13 +441,13 @@ export default function CaptureScreen() {
   const pinchCurrentLog = useRef(0);
   const pinchRaf = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
   const pinchRef = useRef(false);
-  // Physical lens selection: the native module's listFormats() reports which
+  // Physical lens selection: the native module's listFormats reports which
   // lens stacks this hardware genuinely has; absent lenses are hidden
   // (unreached, never red). Switching lenses is genuine optical zoom (a
   // different sensor+lens stack), not a crop.
   const [lenses, setLenses] = useState<ExhibitLens[]>([]);
   // Apple-style chip labels derived from the hardware's reported FOVs
-  // (computeLensLabels); buildStops() falls back to '.5'/'1x'/'T' labels
+  // (computeLensLabels); buildStops falls back to '.5'/'1x'/'T' labels
   // when unreported — never a number that could be wrong.
   const [lensLabels, setLensLabels] = useState<Partial<Record<ExhibitLens, string>>>({});
   const [lens, setLens] = useState<ExhibitLens>('wide');
@@ -557,7 +557,7 @@ export default function CaptureScreen() {
   // the pixels-after-the-fact, so the signing pipeline is unaffected.
   // Gesture arbitration: two-finger pinch zooms; a single-finger
   // HORIZONTAL swipe switches capture mode (the Apple Camera pattern —
-  // TestFlight 0.13.0 had tap-only mode switching). The responder claims a
+  // TestFlight had tap-only mode switching). The responder claims a
   // gesture only once intent is clear (24 px of dominant horizontal travel),
   // so taps still reach tap-to-focus untouched.
   // The pinch target follows
@@ -600,7 +600,7 @@ export default function CaptureScreen() {
   }, [proOpen, ribbonParam, mode]);
   const applyLiveZoomRef = useRef<(relative: number) => void>(() => {});
   const commitZoomRef = useRef<(relative: number) => void>(() => {});
-  // Pinch floor tracks the CURRENT stack's optical stop (0.17.1 — the
+  // Pinch floor tracks the CURRENT stack's optical stop (the
   // sweep never leaves the stack; the lens inventory arrives async).
   const zoomFloorLog = useRef(Math.log2(1));
   zoomFloorLog.current = Math.log2(stackZoomFloor(activeStops, lens));
@@ -762,7 +762,7 @@ export default function CaptureScreen() {
           return;
         }
         const doConfigure = () => withTimeout(
-          // Alternate view (0.14.0 toggle): OFF means DO NOT COLLECT — the
+          // Alternate view: OFF means DO NOT COLLECT — the
           // secondary camera is never attached, and the record's stereo
           // sections commit their honest never-recorded states. Applies
           // from the next session configure (screen re-enter), like lens.
@@ -776,11 +776,11 @@ export default function CaptureScreen() {
             facing,
             stereo: settings.captureEvidence.altView,
             sensorLog: settings.includeSensors,
-            // Shutter-burst sink (native 0.17.2+): arms the 3 pre + 4 post
+            // Shutter-burst sink (newer native builds): arms the 3 pre + 4 post
             // frame commit per still; older builds ignore the flag and the
             // record commits 'never-recorded' by absence.
             ring: settings.captureEvidence.ring,
-            // Stereo partner (native 0.17.2+): always 'auto' — the picker
+            // Stereo partner (newer native builds): always 'auto' — the picker
             // is gone; 'auto' keeps the native UW↔W/T pairing. Older
             // builds ignore the key.
             secondaryLens: 'auto',
@@ -1017,7 +1017,7 @@ export default function CaptureScreen() {
           // CoreMotion's axis names: alpha = z (yaw), beta = y (pitch),
           // gamma = x (roll). Mapped to device axes here so the signed
           // trace's rx/ry/rz are what a desk expects.
-          // UNITS (0.18.4-R5): expo's native module converts rotationRate to
+          // UNITS: expo's native module converts rotationRate to
           // DEGREES per second (radiansToDegrees, DeviceMotionModule.swift)
           // before JS sees it; PoseSample.rx/ry/rz are documented rad/s and
           // every consumer (motion.ts quantization, the Motion Trace card,
@@ -1062,10 +1062,10 @@ export default function CaptureScreen() {
   };
 
   // ------------------------------------------------------------------
-  // Zoom engine (0.15.0 Drop 2; W2.3). ONE path for pinch and wheel:
+  // Zoom engine. ONE path for pinch and wheel:
   //   applyLiveZoom(relative) — clamps to the current stack, emits the
   //     live channel, applies natively RAMPED (setZoomSmooth) throttled,
-  //     trailing. Never switches lenses (0.17.1, the Halide model).
+  //     trailing. Never switches lenses.
   //   commitZoom(relative)    — gesture end: final INSTANT native apply
   //     (setZoom) + the committed React state.
   // The relative ceiling is the current stack's native per-device
@@ -1167,7 +1167,7 @@ export default function CaptureScreen() {
       capturedAtMs,
     });
 
-  // Burst intent queue (0.16.2, field report 8/13): rapid shutter taps used
+  // Burst intent queue: rapid shutter taps used
   // to be silently dropped while a capture was in flight — burst felt
   // broken. Now a tap during an in-flight capture enqueues an intent (cap
   // 5) with a haptic ack; each queued shot fires sequentially as the
@@ -1195,7 +1195,7 @@ export default function CaptureScreen() {
       // Face check at capture start — before any bytes exist.
       faceGateFlag.current = await runFaceGate();
 
-      // ExhibitCamera stills path (0.13.0 — the ONE camera session): the
+      // ExhibitCamera stills path: the
       // delivery still plus the synchronized stereo partner, committed
       // calibration, timestamps, and per-device metadata, each a three-state
       // EvidencePath. W2.1 adds full-sensor stills (own hash) and W2.4 the
@@ -1246,8 +1246,8 @@ export default function CaptureScreen() {
         exif: buildCaptureExif(result.captureSettings),
         // Three-state honesty per sink. The PCM master is a video-session
         // sink — structural 'never-recorded' on stills. The stills ring is
-        // REAL as of native 0.17.2 — the capture result's own three-state
-        // report, mapped through the shared vocabulary; a pre-0.17.2 build
+        // REAL as of newer native builds — the capture result's own three-state
+        // report, mapped through the shared vocabulary; a pre-build
         // reports nothing and commits 'never-recorded'. The IMU sensor log
         // rides the frozen SensorLogEvidence contract (native 0.15+). The
         // stereo artifacts carry their own three-state vocabulary in
@@ -1328,7 +1328,7 @@ export default function CaptureScreen() {
           maxSamples: 240,
         },
       });
-      // ENF anchor (0.18.0, native 0.17.2): when the PCM master committed,
+      // ENF anchor: when the PCM master committed,
       // its first-sample wall-clock anchor + integrity summary ride the
       // sealed context so the details screen (and a desk with a reference
       // ENF series) can place the mains trace in absolute time. Absent when
@@ -1341,7 +1341,7 @@ export default function CaptureScreen() {
         context,
         identity,
         // Three-state honesty per sink: the raw-audio master is REAL as of
-        // 0.14.0 — the native stop payload reports the recorded path or
+        // The native stop payload reports the recorded path or
         // null (enabled-but-failed); the toggle-off case is stated
         // 'never-recorded' here. The IMU sensor log rides the same frozen
         // SensorLogEvidence contract as stills (native 0.15+) — a pre-parity
@@ -1418,7 +1418,7 @@ export default function CaptureScreen() {
           startVideo({
             deliveryPath: `${FileSystem.cacheDirectory}capture-${stamp}.mp4`,
             evidenceDir,
-            // The settings toggle drives a REAL sink (0.13.0: it was a dead
+            // The settings toggle drives a REAL sink (it was a dead
             // control — the module had no PCM tee, so the record could only
             // ever say 'never-recorded').
             rawPcm: settings.captureEvidence.rawPcm,
@@ -1485,7 +1485,7 @@ export default function CaptureScreen() {
     // Media parity: the take's gyro JSONL rides into the seal exactly like a
     // CaptureKit video sensor log. The ring stays a stills sink (structural
     // 'never-recorded'); the raw PCM master is real for audio takes as of
-    // native 0.18.3 — the stop result's three-state report, mapped through
+    // newer native builds — the stop result's three-state report, mapped through
     // the shared vocabulary exactly like video (toggle off commits
     // 'never-recorded'; enabled-but-failed commits null).
     const captureEvidence: CaptureEvidencePaths = {
@@ -1639,7 +1639,7 @@ export default function CaptureScreen() {
     // The light is per mode: entering a mode re-derives
     // the applied light from THAT mode's persisted preference — photo's
     // flash pref and video's torch never carry into each other, and the
-    // trip to audio always goes dark. (0.14.2: photo↔video hops ride the
+    // trip to audio always goes dark. (photo↔video hops ride the
     // same native session, so this is a chrome call, not a rebuild.)
     setRibbonParam(null);
     if (m === 'audio') setTorch(false);
@@ -1695,7 +1695,7 @@ export default function CaptureScreen() {
       commitZoom(factorForLens(stopsRef.current, l));
       return;
     }
-    // Honesty fix (TestFlight 0.13.0): the native switch can resolve
+    // Honesty fix (TestFlight): the native switch can resolve
     // applied:false or reject outright. Updating the chip before the result
     // made the buttons look dead — or worse, lie about which lens sealed
     // the capture. Apply the label only on applied:true; say why otherwise.
@@ -2015,7 +2015,7 @@ export default function CaptureScreen() {
           void applyExposure('auto');
           setRibbonParam(null);
         };
-        // 0.18.4 (Noah: "ISO moves exponentially", "sliders need to be more
+        // "ISO moves exponentially", "sliders need to be more
         // consistently sized"): ISO rides a log2 domain exactly like SHTR —
         // one doubling = one stop = a uniform drag step, the ladder ticks
         // space evenly instead of bunching at the low end, and 1/3-stop snap
@@ -2304,7 +2304,7 @@ export default function CaptureScreen() {
           over it — no header, no separate screen. The transcript fades on
           as you speak; the words seal inside the file only while the
           transcription toggle beside the shutter is on.
-          Z-ORDER RULE (TestFlight 0.13.0: "all the top ui should be on
+          Z-ORDER RULE (TestFlight "all the top ui should be on
           top"): this full-screen dim renders BEFORE the HUD — the seal
           pill, lock badge, toggles and timer always sit above it. */}
       {mode === 'audio' ? (
@@ -2354,7 +2354,7 @@ export default function CaptureScreen() {
         </View>
       ) : null}
 
-      {/* The top HUD is ONE column stack (0.15.0 overlap fix): the seal pill
+      {/* The top HUD is ONE column stack (fix): the seal pill
           and the proof toggles were two independently-positioned rows
           (top:0 and top:52), so a long fingerprint pill or a narrow device
           could land the toggle row ON the pill. One stack, laid out by
@@ -2391,10 +2391,9 @@ export default function CaptureScreen() {
           </BlurView>
         )}
 
-        {/* Proof HUD: what will be embedded, visible BEFORE the shutter.
-            Mockup hudpill language: a glass pill with a status dot — filled
-            + tinted when ON, a hollow ring when OFF (the dot's SHAPE says
-            the state, never color alone). */}
+        {/* Proof HUD: what will be embedded, shown before the shutter. The
+            status dot is filled when on and a hollow ring when off, so the
+            shape carries the state and not just the color. */}
         <View style={styles.hudToggleRow}>
           <HudPillToggle
             label="Location"
@@ -2431,7 +2430,7 @@ export default function CaptureScreen() {
           tour).
           The HUD is exactly the mockup: the lock badge, the seal pills,
           nothing else. The flash/torch control is NOT here — it is the
-          first chip of the pro strip (0.17.1, owner directive). */}
+          first chip of the pro strip (owner directive). */}
       <SafeAreaView edges={['top']} style={styles.hudLock} pointerEvents="box-none">
         <TouchableOpacity
           style={styles.hudLockBadge}
@@ -2446,7 +2445,7 @@ export default function CaptureScreen() {
       {/* Recording indicator (photo/video — the audio stage carries its
           own). Safe-area wrapped: the HUD stack above it is inset-padded,
           and an unadjusted top:110 landed exactly ON it on Dynamic-Island
-          devices (TestFlight 0.13.0 overlap). top:96 clears the stack
+          devices (TestFlight overlap). top:96 clears the stack
           (seal pill + toggle row + breathing room) in the same inset
           space. */}
       {recording && mode !== 'audio' ? (
@@ -2489,7 +2488,7 @@ export default function CaptureScreen() {
           <Text style={styles.stereoCaption}>Stereo capture: not available on this device</Text>
         ) : null}
 
-        {/* Zoom control (0.15.0 Drop 2): optical pills for the lenses the
+        {/* Zoom control (2): optical pills for the lenses the
             hardware reports (a tap is a genuine optical jump — these are
             real cameras, never crops), and a horizontal drag anywhere on
             the row turns it into the smooth zoom wheel (the "no
@@ -2508,7 +2507,7 @@ export default function CaptureScreen() {
           />
         ) : null}
         {/* Pro tray — quiet, horizontal, above the mode/shutter cluster.
-            ONE capsule language (0.18.2): equal-width capsules built from
+            One capsule language: equal-width capsules built from
             the single param model; a tap docks the precision bar, which is
             the only adjustment surface. Values are the bridge's APPLIED
             values; a device clamp shows the clamped number, which is the
@@ -2517,9 +2516,8 @@ export default function CaptureScreen() {
             hardware reports them. */}
         {proOpen && proAvailable && mode !== 'audio' ? (
           // alignSelf stretch is mandatory here: `controls` centers its
-          // children, and an unstyled wrapper shrink-wraps to content —
-          // which is exactly how the capsules collapsed to strips in the
-          // 0.18.2 field build.
+          // children, and an unstyled wrapper shrink-wraps to content,
+          // which collapses the capsules to strips.
           <View ref={trayWrapRef} onLayout={measureGestureZones} collapsable={false} style={styles.trayWrap}>
           <Animated.View
             style={[
@@ -2530,7 +2528,7 @@ export default function CaptureScreen() {
               },
             ]}
           >
-            {/* ONE row of equal-width capsules (0.18.2), built from the
+            {/* One row of equal-width capsules, built from the
                 single param model: flex:1 each, same padding/typography/
                 radius/hairline, a 5px clay dot when manual. A tap docks
                 the precision bar — the capsule itself has no gestures.
@@ -2591,8 +2589,7 @@ export default function CaptureScreen() {
           </View>
         ) : null}
 
-        {/* Mode labels with the sliding highlight pill (0.15.0 Drop 2,
-            research §7): crossfade/translate on the native driver, travel
+        {/* Mode labels with the sliding highlight pill (research §7): crossfade/translate on the native driver, travel
             always toward the newly active label — never inverted. */}
         <ModeSwitcher mode={mode} onSwitch={switchMode} disabled={recording} />
 
@@ -2615,7 +2612,7 @@ export default function CaptureScreen() {
           ) : proAvailable ? (
             // Capture settings: a dials glyph on the shutter row's left
             // slot opens the pro tray. The light (flash / torch) is the
-            // tray's FIRST chip, not a HUD button (0.17.1, owner
+            // tray's FIRST chip, not a HUD button (owner
             // directive). The accent color is the one-glance signal: this
             // capture's optics were chosen by hand, and the record says so.
             <TouchableOpacity
@@ -2847,13 +2844,12 @@ function ParamCapsule({
 
 const buildStyles = () => StyleSheet.create({
   // A camera screen is black end-to-end: the app's paper-white theme bg
-  // flashed between the preview and a session reconfigure (TestFlight 0.13.0
+  // flashed between the preview and a session reconfigure (TestFlight
   // "janky with a white screen" on mode switch).
   root: { flex: 1, backgroundColor: '#000' },
   scrimTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 170 },
   scrimBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 300 },
-  // ONE column stack for the seal pill + proof toggles (0.15.0 overlap
-  // fix): flexbox lays the rows out, so they can never land on each other
+  // ONE column stack for the seal pill + proof toggles (// fix): flexbox lays the rows out, so they can never land on each other
   // the way the old top:0 / top:52 pair could. Side gutters reserve the
   // top-left lock/flash column; the toggle row wraps inside them.
   hudStack: {
@@ -2959,8 +2955,6 @@ const buildStyles = () => StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    // No card background: the button floats on the bottom
-    // gradient scrim, like Apple's camera chrome.
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3008,8 +3002,8 @@ const buildStyles = () => StyleSheet.create({
     minHeight: 46,
     backgroundColor: 'rgba(13,13,15,0.55)',
     borderWidth: 1,
-    // The HUD's dark-glass hairline — colors.border is the LIGHT scheme's
-    // divider gray and glowed white over the viewfinder (0.18.2 field).
+    // Hardcoded, not colors.border: that token is the light-scheme divider
+    // and glows white over the viewfinder.
     borderColor: 'rgba(232,232,236,0.14)',
     borderRadius: 8,
     paddingHorizontal: 4,

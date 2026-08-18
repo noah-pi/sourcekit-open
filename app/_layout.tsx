@@ -131,9 +131,8 @@ export default function RootLayout() {
     }
     // NOTE: an ONBOARDED user may open /onboarding deliberately — the HUD
     // lock badge replays the tour, and the screen handles its own exit
-    // (X-out / Done → router.back()). This gate must NOT bounce them back
-    // to '/': the replace raced the push and crashed the app (TestFlight
-    // 0.13.0 report, 2026-08-10).
+    // (X-out / Done → router.back). This gate must NOT bounce them back
+    // to '/': the replace races the push and crashes the app.
     if (passcodeSet && !unlocked && !inLock && !inSetPasscode) {
       router.replace('/lock');
     }

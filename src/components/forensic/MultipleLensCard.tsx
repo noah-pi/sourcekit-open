@@ -203,11 +203,10 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
                 {...slider.panHandlers}
                 accessibilityLabel="Blend between primary and second camera"
               >
-                {/* pointerEvents="none" on the children: the WRAP must stay
-                    the touch target — a touch landing on the track/thumb
-                    otherwise reports locationX relative to that child (the
-                    thumb is 14 px wide) and the blend jumps to ~0 (0.18.1
-                    field fix). */}
+                {/* Children are pointerEvents="none" so the wrap stays the
+                    touch target. A touch landing on the track or thumb would
+                    report locationX relative to that child, and the 14 px
+                    thumb would snap the blend to ~0. */}
                 <View style={styles.sliderTrack} pointerEvents="none">
                   <View style={[styles.sliderFill, { width: `${mix * 100}%` }]} />
                 </View>

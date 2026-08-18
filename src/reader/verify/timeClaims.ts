@@ -44,7 +44,7 @@ export function captureToSealCard(record: AttestationRecord): EvidenceCard {
     return makeNotRun(
       'time.capture-to-seal', 'Shutter → seal latency',
       'the record carries no capture-integrity commitment, so the camera never stated when it sealed relative to the shutter',
-      { audit: 'Audit ▸ AttestationRecord.captureIntegrity (0.9.3+); absent on older records' },
+      { audit: 'Audit ▸ AttestationRecord.captureIntegrity; absent on older records' },
     );
   }
   const latency = record.captureIntegrity.captureToSignatureMs;
@@ -86,7 +86,7 @@ export function beaconOrderCard(record: AttestationRecord): EvidenceCard {
     return makeNotRun(
       'time.beacon-lower-bound', 'Beacon lower bound',
       'the record carries no Bitcoin beacon, so no signed time lower bound was committed (absent, never fabricated, when no tip was cached)',
-      { audit: 'Audit ▸ AttestationRecord.beacon (0.10.0, W1.4)' },
+      { audit: 'Audit ▸ AttestationRecord.beacon' },
     );
   }
   const capturedMs = ms(record.capturedAt);

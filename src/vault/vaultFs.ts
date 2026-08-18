@@ -101,7 +101,7 @@ async function aclEnabled(): Promise<boolean> {
 export async function upgradeVaultKeyAcl(): Promise<void> {
   if (await aclEnabled()) return;
   const existing = await SecureStore.getItemAsync(KEY_STORE, KEY_OPTIONS);
-  if (!existing) return; // no key yet — first creation honors the ACL path via hasPasscode()
+  if (!existing) return; // no key yet — first creation honors the ACL path via hasPasscode
   await SecureStore.setItemAsync(KEY_STORE_ACL, existing, ACL_OPTIONS);
   await SecureStore.deleteItemAsync(KEY_STORE, KEY_OPTIONS);
   await SecureStore.deleteItemAsync(KEY_STORE_ACL, KEY_OPTIONS);
@@ -131,10 +131,10 @@ export interface VaultIndexEntry {
   motionVerdict: string | null;
   hasLocation: boolean;
   /**
-   * Grid badge flags (0.11.1, §4) — what's embedded, visible at a glance on
+   * Grid badge flags — what's embedded, visible at a glance on
    * the exhibits grid. Computed at seal time; legacy entries gain it on
    * first grid read via ensureEntryFlags (backfilled from the record, never
-   * by decrypting media). Optional for data compat with pre-0.11.1 indexes.
+   * by decrypting media). Optional for data compat with pre-indexes.
    *   sealed      — always true for vault items (the lock is the default state)
    *   location    — GPS coordinates embedded
    *   identifying — byline OR sensor log OR transcript OR face-check flag OR wifi claim
@@ -151,7 +151,7 @@ export interface VaultIndexEntry {
   phash: string | null;
 }
 
-/** Grid badge flags (0.11.1, §4) — see VaultIndexEntry.flags. */
+/** Grid badge flags — see VaultIndexEntry.flags. */
 export interface VaultFlags {
   sealed: true;
   location: boolean;
@@ -252,7 +252,7 @@ let keyCache: Uint8Array | null = null;
 /**
  * In-flight seal counter (D2): the cached vault key may be dropped on
  * background/lock ONLY when no seal is mid-write. Otherwise the seal
- * queue's next getVaultKey() would need a fresh keychain read — under ACL
+ * queue's next getVaultKey would need a fresh keychain read — under ACL
  * that is a user-presence prompt — in a background window where no prompt
  * can appear, and work already in progress would fail instead of finish.
  * Incremented/decremented INSIDE the seal entry points (sealVaultJson,
@@ -367,7 +367,7 @@ export async function ensureVaultDirs(): Promise<void> {
  * path funnels its read-modify-write through readIndex, so this error
  * refuses the write: persisting an empty-looking read over a corrupted
  * index would orphan every record already in the vault. The recovery path
- * is rebuildIndexFromRecords().
+ * is rebuildIndexFromRecords.
  */
 export class VaultIndexCorruptedError extends Error {
   constructor(message: string) {
@@ -571,7 +571,7 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
         // pHash: a 32×32 grayscale reduction → DCT hash → 8
         // bytes in the index. Lossy JPEG at 32×32 is exactly what pHash is
         // robust against. Best-effort like the thumbnail — null, never fatal.
-        // Since 0.16.0 (C3) the pHash is ALSO computed pre-signing in the
+        // Since (C3) the pHash is ALSO computed pre-signing in the
         // attest path (attest.ts photoPhashHex) and committed under the
         // COSE claim as c2pa.soft-binding — this post-embed computation is
         // now at most a cross-check of that signed value plus the vault
@@ -802,9 +802,9 @@ export async function decryptThumbToCache(id: string, opts?: { fallbackToFull?: 
 }
 
 /**
- * Legacy-video thumbnail backfill (0.14.0 — "videos still need
- * thumbnails"): videos sealed before grid thumbnails existed have no
- * .thumb.bin and would show the bare icon forever. This generates one
+ * Legacy-video thumbnail backfill. Videos sealed before grid thumbnails
+ * existed have no .thumb.bin and would show the bare icon forever. This
+ * generates one
  * lazily, on first grid view: the media decrypts into the plain cache
  * (shredded on lock/background like every plaintext), one frame is grabbed
  * ~0.5 s in, resized, and sealed beside the media — from then on it is a

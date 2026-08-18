@@ -18,7 +18,7 @@
  *  - Floating value pill floats above the needle while dragging.
  *  - Light haptic tick at each detent crossed; a stronger pulse at the
  *    range ends.
- *  - Gestures are classified by classifyGesture() (gestureClassify.ts —
+ *  - Gestures are classified by classifyGesture (gestureClassify.ts —
  *    the same pure function the screen's mode swipe consults): scrub on
  *    clear horizontal intent, close on a clearly-vertical-from-the-start
  *    swipe down (commit at CLOSE_COMMIT_DY), and the intent is locked for

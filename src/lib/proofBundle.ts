@@ -31,7 +31,7 @@
  * they pair with. The app has never left the lab: there is NO migration
  * and NO legacy reader. '/1' bundles are rejected at the format gate
  * (proofBundleGate) with the version named; re-export from the vault with
- * a current build. '/2' was then extended ADDITIVELY (0.13.0, Spec §8) with
+ * a current build. '/2' was then extended ADDITIVELY with
  * the optional `videoStereo` section (periodic video stereo pairs) — an
  * optional field gated by isVideoStereoBundleSection when present, so no
  * format bump: every prior '/2' bundle still validates, and a '/2' bundle

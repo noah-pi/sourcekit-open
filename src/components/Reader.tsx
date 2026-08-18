@@ -1,8 +1,8 @@
 /**
- * The Reader — RN surface widgets (0.16.0, Track 3 app subset).
+ * The Reader — RN surface widgets.
  *
  * These components render the engine's output (src/reader/*) in the Reader's
- * visual grammar, per the binding wireframe (app/mock/reader-0.16.0.html):
+ * visual grammar:
  *
  *   - five states, five glyphs: ⬤ agrees · ⬥ diverges · ◐ insufficient ·
  *     ○ not run · — not applicable. Agreement renders DIM; divergence is the

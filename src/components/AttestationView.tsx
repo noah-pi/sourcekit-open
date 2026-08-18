@@ -56,7 +56,7 @@ export function AttestationView({ record, ownFingerprint }: {
             <Chip label={`Assignment key · ${record.assignment.label}`} tone="neutral" icon="briefcase-outline" />
           ) : null}
         </View>
-        {/* 0.14.0: the PQ explainer text and the device-integrity
+        {/* the PQ explainer text and the device-integrity
             self-report row were removed from this page — footnote-grade
             material that cost more attention than it returned. The ML-DSA
             chip above still says the second signature exists; the signed

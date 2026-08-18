@@ -27,7 +27,7 @@ import CoreMotion
  * gyro lines; accel/baro/loc are CaptureKit-session sinks and stay there.
  *
  * FAILURE HONESTY (mirrors SensorLogger rule 4): a write failure marks the
- * sink failed; finish() then returns nil and the module reports
+ * sink failed; finish then returns nil and the module reports
  * sensorLogState "failed" — the recording itself is never blocked. A failed
  * sink appends one last best-effort line,
  *   {"kind":"sinkFailed","t":<bootSec>}

@@ -93,7 +93,7 @@ export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Ar
     const tstOctets = readTlv(encapContent.content, 0);
     if (tstOctets.tag !== 0x04) return FAIL('TSTInfo missing');
 
-    // TSTInfo ::= SEQUENCE { version, policy, messageImprint, serial, genTime, … }
+    // TSTInfo::= SEQUENCE { version, policy, messageImprint, serial, genTime, … }
     const tst = readTlv(tstOctets.content, 0);
     let t = 0;
     t = readTlv(tst.content, t).next; // version

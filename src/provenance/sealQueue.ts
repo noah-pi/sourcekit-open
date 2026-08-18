@@ -63,7 +63,7 @@ type Identity = { author: string | null; organization: string | null } | 'redact
 
 export interface SealJob {
   id: string;
-  /** Photos are the original flow; audio joined in 0.6.0, video in 0.7.0. Absent = photo (legacy queue). */
+  /** Photos are the original flow; audio joined, video. Absent = photo (legacy queue). */
   kind?: 'photo' | 'audio' | 'video';
   draftUri: string;
   context: SensorContext;
@@ -103,8 +103,7 @@ export interface SealJob {
     evidenceDir: string;
     /** Session stereo availability as probed at configure time, verbatim. */
     stereo?: 'available' | 'unsupported' | 'unreached';
-    /** The onStereoPairCaptured events collected during recording (0.13.0
-        §8): the per-pair enumeration + PTS anchors — the module writes no
+    /** The onStereoPairCaptured events collected during recording (§8): the per-pair enumeration + PTS anchors — the module writes no
         per-pair timestamps file, so these events ARE the anchors. */
     pairEvents?: StereoVideoPairEvent[];
   } | null;
@@ -132,7 +131,7 @@ let pumping = false;
 const listeners = new Set<Listener>();
 
 /**
- * Container rebasing (0.16.2, field failure 8/13): a TestFlight reinstall
+ * Container rebasing: a TestFlight reinstall
  * moves Documents into a NEW app-container UUID. Every path this queue
  * persisted still names the OLD container, so perfectly intact drafts read
  * as "file does not exist" (the zombie FileNotExistsException jobs). The
@@ -286,12 +285,10 @@ export async function discardSealJob(id: string): Promise<void> {
 }
 
 /**
- * User-initiated cancel of a QUEUED (pending) job (0.18.3, Noah: "I want to
- * be able to select and cancel queued exhibits in the same way I can delete
- * sealed ones when I hit select"). Deletes the armored draft, drops the job,
+ * User-initiated cancel of a QUEUED (pending) job. Deletes the armored draft, drops the job,
  * persists, notifies.
  *
- * 0.18.4 (Noah: "allow you to also remove/cancel queued/sealing ones"): a
+ * a
  * cancel requested while the pump holds the job ('sealing') is COOPERATIVE —
  * the id is marked here and honored at the pump's checkpoints, all of which
  * sit BEFORE the vault insertion, so a cancel never lands mid-write. A seal
@@ -404,9 +401,9 @@ export async function enqueuePhotoSeal(params: {
   exif?: Record<string, number | string> | null;
   /** CaptureKit ring/sensor-log evidence paths (1.0.0, WS1) — native stills path only. */
   captureEvidence?: CaptureEvidencePaths | null;
-  /** Full ExhibitCamera CaptureResult (0.13.0) — stereo artifacts ride the job to the record's evidence dir. */
+  /** Full ExhibitCamera CaptureResult — stereo artifacts ride the job to the record's evidence dir. */
   exhibitCapture?: CaptureResult | null;
-  /** Face check outcome (0.11.1) — boolean only; null when the toggle was off. */
+  /** Face check outcome — boolean only; null when the toggle was off. */
   biometricGatePassed?: boolean | null;
 }): Promise<void> {
   await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {});
@@ -444,7 +441,7 @@ export async function enqueueAudioSeal(params: {
   context: SensorContext;
   identity: Identity;
   transcript: TranscriptAssertion | null;
-  /** Face check outcome (0.11.1) — boolean only; null when the toggle was off. */
+  /** Face check outcome — boolean only; null when the toggle was off. */
   biometricGatePassed?: boolean | null;
   /**
    * Audio IMU evidence path (WS2 Phase 2 §3 media parity) — the gyro JSONL
@@ -496,9 +493,9 @@ export async function enqueueVideoSeal(params: {
   identity: Identity;
   /** CaptureKit PCM/sensor-log evidence paths (1.0.0, WS1) — native session path only. */
   captureEvidence?: CaptureEvidencePaths | null;
-  /** ExhibitCamera video session facts (0.13.0) — audio track presence, stereo pair counts, evidence dir. */
+  /** ExhibitCamera video session facts — audio track presence, stereo pair counts, evidence dir. */
   exhibitVideo?: SealJob['exhibitVideo'];
-  /** Face check outcome (0.11.1) — boolean only; null when the toggle was off. */
+  /** Face check outcome — boolean only; null when the toggle was off. */
   biometricGatePassed?: boolean | null;
 }): Promise<void> {
   await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {});
@@ -784,7 +781,7 @@ async function buildFullResSealExtras(
 }
 
 /**
- * VIDEO pair artifact storage (0.13.0 §8): after a video seals, the
+ * VIDEO pair artifact storage: after a video seals, the
  * COMMITTED pair bytes (converted calibration JSON — the exact bytes the
  * bundle hash binds; the raw secondary JPEGs) move into the record's
  * evidence dir under pairs/, vault-sealed. A sealed pairs-summary.json
@@ -997,7 +994,7 @@ async function pump(): Promise<void> {
           await saveDisclosureState(savedId, disclosure, chunkMaps);
           await maybeAnchorOts(savedId, record);
         } else if (job.kind === 'video') {
-          // ExhibitCamera VIDEO stereo ingestion (0.13.0, Spec §8): the
+          // ExhibitCamera VIDEO stereo ingestion: the
           // periodic pairs dumped during recording are enumerated from the
           // collected pair events (the module writes no per-pair timestamps
           // file — the events carry the anchors), converted by stereoGlue
@@ -1059,7 +1056,7 @@ async function pump(): Promise<void> {
           }
           await maybeAnchorOts(savedId, record);
         } else {
-          // ExhibitCamera stereo ingestion (0.13.0, Spec-Camera-Module-0.13
+          // ExhibitCamera stereo ingestion (Spec-Camera-Module-0.13
           // §5): map the CaptureResult's three-state EvidencePaths onto the
           // commit contract (bytes read, JSON artifacts converted to the
           // committed desk shape by stereoGlue) and commit them — the

@@ -2,7 +2,7 @@
 /**
  * Bridge to the native Secure Enclave module (modules/secure-enclave).
  * Absent on web, Expo Go, Android, or old builds — callers must check
- * `enclaveAvailable()` and fall back to the software signer.
+ * `enclaveAvailable` and fall back to the software signer.
  */
 
 import { Platform } from 'react-native';

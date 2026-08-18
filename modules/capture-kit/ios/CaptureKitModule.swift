@@ -20,13 +20,13 @@ import CoreVideo
  *   4. RingBuffer           → last 8 frames, JPEG dump on photo only (§4)
  *   5. SensorLogger         → 100 Hz IMU/baro/fused-loc JSONL file (§5.2)
  *
- * Hashing reality (audit, 0.12.0): the StreamingHasher NEVER sees delivery
+ * Hashing reality (audit,): the StreamingHasher NEVER sees delivery
  * (compressed H.264/AAC) bytes. Video capture frames are CVPixelBuffer-backed
  * with no CMBlockBuffer, so hashBytes's CMSampleBufferGetDataBuffer guard is
  * always nil and no video byte is ever hashed — the video Merkle root is the
  * documented empty-stream SHA-256 with 0 chunks. Audio roots commit the
  * pre-encode native LPCM sample stream handed to the AAC encoder, NOT the
- * AAC bytes stored in the file. As of 0.12.0 these roots are no longer
+ * AAC bytes stored in the file. As of these roots are no longer
  * consumed for new seals (v2 delivery-file roots are computed at seal time
  * and carry the commitment); the machinery remains only so 0.11.x records
  * can still be reproduced. See StreamingHasher.swift.
@@ -676,7 +676,7 @@ public class CaptureKitModule: Module {
   /// empty-stream hash with 0 chunks. Audio: the bytes hashed are the
   /// pre-encode native LPCM samples the AAC writer was handed, not the
   /// encoded AAC in the delivery file. Retained for 0.11.x record
-  /// reproduction only; 0.12.0 seals use v2 delivery-file roots.
+  /// reproduction only; seals use v2 delivery-file roots.
   private func hashBytes(track: HashTrack, from sampleBuffer: CMSampleBuffer) {
     // Nil for every video capture frame (CVPixelBuffer-backed, no
     // CMBlockBuffer) — see the note above.
@@ -802,7 +802,7 @@ public class CaptureKitModule: Module {
   }
 
   /// Max-duration hard stop + auto-finalize (SPEC §2.2). The outcome is
-  /// cached; the next stopVideoSession() call returns it exactly.
+  /// cached; the next stopVideoSession call returns it exactly.
   private func autoFinalize() {
     guard session != nil, sessionKind == .video, !stopping, cachedStopOutcome == nil else { return }
     stopping = true

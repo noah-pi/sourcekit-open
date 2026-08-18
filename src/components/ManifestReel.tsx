@@ -3,7 +3,6 @@
  * ManifestReel — the FULL C2PA manifest, exactly as parsed from the file:
  * every claim, assertion, telemetry block, edit action and ingredient,
  * strings and arrays uncapped, no depth limit, no character budget
- * (0.18.3, Noah: "it needs to be the FULL manifest").
  *
  * Two honest accommodations, both visible in the UI:
  *
@@ -14,7 +13,7 @@
  *
  *   2. The reel is windowed: the JSON is split into lines and rendered
  *      through a FlatList, because a single <Text> cannot lay out a
- *      video manifest's telemetry (the 0.13.0 blank-box bug). Every line
+ *      video manifest's telemetry, which would render a blank box. Every line
  *      is in the list — nothing is cut — and the copy button puts the
  *      complete, unmodified text on the clipboard.
  *

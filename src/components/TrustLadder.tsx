@@ -112,7 +112,6 @@ const buildStyles = () => StyleSheet.create({
     marginTop: 2,
   },
   nodeRing: {
-    // The current-highest rung gets a thin outer ring.
     borderWidth: 2.5,
     width: NODE + 4,
     height: NODE + 4,

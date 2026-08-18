@@ -1,56 +1,30 @@
 /**
- * The custody ladder (M0) — five rungs, each a projection of checks
- * verify-core ALREADY performs. Nothing here computes new cryptography and
- * nothing fuses rungs into a score: a rung states what was compared, how it
- * landed, or why it could not run. Absence of proof is neutral and said out
- * loud; a check that could not run is a rung with a stated reason, never an
- * absence.
+ * The custody ladder — five rungs, each a projection of checks the
+ * verification core already performs. Nothing here computes new cryptography
+ * and nothing fuses rungs into a score. A rung states what was compared and
+ * how it landed, or why it couldn't run. Absence of proof is neutral and said
+ * out loud.
  *
- * APP SUBSET LEDGER (this copy lives in exhibit-app/src/reader — the app
- * surface of the one-reader design; the desk original lives at
- * app/src/reader/verify/ladder.ts). Rung logic is byte-faithful to the desk
- * engine; the differences are exactly these:
- *
- *   - Imports point at the app's own verification core (src/lib/*,
- *     src/provenance/manifest.ts) — the same functions the desk's
- *     verify-core mirrors, already exercised by the app's verifiers.
- *   - The ASYNC ladder, rosterFetch (TLS well-known resolution + Node fs
- *     snapshot cache), and the NoticesSource seam stay WEB-SIDE: they need
- *     network/Node. Rung 3 here is the caller path only — the app hands in
- *     the rosters it holds (src/lib/rosterStore). Rung 5 is the honest
- *     not-run stub. The stale-cache cap is web-only machinery and is
- *     removed with the async path.
- *   - The format-gate message names the app's bundle format
- *     ('exhibit-proof-bundle/2'), built on-device by src/lib/proofBundle.
- *
- * DESK EXTRACTION LEDGER (what the desk original reused vs wrapped vs
- * stubbed — kept verbatim so the two copies can be diffed):
- *
- *   Rung 1 — Seal intact        EXTRACTED from verify-core/lib/sign.ts
- *     (verifyRecordSignature, payloadDigest) + the digest/equality semantics
- *     of verify-core/lib/proofBundle.ts (buildProofBundle) and the media
- *     re-hash comparison of the archived verifier's verifyWithSidecarBytes.
- *
- *   Rung 2 — Device credential  PARTIAL EXTRACTION from the AttestationRecord
- *     schema (verify-core/provenance/manifest.ts): orgCredential mirror,
- *     biometricBound, deviceIntegrity, captureIntegrity — each labeled with
- *     the custody the repo itself assigns it (self-reported commitment,
- *     never hardware proof). The full device-credential check (x5chain +
- *     App Attest) runs in the app's verification report; this rung states
- *     the record's own custody commitments and says so.
- *
- *   Rung 3 — Roster             EXTRACTED from verify-core/lib/roster.ts
- *     (verifyRosterSignature, resolveInRoster, membershipState semantics),
- *     with the desk's atMs convention: proof artifacts carry no
- *     pinned-authority time, so membership evaluates at atMs = null →
- *     'unknown-time', stated, never assumed.
- *
- *   Rung 4 — Countersigned time WRAPPED from deskCore.checkOtsSet over the
- *     same ots primitives; beacon lower bound from lib/beacon.ts isValidTip.
- *
- *   Rung 5 — Notices            STUB, honestly stated: no notices/corrections
- *     feed exists today, so the rung is always 'not-run' with that reason.
- *     Roster revocations are rung-3 territory, not a notice feed.
+ * Rung 1 — Seal intact.        Record signature and payload digest, plus the
+ *                              media re-hash comparison.
+ * Rung 2 — Device credential.  The record's own custody commitments:
+ *                              orgCredential, biometricBound, deviceIntegrity,
+ *                              captureIntegrity — each labelled with the
+ *                              custody it actually carries, which is
+ *                              self-reported commitment rather than hardware
+ *                              proof. The full x5chain and App Attest check
+ *                              runs in the verification report, not here.
+ * Rung 3 — Roster.             Roster signature, resolution and membership.
+ *                              Proof artifacts carry no pinned-authority time,
+ *                              so membership evaluates at atMs = null and
+ *                              reports 'unknown-time' rather than assuming
+ *                              one. Callers hand in the rosters they hold
+ *                              (src/lib/rosterStore); there is no fetch here.
+ * Rung 4 — Countersigned time. OTS set check over the ots primitives, plus the
+ *                              beacon lower bound from lib/beacon.ts.
+ * Rung 5 — Notices.            Always 'not-run', with that reason: no
+ *                              notices or corrections feed exists. Roster
+ *                              revocations are rung 3, not a notice feed.
  */
 
 import { verifyRecordSignature, payloadDigest, sha256Hex } from '../../lib/sign';

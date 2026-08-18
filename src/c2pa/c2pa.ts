@@ -62,7 +62,7 @@ const UUID_JSON = c2paUuid('json');
 const UUID_JPEG = c2paUuid('jpeg');
 
 // ---------------------------------------------------------------------------
-// Standard assertion labels (0.16.0 data contract, C2–C5) — per the vendored
+// Standard assertion labels — per the vendored
 // C2PA SDK 2.3 StandardAssertionLabel enum (modules/c2pa-ios …/
 // Manifest/StandardAssertionLabel.swift). Emitted through the first-class
 // allowlist in verifyAssertionBoxes; parsed back by parseOneManifest with
@@ -245,7 +245,7 @@ export function timestampMessageForSignature(protectedBstr: Uint8Array, rawSigna
 // ---------------------------------------------------------------------------
 
 export interface C2paManifestParams {
-  appName: string;          // claim_generator, e.g. "ExhibitA/0.2.0 (com.verify.camera)"
+  appName: string;          // claim_generator, e.g. "ExhibitA/ (com.verify.camera)"
   mime: string;             // dc:format
   title: string;            // dc:title
   instanceId: string;       // "xmp:iid:<hex>"
@@ -314,7 +314,7 @@ export interface C2paManifestParams {
    * with 'com.verify.' and must not collide with the built-in boxes.
    */
   customAssertions?: { label: string; data: unknown }[] | null;
-  // ---- 0.16.0 data contract (C2–C5): standard assertions, each emitted
+  // ---- Data contract: standard assertions, each emitted
   // only when its param is supplied; the caller omits (and logs) any
   // assertion it cannot build honestly — never a capture/seal failure.
   /**
@@ -639,7 +639,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
           'Proves WHICH org credential produced this file — never that its contents are true.',
       }))))
     : null;
-  // ---- 0.16.0 standard assertions (C2–C5), first-class allowlist ----
+  // ---- Standard assertions, first-class allowlist ----
   // Order is fixed so the claim's assertion list is deterministic.
   const standardBoxes: Uint8Array[] = [];
   const standardLabels: string[] = [];
@@ -882,14 +882,14 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
  * Identical fixpoint to the JPEG path, but the inserted unit is the caBX chunk
  * (store + 12 bytes of PNG framing: length/type/CRC32), so the exclusion length
  * is store.length + 12 and must stabilize. Returns the store (not the chunk) —
- * the caller wraps it with caBxChunk() and inserts before IEND.
+ * the caller wraps it with caBxChunk and inserts before IEND.
  */
 export async function buildC2paStorePng(p: C2paManifestParams, insertOffset: number): Promise<Uint8Array> {
   const uuid = p.instanceId.replace(/^xmp:iid:/i, '');
   const manifestLabel = 'verify:urn:uuid:' + uuid;
   const telemetryJson = utf8ToBytes(JSON.stringify(p.telemetry));
   const CHUNK_OVERHEAD = 12; // length(4) + "caBX"(4) + CRC32(4)
-  const SLACK = 256; // 0.18.5: matches buildC2paSegment — see its note
+  const SLACK = 256; // matches buildC2paSegment — see its note
 
   let exclusionLength = 0;
 
@@ -1056,7 +1056,7 @@ export async function buildC2paStoreBmff(
   const uuid = p.instanceId.replace(/^xmp:iid:/i, '');
   const manifestLabel = 'verify:urn:uuid:' + uuid;
   const telemetryJson = utf8ToBytes(JSON.stringify(p.telemetry));
-  const SLACK = 256; // 0.18.5: matches buildC2paSegment — see its note
+  const SLACK = 256; // matches buildC2paSegment — see its note
 
   const hashBox = jumbBox(UUID_CBOR, 'c2pa.hash.bmff.v2', box('cbor', hashAssertionCbor));
   const rest = verifyAssertionBoxes(p, telemetryJson);
@@ -1238,27 +1238,27 @@ export interface C2paManifest {
    */
   actions: { list: EditAction[]; referenced: boolean } | null;
   /**
-   * c2pa.metadata (0.16.0, C4) — signer-attributed standard metadata
+   * c2pa.metadata — signer-attributed standard metadata
    * (JSON-LD). DECLARED by the sealing software like actions: parsed for
    * display, claim-bound only when `referenced`.
    */
   c2paMetadata: { data: Record<string, unknown>; referenced: boolean } | null;
   /**
-   * c2pa.soft-binding (0.16.0, C3) — the declared soft binding (alg id +
+   * c2pa.soft-binding — the declared soft binding (alg id +
    * first block value, hex). RECOVERY METADATA, never a hard binding: the
    * spec forbids soft bindings as hard bindings, and no report string may
    * present a match here as asset integrity.
    */
   softBinding: { alg: string; valueHex: string | null; referenced: boolean } | null;
   /**
-   * c2pa.training-mining (0.16.0, C5) — the declared training/data-mining
+   * c2pa.training-mining — the declared training/data-mining
    * permissions, property → use (e.g. 'c2pa.ai_generative_training' →
    * 'notAllowed'). The signer/developer's stance, stated; not a runtime
    * enforcement signal.
    */
   trainingMining: { entries: Record<string, string>; referenced: boolean } | null;
   /**
-   * c2pa.asset-type / c2pa.asset-type.v2 (0.16.0, C5) — declared asset
+   * c2pa.asset-type / c2pa.asset-type.v2 — declared asset
    * types (e.g. ['image']). v1 (CBOR map) and v2 (JSON array) both parse.
    */
   assetType: { types: string[]; referenced: boolean } | null;
@@ -1269,11 +1269,11 @@ export interface C2paManifest {
    */
   thumbnails: { label: string; bytes: Uint8Array; referenced: boolean }[];
   /**
-   * c2pa.depthmap.GDepth (0.16.0, D1; §18.21) — the declared depth map:
+   * c2pa.depthmap.GDepth — the declared depth map:
    * GDepth envelope fields plus the decoded map image. Optically captured
    * by the signer's claim; parsed for display/coherence, claim-bound only
    * when `referenced`. Self-asserted like every assertion — a scene-match
-   * check (spec's depthMap.sceneMismatch) is a desk analyzer's job.
+   * check (spec's depthMap.sceneMismatch) happens off-device.
    */
   depthmap: {
     format: string;
@@ -1289,7 +1289,7 @@ export interface C2paManifest {
     referenced: boolean;
   } | null;
   /**
-   * c2pa.hash.collection.data (0.16.0, D1; §18.8) — the declared
+   * c2pa.hash.collection.data — the declared
    * multi-part set (photo + depth map), per-entry sha256 over ALL bytes of
    * each member. A HARD BINDING over set membership: validate with
    * verifyCollectionHash against the actual artifacts.
@@ -1767,7 +1767,7 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
   } catch { /* malformed PQ entry — treated as absent */ }
 
   // claim_generator: the software that sealed THIS manifest ("Adobe
-  // Photoshop 26.3", "ExhibitA/0.14.0"). Display only — self-asserted.
+  // Photoshop 26.3", "ExhibitA/"). Display only — self-asserted.
   const claimGenerator = typeof claim['claim_generator'] === 'string' ? (claim['claim_generator'] as string) : null;
 
   return { claim, claimBytes, protectedHeader, signature, certDer, certChain: chain.map((c) => new Uint8Array(c)), certChainLength: chain.length, hashData, hashBmff, telemetry, manifestLabel: manifest.label, assertionHashes, referencedAssertionLabels, timestampTokens, pq, appAttestAssertion, transcript, exif, identity, customAssertions, actions, c2paMetadata, softBinding, trainingMining, assetType, thumbnails, depthmap, collectionHash, ingredients, claimGenerator, manifestCount };
@@ -2035,7 +2035,7 @@ export function verifyManifest(
 }
 
 // ---------------------------------------------------------------------------
-// c2pa.hash.collection.data validation (0.16.0, D1; spec §15.12.5)
+// c2pa.hash.collection.data validation
 // ---------------------------------------------------------------------------
 
 export interface CollectionHashEntryResult {

@@ -282,7 +282,7 @@ export interface StereoCommitmentShape {
   syncTimestampDeltaMs: number;
   /** Photo commitments carry the per-capture metadata block; VIDEO pair
       commitments carry none (the module commits no per-pair block), so the
-      distance gate weighs the disparity cue alone. Optional since 0.13.0 —
+      distance gate weighs the disparity cue alone. Optional since —
       the desk's use was already optional-chained. */
   metadataBlock?: StereoMetadataBlockShape;
 }

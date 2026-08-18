@@ -120,13 +120,11 @@ function Card({ title, sub, children }: { title: string; sub: string; children: 
 // ---------------------------------------------------------------------------
 
 /**
- * Sealed attitude → frame geometry, as an actual 3D model (0.18.2 — Noah's
- * field note: the overlays ignored what happens when the phone points DOWN
- * or UP, and the lines pivoted off-center). The trace commits expo
+ * Sealed attitude → frame geometry, as a 3D model. The trace commits expo
  * DeviceMotion attitude (roll = gamma, pitch = beta, decidegrees ÷ 10).
- * The 0.18.1 field bug stands as recorded below: the web/CoreMotion Euler
- * chart (Z–X′–Y″) hits gimbal lock at beta ≈ ±90° — exactly an upright
- * phone taking a photo — so neither raw Euler angle is trustworthy alone.
+ *
+ * Don't use the raw Euler angles: the web/CoreMotion chart (Z–X′–Y″) hits
+ * gimbal lock at beta ≈ ±90°, which is an upright phone taking a photo.
  *
  * The robust quantities come from the GRAVITY VECTOR. With device axes
  * x = right, y = top, z = out of screen, gravity in device coords is
@@ -226,8 +224,8 @@ export function HorizonLineOverlay({ rollDeg, pitchDeg }: { rollDeg: number; pit
   const line = { top: `${horizonTopPct(aim)}%` as const };
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Roll rotates the horizon around the IMAGE CENTER (0.18.2): the
-          wrapper carries the rotation, the line carries the pitch offset. */}
+      {/* Roll rotates the horizon around the image center: the wrapper
+          carries the rotation, the line carries the pitch offset. */}
       <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${tilt}deg` }] }]}>
         <View style={[styles.horizonOverlayBacking, line]} />
         <View style={[styles.horizonOverlayLine, line]} />
@@ -391,18 +389,18 @@ const GROUND_RY = 42;
 const GROUND_SQUASH = GROUND_RY / GROUND_RX; // ≈ 0.568 — the ~35° tilt
 const DIAL_CX = 90; // container is 180 wide
 const DIAL_CY = 64; // container is 114 tall: 22px of headroom above the far edge
-/** 0.18.4: vertical scale of the sun's sky arc, px — at the top of the sky
+/** vertical scale of the sun's sky arc, px — at the top of the sky
  *  the dot stands this far above the plane's center (y = DIAL_CY − SKY_LIFT
  *  = 34; the 12px dot clears the container top). */
 const SKY_LIFT = 30;
 
 /**
- * The condition glyph (0.18.2 — Noah asked for weather-style icons). The
+ * The condition glyph. The
  * HONESTY RULE: the sealed record carries NO weather field (checked
  * src/provenance/manifest.ts), so the glyph is derived from sun elevation
  * alone — sun by day, an outlined sun near the horizon, a moon at night.
  * Clouds and rain would be fabricated conditions; they need a capture-time
- * weather API decision (flagged to Noah), so they never render here.
+ * weather API, so they never render here.
  */
 function sunCondition(elevationDeg: number): { icon: keyof typeof Ionicons.glyphMap; words: string } {
   if (elevationDeg <= 0) return { icon: 'moon-outline', words: 'Nighttime. Not applicable.' };
@@ -415,7 +413,7 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
   const pos = solarPosition(lat, lon, at);
   const condition = sunCondition(pos.elevationDeg);
   if (pos.elevationDeg <= 0) {
-    // Night: the sundial becomes plain language — Noah's verbatim.
+    // At night the sundial gives way to plain language.
     return (
       <Card title="Shadows" sub="Where the sun was, from the sealed time and place.">
         <View style={styles.conditionRow}>
@@ -438,7 +436,7 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
      shadow points OPPOSITE the sun azimuth ((azimuth + 180) mod 360 —
      verified against the NOAA ephemeris, e.g. an evening sun at 277° over
      Austin throws a 2.9× shadow at 97°, east). Only the projection changed
-     in 0.18.2 — perspective now, the math untouched. */
+     perspective now, the math untouched. */
   const unit = Math.max(6, Math.min(20, (GROUND_RX - 10) / ratio));
   const gnomonH = Math.round(unit * 1.2 * 10) / 10;
   const shadowWorld = Math.min(ratio * unit, GROUND_RX - 10);
@@ -447,11 +445,10 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
   const sdy = -Math.cos(brg) * GROUND_SQUASH * shadowWorld;
   const shadowLen = Math.hypot(sdx, sdy);
   const shadowAng = (Math.atan2(sdy, sdx) * 180) / Math.PI; // screen y-down: rotate clockwise
-  // The sun dot (0.18.4, Noah: "it doesn't go up and over in the right
-  // way"): the 0.18.3 polar projection collapsed elevation into RADIAL
-  // distance ON the ground disc, so a climbing sun slid toward the gnomon
-  // instead of rising into the sky. The dot now rides the SKY under the
-  // same tilted projection extended upward — a unit sky point at azimuth θ,
+  // The sun dot rides the sky under the ground disc's projection, extended
+  // upward. Projecting elevation as radial distance on the disc instead would
+  // slide a climbing sun toward the gnomon rather than up.
+  // A unit sky point at azimuth θ,
   // elevation φ projects to x = sin θ·cos φ, y = −cos θ·cos φ·SQUASH −
   // sin φ·SKY_LIFT. On the horizon (φ=0) the dot sits exactly ON the rim at
   // its azimuth; rising elevation lifts it ABOVE the plane; sunrise → noon
@@ -493,8 +490,8 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
         <View style={styles.groundRing} pointerEvents="none" />
         {/* N — the far edge of the plane. */}
         <Text style={styles.groundN} pointerEvents="none">N</Text>
-        {/* The day's sun track (0.18.5): dotted path, same projection as
-            the dot — past → future left as position on the arc. */}
+        {/* The day's sun track: dotted path, same projection as the dot.
+            Past and future read as position along the arc. */}
         {sunPath.map((pt, i) => (
           <View key={i} style={[styles.sunPathDot, { left: pt.x - 1.5, top: pt.y - 1.5 }]} pointerEvents="none" />
         ))}
@@ -516,7 +513,7 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
           <View style={styles.gnomonShade} />
         </View>
         <View style={styles.gnomonBase} pointerEvents="none" />
-        {/* 0.18.1: the bottom direction readout was removed — the shadow
+        {/* the bottom direction readout was removed — the shadow
             direction is already stated in the SHOULD BE sentence below,
             and the duplicated label read as a second, conflicting dial. */}
       </View>
@@ -767,7 +764,7 @@ const buildStyles = () => StyleSheet.create({
   aimBadgeText: { color: '#fff', fontSize: 9.5, fontWeight: '700' },
 
   // sun overlay — filled accent pill, now with a dark halo ring and a step
-  // larger type/icon so it holds up over a bright sky (0.18.2 bump).
+  // larger type/icon so it holds up over a bright sky.
   sunMarker: {
     position: 'absolute',
     flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -812,8 +809,7 @@ const buildStyles = () => StyleSheet.create({
     position: 'absolute', top: DIAL_CY - GROUND_RY - 15, left: 0, right: 0,
     textAlign: 'center', color: colors.textFaint, fontSize: 7.5, fontWeight: '700',
   },
-  // The clay sun dot — the one warm accent. 12px (0.18.3, Noah: ~40%
-  // bigger than the old 8px), positioned by the polar projection above.
+  // Positioned by the projection above.
   sunDotPersp: {
     position: 'absolute', width: 12, height: 12, borderRadius: 6,
     backgroundColor: '#C08552',
@@ -823,8 +819,7 @@ const buildStyles = () => StyleSheet.create({
     position: 'absolute', width: 3, height: 3, borderRadius: 1.5,
     backgroundColor: 'rgba(192,133,82,0.45)',
   },
-  // The shadow: rotated about its left-center end, which sits exactly on
-  // the gnomon's base (DIAL_CX, DIAL_CY).
+  // Rotates about its left-center end, which sits on the gnomon's base.
   shadowLinePersp: {
     position: 'absolute', left: DIAL_CX, top: DIAL_CY - 1.5,
     height: 3, borderRadius: 1.5,

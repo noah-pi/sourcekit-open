@@ -53,7 +53,7 @@ const PROFILE_LABELS: { profile: DisclosureProfile; title: string; detail: strin
 ];
 
 /**
- * The disclosure categories (0.15.0 Drop 2, Noah's export taxonomy): identity /
+ * The disclosure categories: identity /
  * location / device attestation / timestamps / auxiliary evidence. The committed
  * context claims map onto four of the five; DEVICE ATTESTATION has no claims in
  * the context tree at all — hardware-attestation identifiers live in the file's

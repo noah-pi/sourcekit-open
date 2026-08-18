@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * InspectGuide — the FAQ at the bottom of the Inspect tab (0.17.1, copy v5).
+ * InspectGuide — the FAQ at the bottom of the Inspect tab.
  *
  * Truly an FAQ: every question sits behind its own dropdown, answers are the
  * approved plain declarative facts. No question is answered before it's asked.

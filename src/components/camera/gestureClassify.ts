@@ -3,7 +3,7 @@
  * the camera screen's bottom controls. Pure and dependency-free so the
  * whole decision matrix is unit-tested (scripts/test-protray-gestures.mts).
  *
- * The 0.18.1 bug class this kills: three separate responders (the root
+ * The bug class this kills: three separate responders (the root
  * mode swipe, the pro tray, the precision bar) each carried their own
  * ad-hoc thresholds, so one physical drag could be read as two different
  * gestures. Now every responder asks THIS function, with the touch-start

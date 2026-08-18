@@ -71,7 +71,7 @@ final class AudioMasterConverter {
    * Convert one native CMSampleBuffer into the canonical master format.
    * Returns nil for not-ready buffers AND for benign zero-output conversions
    * (frames parked in the SRC delay line — they emerge on a later call or at
-   * drain()); callers skip nil silently. Throws only for real conversion
+   * drain); callers skip nil silently. Throws only for real conversion
    * failures (callers fail the PCM sink honestly).
    */
   func convert(_ sampleBuffer: CMSampleBuffer) throws -> AVAudioPCMBuffer? {
@@ -145,7 +145,7 @@ final class AudioMasterConverter {
     case .haveData, .inputRanDry, .endOfStream:
       // Zero output is BENIGN, not an error: with the single-shot input
       // closure above, the frames just absorbed sit in the SRC delay line
-      // and emerge on the NEXT convert call (or at drain()). Throwing here
+      // and emerge on the NEXT convert call (or at drain). Throwing here
       // would permanently kill the PCM master sink for the whole take.
       return outBuf.frameLength > 0 ? outBuf : nil
     case .error:
@@ -162,7 +162,7 @@ final class AudioMasterConverter {
    * nothing remains (or no converter was ever built this session). Throws
    * only for genuine converter errors. The converter is torn down afterward
    * so the next session rebuilds it fresh (a converter that has seen
-   * .endOfStream must not be reused without reset()).
+   * .endOfStream must not be reused without reset).
    */
   func drain() throws -> AVAudioPCMBuffer? {
     guard let converter = converter else { return nil }

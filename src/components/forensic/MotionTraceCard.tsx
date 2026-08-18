@@ -7,8 +7,7 @@
  * pairs block-matched for whole-frame translation) against how fast the
  * GYRO says the phone was rotating at that same moment. Two short lines,
  * then the sealed claim — never a score: agreement corroborates,
- * disagreement is a fact to weigh, not a verdict (0.18.2 — Noah didn't
- * understand what the card was doing; the copy now says it plainly).
+ * disagreement is a fact to weigh, not a verdict.
  *
  * States, honestly: "Not recorded" (burst off or not applicable — neutral),
  * a plainly stated read failure (the frames are no longer on this device,
@@ -79,14 +78,13 @@ const SERIES_GYRO = '#C08552';
 // exhibit, or cross-exhibit comparison is a lie of presentation: 8 px per
 // frame fills the picture lane, 200°/s fills the gyro lane. Bars beyond the
 // scale clip at full height; the peak label always states the true value.
-// (0.18.3 redesign — the per-lane "own peak" normalization made a 0.4 px
-// flatline fill the lane exactly like a 6.2 px jolt.)
+// Fixed scales, not per-lane peaks: normalizing to each lane's own peak
+// makes a 0.4 px flatline fill the lane exactly like a 6.2 px jolt.
 const FRAMES_FULL_DPS = 8;   // px per frame
 const GYRO_FULL_DPS = 200;   // degrees per second
 
 /**
- * TraceChart (0.18.3 — Noah: the overlay was unreadable; redesign approved
- * from the mockup). TWO lanes, ONE time axis, shutter-centered: the picture
+ * TraceChart — two lanes, one time axis, shutter-centered. The picture
  * lane shows frame-to-frame pixel shift (one sage bar per interval), the
  * gyro lane shows the sealed pose trace's rotation rate resampled into the
  * same window (one clay bar per frame instant). A hairline marks the shutter
@@ -324,7 +322,7 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
           <Text style={styles.line}>
             {`Frames: ${round1(trace.meanShift)} px per frame, ${directionWord(trace.meanDx, trace.meanDy)} (${trace.pairs} pairs) · Gyro: ${dps !== null ? `${Math.round(dps)}°/s at the shutter` : 'no trace sealed'}.`}
           </Text>
-          {/* 0.18.4: when the committed frames carry fewer distinct capture
+          {/* when the committed frames carry fewer distinct capture
               timestamps than frames, the pipeline retained the same frame
               repeatedly — the fact is stated from the ring's own index, so
               a flatline never reads as "no motion" on its own. */}
@@ -360,7 +358,7 @@ const buildStyles = () => StyleSheet.create({
   dim: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 17, marginTop: spacing.xs },
   juxta: { marginTop: spacing.xs },
   // The dual-lane chart: two stacked lanes, one shared time axis around the
-  // shutter (0.18.3 redesign — lanes replace the overlaid strip).
+  // shutter.
   chartWrap: { marginTop: spacing.sm },
   laneLabels: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',

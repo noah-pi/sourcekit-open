@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Verification pipeline — the desk editor's path.
+ * Verification pipeline.
  *
  *   photo:  extract embedded manifest (APP11) → verify COSE signature →
  *           recompute hash.data binding → verdict
@@ -113,20 +113,19 @@ export interface VerificationReport {
   /** Every check NOT performed, with the reason — absence of a check is itself disclosed. */
   checksNotPerformed: string[];
   /**
-   * Trust axis: WHO vouches for the signing key,
-   * resolved through anchors OUTSIDE the file — part of the DATA MODEL,
-   * not a switch statement in a React component. A desk scripting against
-   * verifyPhotoBytes sees the same 'unknown' the UI renders amber.
-   * null/undefined = NOT RESOLVED (no resolver supplied) — disclosed in
-   * checksNotPerformed, never silently green.
+   * Who vouches for the signing key, resolved through anchors outside the
+   * file. It lives in the data model rather than in a component, so a script
+   * calling verifyPhotoBytes sees the same 'unknown' the UI renders amber.
+   * null or undefined means no resolver was supplied, which is disclosed in
+   * checksNotPerformed rather than passing silently.
    */
   signerTrust?: SignerTrust | null;
 }
 
 /**
  * Optional anchors for the trust axis. The resolver is injected because
- * anchor storage differs by host (app keychain, desk localStorage, a
- * script's own files) — the verifier must not import any of them.
+ * anchor storage differs by host — the app keychain, a browser's storage, a
+ * script's own files — and the verifier must not import any of them.
  */
 export interface VerifyOptions {
   trustResolver?: (input: {
@@ -368,11 +367,11 @@ async function c2paReport(
     }
   }
   // The pose trace is signed DATA, not a check: its integrity rides the
-  // record signature above. What it shows is for the desk to weigh.
+  // record signature above. What it shows is for a person to weigh.
   const poseTrace = telemetryRecord?.context?.poseTrace;
   if (poseTrace) {
     performed.push(
-      `signed pose trace present (${poseTrace.samples} samples @ ${poseTrace.hz} Hz: gyro rotation rate, fused attitude, gravity-free acceleration) — integrity covered by the record signature; analysis is a desk-side, human-weighed step`,
+      `signed pose trace present (${poseTrace.samples} samples @ ${poseTrace.hz} Hz: gyro rotation rate, fused attitude, gravity-free acceleration) — integrity covered by the record signature; the analysis is a human step`,
     );
   }
   if (manifest.exif) {
@@ -461,7 +460,7 @@ async function c2paReport(
     certChain = { length: manifest.certChain.length, linksValid: chain.linksValid, reason: chain.reason, topSubject: chain.topSubject };
   }
   // --- Trust axis: who vouches for this key lives
-  // in the data model. The UI consumes report.signerTrust; a desk scripting
+  // in the data model. The UI consumes report.signerTrust; a script
   // against verifyPhotoBytes gets the same amber. No resolver → disclosed
   // as unresolved, never silently green.
   let signerTrust: SignerTrust | null = null;

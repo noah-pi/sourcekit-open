@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * BurnPanel — the selective-disclosure lock surface (0.17.0, copy v5).
+ * BurnPanel — the selective-disclosure lock surface.
  * User-facing language is "lock forever", not "burn".
  *
  * Details sealed inside an exhibit can be opened one at a time — or

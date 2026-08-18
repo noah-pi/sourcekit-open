@@ -95,7 +95,7 @@ export function horizonCard(
     return makeNotRun(
       id, title,
       'the record commits no pose trace: sensors were off, the capture predates 0.10.0, or the trace was stripped on the de-identify path; there is no committed gravity to predict a horizon from',
-      { method: methodBase, audit: 'Audit ▸ SensorContext.poseTrace (0.10.0+); absent on older records and every de-identified copy' },
+      { method: methodBase, audit: 'Audit ▸ SensorContext.poseTrace; absent on older records and every de-identified copy' },
     );
   }
 
@@ -111,7 +111,7 @@ export function horizonCard(
   const prediction =
     `committed gravity at the shutter (roll ${round1(predicted)}°, ±${ATTITUDE_QUANTIZATION_DEG}° quantization ◌ self-reported IMU): the horizon should sit at that tilt in the frame`;
   const audit =
-    'Audit ▸ poseTrace.attitude[3·anchor] → roll; yaw/pitch travel with the trace for the full gravity vector in the complete Reader';
+    'Audit ▸ poseTrace.attitude[3·anchor] → roll; yaw and pitch travel with the trace for the full gravity vector';
 
   if (!observation) {
     return makeInsufficient(

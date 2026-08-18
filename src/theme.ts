@@ -1,37 +1,26 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Design tokens — modern minimal.
+ * Design tokens.
  *
- * Light-first, generous whitespace, sans display type (SF), soft borderless
- * surfaces with gentle elevation. Gradients are RARE and load-bearing: they
- * mark the two moments of action (a primary button, the seal pill) — never
- * decoration, never on evidence surfaces.
+ * Verdict colors carry meaning and shouldn't be reused decoratively: green is
+ * intact/signed, amber is caution or unknown, red is proven tamper, slate is
+ * information. Unsigned renders neutral gray, never red. Gradients mark the two
+ * moments of action — a primary button and the seal pill — and stay off
+ * evidence surfaces.
  *
- * What did NOT change, deliberately: the verdict semantics. Deep green =
- * intact/signed (and primary actions), amber = caution/unknown, brick red =
- * invalid/tampered, slate = information. Verdict colors stay muted — this is
- * a document, not a dashboard — and unsigned stays neutral gray, never red.
+ * The camera screen is the exception: its chrome floats over a live viewfinder,
+ * so it uses the onDark tokens.
  *
- * The camera screen is the one exception: its chrome floats over the live
- * viewfinder (dark), so it uses the onDark tokens.
+ * The palette is dual. `colors` is mutated in place when the effective scheme
+ * changes, so every `import { colors }` keeps working without a per-screen
+ * rewrite. 'device' follows the OS, seeded synchronously at module load and
+ * kept live by an Appearance listener; 'dark' and 'light' pin it.
  *
- * APPEARANCE (0.15.x, Track E): the palette is now dual — light below, dark
- * further down (the approved Reader design system, mapped onto these same
- * keys). `colors` is mutated in place when the effective scheme changes, so
- * every existing `import { colors }` keeps working with no per-screen
- * rewrites. Resolution: preference 'device' follows the OS (seeded
- * synchronously from Appearance at module load, then kept live via an
- * Appearance listener); 'dark'/'light' pin the palette regardless of the OS.
- *
- * Known limit, stated honestly: styles built once at module scope
- * (`StyleSheet.create` at file bottom) capture their colors at module
- * evaluation, so an in-session override flip restyles everything read at
- * render time (icons, tints, gradients, inline styles) immediately and the
- * static style blocks on the next full tree rebuild — the root layout
- * remounts the navigator on scheme change to force exactly that. In the
- * default 'device' mode every module style is correct from first paint.
+ * One gotcha: styles built at module scope capture their colors at module
+ * evaluation. Flipping the scheme mid-session updates anything read at render
+ * time immediately, but static style blocks only on the next tree rebuild —
+ * which is why the root layout remounts the navigator on a scheme change.
  */
-
 import { Appearance, Platform, StyleSheet } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -44,16 +33,15 @@ export const colors = {
 
   text: '#1D1D1F',        // Apple label
   textDim: '#6E6E73',
-  // WCAG AA: 4.07:1 on bg #F6F6F8, 4.39:1 on surface #FFFFFF (was #AEAEB2
-  // at 2.05:1 — it carried the product's honesty sentences and failed AA).
+  // Carries the product's caveat text, so it has to clear WCAG AA:
+  // 4.07:1 on bg, 4.39:1 on surface.
   textFaint: '#78787D',
 
-  accent: '#1F6B45',                   // brand green, lifted from darkroom
+  accent: '#1F6B45',
   accentSoft: 'rgba(31, 107, 69, 0.10)',
-  accentGradStart: '#2E9E66',          // primary-action gradient (the only
-  accentGradEnd: '#1B7A4B',            //  place color gets to glow)
-  // WCAG AA for body text: 5.64:1 on white, 5.22:1 on bg (was #A4741C at
-  // 4.13:1 on white — under the 4.5:1 AA line).
+  accentGradStart: '#2E9E66',          // primary-action gradient
+  accentGradEnd: '#1B7A4B',
+  // WCAG AA for body text: 5.64:1 on white, 5.22:1 on bg.
   warn: '#8A5F12',
   warnSoft: 'rgba(164, 116, 28, 0.10)',
   danger: '#C03527',
@@ -201,7 +189,7 @@ export function useEffectiveScheme(): EffectiveScheme {
  * reads the (mutated-in-place) `colors` AFTER any flip, and the scheme
  * subscription forces the re-render that recomputes it.
  *
- *   const buildStyles = () => StyleSheet.create({ … colors.x … });
+ *   const buildStyles =  => StyleSheet.create({ … colors.x … });
  *   const styles = useThemedStyles(buildStyles);
  */
 export function useThemedStyles<T extends StyleSheet.NamedStyles<T>>(build: () => T): T {

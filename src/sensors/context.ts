@@ -99,7 +99,7 @@ export async function collectContext(params: {
    */
   includeWifi: boolean;
   motionSamples: MotionSample[];
-  /** Fused DeviceMotion buffer for the signed pose trace (0.10.0). */
+  /** Fused DeviceMotion buffer for the signed pose trace. */
   poseSamples?: PoseSample[];
   /** Shutter moment the pose trace anchors to (default: now). */
   capturedAtMs?: number;

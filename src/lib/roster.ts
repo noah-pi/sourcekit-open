@@ -120,8 +120,8 @@ export function isRoster(x: unknown): x is Roster {
   for (const e of r.entries as Record<string, unknown>[]) {
     if (!e || typeof e.fingerprint !== 'string' || !HEX64.test(e.fingerprint)) return false;
     // Duplicate fingerprints make membership ambiguous — resolveInRoster's
-    // .find() would silently resolve to the FIRST entry (e.g. an expired
-    // one shadowing a valid one). Rejection here is what makes that .find()
+    // .find would silently resolve to the FIRST entry (e.g. an expired
+    // one shadowing a valid one). Rejection here is what makes that .find
     // safe; fail closed, never ambiguous.
     if (seenFingerprints.has(e.fingerprint)) return false;
     seenFingerprints.add(e.fingerprint);
@@ -220,7 +220,7 @@ export function membershipState(entry: RosterEntry, atMs: number | null): Member
  * never vouch for an unlisted key).
  */
 export function resolveInRoster(roster: Roster, fingerprint: string, atMs: number | null): RosterResolution | null {
-  // .find() takes the first match — unambiguous because isRoster rejects
+  // .find takes the first match — unambiguous because isRoster rejects
   // any roster carrying a duplicate fingerprint.
   const entry = roster.entries.find((e) => e.fingerprint === fingerprint);
   if (!entry) return null;

@@ -52,7 +52,7 @@ const seq = (...c: Uint8Array[]) => tlv(0x30, concatBytes(...c));
 const OID_SHA256 = new Uint8Array([0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01]);
 const NULL = new Uint8Array([0x05, 0x00]);
 
-/** TimeStampReq ::= SEQUENCE { version 1, messageImprint, certReq TRUE }. */
+/** TimeStampReq::= SEQUENCE { version 1, messageImprint, certReq TRUE }. */
 export function buildTimestampRequest(message: Uint8Array): Uint8Array {
   return seq(
     tlv(0x02, new Uint8Array([1])),
@@ -119,8 +119,7 @@ export function estimatedTsaTokenSizes(): number[] {
  * bounded by a deadline — the countersign is valuable, never worth a slow
  * shutter. The deadline caps the WAIT, not the harvest: tokens that arrive
  * before it are kept, so one slow or unreachable TSA can no longer starve
- * the witnesses that did answer (0.18.0 raced the all-settled promise and
- * discarded every token on a miss — a single down TSA meant NO countersign).
+ * the witnesses that did answer (* discarded every token on a miss — a single down TSA meant NO countersign).
  * On a full miss the seal ships unsigned-by-TSA exactly as an offline
  * capture always has; fetches still in flight finish (updating the size
  * cache) and are then discarded.

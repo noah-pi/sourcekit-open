@@ -1,38 +1,26 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 2: commit-at-capture (SPEC-WS2-Phase2 §4).
+ * Commit-at-capture: turns the capture evidence the seal path already holds
+ * into the fixed context-claim set, committed under one Merkle root
+ * (commit.ts). The root rides in the C2PA manifest as the
+ * `com.verify.contextTree` assertion.
  *
- * Turns the capture evidence the seal path already holds into the fixed
- * context-claim set and commits it under one Merkle root (commit.ts).
- * The root rides in the C2PA manifest as the `com.verify.contextTree`
- * JUMBF assertion (the inventoryDigest meta-leaf at tree index 0 — audit
- * A-01 — binds the never-recorded declaration). The default profile is
- * SEALED: everything committed, nothing opened; opening later re-derives
- * salts from the master seed on demand (A-02 — no salt table ever
- * exists).
+ * The default profile is sealed — everything committed, nothing opened.
+ * Opening later re-derives salts from the master seed.
  *
- * Derivation honesty, per family:
- *   time     — all six rungs derived from capturedAt by pure prefix
- *              truncation (ladder.coarsen).
- *   location — geohash-5/7/9 + exact derived from the GPS fix (pure).
- *              country / region / grid-region are REVERSE GEOCODING — a
- *              lookup, not a derivation — so they are declared
- *              never-recorded, never fabricated from a dataset the
- *              commitment core does not have.
- *   identity — key-fingerprint is the signer fingerprint; named/org are
- *              the byline fields when present. roster-status is a roster
- *              lookup result, not a seal-time fact: never-recorded.
- *   sensor   — 'present' states whether a CaptureKit sensor log (the
- *              JSONL sink) was recorded — actual log presence only, never
- *              inferred from derived signals like a motion verdict or a
- *              poseTrace; 'residual-summary' carries
- *              the motion verdict string when one exists. No sensor data
- *              → never-recorded residual.
- *
- * This module commits context claims; it never concludes anything about
- * them. No verdicts.
+ * What can and can't be derived here:
+ *   time     — all six rungs come from capturedAt by prefix truncation.
+ *   location — geohash-5/7/9 and exact are derived from the GPS fix.
+ *              country, region and grid-region need reverse geocoding, which
+ *              is a lookup this module can't do, so they are declared
+ *              never-recorded rather than fabricated.
+ *   identity — key-fingerprint is the signer fingerprint; named and org come
+ *              from the byline fields. roster-status is a lookup, not a
+ *              seal-time fact, so it is never-recorded.
+ *   sensor   — 'present' reflects whether a sensor log was actually written,
+ *              never inferred from a motion verdict or poseTrace.
+ *              'residual-summary' carries the motion verdict when one exists.
  */
-
 import { coarsen, exactLocationValue, LOCATION_RUNGS, TIME_RUNGS, claimIdFor } from './ladder';
 import type { ContextClaim } from './inventory';
 import { commitContext, type CommittedContext, type CommittedInventoryAssertion } from './commit';
@@ -48,7 +36,7 @@ export interface CaptureCommitInput {
   identity: { author: string | null; organization: string | null } | 'redacted';
   /** Signer key fingerprint (hex) — the identity.key-fingerprint rung. */
   fingerprint: string;
-  /** Was a full-rate CaptureKit sensor log recorded for this capture? (Actual JSONL sink presence only — never inferred from derived signals.) */
+  /** Was a sensor log actually written? Sink presence only, not inferred. */
   sensorLogRecorded: boolean;
   /** Motion verdict string (sensor.residual-summary), when one was computed. */
   motionVerdict?: string | null;

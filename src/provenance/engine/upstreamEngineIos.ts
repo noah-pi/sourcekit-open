@@ -516,7 +516,7 @@ async function normalizeRead(
   return r;
 }
 
-/** Container gate shared by verify() and readIosAsset() (verbatim desk rule). */
+/** Container gate shared by verify and readIosAsset (verbatim desk rule). */
 function gateContainer(r: NormalizedEngineResult, bytes: Uint8Array, flow: 'photo' | 'video'): Container | null {
   const container = sniffContainer(bytes);
   if (flow === 'photo' && container !== 'jpeg' && container !== 'png') {
@@ -613,7 +613,7 @@ export async function readIosDetached(
 // SIGN — embed a signed manifest. Second-priority deliverable: the native
 // APIs are verified against c2pa-swift v0.0.12 source, but no compiler
 // exists on this desk — EAS is the compiler, and the first signed artifact
-// must round-trip through verify() on device before this path is trusted
+// must round-trip through verify on device before this path is trusted
 // for captures. Certificate issuance for the Secure Enclave key is the
 // app's existing identity flow — this module NEVER mints certificates.
 // ---------------------------------------------------------------------------
