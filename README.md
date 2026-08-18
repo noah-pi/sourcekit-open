@@ -14,9 +14,10 @@
 
 # Fuck deepfakes. Prove your work.
 
-**Source Kit is a cryptographic camera app that signs every photo and video at the
-shutter** — on the device, offline, in the iPhone's Secure Enclave — and writes the
-signature and the capture context into the file itself. Any C2PA reader can open it.
+**Source Kit is a cryptographic camera app that signs each photo and video as you take
+it.** The signature and the capture context go inside the file, on the device, with no
+network involved — so anyone can check it later without needing anything from me. Any C2PA
+reader opens it.
 
 I'm a journalist who became a product designer. I'm not a cryptographer, and I'm not a
 career engineer. This is a side project, published in full — camera, cryptography, native

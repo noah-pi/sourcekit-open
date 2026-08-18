@@ -27,9 +27,8 @@
   <text x="261" y="169" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
         font-size="15" font-weight="800" letter-spacing="3.4" fill="#78787D">AN OPEN CRYPTOGRAPHIC CAMERA</text>
 
-  <!-- the promise, in the product's own words -->
-  <text x="261" y="212" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
-        font-size="19" font-weight="500" fill="#6E6E73">Every capture, sealed at the shutter.</text>
+  <text x="261" y="213" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="23" font-weight="700" letter-spacing="-0.5" fill="#1D1D1F">Fuck deepfakes. Prove your work.</text>
 
   <!-- the ladder motif, right -->
   <g transform="translate(1006 84)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5">
