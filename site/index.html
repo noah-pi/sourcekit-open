@@ -246,7 +246,7 @@ footer a:hover{color:var(--accent)}
 <section class="block" style="border-top:none;padding-top:var(--s-lg)"><div class="wrap">
   <div class="col">
     <h2>An open source proof-of-concept</h2>
-    <p>All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product designer, not a cryptographer or a career engineer. Everything is here — camera, cryptography, native modules, interface, test suite — because people who know more will get further with it than I will.</p>
+    <p>All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product designer, not a cryptographer or a career engineer. Everything is here: camera, cryptography, native modules, interface, test suite.</p>
     <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a>
     </div>
@@ -333,7 +333,7 @@ footer a:hover{color:var(--accent)}
     <p>Source Kit captures a simultaneous downsampled frame from a secondary lens, usually the ultra-wide, and seals it alongside the main image as a first-class C2PA ingredient: the <code>c2pa.ingredient.v3</code> schema with relationship <code>componentOf</code>, meaning the second frame is a component of this exhibit rather than a parent it was derived from. A 512-pixel thumbnail rides in the manifest as <code>c2pa.thumbnail.ingredient.jpeg</code>. Anyone opening the file in any C2PA reader sees the second viewpoint.</p>
     <p>The cheap version of the attack it counters is rephotography: point a camera at a screen. An ultra-wide sees far more of the room than the frame you composed, so a monitor bezel, the edge of a laptop, the reflection off an OLED panel all land in the second view.</p>
     <p>Past that, the geometry. Two lenses a known distance apart see a flat plane identically, up to a single projective transform. They see a scene with real depth with a residual disagreement that no homography removes. Because the second frame and the full calibration are both committed, anyone can undistort the pair, match features, fit a homography and measure that residual themselves rather than trusting the device's arithmetic. Disparity falls off with distance, so beyond a few metres the answer is <b>insufficient</b>, never <i>passed</i>.</p>
-    <p class="note"><b>Status:</b> the verification side is lab-tested and green. The capture path moved to Apple's virtual dual-wide device graph and has not been confirmed in the field on iPhone 17 / iOS 26. It is not finished.</p>
+    <p class="note"><b>Status:</b> the verification side is lab-tested and green. The capture path moved to Apple's virtual dual-wide device graph and has not been confirmed in the field on iPhone 17 / iOS 26.</p>
     <p class="where" style="font-family:var(--mono);font-size:12.5px;color:var(--textFaint)"><a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/exhibit-camera">modules/exhibit-camera</a> · <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/c2pa">src/c2pa</a></p>
   </div>
   <figure>
@@ -405,7 +405,7 @@ footer a:hover{color:var(--accent)}
     <p style="color:var(--textDim)">Apple will certify that a genuine build of your app is running on genuine hardware. It will not let you attest your own signing key.</p>
     <p>Signing keys are generated inside the Secure Enclave and cannot be extracted. App Attest then certifies the device and the app — but Apple gives applications no access to the attested key, so there is no direct way to say "and this is the key I sign with."</p>
     <p>The workaround is a commitment. Set the App Attest <code>clientDataHash</code> to <code>SHA256(challenge ‖ signingPublicKey)</code>. Apple's nonce extension in the resulting certificate then vouches for exactly that key rather than for some key on some genuine device. An attestation cannot be lifted from a real phone and pointed at a key someone else controls.</p>
-    <p>The binding rides inside every manifest, so it can be re-checked offline years later with nothing running anywhere. It is the piece I would most like a cryptographer to check.</p>
+    <p>The binding rides inside every manifest, so it can be re-checked offline years later with nothing running anywhere.</p>
     <p class="where" style="font-family:var(--mono);font-size:12.5px;color:var(--textFaint)"><a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts">src/lib/appAttest.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/secure-enclave">modules/secure-enclave</a></p>
   </div>
   <figure>
@@ -836,13 +836,13 @@ footer a:hover{color:var(--accent)}
   <div class="col">
     <h3>Three: a signature doesn't make a claim true</h3>
     <p>A signature binds the sensor readings into the file. It does not make them true. The same goes for the system clock and for any location derived from the network.</p>
-    <p>The failure is presentational, not cryptographic: a spoofable claim shown in the register of a proven one. A design problem, which is the one part of this I am actually trained for.</p>
+    <p>The failure is presentational, not cryptographic: a spoofable claim shown in the register of a proven one. A design problem.</p>
 
     <h3>Four: the credential dies in transit</h3>
     <p>The industry answer is a soft binding: a perceptual fingerprint that survives re-encoding, plus a repository to look the manifest up in. Source Kit commits that fingerprint today. The lookup half isn't built, and it is the most valuable thing left undone here.</p>
 
     <h3 style="margin-top:var(--s-xl)">What follows</h3>
-    <p>Everything in <a href="#how">How Source Kit works</a> is aimed at one of these. The second lens and the on-device checks take gap two, the hard one. Gap four is unfinished business.</p>
+    <p>Everything in <a href="#how">How Source Kit works</a> is aimed at one of these. The second lens and the on-device checks take gap two, the hard one. Gap four is not addressed here.</p>
     <p>None of it is detection. You can't out-classify a generator, but you can raise what a forger has to keep consistent: geometry, motion, shadows, time. Lay it out so a person can weigh it in about four seconds.</p>
   </div>
 </div></section>
@@ -971,7 +971,7 @@ footer a:hover{color:var(--accent)}
     <p class="pull">Prove your work.</p>
     <p style="margin-top:var(--s-lg);color:var(--textDim)">One last thing about the fairies. Everything here would have sealed them without complaint. Elsie Wright used a real camera and a real plate. The cut-outs were propped up with hatpins at a real distance, in a real garden, in real light. Two lenses would measure genuine depth, because there was genuine depth. Every rung on the ladder would be reached, and every one of them would be telling the truth.</p>
     <p style="color:var(--textDim)">That is the edge of what provenance can do. It can tell you a file is what it claims to be. It cannot tell you the world was as the picture says. That was always the reader's job, and the desk's.</p>
-    <p style="color:var(--textDim)">It doesn't solve misinformation. I don't think anything does. It gives an honest photographer a way to show their work, and it makes the alternative more expensive.</p>
+    <p style="color:var(--textDim)">It doesn't solve misinformation. It gives an honest photographer a way to show their work, and it makes the alternative more expensive.</p>
     <p style="color:var(--textDim)">Apple and Google will attest sensors better than any application can, and eventually this should not need to exist. Until then it is all here. Take whatever is useful, fork it under your own name, or tell me where I have it wrong. That is the most valuable thing anyone could do with it.</p>
     <p style="font-weight:600">— Noah Bassetti-Blum</p>
     <div class="cta" style="margin-top:var(--s-lg)">

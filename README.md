@@ -34,8 +34,7 @@ and says so.
 
 All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product
 designer, not a cryptographer or a career engineer. Everything is here — camera,
-cryptography, native modules, interface, test suite — because people who know more will get
-further with it than I will.
+cryptography, native modules, interface, test suite.
 
 ## How Source Kit works
 
@@ -68,8 +67,7 @@ that residual themselves rather than trusting the device's arithmetic. Disparity
 with distance, so beyond a few metres the answer is **insufficient**, never *passed*.
 
 *Status: the verification side is lab-tested and green. The capture path moved to Apple's
-virtual dual-wide device graph and has not been confirmed in the field on iPhone 17 / iOS 26.
-It is not finished.* [`modules/exhibit-camera`](https://github.com/noah-pi/sourcekit-open/tree/main/modules/exhibit-camera)
+virtual dual-wide device graph and has not been confirmed in the field on iPhone 17 / iOS 26.* [`modules/exhibit-camera`](https://github.com/noah-pi/sourcekit-open/tree/main/modules/exhibit-camera)
 
 ### The motion of the phone
 
@@ -108,7 +106,7 @@ then vouches for exactly that key rather than for some key on some genuine devic
 attestation cannot be lifted from a real phone and pointed at a key someone else controls.
 
 The binding rides inside every manifest, so it can be re-checked offline years later with
-nothing running anywhere. It is the piece I would most like a cryptographer to check.
+nothing running anywhere.
 [`src/lib/appAttest.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
 
 ### Time from somewhere other than the phone
@@ -285,12 +283,12 @@ cryptographically valid, nothing broken: the picture was handed to the signer, w
 it as designed. Nikon revoked every certificate it had issued; a year later the service is
 still suspended.
 
-Detection is the obvious response, and I think it is the wrong one. A detector is a
+Detection is the obvious response and the wrong one. A detector is a
 classifier guessing at the output of a generator, and it gets worse exactly as the generator
 gets better. What is left is narrower: raise what a forger has to keep consistent across
 geometry, motion, shadows and time, then present it so that a person can weigh it quickly.
-This repo is an attempt at gaps two and three, a careful pass at one, and unfinished
-business on four.
+This repo is an attempt at gaps two and three, a careful pass at one. Gap four is not
+addressed.
 
 ## The shutter path
 
