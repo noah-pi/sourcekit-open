@@ -106,6 +106,24 @@ section.block { padding:var(--s-xxl) 0; border-top:1px solid var(--border); scro
 .gaps { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-xl) var(--s-xl); margin-top:var(--s-xl); }
 .gap svg { width:100%; height:auto; display:block; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); }
 .gap h3 { margin:var(--s-md) 0 6px; font-size:15px; }
+/* parallax calculator */
+.pxlab { border:1px solid var(--border); border-radius:var(--r-md); background:var(--surface); padding:var(--s-md); margin:var(--s-md) 0; }
+.pxlab-title { font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--textFaint); margin:0 0 var(--s-md); }
+.pxlab-ctl { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:var(--s-md); margin-bottom:var(--s-md); }
+.pxlab-ctl label { display:block; font-size:12px; font-weight:600; color:var(--textDim); }
+.pxlab-ctl select, .pxlab-ctl input { width:100%; margin-top:5px; font:inherit; font-size:12.5px; color:var(--text); background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:5px 6px; }
+.pxlab-ctl input[type=range] { padding:0; border:none; background:none; accent-color:var(--accent); }
+.pxlab-ctl output { float:right; font-family:var(--mono); font-size:11.5px; color:var(--accent); font-weight:700; }
+.pxlab svg { width:100%; height:auto; display:block; margin-bottom:var(--s-sm); }
+.pxlab svg .pxl { font-size:8px; font-weight:800; letter-spacing:0.9px; }
+.pxlab-out { margin:0 0 6px; font-size:14.5px; color:var(--text); line-height:1.5; }
+.pxlab-out b { font-family:var(--mono); }
+.pxlab-out .ok { color:var(--accent); font-weight:700; }
+.pxlab-out .no { color:var(--warn); font-weight:700; }
+.lawhed { font-size:clamp(19px,2.1vw,23px); line-height:1.3; margin:var(--s-xl) 0 var(--s-md); max-width:30ch; }
+.rungs-list { margin:var(--s-sm) 0 var(--s-md); padding-left:22px; }
+.rungs-list li { margin-bottom:5px; color:var(--textDim); font-size:15px; line-height:1.55; }
+.pxlab-note { margin:0; font-size:11.5px; line-height:1.5; color:var(--textFaint); }
 .gap svg .glbl{font-size:8px;font-weight:800;letter-spacing:0.9px}
 .gap svg .gcap{font-size:11px}
 .gap p { margin:0; color:var(--textDim); font-size:14.5px; line-height:1.55; }
@@ -252,6 +270,12 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <p class="note" style="margin:0">Secure Enclave and App Attest need real hardware. The simulator falls back to a software key and says so.</p>
       </div>
     </div>
+
+    <div style="margin-top:var(--s-xl);max-width:52ch">
+      <h3 style="margin:0 0 6px">An open source proof-of-concept</h3>
+      <p style="color:var(--textDim);margin:0 0 var(--s-md)">All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product designer, not a cryptographer or a career engineer. Everything is here: camera, cryptography, native modules, interface, test suite.</p>
+      <div class="cta"><a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a></div>
+    </div>
   </div>
   <div class="phone">
     <div class="screen">
@@ -279,159 +303,55 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <p class="note" style="margin:0 0 var(--s-lg)">All of it optional, all of it switchable in the viewfinder, all of it readable by any C2PA tool.</p>
 
 <details class="f">
-    <summary>A second lens<span class="sum">The cheapest counter to photographing a screen.</span></summary>
-    <div class="fbody">
-      <p>Nearly every flagship ships a multi-camera array, and almost nothing uses the second one for provenance. Source Kit seals a simultaneous downsampled ultra-wide frame into the same file, as a C2PA ingredient with relationship <code>componentOf</code>. Open the photo in any C2PA reader and the second viewpoint is there.</p>
-      <p>An ultra-wide sees far more of the room than the frame you composed. A monitor bezel, the edge of a laptop, the glow off an OLED panel — all of it lands in the second view.</p>
-      <p>Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a real scene with a disagreement no homography removes. The frame and the calibration are both committed, so anyone can measure that residual themselves. Beyond a few metres the answer is <b>insufficient</b>, never <i>passed</i>.</p>
-      <p class="note">Status: the verification side is lab-tested. The capture path has not been confirmed in the field on iPhone 17.</p>
-  <figure>
-    <div class="fig">
-      <svg viewBox="0 0 920 430" width="100%" role="img" aria-label="Two cameras with a known baseline see a flat screen identically but disagree about a scene with depth">
-        <text x="20" y="24" class="lbl s-warn">FLAT SCREEN — ONE PLANE</text>
-        <circle cx="60" cy="105" r="9" class="f-none k-ac" stroke-width="1.8"/>
-        <circle cx="60" cy="165" r="9" class="f-none k-ac" stroke-width="1.8"/>
-        <line x1="60" y1="114" x2="60" y2="156" class="k-ac" stroke-width="1.2"/>
-        <text x="76" y="139" class="cap s-faint">baseline</text>
-        <rect x="300" y="58" width="110" height="155" rx="3" class="f-warnsoft k-warn" stroke-width="1.6"/>
-        <g class="k-dim" stroke-width="1" stroke-dasharray="3 3">
-          <line x1="69" y1="105" x2="300" y2="62"/><line x1="69" y1="105" x2="300" y2="209"/>
-          <line x1="69" y1="165" x2="300" y2="62"/><line x1="69" y1="165" x2="300" y2="209"/>
-        </g>
-        <text x="20" y="248" class="cap s-warn">A single homography fits both views. Residual ≈ 0.</text>
-
-        <line x1="450" y1="10" x2="450" y2="262" class="k-line"/>
-
-        <text x="480" y="24" class="lbl s-ac">REAL SCENE — DEPTH</text>
-        <circle cx="520" cy="105" r="9" class="f-none k-ac" stroke-width="1.8"/>
-        <circle cx="520" cy="165" r="9" class="f-none k-ac" stroke-width="1.8"/>
-        <line x1="520" y1="114" x2="520" y2="156" class="k-ac" stroke-width="1.2"/>
-        <rect x="672" y="72"  width="52" height="52" rx="2" class="f-acsoft k-ac" stroke-width="1.4"/>
-        <rect x="700" y="168" width="44" height="44" rx="2" class="f-acsoft k-ac" stroke-width="1.4"/>
-        <rect x="800" y="112" width="68" height="68" rx="2" class="f-acsoft k-ac" stroke-width="1.4"/>
-        <g class="k-dim" stroke-width="1" stroke-dasharray="3 3">
-          <line x1="529" y1="105" x2="672" y2="80"/><line x1="529" y1="105" x2="800" y2="130"/><line x1="529" y1="105" x2="700" y2="176"/>
-          <line x1="529" y1="165" x2="672" y2="112"/><line x1="529" y1="165" x2="800" y2="160"/><line x1="529" y1="165" x2="700" y2="204"/>
-        </g>
-        <text x="480" y="248" class="cap s-ac">No homography removes the disagreement. Residual &gt; 0.</text>
-
-        <line x1="20" y1="286" x2="900" y2="286" class="k-line"/>
-        <text x="20" y="316" class="lbl s-faint">HOW FAR THE CHECK REACHES</text>
-
-        <line x1="20" y1="356" x2="420" y2="356" class="k-ac" stroke-width="4" stroke-linecap="round"/>
-        <line x1="420" y1="356" x2="880" y2="356" class="k-line" stroke-width="4" stroke-linecap="round"/>
-        <g class="s-faint">
-          <text x="20"  y="345" class="num">0.5 m</text>
-          <text x="220" y="345" class="num">2 m</text>
-          <text x="404" y="345" class="num">4 m</text>
-          <text x="860" y="345" class="num" text-anchor="end">10 m +</text>
-        </g>
-        <text x="20"  y="382" class="cap s-ac">MEASURABLE — a plane separates from a scene</text>
-        <text x="440" y="382" class="cap s-faint">INSUFFICIENT — the baseline can no longer tell them apart</text>
-        <text x="20"  y="410" class="cap s-dim">Past that distance the answer is <tspan class="s-txt" font-weight="700">insufficient</tspan>, never <tspan class="s-txt" font-weight="700">passed</tspan>. A test that quietly becomes a pass when it stops working is worse than no test.</text>
-      </svg>
-    </div>
-    <figcaption>A stereo capture commits the frame you asked for, a downsampled view from the second physical lens, and the full calibration. <b>The second view is committed rather than the computed answer,</b> so anyone can undistort both, match features, fit a homography and measure the residual instead of trusting the device's arithmetic.</figcaption>
-  </figure>      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/exhibit-camera">modules/exhibit-camera</a></p>
-    </div>
-  </details>
-  <details class="f">
-    <summary>The motion of the phone<span class="sum">Hard to fake consistently with the footage.</span></summary>
-    <div class="fbody">
-      <p>A window of gyroscope and attitude samples from around the shutter, signed into the record and drawn against the optical flow of the frames themselves.</p>
-      <p>Near detail should move the way the gyro says the phone moved. A recapture of a screen inherits the screen's horizon, not the phone's — and a fake that matches has to stay consistent across two independent signals.</p>
-      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts">src/provenance/poseTrace.ts</a></p>
-    </div>
-  </details>
-  <details class="f">
-    <summary>A raw audio master<span class="sum">Delivery codecs destroy what forensic work needs.</span></summary>
-    <div class="fbody">
-      <p>Alongside the compressed track, an uncompressed 16 kHz master converted from the same native buffers, with its hash signed into the record.</p>
-      <p>Mains hum at 50 or 60 Hz leaks into any indoor recording and drifts in a pattern unique to a grid region — effectively a timestamp you cannot forge without the grid's own history. Delivery codecs filter exactly that band out. Capturing the master costs a few megabytes and keeps the analysis possible for as long as the file exists.</p>
-      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit">modules/capture-kit</a></p>
-    </div>
-  </details>
-  <details class="f">
     <summary>Hardware attestation, bound to the key<span class="sum">Not just a real phone — this key, on this phone.</span></summary>
     <div class="fbody">
       <p>Signing keys are generated inside the Secure Enclave and cannot be extracted. Apple's App Attest certifies the device and the app, but gives applications no access to the attested key, so there is no direct way to say "and this is the key I sign with."</p>
-      <p>The workaround is a commitment: set the App Attest <code>clientDataHash</code> to <code>SHA256(challenge ‖ signingPublicKey)</code>. Apple's certificate then vouches for exactly that key. An attestation cannot be lifted off a real phone and pointed at someone else's key.</p>
-  <figure>
-    <div class="fig">
-      <svg viewBox="0 0 920 300" width="100%" role="img" aria-label="How the App Attest client data hash binds Apple's attestation to the signing key">
-        <defs>
-          <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M0,1 L9,5 L0,9 z" fill="var(--textFaint)"/>
-          </marker>
-        </defs>
-
-        <rect x="20"  y="40"  width="170" height="48" rx="8" class="f-surf k-line" stroke-width="1.4"/>
-        <text x="105" y="70" class="cap s-txt" text-anchor="middle">Fresh challenge</text>
-
-        <rect x="20"  y="112" width="170" height="48" rx="8" class="f-surf k-line" stroke-width="1.4"/>
-        <text x="105" y="136" class="cap s-txt" text-anchor="middle">Signing public key</text>
-        <text x="105" y="151" class="cap s-faint" text-anchor="middle">Secure Enclave, P-256</text>
-
-        <path d="M192 64 h20 v36" class="f-none k-dim" stroke-width="1.3"/>
-        <path d="M192 136 h20 v-36" class="f-none k-dim" stroke-width="1.3"/>
-        <text x="222" y="94" class="hd s-dim">‖</text>
-        <line x1="232" y1="100" x2="246" y2="100" class="k-dim" stroke-width="1.3" marker-end="url(#ah2)"/>
-
-        <rect x="252" y="76"  width="118" height="48" rx="8" class="f-surf k-line" stroke-width="1.4"/>
-        <text x="311" y="105" class="cap s-txt" text-anchor="middle">SHA-256</text>
-        <line x1="374" y1="100" x2="404" y2="100" class="k-dim" stroke-width="1.3" marker-end="url(#ah2)"/>
-
-        <rect x="410" y="76"  width="170" height="48" rx="8" class="f-acsoft k-ac" stroke-width="1.4"/>
-        <text x="495" y="99"  class="cap s-txt" text-anchor="middle">clientDataHash</text>
-        <text x="495" y="114" class="cap s-faint" text-anchor="middle">32 bytes</text>
-        <line x1="584" y1="100" x2="614" y2="100" class="k-dim" stroke-width="1.3" marker-end="url(#ah2)"/>
-
-        <rect x="620" y="76"  width="180" height="48" rx="8" class="f-surf k-line" stroke-width="1.4"/>
-        <text x="710" y="99"  class="cap s-txt" text-anchor="middle">Apple App Attest</text>
-        <text x="710" y="114" class="cap s-faint" text-anchor="middle">on device, no key access</text>
-
-        <path d="M710 128 v34" class="f-none k-ac" stroke-width="1.5" marker-end="url(#ah2)"/>
-
-        <rect x="410" y="176" width="470" height="86" rx="8" class="f-none k-ac" stroke-width="1.5" stroke-dasharray="5 4"/>
-        <text x="430" y="200" class="lbl s-ac">APPLE ATTESTATION CERTIFICATE</text>
-        <text x="430" y="224" class="num s-txt">nonce ext 1.2.840.113635.100.8.2</text>
-        <text x="430" y="246" class="num s-ac">= SHA256(challenge ‖ signingPublicKey)</text>
-
-        <text x="20"  y="200" class="cap s-dim">Apple's certificate now names</text>
-        <text x="20"  y="218" class="cap s-dim">this exact key — not merely</text>
-        <text x="20"  y="236" class="cap s-dim">some key on some genuine</text>
-        <text x="20"  y="254" class="cap s-dim">device.</text>
-      </svg>
-    </div>
-    <figcaption>The binding rides inside every manifest, so it can be re-checked offline years later with nothing running anywhere. <span class="note">Code in <code>src/lib/appAttest.ts</code>; the relay is one dependency-free file in <code>server/</code>. Run your own or skip it — an offline device signs unattested and says so.</span></figcaption>
-  </figure>      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts">src/lib/appAttest.ts</a></p>
+      <p>The workaround is a commitment: set the App Attest <code>clientDataHash</code> to <code>SHA256(challenge ‖ signingPublicKey)</code>. Apple's certificate then vouches for exactly that key, in the nonce extension at OID <code>1.2.840.113635.100.8.2</code>. An attestation cannot be lifted off a real phone and pointed at someone else's key. The binding rides inside every manifest, so it can be re-checked offline years later.</p>
+      <p class="note">This is the strongest thing an app can assert about itself, and it is still weaker than what the phone's own camera could assert. A signature made inside the imaging pipeline covers the pixels on their way out of the sensor; this one covers a key and an app, and starts after the image has already been handed over. <a href="#photons">That difference, and who has closed it, is further down the page.</a> <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts">appAttest.ts</a></p>
     </div>
   </details>
+
   <details class="f">
-    <summary>Independent time<span class="sum">The only claim that does not come from your phone.</span></summary>
+    <summary>Independent timestamping<span class="sum">The only claim that does not come from your phone.</span></summary>
     <div class="fbody">
-      <p>An RFC 3161 countersignature, verified cryptographically on-device rather than read off the token. And an OpenTimestamps receipt, which lands the record's digest in a Bitcoin block and gives a lower bound nobody controls.</p>
-      <p>Offline, the capture signs without either and says the anchor is missing. Queued anchors record their delay rather than backdating.</p>
-      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts">timestamp.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts">ots.ts</a></p>
+      <p>Every other field in the record is the device describing itself. The clock is the easiest of those to move, so it gets outside corroboration. An RFC 3161 countersignature from a timestamp authority is verified cryptographically on-device rather than read off the token, and an OpenTimestamps receipt lands the record's digest in a Bitcoin block, which gives a lower bound nobody controls.</p>
+      <p>Offline, the capture signs without either and the report says the anchor is missing rather than implying one. An anchor queued for later records its own delay instead of backdating. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts">timestamp.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts">ots.ts</a></p>
     </div>
   </details>
+
   <details class="f">
-    <summary>A post-quantum signature<span class="sum">A photograph may need to prove itself in twenty years.</span></summary>
+    <summary>Organizational credentials<span class="sum">Optional. Lets a newsroom vouch for the key, not the file.</span></summary>
     <div class="fbody">
-      <p>Evidence outlives its cryptography. A photograph taken today might matter in a court, an archive or a history in two decades, by which time the signature protecting it could be breakable.</p>
-      <p>So every record carries an ML-DSA-65 signature over the same commitment as the ECDSA one. A few kilobytes now, against a file that quietly stops being provable later.</p>
-      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/pq.ts">src/lib/pq.ts</a></p>
+      <p>By default a capture is signed with a self-signed device key, which proves consistency and nothing about who you are. An organization can raise that without the private key ever leaving the Secure Enclave: the device exports its public key, the organization's CA issues a certificate for that key, and the device imports it. From then on the signature chains into the organization instead of into itself.</p>
+      <p>There is also a hands-off version. A newsroom publishes a static document at <code>/.well-known/signet-org.json</code> listing member fingerprints and their certificates, and a member enters the domain rather than passing files around.</p>
+      <p>Revocation stays where it belongs: the organization's CA publishes OCSP and CRL endpoints, and any verifier can ask. A credential that no longer matches the active device key — after a key rotation, say — is ignored and flagged, never quietly used. The app will not accept a credential that ships a private key. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/orgCert.ts">orgCert.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/orgDirectory.ts">orgDirectory.ts</a></p>
     </div>
   </details>
+
   <details class="f">
-    <summary>Field-by-field disclosure<span class="sum">The record is a dossier. You decide what travels.</span></summary>
+    <summary>A verdict that refuses to be a badge<span class="sum">Five questions, five answers, no checkmark.</span></summary>
     <div class="fbody">
-      <p>A provenance record says where you were, when, on which device, sometimes who you are. For a photographer working somewhere hostile that file is a threat as much as a defence.</p>
-      <p>Every field is committed under its own salt into a signed Merkle tree, which gives three states a verifier can tell apart: <b>disclosed</b>, <b>withheld</b> — committed but absent, with no ciphertext to attack — and <b>never-recorded</b>, declared at capture and bound into the root, so a withheld field cannot later be passed off as one that never existed.</p>
-      <p>Reveal one field later and it still verifies against the original signature. Or destroy the seed, and the withheld fields become permanently underivable by anyone, including me.</p>
-      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure">src/disclosure</a></p>
+      <p>A checkmark borrows the authority of a body that supposedly did the checking. No such body exists here. So the result is a ladder of five separate questions, each answered on its own evidence:</p>
+      <ol class="rungs-list">
+        <li><b>Media unchanged since signing.</b> The signature verifies and the bytes match what was signed.</li>
+        <li><b>Signer identified.</b> The key is one this device has seen before.</li>
+        <li><b>Accessioned by an organization.</b> The signature chains into an org credential.</li>
+        <li><b>Key attested by Apple hardware.</b> Apple certifies the key is Enclave-resident on genuine hardware.</li>
+        <li><b>Time bracketed by an independent anchor.</b> A timestamp token or Bitcoin receipt corroborates when.</li>
+      </ol>
+      <p>Each rung is <i>reached</i>, <i>not reached</i>, <i>failed</i>, or <i>not applicable</i>, and the unreached ones say why. Unsigned renders neutral grey, never red: the absence of a credential is not evidence of tampering. <i>Verified</i>, <i>authentic</i> and <i>trusted</i> name a conclusion somebody reached, and nothing here reaches conclusions — a test fails the build if one of those words appears in a verdict position. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts">trustLadder.ts</a></p>
     </div>
   </details>
+
+  <details class="f">
+    <summary>Privacy and data redaction controls<span class="sum">The same record that proves your work can expose you.</span></summary>
+    <div class="fbody">
+      <p>Say this plainly, because the provenance industry mostly does not. A manifest that establishes where a photograph came from is, by construction, a record of where its photographer was, when, on which device, and often under what name. C2PA is dual-use. For a wedding photographer that is a credential. For someone documenting a police stop, a strike, or a border crossing, the same file is a surveillance artefact they carried in voluntarily and cannot take back once it is shared.</p>
+      <p>So the control has to sit at the shutter, not at export. Every field is committed under its own salt into a signed Merkle tree, which lets a verifier tell three states apart: <b>disclosed</b>, <b>withheld</b> — committed but absent, with no ciphertext to attack — and <b>never-recorded</b>, declared at capture and bound into the root, so a withheld field cannot later be passed off as one that was never collected.</p>
+      <p>Reveal a field later and it still verifies against the original signature. Or destroy the seed, and the withheld fields become permanently underivable by anyone, including me. What this does not cover is the picture itself: blur a face and the signature breaks, which is <a href="#holes">the sixth gap below</a>. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure">src/disclosure</a></p>
+    </div>
+  </details>
+
   <details class="f">
     <summary>Forensic checks any person can run<span class="sum">No model, no upload, no probability.</span></summary>
     <div class="fbody">
@@ -482,20 +402,90 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   </figure>      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/components/forensic">src/components/forensic</a></p>
     </div>
   </details>
+
   <details class="f">
-    <summary>A verdict that refuses to be a badge<span class="sum">Five questions, five answers, no checkmark.</span></summary>
+    <summary>A second lens<span class="sum">The cheapest counter to photographing a screen.</span></summary>
     <div class="fbody">
-      <p>A checkmark borrows the authority of a body that supposedly did the checking. No such body exists here. So the result is a ladder of five separate questions, with the unreached rungs stating why. Unsigned renders neutral grey, never red: the absence of a credential is not evidence of tampering.</p>
-      <p><i>Verified</i>, <i>authentic</i> and <i>trusted</i> name a conclusion somebody reached, and nothing here reaches conclusions. A test fails the build if one of those words appears in a verdict position.</p>
-      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts">src/lib/trustLadder.ts</a></p>
+      <p>Nearly every flagship smartphone ships a multi-camera array, and almost nothing uses the second one for provenance. Source Kit seals a simultaneous downsampled ultra-wide frame into the same file, as a C2PA ingredient with relationship <code>componentOf</code>. Open the photo in any C2PA reader and the second viewpoint is there.</p>
+      <p>An ultra-wide sees far more of the room than the frame you composed. A monitor bezel, the edge of a laptop, the glow off an OLED panel — all of it lands in the second view.</p>
+      <p>Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a scene with real depth differently, and no homography removes the difference. On an iPhone Pro the wide and ultra-wide sit <a href="https://arxiv.org/pdf/2506.06037">about 19.2&nbsp;mm apart</a>. A point at distance <i>Z</i> shifts between the two views by <code>f × B ÷ Z</code> pixels, where <i>B</i> is that baseline and <i>f</i> is the focal length expressed in pixels of whatever width you analyse at.</p>
+      <p>That last term is what decides the range, and it is worth being exact about. The card inside the app decodes both views to 96&nbsp;px wide, which puts <i>f</i> at about 69&nbsp;px and the one-pixel floor at <b>1.3&nbsp;m</b>. The frame sealed into the file is 640&nbsp;px, where <i>f</i> is about 457&nbsp;px and the same floor sits at <b>8.8&nbsp;m</b>. Past those distances the two views agree to within a pixel, and a screen is indistinguishable from a room.</p>
+      <p>This turns out to matter less than it sounds, because rephotography happens close up. A 27-inch monitor filling the frame sits around 60&nbsp;cm from the lens, where the shift is 2.2&nbsp;px in the app's own card and 14.6&nbsp;px in the sealed frame — well clear of the floor either way.</p>
+      <div class="pxlab" data-pxlab>
+        <p class="pxlab-title">Parallax range calculator</p>
+        <div class="pxlab-ctl">
+          <label>Baseline
+            <select data-b>
+              <option value="19.2" selected>19.2 mm — iPhone Pro wide ↔ ultra-wide</option>
+              <option value="12">12 mm — a tighter array</option>
+              <option value="30">30 mm — a folding phone, unfolded</option>
+            </select>
+          </label>
+          <label>Analysed at
+            <select data-w>
+              <option value="96" selected>96 px — the in-app card</option>
+              <option value="640">640 px — the sealed second frame</option>
+            </select>
+          </label>
+          <label>Subject distance <output data-zout>0.6 m</output>
+            <input type="range" data-z min="10" max="2000" value="60">
+          </label>
+        </div>
+        <svg viewBox="0 0 420 132" role="img" aria-label="Two lenses a fixed distance apart viewing a subject; the calculator reports the resulting pixel disparity.">
+          <line x1="34" y1="46" x2="34" y2="104" class="f-none k-line" stroke-width="1"/>
+          <circle cx="34" cy="58" r="7" class="f-surf k-txt" stroke-width="1.5"/>
+          <circle cx="34" cy="92" r="7" class="f-surf k-txt" stroke-width="1.5"/>
+          <text x="16" y="40" class="pxl s-faint">WIDE</text>
+          <text x="4" y="118" class="pxl s-faint">ULTRA-WIDE</text>
+          <path d="M26 58 h-9 M26 92 h-9" class="f-none k-dim" stroke-width="1"/>
+          <text x="8" y="79" class="pxl s-ac" data-blab>19.2 mm</text>
+          <line x1="41" y1="58" x2="360" y2="66" class="f-none k-dim" stroke-width="1" stroke-dasharray="3 3" data-ray1/>
+          <line x1="41" y1="92" x2="360" y2="66" class="f-none k-dim" stroke-width="1" stroke-dasharray="3 3" data-ray2/>
+          <circle cx="362" cy="66" r="5" class="s-ac" data-subj/>
+          <text x="352" y="52" text-anchor="middle" class="pxl s-ac" data-zlab>0.6 m</text>
+          <line x1="41" y1="20" x2="362" y2="20" class="f-none k-line" stroke-width="1" data-bar/>
+          <path d="M41 16v8 M362 16v8" class="f-none k-line" stroke-width="1" data-ticks/>
+          <text x="200" y="14" text-anchor="middle" class="pxl s-faint" data-barlab>SUBJECT DISTANCE</text>
+        </svg>
+        <p class="pxlab-out" data-out></p>
+        <p class="pxlab-note">Disparity = focal length in pixels × baseline ÷ distance, with focal length taken from a 70° horizontal field of view at the analysed width. A patch has to shift by at least one pixel to be measurable, so that is the range floor. Below roughly 9 cm the shift exceeds the ±14 px search window and matching fails outright.</p>
+      </div>
+      <p class="note"><b>It does not currently flag its own limit.</b> The card reports the matched-patch count and the median disparity and stops there — no verdict, no range warning. Someone reading a distant subject sees a small number and has to know for themselves that small means <i>out of range</i> rather than <i>flat</i>. That is a real gap in the interface, not the geometry, and it should say so on the card. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/components/forensic/MultipleLensCard.tsx">MultipleLensCard.tsx</a></p>
     </div>
   </details>
+
   <details class="f">
-    <summary>It works with the radio off<span class="sum">Sealing and verifying both, with no network at all.</span></summary>
+    <summary>The motion of the phone<span class="sum">Two independent signals a forgery has to satisfy at once.</span></summary>
     <div class="fbody">
-      <p>No accounts, no analytics, no launch-time network calls, and no registry address bundled in the app. The optional calls that exist — a timestamp authority, a Bitcoin anchor, an attestation relay you host — are named individually in the docs.</p>
-      <p>Apple's Reference Image sends the raw image, sensor signatures and hardware identifiers to Private Cloud Compute and returns an authenticated copy. That is a reasonable trade for most people. It is not available to someone who cannot afford to be seen talking to a server.</p>
-      <p class="where" style="font-family:var(--mono);font-size:12px;color:var(--textFaint);margin:0"><a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/NETWORK.md">docs/NETWORK.md</a></p>
+      <p>This is really two things, and they fail differently.</p>
+      <p><b>The first is the hand.</b> A window of gyroscope and accelerometer samples from around the shutter is signed into the record. Nobody holds a phone still, and the particular tremor of a hand over a second or two is not a thing a generator produces by accident. On a video or a short burst — an option in the viewfinder — that trace can be drawn against the optical flow of the frames themselves, so the movement the device felt is checked against the movement it saw. Those are two sensors on two physical principles, and they have to tell the same story.</p>
+      <p><b>The second is orientation.</b> The device knows which way is down from gravity, which way is north from the magnetometer, and where the sun should be from the signed time and place. Each of those predicts something visible in the frame: where the horizon should sit, which way shadows should fall. None of it is a check on the picture's content — it is a check for <i>agreement</i> between what the sensors claimed and what the image shows. A recapture of a screen, for instance, inherits the screen's horizon rather than the phone's.</p>
+      <p>Every one of these values is spoofable on its own. The point is that they are only useful together, and consistency across all of them is a much harder thing to fabricate than any one of them. That said: this is a cost, not a wall, and it is the kind of cost that falls as generative systems get better at physical consistency. It raises the price of a convincing forgery; it does not make one impossible. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts">poseTrace.ts</a></p>
+    </div>
+  </details>
+
+  <details class="f">
+    <summary>A raw audio master<span class="sum">Delivery codecs destroy what forensic work needs.</span></summary>
+    <div class="fbody">
+      <p>Alongside the compressed track, an uncompressed 16 kHz master is converted from the same native buffers and its hash signed into the record.</p>
+      <p>The reason is a technique called ENF analysis. Mains hum at 50 or 60 Hz leaks into almost any indoor recording, and the grid's frequency wanders in a pattern that is the same across a whole region and never repeats — so a recording carries a rough timestamp you cannot forge without the grid's own history. Delivery codecs filter that band out as inaudible, which is exactly right for listening and destroys the evidence.</p>
+      <p class="note">Be honest about what this buys. ENF matching is real forensic practice but it is not a party trick: the literature has conventionally wanted <a href="https://www.sciencedirect.com/science/article/pii/S2352864823000226">ten minutes or more of continuous audio</a> for a confident match against a grid database, and work on shorter clips — tens of seconds to a few minutes — is an active research problem rather than settled method. A ten-second video will not be dated this way. What the master does is keep the option open for the recordings long enough to use it, at a cost of a few megabytes. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit">capture-kit</a></p>
+    </div>
+  </details>
+
+  <details class="f">
+    <summary>A post-quantum signature<span class="sum">Cheap now, and photographs are read decades later.</span></summary>
+    <div class="fbody">
+      <p>Every record carries an ML-DSA-65 signature over the same commitment as the ECDSA one.</p>
+      <p>The obvious objection is that this is a bank vault door on a garden shed — the elliptic-curve signature is nowhere near the weakest thing here, and an attacker with a quantum computer would still find it easier to point a camera at a screen. That is fair, and it is not a reason to skip it. The cost is a few kilobytes per file and a library that already exists. The benefit is that a photograph taken this week might be evidence in a hearing, an archive or a history in twenty years, by which time the signature protecting it could be the one thing that has quietly stopped meaning anything. Nobody gets to re-sign the archive later. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/pq.ts">pq.ts</a></p>
+    </div>
+  </details>
+
+  <details class="f">
+    <summary>Works without a network<span class="sum">Sealing and verifying both, with the radio off.</span></summary>
+    <div class="fbody">
+      <p>No accounts, no analytics, no launch-time network calls, and no registry address bundled in the app. The optional calls that exist — a timestamp authority, a Bitcoin anchor, an organization directory you host — are named individually in the docs, and a capture made offline signs anyway and says which anchors are missing.</p>
+      <p>Apple's Reference Image sends the raw image, sensor signatures and hardware identifiers to Private Cloud Compute and returns an authenticated copy. That is a reasonable trade for most people. It is not available to someone who cannot afford to be seen talking to a server. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/NETWORK.md">NETWORK.md</a></p>
     </div>
   </details>
 
@@ -518,24 +508,26 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   </figure>
 
   <div class="col">
-    <p>In July 1917 two girls in Yorkshire photographed some fairies. The images were examined by Arthur Conan Doyle, who found them persuasive, and by Kodak, which declined to certify them but conceded it could not prove them fake. The fairies were cardboard, copied from a children's book and held up with hatpins. What is striking about the Cottingley affair is not that anyone was fooled but that the question was already understood to be a technical one, a matter for Kodak, rather than a question about two girls and a hatpin.</p>
+    <p>In July 1917 two girls in the Yorkshire village of Cottingley photographed some fairies at the bottom of the garden. The images were examined by Arthur Conan Doyle, who found them persuasive, and by Kodak, which declined to certify them but conceded it could not prove them fake. The fairies were cardboard, copied from a children's book and held up with hatpins. What is striking is not that anyone was fooled but that the question was already understood to be a technical one, a matter for Kodak, rather than a question about two girls and a hatpin.</p>
 
 
     <p>Retouching is as old as the negative, and Soviet censors <a href="https://en.wikipedia.org/wiki/The_Commissar_Vanishes">airbrushed the disgraced out of group portraits</a> for fifty years before Photoshop shipped in 1990. A convincing lie took a darkroom, a skill and an afternoon, and picture desks, wire services and libel law made it expensive to attempt.</p>
 
     <p>Generative models did not make images forgeable. They made forgery fast and essentially free, which is lighter fluid on an already smouldering sense of reality.</p>
 
-    <h3>Lawmakers have written more bills about synthetic media than about any other use of AI</h3>
-    <p>State legislatures introduced <a href="https://www.multistate.ai/artificial-intelligence-ai-legislation">635 AI bills in 2024 and more than 1,200 in 2025</a>, and synthetic media is the <a href="https://www.transparencycoalition.ai/news/state-bill-topic-tracker-ai-deepfakes">most-legislated corner</a> of the subject. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> and <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> both took effect on 2 August 2026. Penalties differ; the two technologies they lean on do not.</p>
+    <h3 class="lawhed">Deepfakes are the most legislated subject in artificial intelligence</h3>
+    <p>The volume is worth stating precisely, because it is the reason any of this exists. American state legislatures introduced <a href="https://www.multistate.ai/artificial-intelligence-ai-legislation">635 AI bills in 2024 and more than 1,200 in 2025</a>, the first year in which every state filed at least one, and 2026 passed both totals before most sessions closed. Inside that pile, synthetic media is the largest single category and the one that actually becomes law: <a href="https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/">49 states have now passed at least one deepfake statute</a> — 244 of them enacted since 2019, 58 in 2026 alone. Forty-eight states cover sexually explicit deepfakes; thirty-three now cover political ones, up from twenty-eight in January.</p>
+    <p>The pattern is not American. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on 2 August 2026, requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties up to €15 million or 3% of global turnover. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day. China has required labelling of synthetic text, image, audio and video since its deep synthesis rules, South Korea criminalised sexual deepfakes without an intent-to-distribute test, and Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge; the two technical demands underneath them do not.</p>
 
-    <h3>Watermarking marks what a machine made, and it can be washed off</h3>
+    <h3 class="lawhed">1 &nbsp;Requiring invisible watermarks on generated media</h3>
     <p>A watermark rides inside what a model generates, and it holds up against ordinary handling. It does not hold up against effort. Regenerating an image through a diffusion model <a href="https://arxiv.org/abs/2408.10446">strips the mark and keeps the picture</a>, one watermark can <a href="https://arxiv.org/abs/2605.16796">overwrite another</a>, and there is <a href="https://github.com/guillaumemeyer/watermarks-remover">tooling for it on GitHub</a>. Open-weight models emit nothing to strip in the first place.</p>
     <p>The deeper limit is that a watermark can only speak for what a machine made. It says nothing about a photograph, which leaves the person holding real footage with nothing to show. Once everyone knows video can be faked, real video gets dismissed as fake — a move already run in court by <a href="https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/">Tesla's lawyers over recordings of Elon Musk</a> and by <a href="https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/">January 6th defendants over footage from inside the Capitol</a>.</p>
 
-    <h3>Provenance signs what a camera saw, and the signature travels with the file</h3>
-    <p>Adobe, Arm, the BBC, Intel, Microsoft and Truepic founded the <a href="https://c2pa.org/">Coalition for Content Provenance and Authenticity</a> in February 2021, and the first specification followed a year later. It inverts the problem: instead of examining a file for signs of forgery, seal it at the source so any later change reads as a change. A watermark says a machine was involved. A manifest says which device, which moment, and what has happened since.</p>
+    <h3 class="lawhed">2 &nbsp;Requiring all media to carry tamper-proof data about its provenance</h3>
+    <p>Provenance is a word borrowed from the art trade, where it means the paper trail of a painting's owners — the chain of receipts, bills of sale and catalogue entries that says where a canvas has been since it left the studio. It was never a claim about the painting. A perfect provenance on a forgery is a well-documented forgery, and the trade has bought plenty of those. What the paper trail does is make lying laborious, because the liar has to manufacture a history rather than an object.</p>
+    <p>The digital version is the same idea with a signature instead of a filing cabinet. Adobe, Arm, the BBC, Intel, Microsoft and Truepic founded the <a href="https://c2pa.org/">Coalition for Content Provenance and Authenticity</a> in February 2021, and the first specification followed a year later. Instead of examining a file for signs of forgery, seal it at the source so any later change reads as a change. A watermark says a machine was involved. A manifest says which device, which moment, and what has happened since.</p>
 
-    <h3>Two assurance levels grade the signer, and the second one needs hardware</h3>
+    <h3 class="lawhed">Two assurance levels grade the signer, and the second one needs hardware</h3>
     <p>A signature is worth the process that produced it, so C2PA's <a href="https://github.com/c2pa-org/conformance-public">conformance program</a> grades the signer and writes the grade into the certificate. There are two levels, and both cover the same six objectives: certificate enrolment, key confidentiality, protecting the claim generator from misuse, protecting the asset and assertions at generation, protecting traffic between components, and the hosting environment. <b>Level 1</b> can meet them in software — the signing key encrypted at rest, a shared secret to authenticate at enrolment. <b>Level 2</b> adds two things: the key must be generated, stored and used at a higher privilege level than the code asking for the signature, and the device must present a hardware-rooted attestation of the signing binary when it enrols. The <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10 camera</a> is the first to reach it, and for a mobile app it is currently reachable only on Android. Source Kit meets the software tier, holds no certificate, and says so in every manifest.</p>
   </div>
 
@@ -719,16 +711,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 
 
 
-<!-- ===================== PROOF OF CONCEPT ===================== -->
-<section class="block" style="border-top:none;padding-top:var(--s-lg)"><div class="wrap">
-  <div class="col">
-    <h2>An open source proof-of-concept</h2>
-    <p>All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product designer, not a cryptographer or a career engineer. Everything is here: camera, cryptography, native modules, interface, test suite.</p>
-    <div class="cta" style="margin-top:var(--s-lg)">
-      <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a>
-    </div>
-  </div>
-</div></section>
+
 
 
 <!-- ===================== SIGNALS ===================== -->
@@ -820,5 +803,61 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   </div>
   <p class="fine" style="margin-top:var(--s-xl);padding-top:var(--s-md);border-top:1px solid var(--border)">© 2026 Noah Bassetti-Blum · Apache-2.0 · “Source Kit” is a trademark and isn’t licensed for derivative use — fork freely, rename proudly.</p>
 </div></footer>
+<script>
+(function () {
+  var root = document.querySelector('[data-pxlab]');
+  if (!root) return;
+  var bSel = root.querySelector('[data-b]'), wSel = root.querySelector('[data-w]');
+  var zIn = root.querySelector('[data-z]'), out = root.querySelector('[data-out]');
+  var zOut = root.querySelector('[data-zout]'), zLab = root.querySelector('[data-zlab]');
+  var bLab = root.querySelector('[data-blab]'), subj = root.querySelector('[data-subj]');
+  var FOV = 70 * Math.PI / 180;
+
+  function fmtZ(z) { return z < 1 ? Math.round(z * 100) + ' cm' : (Math.round(z * 10) / 10) + ' m'; }
+
+  function draw() {
+    var B = parseFloat(bSel.value) / 1000;          // metres
+    var W = parseFloat(wSel.value);                  // analysed width, px
+    var z = parseInt(zIn.value, 10) / 100;           // metres
+    var f = (W / 2) / Math.tan(FOV / 2);             // focal length, px
+    var d = f * B / z;                               // disparity, px
+    var reach = f * B;                               // distance at the 1 px floor
+    var searchPx = 14 * (W / 96);                    // search window at this width
+    var near = f * B / searchPx;
+
+    zOut.textContent = fmtZ(z);
+    zLab.textContent = fmtZ(z);
+    bLab.textContent = bSel.value + ' mm';
+
+    // subject slides along the sight lines, log-scaled so the near end is legible
+    var t = Math.log(z / 0.1) / Math.log(20 / 0.1);
+    var x = 90 + Math.max(0, Math.min(1, t)) * 272;
+    subj.setAttribute('cx', x.toFixed(1));
+    zLab.setAttribute('x', x.toFixed(1));
+    root.querySelector('[data-ray1]').setAttribute('x2', x.toFixed(1));
+    root.querySelector('[data-ray2]').setAttribute('x2', x.toFixed(1));
+    root.querySelector('[data-bar]').setAttribute('x2', x.toFixed(1));
+    root.querySelector('[data-ticks]').setAttribute('d', 'M41 16v8 M' + x.toFixed(1) + ' 16v8');
+    root.querySelector('[data-barlab]').setAttribute('x', ((41 + x) / 2).toFixed(1));
+
+    var verdict;
+    if (d > searchPx) {
+      verdict = '<span class="no">too close to match</span> — the shift is larger than the ±' +
+        Math.round(searchPx) + ' px search window';
+    } else if (d >= 1) {
+      verdict = '<span class="ok">measurable</span>';
+    } else {
+      verdict = '<span class="no">below the one-pixel floor</span> — a flat screen and a real scene look the same here';
+    }
+    out.innerHTML = 'A subject at ' + fmtZ(z) + ' shifts <b>' + (Math.round(d * 100) / 100) +
+      ' px</b> between the two views: ' + verdict + '. At this baseline and width the method reaches ' +
+      '<b>' + fmtZ(near) + '</b> to <b>' + fmtZ(reach) + '</b>.';
+  }
+
+  [bSel, wSel, zIn].forEach(function (el) { el.addEventListener('input', draw); });
+  draw();
+})();
+</script>
+
 </body>
 </html>
