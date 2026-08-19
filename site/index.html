@@ -199,8 +199,9 @@ footer a:hover{color:var(--accent)}
     Source Kit
   </div>
   <div class="navlinks">
+    <a href="#how">How it works</a>
     <a href="#history">History</a>
-    <a href="#holes">The holes</a>
+    <a href="#holes">The gaps</a>
     <a href="#seal">The seal</a>
     <a href="#label">The label</a>
     <a href="#stereo">Two lenses</a>
@@ -211,15 +212,19 @@ footer a:hover{color:var(--accent)}
   <a class="btn ghost" style="padding:8px 14px;font-size:13px" href="https://github.com/noah-pi/sourcekit-open">GitHub ↗</a>
 </div></nav>
 
-<header style="padding:var(--s-xxl) 0 var(--s-xl)"><div class="wrap" style="display:grid;grid-template-columns:1fr 330px;gap:var(--s-xxl);align-items:center">
+<header style="padding:var(--s-xxl) 0 var(--s-xl)"><div class="wrap" style="display:grid;grid-template-columns:1fr 330px;gap:var(--s-xxl);align-items:start">
   <div>
     <h1>Fuck deepfakes.<br>Prove your work.</h1>
-    <p class="lede">Source Kit is a cryptographic camera app that signs each photo and video as you take it, on the device, without a network. The signature and the sensor readings go inside the file. Anyone can check them without needing anything from me. The manifest is standard C2PA, checked in CI against <code>c2patool</code> on every run.</p>
-    <p style="color:var(--textDim);max-width:48ch">I'm a journalist turned product designer, not a cryptographer or a career engineer. Everything is published — camera, cryptography, native modules, interface, test suite — because people who know more will get further with it than I will.</p>
-    <div class="cta" style="margin-top:var(--s-lg)">
-      <a class="btn primary" href="https://testflight.apple.com/join/cRuRw2MN">Try it on TestFlight</a>
-      <a class="btn ghost" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
-      <a class="btn ghost" href="#seal">How it works</a>
+    <p class="lede">Source Kit is a cryptographic camera app that embeds each photo and video with a signed record of how it was made — which device, which instant, what the sensors read, what a second lens saw — so anyone can check later where a file came from and what has happened to it since.</p>
+    <p style="color:var(--textDim);max-width:52ch">The record is signed and sealed into the file at the moment of capture, as a standard C2PA manifest. It works without a network, and it can be checked with any C2PA tool.</p>
+
+    <div class="card" style="margin-top:var(--s-lg);display:flex;gap:var(--s-lg);align-items:center;flex-wrap:wrap;max-width:52ch">
+      <a href="https://testflight.apple.com/join/cRuRw2MN" aria-label="Join the Source Kit TestFlight build"><svg viewBox="0 0 33 33" width="132" height="132" role="img" aria-label="QR code linking to the Source Kit TestFlight build" style="display:block;border-radius:8px"><rect width="33" height="33" fill="#FFFFFF"/><g transform="translate(2 2)" fill="#1D1D1F"><path d="M0 0h7v1h-7zM9 0h1v1h-1zM12 0h1v1h-1zM15 0h1v1h-1zM17 0h3v1h-3zM22 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h8v1h-8zM17 1h3v1h-3zM22 1h1v1h-1zM28 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM9 2h3v1h-3zM15 2h2v1h-2zM18 2h1v1h-1zM20 2h1v1h-1zM22 2h1v1h-1zM24 2h3v1h-3zM28 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM9 3h2v1h-2zM13 3h4v1h-4zM18 3h3v1h-3zM22 3h1v1h-1zM24 3h3v1h-3zM28 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM8 4h1v1h-1zM10 4h3v1h-3zM18 4h2v1h-2zM22 4h1v1h-1zM24 4h3v1h-3zM28 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM11 5h1v1h-1zM15 5h5v1h-5zM22 5h1v1h-1zM28 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h7v1h-7zM9 7h3v1h-3zM13 7h1v1h-1zM17 7h3v1h-3zM0 8h1v1h-1zM2 8h1v1h-1zM4 8h1v1h-1zM6 8h1v1h-1zM13 8h1v1h-1zM16 8h3v1h-3zM24 8h1v1h-1zM27 8h1v1h-1zM1 9h1v1h-1zM3 9h3v1h-3zM8 9h1v1h-1zM11 9h1v1h-1zM13 9h2v1h-2zM16 9h1v1h-1zM20 9h3v1h-3zM25 9h1v1h-1zM28 9h1v1h-1zM0 10h1v1h-1zM4 10h3v1h-3zM8 10h4v1h-4zM13 10h1v1h-1zM17 10h1v1h-1zM21 10h2v1h-2zM24 10h1v1h-1zM26 10h3v1h-3zM1 11h4v1h-4zM10 11h5v1h-5zM16 11h2v1h-2zM19 11h1v1h-1zM21 11h2v1h-2zM27 11h1v1h-1zM1 12h3v1h-3zM5 12h2v1h-2zM12 12h6v1h-6zM20 12h4v1h-4zM25 12h1v1h-1zM27 12h2v1h-2zM0 13h2v1h-2zM3 13h3v1h-3zM7 13h2v1h-2zM10 13h5v1h-5zM17 13h1v1h-1zM20 13h3v1h-3zM25 13h1v1h-1zM28 13h1v1h-1zM1 14h2v1h-2zM6 14h1v1h-1zM9 14h1v1h-1zM11 14h4v1h-4zM16 14h3v1h-3zM20 14h2v1h-2zM23 14h1v1h-1zM25 14h1v1h-1zM27 14h2v1h-2zM0 15h6v1h-6zM7 15h1v1h-1zM9 15h3v1h-3zM13 15h1v1h-1zM16 15h3v1h-3zM20 15h2v1h-2zM23 15h1v1h-1zM25 15h1v1h-1zM27 15h1v1h-1zM1 16h1v1h-1zM4 16h1v1h-1zM6 16h6v1h-6zM15 16h3v1h-3zM19 16h5v1h-5zM25 16h1v1h-1zM27 16h2v1h-2zM1 17h5v1h-5zM7 17h2v1h-2zM10 17h1v1h-1zM12 17h1v1h-1zM16 17h1v1h-1zM21 17h2v1h-2zM25 17h2v1h-2zM28 17h1v1h-1zM0 18h1v1h-1zM2 18h3v1h-3zM6 18h2v1h-2zM10 18h1v1h-1zM17 18h1v1h-1zM20 18h1v1h-1zM23 18h2v1h-2zM27 18h2v1h-2zM1 19h1v1h-1zM4 19h1v1h-1zM7 19h3v1h-3zM12 19h4v1h-4zM17 19h4v1h-4zM25 19h1v1h-1zM27 19h1v1h-1zM0 20h1v1h-1zM2 20h1v1h-1zM6 20h3v1h-3zM10 20h1v1h-1zM12 20h1v1h-1zM15 20h3v1h-3zM20 20h5v1h-5zM8 21h3v1h-3zM16 21h1v1h-1zM20 21h1v1h-1zM24 21h1v1h-1zM26 21h3v1h-3zM0 22h7v1h-7zM9 22h1v1h-1zM11 22h3v1h-3zM19 22h2v1h-2zM22 22h1v1h-1zM24 22h2v1h-2zM27 22h2v1h-2zM0 23h1v1h-1zM6 23h1v1h-1zM10 23h1v1h-1zM13 23h1v1h-1zM16 23h3v1h-3zM20 23h1v1h-1zM24 23h2v1h-2zM27 23h2v1h-2zM0 24h1v1h-1zM2 24h3v1h-3zM6 24h1v1h-1zM8 24h1v1h-1zM10 24h3v1h-3zM14 24h5v1h-5zM20 24h5v1h-5zM0 25h1v1h-1zM2 25h3v1h-3zM6 25h1v1h-1zM9 25h2v1h-2zM16 25h1v1h-1zM19 25h1v1h-1zM23 25h2v1h-2zM26 25h3v1h-3zM0 26h1v1h-1zM2 26h3v1h-3zM6 26h1v1h-1zM8 26h1v1h-1zM10 26h1v1h-1zM12 26h1v1h-1zM14 26h1v1h-1zM16 26h2v1h-2zM23 26h3v1h-3zM28 26h1v1h-1zM0 27h1v1h-1zM6 27h1v1h-1zM9 27h2v1h-2zM13 27h2v1h-2zM17 27h4v1h-4zM23 27h1v1h-1zM27 27h1v1h-1zM0 28h7v1h-7zM8 28h1v1h-1zM14 28h4v1h-4zM19 28h3v1h-3zM23 28h3v1h-3zM27 28h2v1h-2z"/></g></svg></a>
+      <div style="flex:1;min-width:190px">
+        <h3 style="margin:0 0 4px">Download the beta</h3>
+        <p style="color:var(--textDim);font-size:15px;margin:0 0 6px">Scan with an iPhone, or open <a href="https://testflight.apple.com/join/cRuRw2MN">testflight.apple.com/join/cRuRw2MN</a>.</p>
+        <p class="note" style="margin:0">Secure Enclave and App Attest need real hardware. The simulator falls back to a software key and says so.</p>
+      </div>
     </div>
   </div>
   <div class="phone">
@@ -241,21 +246,45 @@ footer a:hover{color:var(--accent)}
   </div>
 </div></header>
 
-
-<!-- ===================== WHO ===================== -->
+<!-- ===================== PROOF OF CONCEPT ===================== -->
 <section class="block" style="border-top:none;padding-top:var(--s-lg)"><div class="wrap">
-  <div class="card" style="border-left:3px solid var(--accent)">
-    <h3 style="margin-top:0">Where this comes from</h3>
-    <p style="color:var(--textDim);margin-bottom:var(--s-sm)">I was a journalist at the New York Times and am now a product designer at Google. Source Kit is neither job, and neither organization endorses it. I built it nights and weekends, wanting a camera that could show its work.</p>
-    <p style="color:var(--textDim);margin-bottom:var(--s-sm)">Twenty-seven test suites, cross-checked against the C2PA reference implementation on every run. I have also missed things a cryptographer, or a career iOS engineer, would find in an afternoon. I would rather you found them.</p>
-    <p style="color:var(--textDim);margin:0">Apple, Google, the C2PA working group and newsrooms with security teams are working on this with resources I do not have. A side project can publish everything and name its limits without asking permission.</p>
+  <div class="col">
+    <h2>An open source proof-of-concept</h2>
+    <p>All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product designer, not a cryptographer or a career engineer. Everything is here — camera, cryptography, native modules, interface, test suite — because people who know more will get further with it than I will.</p>
+    <p>I was a journalist at the New York Times and am now a product designer at Google. Source Kit is neither job, and neither organization endorses it. I built it nights and weekends, wanting a camera that could show its work.</p>
+    <p class="note">Twenty-seven test suites, cross-checked against the C2PA reference implementation on every run. I have also missed things a cryptographer, or a career iOS engineer, would find in an afternoon. I would rather you found them.</p>
+    <div class="cta" style="margin-top:var(--s-lg)">
+      <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
+      <a class="btn ghost" href="#how">How it works</a>
+    </div>
   </div>
 </div></section>
 
-<!-- ===================== HISTORY ===================== -->
+<!-- ===================== HOW IT WORKS ===================== -->
+<section class="block" id="how"><div class="wrap">
+  <h2>How Source Kit works</h2>
+  <p class="dek">Take a photo, video or audio recording in a familiar interface. As on most C2PA-enabled hardware, the basics go into the file at the moment of capture: time, device, and location if you allow it. Source Kit commits a good deal more.</p>
+
+  <div class="col">
+    <ul style="padding-left:20px;color:var(--textDim);line-height:1.7">
+      <li style="margin-bottom:10px"><b style="color:var(--text)">A second lens.</b> A downsampled view from a different physical camera, with its calibration, committed alongside the frame. Two lenses a known distance apart see a flat screen and a real room differently, and the difference is measurable. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/exhibit-camera">modules/exhibit-camera</a></li>
+      <li style="margin-bottom:10px"><b style="color:var(--text)">The motion of the phone.</b> Gyroscope and attitude around the shutter, decimated and signed, so the movement can be checked against the optical flow of the frames it accompanies. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts">src/provenance/poseTrace.ts</a></li>
+      <li style="margin-bottom:10px"><b style="color:var(--text)">A raw audio master.</b> Uncompressed LPCM beside the delivery file. Delivery codecs filter out exactly the frequencies forensic work needs, so it has to be captured now or not at all. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit">modules/capture-kit</a></li>
+      <li style="margin-bottom:10px"><b style="color:var(--text)">Hardware attestation, bound to the signing key.</b> Apple's App Attest certifies the device and app; a commitment construction welds that certificate to this specific key. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts">src/lib/appAttest.ts</a></li>
+      <li style="margin-bottom:10px"><b style="color:var(--text)">Independent time.</b> An RFC 3161 countersignature and an OpenTimestamps receipt anchored to Bitcoin — the only claims in the record that don't come from the device itself. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts">timestamp.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts">ots.ts</a></li>
+      <li style="margin-bottom:10px"><b style="color:var(--text)">A post-quantum signature.</b> ML-DSA-65 over the same commitment, so a future break of P-256 doesn't quietly invalidate an archive. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/pq.ts">src/lib/pq.ts</a></li>
+      <li style="margin-bottom:10px"><b style="color:var(--text)">Selective disclosure.</b> Every field committed under its own salt, so you can reveal one later without breaking the seal, or destroy the seed and make it permanently unreadable. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure">src/disclosure</a></li>
+      <li style="margin-bottom:10px"><b style="color:var(--text)">Checks a person can run.</b> Shadows against the sun's real position, the horizon against the committed gyro, the motion trace against the footage. No model, no upload, no score. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/components/forensic">src/components/forensic</a></li>
+      <li><b style="color:var(--text)">A verdict surface that refuses to be a badge.</b> Five separate questions, each answered on its own terms, with the unreached ones saying why. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts">src/lib/trustLadder.ts</a></li>
+    </ul>
+    <p class="note">The C2PA engine itself is written from the specification rather than bound to the reference library, which is what makes the differential testing possible. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/c2pa">src/c2pa</a></p>
+  </div>
+</div></section>
+
+<!-- ===================== CHASING INSTRUMENTS OF TRUTH ===================== -->
 <section class="block" id="history"><div class="wrap">
-  <h2>A photograph has never been proof</h2>
-  <p class="dek">It only used to be expensive to fake.</p>
+  <h2>Chasing instruments of truth</h2>
+  <p class="dek">A photograph has never been proof. It has only ever been expensive to fake.</p>
 
   <figure>
     <div class="fig plain">
@@ -276,8 +305,20 @@ footer a:hover{color:var(--accent)}
   </figure>
 
   <div class="col">
-    <p>Soviet censors airbrushed the disgraced out of group portraits for fifty years before Photoshop shipped in 1990. A photograph was never self-evidence. It was friction: a darkroom, a skill, an afternoon, with picture desks, wire services and libel law making lying expensive.</p>
-    <p>Generative models did not make images forgeable. They made forgery free and fast. The industry replaced friction with provenance: sign the file where it is made, carry the record with it.</p>
+    <p>In July 1917 two girls in Yorkshire photographed some fairies. The images were examined by Arthur Conan Doyle, who found them persuasive, and by Kodak, which declined to certify them but conceded it could not prove them fake. The fairies were cardboard, copied from a children's book and held up with hatpins. What is striking about the Cottingley affair is not that anyone was fooled but that the question was already understood to be a technical one, a matter for Kodak, rather than a question about two girls and a hatpin.</p>
+    <p>Susan Sontag put the presumption exactly: "A photograph passes for incontrovertible proof that a given thing happened. The picture may distort; but there is always a presumption that something exists, or did exist, which is like what's in the picture."</p>
+    <p>The presumption was never earned by the medium. Retouching is as old as the negative, and Soviet censors airbrushed the disgraced out of group portraits for fifty years before Photoshop shipped in 1990. What a photograph had was friction: a darkroom, a skill, an afternoon, with picture desks, wire services and libel law making lying expensive.</p>
+    <p>Generative models did not make images forgeable. They made forgery fast and essentially free, which is lighter fluid on an already smouldering sense of reality.</p>
+
+    <h3>Two responses, both pushed along by law</h3>
+    <p>The EU AI Act's transparency obligations became applicable on 2 August 2026, and California's AI Transparency Act became operative the same day. Both point at the same two mechanisms.</p>
+    <p><b>The first is marking synthetic content.</b> Google's SynthID, and now Anthropic's text watermarking, announced on 11 August 2026 and built on the SynthID-Text approach, embed a machine-readable signal in what a model produces. This is worth doing and it is not sufficient. Watermarks are strippable, open-weight models generate unmarked output, and any motivated actor can still pass off manipulated media.</p>
+    <p>Meanwhile the liar's dividend keeps paying. Once everyone knows video can be faked, real video can be dismissed as fake. Tesla's lawyers argued that Elon Musk's recorded statements about self-driving safety might be deepfakes and should not be admitted. A defendant charged over the January 6th Capitol riot argued the video evidence against him might be AI-generated. Marking what is synthetic does nothing for someone who needs to prove that something is not.</p>
+
+    <h3>The second response is provenance</h3>
+    <p>In February 2021, Adobe, Arm, the BBC, Intel, Microsoft and Truepic folded two existing efforts — Adobe's Content Authenticity Initiative and the Microsoft and BBC Project Origin — into the Coalition for Content Provenance and Authenticity. The first specification followed in 2022.</p>
+    <p>The vision inverts the detection problem. Rather than examining a file for signs of forgery, put a tamper-evident seal on it at the source, so that any later change is visible as a change. The work has been careful, open, and unusually candid about its own limits, and it is now real infrastructure.</p>
+    <p>C2PA defines four assurance levels for how well an implementation protects the signing process. Level 2, which requires hardware-backed key storage and dynamic security evidence, is the one that matters, and it has now been reached in shipping consumer hardware.</p>
   </div>
 
   <figure>
@@ -324,13 +365,24 @@ footer a:hover{color:var(--accent)}
     <figcaption>Ordered, not to scale. The Coalition for Content Provenance and Authenticity published the first C2PA specification in 2022; the Pixel 10 was the first phone to sign every camera JPEG with keys in a hardware security module.</figcaption>
   </figure>
 
-  <div class="col">
-    <p>It shipped. The <b>Pixel 10</b> signs every photo inside the imaging pipeline, claim keys in a Titan M2 chip, timestamp authority on the same die, certified at the highest assurance level the C2PA conformance programme defines. Qualcomm put a signer in the Snapdragon trusted execution environment. <b>Apple's Reference Image</b>, in an iOS 27 beta, captures sensor signatures and hardware identifiers with the frame.</p>
-    <p>Moving the signature into silicon solves what no application can: pixels that never leave the chip between sensor and signature leave nothing in between to attack.</p>
-  </div>
+</div></section>
 
-  <h2 id="holes" style="margin-top:var(--s-xxl);scroll-margin-top:70px">What it doesn't solve</h2>
-  <p class="dek">It leaves four holes. Everything below this is an attempt at one of them.</p>
+<!-- ===================== FROM BYTES TO PHOTONS ===================== -->
+<section class="block" id="photons"><div class="wrap">
+  <h2>From bytes to photons</h2>
+  <p class="dek">The gap that just closed is a significant one, and every new device will ship with this.</p>
+
+  <div class="col">
+    <p>It shipped. The <b>Pixel 10</b> signs every photo inside the imaging pipeline, claim keys in a Titan M2 chip, timestamp authority on the same die, certified at Assurance Level 2. Qualcomm put a signer in the Snapdragon trusted execution environment. <b>Apple's Reference Image</b>, visible in an iOS 27 beta, captures sensor signatures and hardware identifiers with the frame.</p>
+    <p>The difference is not the strength of the key. Everyone protects the key in hardware. The difference is how much untrusted code touches the pixels between the sensor and the signature. On a Pixel there is none: the pixels never leave the chip, so there is nothing in between to attack. Photograph something with a Pixel 10 and you can claim, with justification, that these are the literal photons that struck the sensor. No outside image can be injected.</p>
+    <p>That is a real achievement, and it is more than any third-party application on iOS can do. Source Kit signs in its own process, which is a longer and more exposed path.</p>
+  </div>
+</div></section>
+
+<!-- ===================== FOUR GAPS ===================== -->
+<section class="block" id="holes"><div class="wrap">
+  <h2>Four gaps remain</h2>
+  <p class="dek">None of them is closed by moving the signature into the silicon. Everything below this is an attempt at one of them.</p>
 
   <div class="grid2" style="align-items:start;margin-bottom:var(--s-xl)">
     <div class="card">
@@ -357,13 +409,23 @@ footer a:hover{color:var(--accent)}
 
   <div class="col">
     <p>In August 2025 a researcher found the Nikon Z6 III would sign an AI-generated image run through Multiple Exposure mode. Hardware-rooted, cryptographically valid, nothing broken: the picture was handed to the signer, which signed it as designed. Nikon revoked every certificate it had issued; a year later the service is still suspended.</p>
-    <p>Take the holes in order.</p>
+
     <h3>One: the standard</h3>
+    <p>C2PA has had its first comprehensive independent security analysis, and it did not go well.</p>
+  </div>
+
+  <div class="cite">
+    Golaszewski et al., <i>Verifying Provenance of Digital Media: Why the C2PA Specifications Fall Short</i> (UMBC, 2026).
+    Generators and validators disagree on which timestamp to trust. Revocation is weak enough that conforming validators accept manifests signed with certificates already known to be compromised.
+    <b style="color:var(--text)">The exclusion range permits alterations that no validator detects.</b>
+    Conforming validators return different answers on the same file. And the conformance program certifies products without technical review.
+    Their conclusion: don't stake journalism or legal evidence on C2PA yet.
+    <a href="https://eprint.iacr.org/2026/804">eprint.iacr.org/2026/804</a>
   </div>
 
   <div class="col">
     <h3>Two: nothing reaches the scene</h3>
-    <p>This hole survives every improvement in hardware, and widens as the others narrow. The better attestation gets, the more it becomes the only way in.</p>
+    <p>This gap survives every improvement in hardware, and widens as the others narrow. The better attestation gets, the more it becomes the only way in.</p>
   </div>
 
   <figure>
@@ -443,7 +505,7 @@ footer a:hover{color:var(--accent)}
     <p>The industry answer is a soft binding: a perceptual fingerprint that survives re-encoding, plus a repository to look the manifest up in. Source Kit commits that fingerprint today. The lookup half isn't built, and it is the most valuable thing left undone here.</p>
 
     <h3 style="margin-top:var(--s-xl)">What follows</h3>
-    <p><a href="#seal">The seal</a> and <a href="#label">the label</a> take holes one and three, <a href="#stereo">two lenses</a> and <a href="#inspect">Inspect</a> hole two, the hard one. Hole four is unfinished business.</p>
+    <p><a href="#seal">The seal</a> and <a href="#label">the label</a> take gaps one and three, <a href="#stereo">two lenses</a> and <a href="#inspect">Inspect</a> gap two, the hard one. Gap four is unfinished business.</p>
     <p>None of it is detection. You can't out-classify a generator, but you can raise what a forger has to keep consistent: geometry, motion, shadows, time. Lay it out so a person can weigh it in about four seconds.</p>
   </div>
 </div></section>
@@ -607,10 +669,7 @@ footer a:hover{color:var(--accent)}
   </figure>
 
   <div class="col">
-    <h3>Being straight about where this is weaker</h3>
-    <p>Everyone protects the key in hardware: the Secure Enclave here, Titan M2 on the Pixel, the TEE on Snapdragon. The difference is how much untrusted code touches the pixels before they reach the signer.</p>
-    <p>Source Kit signs in the app's own process; the Pixel signs inside the imaging pipeline, where Android userspace cannot reach. Hook this app on a jailbroken iPhone and the Enclave signs pixels of your choosing. <b>That's a real gap, and it's the one the silicon closes properly.</b> The key binding keeps the attack per-device: an attestation is welded to one signing key, so it cannot be pointed at a key someone else controls. On iPhones, and on the Android phones that will never get in-pipeline signing, this is roughly as far as an app can go.</p>
-    <p class="note">The interesting work is in holes two and three. The full comparison is in <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">the threat model</a>.</p>
+    <p class="note">Signing happens in this app's own process, which is a longer path than the Pixel's. See <a href="#photons">From bytes to photons</a> above, and <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">the threat model</a> for the full comparison.</p>
   </div>
 
   <h2 style="margin-top:var(--s-xxl)">What gets collected, and what each thing is worth</h2>
@@ -981,14 +1040,6 @@ footer a:hover{color:var(--accent)}
       <a class="btn ghost" href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">Threat model</a>
     </div>
 
-    <div class="card" style="margin-top:var(--s-xl);display:flex;gap:var(--s-lg);align-items:center;flex-wrap:wrap">
-      <a href="https://testflight.apple.com/join/cRuRw2MN" aria-label="Join the Source Kit TestFlight build"><svg viewBox="0 0 33 33" width="132" height="132" role="img" aria-label="QR code linking to the Source Kit TestFlight build" style="display:block;border-radius:8px"><rect width="33" height="33" fill="#FFFFFF"/><g transform="translate(2 2)" fill="#1D1D1F"><path d="M0 0h7v1h-7zM9 0h1v1h-1zM12 0h1v1h-1zM15 0h1v1h-1zM17 0h3v1h-3zM22 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h8v1h-8zM17 1h3v1h-3zM22 1h1v1h-1zM28 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM9 2h3v1h-3zM15 2h2v1h-2zM18 2h1v1h-1zM20 2h1v1h-1zM22 2h1v1h-1zM24 2h3v1h-3zM28 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM9 3h2v1h-2zM13 3h4v1h-4zM18 3h3v1h-3zM22 3h1v1h-1zM24 3h3v1h-3zM28 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM8 4h1v1h-1zM10 4h3v1h-3zM18 4h2v1h-2zM22 4h1v1h-1zM24 4h3v1h-3zM28 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM11 5h1v1h-1zM15 5h5v1h-5zM22 5h1v1h-1zM28 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h7v1h-7zM9 7h3v1h-3zM13 7h1v1h-1zM17 7h3v1h-3zM0 8h1v1h-1zM2 8h1v1h-1zM4 8h1v1h-1zM6 8h1v1h-1zM13 8h1v1h-1zM16 8h3v1h-3zM24 8h1v1h-1zM27 8h1v1h-1zM1 9h1v1h-1zM3 9h3v1h-3zM8 9h1v1h-1zM11 9h1v1h-1zM13 9h2v1h-2zM16 9h1v1h-1zM20 9h3v1h-3zM25 9h1v1h-1zM28 9h1v1h-1zM0 10h1v1h-1zM4 10h3v1h-3zM8 10h4v1h-4zM13 10h1v1h-1zM17 10h1v1h-1zM21 10h2v1h-2zM24 10h1v1h-1zM26 10h3v1h-3zM1 11h4v1h-4zM10 11h5v1h-5zM16 11h2v1h-2zM19 11h1v1h-1zM21 11h2v1h-2zM27 11h1v1h-1zM1 12h3v1h-3zM5 12h2v1h-2zM12 12h6v1h-6zM20 12h4v1h-4zM25 12h1v1h-1zM27 12h2v1h-2zM0 13h2v1h-2zM3 13h3v1h-3zM7 13h2v1h-2zM10 13h5v1h-5zM17 13h1v1h-1zM20 13h3v1h-3zM25 13h1v1h-1zM28 13h1v1h-1zM1 14h2v1h-2zM6 14h1v1h-1zM9 14h1v1h-1zM11 14h4v1h-4zM16 14h3v1h-3zM20 14h2v1h-2zM23 14h1v1h-1zM25 14h1v1h-1zM27 14h2v1h-2zM0 15h6v1h-6zM7 15h1v1h-1zM9 15h3v1h-3zM13 15h1v1h-1zM16 15h3v1h-3zM20 15h2v1h-2zM23 15h1v1h-1zM25 15h1v1h-1zM27 15h1v1h-1zM1 16h1v1h-1zM4 16h1v1h-1zM6 16h6v1h-6zM15 16h3v1h-3zM19 16h5v1h-5zM25 16h1v1h-1zM27 16h2v1h-2zM1 17h5v1h-5zM7 17h2v1h-2zM10 17h1v1h-1zM12 17h1v1h-1zM16 17h1v1h-1zM21 17h2v1h-2zM25 17h2v1h-2zM28 17h1v1h-1zM0 18h1v1h-1zM2 18h3v1h-3zM6 18h2v1h-2zM10 18h1v1h-1zM17 18h1v1h-1zM20 18h1v1h-1zM23 18h2v1h-2zM27 18h2v1h-2zM1 19h1v1h-1zM4 19h1v1h-1zM7 19h3v1h-3zM12 19h4v1h-4zM17 19h4v1h-4zM25 19h1v1h-1zM27 19h1v1h-1zM0 20h1v1h-1zM2 20h1v1h-1zM6 20h3v1h-3zM10 20h1v1h-1zM12 20h1v1h-1zM15 20h3v1h-3zM20 20h5v1h-5zM8 21h3v1h-3zM16 21h1v1h-1zM20 21h1v1h-1zM24 21h1v1h-1zM26 21h3v1h-3zM0 22h7v1h-7zM9 22h1v1h-1zM11 22h3v1h-3zM19 22h2v1h-2zM22 22h1v1h-1zM24 22h2v1h-2zM27 22h2v1h-2zM0 23h1v1h-1zM6 23h1v1h-1zM10 23h1v1h-1zM13 23h1v1h-1zM16 23h3v1h-3zM20 23h1v1h-1zM24 23h2v1h-2zM27 23h2v1h-2zM0 24h1v1h-1zM2 24h3v1h-3zM6 24h1v1h-1zM8 24h1v1h-1zM10 24h3v1h-3zM14 24h5v1h-5zM20 24h5v1h-5zM0 25h1v1h-1zM2 25h3v1h-3zM6 25h1v1h-1zM9 25h2v1h-2zM16 25h1v1h-1zM19 25h1v1h-1zM23 25h2v1h-2zM26 25h3v1h-3zM0 26h1v1h-1zM2 26h3v1h-3zM6 26h1v1h-1zM8 26h1v1h-1zM10 26h1v1h-1zM12 26h1v1h-1zM14 26h1v1h-1zM16 26h2v1h-2zM23 26h3v1h-3zM28 26h1v1h-1zM0 27h1v1h-1zM6 27h1v1h-1zM9 27h2v1h-2zM13 27h2v1h-2zM17 27h4v1h-4zM23 27h1v1h-1zM27 27h1v1h-1zM0 28h7v1h-7zM8 28h1v1h-1zM14 28h4v1h-4zM19 28h3v1h-3zM23 28h3v1h-3zM27 28h2v1h-2z"/></g></svg></a>
-      <div style="flex:1;min-width:220px">
-        <h3 style="margin:0 0 4px">Try it</h3>
-        <p style="color:var(--textDim);font-size:15px;margin:0 0 6px">The beta runs on TestFlight. Scan this, or open <a href="https://testflight.apple.com/join/cRuRw2MN">testflight.apple.com/join/cRuRw2MN</a> on an iPhone.</p>
-        <p class="note" style="margin:0">Secure Enclave and App Attest need a real device. The simulator falls back to a software key and says so.</p>
-      </div>
-    </div>
   </div>
 </div></section>
 

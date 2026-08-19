@@ -15,80 +15,174 @@
 
 # Fuck deepfakes. Prove your work.
 
-**Source Kit is a cryptographic camera app that signs each photo and video as you take
-it.** The signature, and everything the sensors reported at the time, go inside the file
-itself. On the device, without a network. Anyone can check it later without needing anything
-from me. The manifest is standard C2PA, and CI confirms on every run that `c2patool` reads
-it.
+**Source Kit is a cryptographic camera app that embeds each photo and video with a signed
+record of how it was made** — which device, which instant, what the sensors read, what a
+second lens saw — so anyone can check later where a file came from and what has happened to
+it since.
 
-I'm a journalist who became a product designer. I'm not a cryptographer, and I'm not a
-career engineer. This is a side project, published in full — camera, cryptography, native
-modules, interface, test suite — because people who know more than I do will get further
-with it than I will.
+The record is signed and sealed into the file at the moment of capture, as a standard C2PA
+manifest. It works without a network, and it can be checked with any C2PA tool.
 
-### Where this comes from
+**Download the beta:
+[testflight.apple.com/join/cRuRw2MN](https://testflight.apple.com/join/cRuRw2MN)** ·
+[Deep dive →](https://noah-pi.github.io/sourcekit-open/)
 
-I was a journalist at the New York Times and I'm now a product designer at Google. Source
-Kit isn't either of those jobs. It's a side project, built nights and weekends, because I
-wanted a camera that could show its work and couldn't find one. It isn't affiliated with or
-endorsed by either organization.
+Secure Enclave and App Attest need real hardware. The simulator falls back to a software key
+and says so.
 
-I have read the specifications closely and tested this as carefully as I know how:
-twenty-seven suites, cross-checked against the C2PA reference implementation on every run. I
-have also missed things that a cryptographer, or a career iOS engineer, would find in an
-afternoon. If you are one of those people, I would rather you found them than didn't.
+## An open source proof-of-concept
 
-Apple, Google, the C2PA working group and newsrooms with security teams are all working on
-this, with resources I do not have. A side project has one advantage over them. It can move
-quickly, publish everything, and say where the limits are without asking permission.
+All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product
+designer, not a cryptographer or a career engineer. Everything is here — camera,
+cryptography, native modules, interface, test suite — because people who know more will get
+further with it than I will.
 
-### The tech arrived. Here's what it still doesn't do.
+I was a journalist at the New York Times and am now a product designer at Google. Source Kit
+is neither job, and neither organization endorses it. I built it nights and weekends,
+wanting a camera that could show its work.
 
-There was never a golden age of photographic truth. Conan Doyle published two schoolgirls'
-paper cut-outs as evidence of fairies in 1920, after Kodak's experts confirmed the negatives
-showed no sign of tampering. They were right about the negatives. What a photograph had was
-never self-evidence. It was friction: a darkroom, a skill, an afternoon. Generative models
-did not make images forgeable. They made forgery free and fast.
+Twenty-seven test suites, cross-checked against the C2PA reference implementation on every
+run. I have also missed things a cryptographer, or a career iOS engineer, would find in an
+afternoon. I would rather you found them.
 
-The industry went looking for a replacement for friction and settled on provenance: sign the
-file where it is made, and carry the record with it. It shipped. The **Pixel 10** signs
-every photo its camera takes from inside the imaging pipeline, with the claim keys in a
-Titan M2 security chip and a timestamp authority on the same die, certified at the highest
-assurance level C2PA defines. Qualcomm put a signer in the Snapdragon trusted execution
-environment. **Apple's Reference Image** is visible in an iOS 27 beta.
+## How Source Kit works
 
-Moving the signature into the silicon solves a problem no application can. If the pixels
-never leave the chip between the sensor and the signature, there is nothing in between to
-attack.
+Take a photo, video or audio recording in a familiar interface. As on most C2PA-enabled
+hardware, the basics go into the file at the moment of capture: time, device, and location
+if you allow it. Source Kit commits a good deal more.
 
-Four things it doesn't solve:
+- **A second lens.** A downsampled view from a different physical camera, with its
+  calibration, committed alongside the frame. Two lenses a known distance apart see a flat
+  screen and a real room differently, and the difference is measurable.
+  [`modules/exhibit-camera`](https://github.com/noah-pi/sourcekit-open/tree/main/modules/exhibit-camera)
+- **The motion of the phone.** Gyroscope and attitude around the shutter, decimated and
+  signed, so the movement can be checked against the optical flow of the frames it
+  accompanies. [`src/provenance/poseTrace.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts)
+- **A raw audio master.** Uncompressed LPCM beside the delivery file. Delivery codecs filter
+  out exactly the frequencies forensic work needs, so it has to be captured now or not at
+  all. [`modules/capture-kit`](https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit)
+- **Hardware attestation, bound to the signing key.** Apple's App Attest certifies the
+  device and app; a commitment construction welds that certificate to this specific key.
+  [`src/lib/appAttest.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
+- **Independent time.** An RFC 3161 countersignature and an OpenTimestamps receipt anchored
+  to Bitcoin — the only claims in the record that don't come from the device itself.
+  [`timestamp.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts) · [`ots.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts)
+- **A post-quantum signature.** ML-DSA-65 over the same commitment, so a future break of
+  P-256 doesn't quietly invalidate an archive. [`src/lib/pq.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/pq.ts)
+- **Selective disclosure.** Every field committed under its own salt, so you can reveal one
+  later without breaking the seal, or destroy the seed and make it permanently unreadable.
+  [`src/disclosure`](https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure)
+- **Checks a person can run.** Shadows against the sun's real position, the horizon against
+  the committed gyro, the motion trace against the footage. No model, no upload, no score.
+  [`src/components/forensic`](https://github.com/noah-pi/sourcekit-open/tree/main/src/components/forensic)
+- **A verdict surface that refuses to be a badge.** Five separate questions, each answered
+  on its own terms, with the unreached ones saying why.
+  [`src/lib/trustLadder.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts)
 
-1. **The standard underneath has real problems.** C2PA's first independent security analysis
-   found generators and validators disagreeing on trusted timestamps, revocation weak enough
-   that validators accept known-compromised certificates, and an exclusion range permitting
-   undetectable alterations.
+The C2PA engine itself is written from the specification rather than bound to the reference
+library, which is what makes the differential testing possible. [`src/c2pa`](https://github.com/noah-pi/sourcekit-open/tree/main/src/c2pa)
+
+## Chasing instruments of truth
+
+A photograph has never been proof. It has only ever been expensive to fake.
+
+In July 1917 two girls in Yorkshire photographed some fairies. The images were examined by
+Arthur Conan Doyle, who found them persuasive, and by Kodak, which declined to certify them
+but conceded it could not prove them fake. The fairies were cardboard, copied from a
+children's book and held up with hatpins. What is striking about the Cottingley affair is
+not that anyone was fooled but that the question was already understood to be a technical
+one, a matter for Kodak, rather than a question about two girls and a hatpin.
+
+Susan Sontag put the presumption exactly: "A photograph passes for incontrovertible proof
+that a given thing happened. The picture may distort; but there is always a presumption that
+something exists, or did exist, which is like what's in the picture."
+
+The presumption was never earned by the medium. Retouching is as old as the negative, and
+Soviet censors airbrushed the disgraced out of group portraits for fifty years before
+Photoshop shipped in 1990. What a photograph had was friction: a darkroom, a skill, an
+afternoon, with picture desks, wire services and libel law making lying expensive.
+
+Generative models did not make images forgeable. They made forgery fast and essentially
+free, which is lighter fluid on an already smouldering sense of reality.
+
+### Two responses, both pushed along by law
+
+The EU AI Act's transparency obligations became applicable on 2 August 2026, and
+California's AI Transparency Act became operative the same day.
+
+**The first response is marking synthetic content.** Google's SynthID, and now Anthropic's
+text watermarking, announced on 11 August 2026 and built on the SynthID-Text approach, embed
+a machine-readable signal in what a model produces. This is worth doing and it is not
+sufficient. Watermarks are strippable, open-weight models generate unmarked output, and any
+motivated actor can still pass off manipulated media.
+
+Meanwhile the liar's dividend keeps paying. Once everyone knows video can be faked, real
+video can be dismissed as fake. Tesla's lawyers argued that Elon Musk's recorded statements
+about self-driving safety might be deepfakes and should not be admitted. A defendant charged
+over the January 6th Capitol riot argued the video evidence against him might be
+AI-generated. Marking what is synthetic does nothing for someone who needs to prove that
+something is not.
+
+**The second response is provenance.** In February 2021, Adobe, Arm, the BBC, Intel,
+Microsoft and Truepic folded two existing efforts — Adobe's Content Authenticity Initiative
+and the Microsoft and BBC Project Origin — into the Coalition for Content Provenance and
+Authenticity. The first specification followed in 2022.
+
+The vision inverts the detection problem. Rather than examining a file for signs of forgery,
+put a tamper-evident seal on it at the source, so that any later change is visible as a
+change. The work has been careful, open, and unusually candid about its own limits.
+
+C2PA defines four assurance levels for how well an implementation protects the signing
+process. Level 2, which requires hardware-backed key storage and dynamic security evidence,
+is the one that matters, and it has now been reached in shipping consumer hardware.
+
+## From bytes to photons
+
+It shipped. The **Pixel 10** signs every photo inside the imaging pipeline, claim keys in a
+Titan M2 chip, timestamp authority on the same die, certified at Assurance Level 2. Qualcomm
+put a signer in the Snapdragon trusted execution environment. **Apple's Reference Image**,
+visible in an iOS 27 beta, captures sensor signatures and hardware identifiers with the
+frame.
+
+The difference is not the strength of the key. Everyone protects the key in hardware. The
+difference is how much untrusted code touches the pixels between the sensor and the
+signature. On a Pixel there is none: the pixels never leave the chip, so there is nothing in
+between to attack. Photograph something with a Pixel 10 and you can claim, with
+justification, that these are the literal photons that struck the sensor.
+
+That is a real achievement, and it is more than any third-party application on iOS can do.
+Source Kit signs in its own process, which is a longer and more exposed path.
+
+## Four gaps remain
+
+None of them is closed by moving the signature into the silicon.
+
+1. **The standard underneath has real problems.** C2PA's first comprehensive independent
+   security analysis found generators and validators disagreeing on trusted timestamps,
+   revocation weak enough that validators accept known-compromised certificates, and an
+   exclusion range permitting undetectable alterations. Their conclusion: don't stake
+   journalism or legal evidence on C2PA yet.
+   ([Golaszewski et al., UMBC, 2026](https://eprint.iacr.org/2026/804))
 2. **No signature reaches the scene.** Point a hardware-signed camera at a good monitor and
-   every guarantee holds perfectly, because the sensor really did see those photons.
+   every guarantee holds: the sensor did see those photons.
 3. **Signing a claim doesn't make it true.** Civilian GPS is unauthenticated and spoofers
-   are commodity hardware. In-pipeline signing binds a forged fix as faithfully as a real one.
+   are commodity hardware. In-pipeline signing binds a forged fix as faithfully as a real
+   one.
 4. **The credential dies in transit.** Most platforms strip metadata on upload, so the
    manifest disappears exactly when an image starts to spread.
 
-The Nikon Z6 III is the demonstration. In August 2025 a researcher discovered that the
-camera would sign an AI-generated image if you passed it through Multiple Exposure mode. The
-implementation was hardware-rooted. The signature was cryptographically valid. Nothing had
-been broken. The picture had simply been handed to the signer, which signed it, as designed.
-Nikon revoked every certificate it had issued. A year later the service is still suspended.
+The Nikon Z6 III is the demonstration. In August 2025 a researcher found the camera would
+sign an AI-generated image run through Multiple Exposure mode. Hardware-rooted,
+cryptographically valid, nothing broken: the picture was handed to the signer, which signed
+it as designed. Nikon revoked every certificate it had issued; a year later the service is
+still suspended.
 
 Detection is the obvious response, and I think it is the wrong one. A detector is a
 classifier guessing at the output of a generator, and it gets worse exactly as the generator
 gets better. What is left is narrower: raise what a forger has to keep consistent across
 geometry, motion, shadows and time, then present it so that a person can weigh it quickly.
-This repo is an attempt at holes two and three, a careful pass at one, and unfinished
+This repo is an attempt at gaps two and three, a careful pass at one, and unfinished
 business on four.
-
-**[Try it on TestFlight →](https://testflight.apple.com/join/cRuRw2MN)** ·
-**[Read the deep dive →](https://noah-pi.github.io/sourcekit-open/)**
 
 ## The shutter path
 
@@ -122,7 +216,7 @@ nothing running anywhere. `src/lib/appAttest.ts` and `server/server.mjs`.
 As far as I can tell this holds, but it's the piece where I'm furthest outside my depth, and
 the one I'd most like a cryptographer to either reuse or tell me is wrong.
 
-## Hole two, in detail
+## Gap two, in detail
 
 A signature proves custody of bytes. It cannot prove what the lens was pointed at. Shoot
 a monitor showing a generated video and you get a perfectly valid seal over a perfectly
