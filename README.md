@@ -41,7 +41,7 @@ The people working on this properly — Apple, Google, the C2PA working group, n
 real security teams — have resources I don't. What a solo project can do is try things
 quickly, publish all of it, and be straight about where the limits are.
 
-### Why provenance, and not detection
+### The tech arrived. Here's what it still doesn't do.
 
 There was never a golden age of photographic truth. Conan Doyle published two schoolgirls'
 paper cut-outs as evidence of fairies in 1920, after Kodak experts confirmed the negatives
@@ -49,15 +49,39 @@ showed no tampering — which was true, and beside the point. What a photograph 
 self-evidence. It was friction: a darkroom, a skill, an afternoon. Generative models didn't
 make images forgeable, they made forgery free and fast.
 
-Detection is the obvious replacement and I think it's the wrong one: a detector is a
-classifier guessing at the output of a generator, and it gets worse exactly as the generator
-gets better. Provenance is the alternative — not proof that a scene was real, but a
-checkable record of where a file came from and what has happened to it since. It's a much
-smaller claim than most people want, and it's the one I could see a way to actually keep.
+The industry went looking for a replacement for friction and settled on provenance: sign the
+file where it's made and carry the record with it. That is no longer a proposal. The
+**Pixel 10** signs every camera photo inside the imaging pipeline, keys in the Titan M2, a
+timestamp authority on the same silicon, certified at the highest assurance level C2PA
+defines. Qualcomm put a signer in the Snapdragon TEE. **Apple's Reference Image** is visible
+in an iOS 27 beta. Moving the signature into the silicon is a real achievement and it solves
+something no application can: when the pixels never leave the chip between sensor and
+signature, there's nothing in between to attack.
 
-Provenance is cheap at exactly one instant: capture. Everything after that is
-reconstruction. So the whole thing collapses to one problem — commit to as much as you can,
-at the shutter, in a form anyone can check later without needing anything from me.
+Four things it doesn't solve:
+
+1. **The standard underneath has real problems.** C2PA's first independent security analysis
+   found generators and validators disagreeing on trusted timestamps, revocation weak enough
+   that validators accept known-compromised certificates, and an exclusion range permitting
+   undetectable alterations.
+2. **No signature reaches the scene.** Point a hardware-signed camera at a good monitor and
+   every guarantee holds perfectly, because the sensor really did see those photons.
+3. **Signing a claim doesn't make it true.** Civilian GPS is unauthenticated and spoofers
+   are commodity hardware. In-pipeline signing binds a forged fix as faithfully as a real one.
+4. **The credential dies in transit.** Most platforms strip metadata on upload, so the
+   manifest disappears exactly when an image starts to spread.
+
+The Nikon Z6 III is the demonstration. In August 2025 a researcher got a hardware-rooted
+camera to sign an AI-generated image through its Multiple Exposure mode. The signature was
+valid; the abuse happened upstream of it, inside the trusted pipeline. Nikon revoked every
+certificate it had issued and the service is still suspended.
+
+So detection is the obvious response and I think it's the wrong one: a detector is a
+classifier guessing at the output of a generator, and it gets worse exactly as the generator
+gets better. What's left is narrower — raise what a forger has to keep consistent across
+geometry, motion, shadows and time, and present it so a person can weigh it quickly. This
+repo is an attempt at holes two and three, a careful pass at one, and honest unfinished
+business on four.
 
 **[Read the deep dive →](https://noah-pi.github.io/sourcekit-open/)**
 
@@ -93,7 +117,7 @@ nothing running anywhere. `src/lib/appAttest.ts` and `server/server.mjs`.
 As far as I can tell this holds, but it's the piece where I'm furthest outside my depth, and
 the one I'd most like a cryptographer to either reuse or tell me is wrong.
 
-## What it can't do
+## Hole two, in detail
 
 A signature proves custody of bytes. It cannot prove what the lens was pointed at. Shoot
 a monitor showing a generated video and you get a perfectly valid seal over a perfectly

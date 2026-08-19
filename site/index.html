@@ -200,6 +200,7 @@ footer a:hover{color:var(--accent)}
   </div>
   <div class="navlinks">
     <a href="#history">History</a>
+    <a href="#holes">The holes</a>
     <a href="#seal">The seal</a>
     <a href="#label">The label</a>
     <a href="#stereo">Two lenses</a>
@@ -323,21 +324,46 @@ footer a:hover{color:var(--accent)}
   </figure>
 
   <div class="col">
-    <p>This is real infrastructure now, and both implementations are good. The Pixel 10 signs inside the imaging pipeline with claim keys in the Titan M2, at C2PA Assurance Level 2. Apple's Reference Image, visible in an iOS 27 beta, captures sensor signatures and hardware identifiers alongside the frame.</p>
-    <p>Two things are still open. The first is architectural: Apple's design sends the raw image, the sensor signatures and hardware identifiers to Private Cloud Compute and returns an authenticated copy. Whatever the privacy engineering, it needs a network and a relationship with Apple. A reporter on a burner in a hostile place has neither.</p>
-    <p>The second is that the standard underneath has now had its first independent audit, and it did not go well.</p>
+    <p>That is no longer a proposal. It shipped, and the engineering is genuinely impressive. The <b>Pixel 10</b> signs every camera photo inside the imaging pipeline, with claim keys held in the Titan M2 security chip and a timestamp authority running on the same silicon — the first phone to do it, certified at the highest assurance level the C2PA conformance programme defines. Qualcomm put a signer inside the Snapdragon trusted execution environment. <b>Apple's Reference Image</b>, visible in an iOS 27 beta, captures sensor signatures and hardware identifiers alongside the frame.</p>
+    <p>Moving the signature down into the silicon is a real achievement, and it solves something no application can. When the pixels never leave the chip between the sensor and the signature, there is nothing in between for an attacker to reach.</p>
   </div>
 
-  <div class="cite">
-    Golaszewski et al., <i>Verifying Provenance of Digital Media: Why the C2PA Specifications Fall Short</i> (UMBC, 2026).
-    Generators and validators disagree on which timestamp to trust. Revocation is weak enough that conforming validators accept manifests signed with certificates already known to be compromised.
-    <b style="color:var(--text)">The exclusion range permits alterations that no validator detects.</b>
-    Conforming validators return different answers on the same file. And the conformance program certifies products without technical review.
-    Their conclusion: don't stake journalism or legal evidence on C2PA yet.
-    <a href="https://eprint.iacr.org/2026/804">eprint.iacr.org/2026/804</a>
+  <h2 id="holes" style="margin-top:var(--s-xxl);scroll-margin-top:70px">What it doesn't solve</h2>
+  <p class="dek">Four holes, and they're the reason there's still work to do. Everything further down this page is an attempt at one of them.</p>
+
+  <div class="grid2" style="align-items:start;margin-bottom:var(--s-xl)">
+    <div class="card">
+      <span class="chip warn" style="margin-bottom:var(--s-sm)">one</span>
+      <h3 style="margin-top:0">The standard underneath has real problems</h3>
+      <p style="color:var(--textDim);margin:0">C2PA has had its first independent security analysis, and it did not go well. Details below.</p>
+    </div>
+    <div class="card">
+      <span class="chip warn" style="margin-bottom:var(--s-sm)">two</span>
+      <h3 style="margin-top:0">No signature reaches the scene</h3>
+      <p style="color:var(--textDim);margin:0">Point a hardware-signed camera at a good monitor and every guarantee holds perfectly, because the sensor really did see those photons.</p>
+    </div>
+    <div class="card">
+      <span class="chip warn" style="margin-bottom:var(--s-sm)">three</span>
+      <h3 style="margin-top:0">Signing a claim doesn't make it true</h3>
+      <p style="color:var(--textDim);margin:0">Civilian GPS is unauthenticated and spoofers are commodity hardware. In-pipeline signing binds a forged fix exactly as faithfully as a real one.</p>
+    </div>
+    <div class="card">
+      <span class="chip warn" style="margin-bottom:var(--s-sm)">four</span>
+      <h3 style="margin-top:0">The credential dies in transit</h3>
+      <p style="color:var(--textDim);margin:0">Most platforms strip metadata on upload, so the manifest disappears at exactly the moment an image starts to travel.</p>
+    </div>
   </div>
 
-  <p class="col">Neither of those is the deepest problem, though. The deepest problem is what a signature is for.</p>
+  <div class="col">
+    <p>There's a fifth thing that isn't a hole in the design so much as a demonstration of the first four. In August 2025 a researcher found that the Nikon Z6 III's Multiple Exposure mode could be used to make the camera sign an AI-generated image. That implementation was hardware-rooted. The signature was cryptographically valid. The abuse happened upstream of the signing step, inside the trusted pipeline — which is the thing key protection cannot help with. Nikon revoked every certificate it had issued and the service is still suspended a year later.</p>
+    <p>Take the holes in order.</p>
+    <h3>One: the standard</h3>
+  </div>
+
+  <div class="col">
+    <h3>Two: nothing reaches the scene</h3>
+    <p>This is the one that survives every improvement in hardware, and it gets worse as the others get better — as injection closes, this becomes the only road in.</p>
+  </div>
 
   <figure>
     <div class="fig">
@@ -408,8 +434,16 @@ footer a:hover{color:var(--accent)}
   </figure>
 
   <div class="col">
-    <p>There's a second gap, smaller but easier to trip over. A signature binds the sensor readings into the file. It doesn't make them true. Civilian GPS is unauthenticated and spoofers are commodity hardware; a phone will report a confidently wrong position and never know. Same for the system clock, and for any network-derived location.</p>
-    <p>That failure isn't cryptographic. It's presentational — showing a spoofable claim in the same visual register as a proven one. Which is a design problem, and solvable.</p>
+    <h3>Three: a signature doesn't make a claim true</h3>
+    <p>A signature binds the sensor readings into the file. It doesn't make them true. Civilian GPS is unauthenticated and spoofers are commodity hardware; a phone will report a confidently wrong position and never know. Same for the system clock, and for any network-derived location.</p>
+    <p>That failure isn't cryptographic. It's presentational — showing a spoofable claim in the same visual register as a proven one. Which is a design problem, and the one place this project has a real advantage: deciding how a thing is shown is the job I actually know how to do.</p>
+
+    <h3>Four: the credential dies in transit</h3>
+    <p>Instagram, WhatsApp and most platforms strip metadata on upload, so the manifest disappears at exactly the moment an image starts to spread. The industry answer is a soft binding — a perceptual fingerprint that survives re-encoding, plus a repository you can look the manifest up in. Source Kit computes and commits that fingerprint today; the lookup half isn't built, and it's the most valuable thing left undone here.</p>
+
+    <h3 style="margin-top:var(--s-xl)">What follows</h3>
+    <p>The rest of this page is the attempt. <a href="#seal">The seal</a> and <a href="#label">the label</a> take holes one and three — conform carefully to the standard, and never show a spoofable claim in the same register as a proven one. <a href="#stereo">Two lenses</a> and <a href="#inspect">Inspect</a> take hole two, which is the hard one. Hole four is honest unfinished business.</p>
+    <p>None of it is detection. The bet throughout is that you can't out-classify a generator, but you can raise what a forger has to keep consistent — the geometry, the motion, the shadows, the time — and then lay it out so a person can weigh it in about four seconds.</p>
   </div>
 </div></section>
 
@@ -575,11 +609,8 @@ footer a:hover{color:var(--accent)}
   <div class="col">
     <h3>Being straight about where this is weaker</h3>
     <p>Everyone protects the key in hardware — the Secure Enclave here, Titan M2 on the Pixel, the TEE on Snapdragon. That isn't the difference. The difference is how much untrusted code touches the pixels before they reach the signer.</p>
-    <p>Source Kit signs in the app's own process. The Pixel signs inside the imaging pipeline, with the key in a security chip and a timestamp authority on the same silicon. Nothing in Android userspace can reach in between. On a jailbroken iPhone, someone can hook this app's process and hand the Enclave pixels of their choosing.</p>
-    <p><b>That's a real gap, and moving signing into the silicon is a genuine achievement</b> — better than anything a third-party app on iOS can do. What the key binding still buys is that the attack stays per-device: an attestation is welded to one signing key, so it can't be lifted from a real device and pointed at a key someone else controls. For iPhones today, and for the very large number of Android phones that will never get in-pipeline signing, this is roughly as far as an app can go.</p>
-    <p>Which makes the interesting question what <em>doesn't</em> improve when that gap closes.</p>
-    <p>Two things. <b>Rephotography</b> — point any camera, hardware-signed or not, at a good monitor, and every guarantee holds, because the sensor really did see those photons. And <b>spoofable claims</b> — in-pipeline signing binds a forged GPS fix just as faithfully as a real one. The Nikon Z6 III made the point sharply: that implementation was hardware-rooted, and Multiple Exposure mode still let a researcher get the camera to sign an AI-generated image. Valid signature, abuse upstream of it.</p>
-    <p>So as the injection problem gets solved by people with fabs, the work worth doing moves to those two. The approach in both cases is the same, and it's the thing this whole app is arguing for: don't try to detect the forgery. Raise what a spoofer has to keep consistent — the geometry, the motion, the shadows, the time — and then lay it out so a person can weigh it in about four seconds. Any one check falls to someone who knows it's there. Together they turn a prompt into a physical production.</p>
+    <p>Source Kit signs in the app's own process. The Pixel signs inside the imaging pipeline, and nothing in Android userspace can reach in between. On a jailbroken iPhone, someone can hook this app and hand the Enclave pixels of their choosing. <b>That's a real gap, and it's the one the silicon closes properly.</b> What the key binding still buys is that the attack stays per-device: an attestation is welded to one signing key, so it can't be lifted from a real device and pointed at a key someone else controls. For iPhones today, and for the very large number of Android phones that will never get in-pipeline signing, this is roughly as far as an app can go.</p>
+    <p class="note">Which is why the interesting work is in holes two and three, not this one. The full comparison is in <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">the threat model</a>.</p>
   </div>
 
   <h2 style="margin-top:var(--s-xxl)">What gets collected, and what each thing is worth</h2>
