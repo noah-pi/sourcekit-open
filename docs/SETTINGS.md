@@ -78,26 +78,6 @@ unavailable (simulators and older builds use the previous camera path).
 Evidence failures never destroy the delivery capture — photo and video
 always land.
 
-### Assignment mode
-
-When set, every capture signs with a dedicated assignment key instead of this
-device's key. Different assignments can't be linked to each other or to your
-device, because each uses an independent random key and no org credential is
-attached.
-
-**What this does not hide.** The assignment label you type is written into the
-signed record in plain text, and every capture in one assignment shares a key
-fingerprint. So captures within the same assignment are linkable to each other
-by anyone reading the file, and a label like "Kyiv-March-Ivan" identifies as
-surely as a byline. Choose labels accordingly.
-
-The
-honest cost: assignment keys are software-backed and carry no hardware
-attestation, and the signed record says so. Your newsroom can still vouch for an
-assignment key by adding its fingerprint to the roster. Rotating an assignment
-key keeps past captures verifiable under the old fingerprint and breaks the
-link between before and after.
-
 ## Time evidence
 
 - **Bitcoin-anchored timestamps** — each capture's fingerprint is submitted to

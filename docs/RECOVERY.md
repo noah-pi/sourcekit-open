@@ -34,14 +34,21 @@ its metadata is gone, and the custody chain is intact.
 Recompressed or remuxed media does not match this way. The asset hash commits
 to bytes, and those bytes no longer exist.
 
-## Visual, by perceptual hash
+## Visual, by perceptual hash — the primitive, not a feature
 
 The media was re-encoded, resized or recompressed since signing — messaging apps
 do this silently — so the hash no longer matches but the perceptual hash is
 close.
 
-**A pHash match is a lead.** Anything showing one has to say "likely match,
-confirm visually" and must not render it with the weight of an exact match.
+**The app does not do this comparison.** It computes the perceptual hash and
+commits it, so the material for a visual match travels with the file and sits in
+the vault index, but nothing in the app compares two hashes or surfaces a
+likely-match result. `hammingDistanceHex` exists in `src/lib/phash.ts` and is
+called by nothing. Building the comparison is left to whoever needs it.
+
+If you do build it: **a pHash match is a lead.** Anything showing one has to say
+"likely match, confirm visually" and must not render it with the weight of an
+exact match.
 
 ### The recipe
 
@@ -49,9 +56,10 @@ confirm visually" and must not render it with the weight of an exact match.
 8×8 coefficients, threshold each against their median with DC excluded, read 64
 bits row-major.
 
-Hamming distance ≤ 6 reads as a likely match, ≤ 10 as possible and weak, and
-beyond that as no match. Those numbers are starting points from common practice,
-not calibrated results — treat them as tuning parameters.
+Hamming distance ≤ 6 would read as a likely match and ≤ 10 as possible and weak.
+Those numbers are starting points from common practice rather than calibrated
+results, and nothing in the app enforces them — they are a suggestion to whoever
+implements the comparison, not a shipped threshold.
 
 Each photo carries two copies. One is computed pre-signing and embedded in the
 manifest as a `c2pa.soft-binding` assertion, so it travels with the file under

@@ -159,8 +159,14 @@ const over = (patch: Partial<LadderInput>): LadderInput => ({ ...base, ...patch 
     deid.rungs[3].state === 'not-applicable' && deid.rungs[3].detail.includes('one-time key'));
 
   const assignment = projectTrustLadder(over({ appAttest: { present: false, valid: false }, hardwareNotApplicable: 'assignment' }))!;
+  // The detail must explain why the HARDWARE rung doesn't apply — the key is
+  // software-backed — not why someone would choose an assignment key. The copy
+  // used to say 'deliberately unlinkable', which is a different claim and an
+  // overstated one: captures within an assignment share a key fingerprint.
   check('hardware: assignment key is not-applicable, reason named',
-    assignment.rungs[3].state === 'not-applicable' && assignment.rungs[3].detail.includes('unlinkable'));
+    assignment.rungs[3].state === 'not-applicable'
+    && assignment.rungs[3].detail.includes('assignment keys')
+    && /hardware attestation/i.test(assignment.rungs[3].detail));
 
   const none = projectTrustLadder(over({ appAttest: { present: false, valid: false } }))!;
   check('hardware: absent attestation is unreached, neutral', none.rungs[3].state === 'unreached');

@@ -2,6 +2,11 @@
 /**
  * Per-assignment signing keys.
  *
+ * NOT REACHABLE FROM THE UI. The assignment picker was removed, and
+ * useStore clears a stale assignmentId on load, so nothing in the shipping app
+ * calls this. The module is kept because the signing path still accepts an
+ * assignment label and the behaviour below is what it would do.
+ *
  * When assignment mode is on, captures sign with a dedicated key per
  * assignment instead of the device's long-lived key:
  *   - different assignments are unlinkable to each other and to the device

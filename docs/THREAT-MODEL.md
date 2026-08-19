@@ -209,7 +209,7 @@ verifiers reject non-canonical signatures. *Defended (lab-tested).*
 **5. Truncation and trailing garbage.** Short files, cut streams, bytes after
 IEND → parse or hash failure, FAILED verdict, never a wedge: the DER-walker
 invariant means a non-advancing parser throws. *Defended (lab-tested —
-including the 4000-buffer fuzz over every DER walker).*
+including the randomized fuzz over every DER walker).*
 
 **6. Multi-manifest store confusion.** A file carrying several manifests (the
 C2PA update-chain rule says the *last* is active) → Source Kit verifies the

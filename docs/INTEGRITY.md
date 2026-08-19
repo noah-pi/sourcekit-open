@@ -96,7 +96,8 @@ paths are signed into the same block as `context.captureEvidence`:
   JSONL. The first line is an anchor tying the log to the session's frame-clock
   epoch. Barometer lines use `relAlt` and `press`; location lines are fused
   `CLLocation` fixes, labelled as such.
-- **An 8-frame JPEG ring** straddling the shutter, for stills only.
+- **A short JPEG ring** straddling the shutter — 3 frames before and 4 after —
+  for stills only.
 
 All three are switchable in Settings ▸ Capture evidence and on by default.
 

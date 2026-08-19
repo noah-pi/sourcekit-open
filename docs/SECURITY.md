@@ -124,8 +124,10 @@ of `0xFFFFFFFA` decodes to −6, an overrun guard passes against a negative, and
 TLV walker loops forever. Every walker — `src/lib/x509.ts`, `src/lib/orgCert.ts`,
 `server/server.mjs` — validates offset and length on every TLV and enforces a
 non-advancing-walker invariant (`next <= o` throws) that closes the class
-regardless of what the length field claims. A 4000-buffer fuzz over every walker
-must terminate or throw, so a regression hangs CI rather than shipping.
+regardless of what the length field claims. `tests/test-fuzz.mts` throws several
+hundred randomly generated buffers at each of five walkers, plus a set of fixed
+poison cases; every one must terminate or throw, so a regression hangs CI rather
+than shipping.
 
 **Non-finite certificate dates are a parse error**, never a passed validity
 window. `atMs < NaN` is always false, so an unparseable date would otherwise
