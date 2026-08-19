@@ -142,11 +142,10 @@ verified the active (most recent) one; earlier manifests not evaluated."
 
 ## Attacks the suites pin
 
-Thirteen crypto attacks, each a permanent regression test: manifest transplant
-onto different media, claim tamper in JPEG and PNG, assertion and telemetry
-tamper, pixel tamper, ECDSA high-S malleability, exclusion-range tamper,
-truncated files, trailing garbage after IEND, random garbage, and unsigned
-files.
+Each of these is a permanent regression test: manifest transplant onto
+different media, claim tamper in JPEG and PNG, assertion and telemetry tamper,
+pixel tamper, ECDSA high-S malleability, exclusion-range tamper, truncated
+files, trailing garbage after IEND, random garbage, and unsigned files.
 
 A tampered or transplanted file fails the hard binding. A malleated signature
 fails the low-S check. A junk or truncated container fails the parser closed.

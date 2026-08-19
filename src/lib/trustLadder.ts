@@ -348,7 +348,7 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   } else if (input.hardwareNotApplicable === 'assignment') {
     hardware = {
       id: 'hardware', label: 'Key attested by Apple hardware', state: 'not-applicable',
-      detail: 'Not applicable to assignment keys: deliberately unlinkable.',
+      detail: 'Not applicable to assignment keys: no hardware attestation by design.',
     };
   } else if (input.appAttest.valid && input.appAttest.attestationEnv === 'development') {
     // A genuine DEVELOPMENT attestation is not a failure (never red) and

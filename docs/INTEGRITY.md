@@ -189,8 +189,18 @@ re-wrapped and padded without re-signing.
 
 ### The malleable set — JPEG (APP11/JUMBF)
 
-Flipping any of these changes nothing the verifier reports: 153 fixed bytes,
-plus up to 2 length low-bytes under the swing rule below.
+Flipping any of these changes nothing **this** verifier reports: 153 fixed
+bytes, plus up to 2 length low-bytes under the swing rule below.
+
+The number comes from measurement, not from reading the spec.
+`tests/test-malleability.mts` flips every byte of the manifest region one at a
+time, re-verifies each mutated file, and records which ones still report
+INTACT. It then checks both directions — every documented byte must be
+malleable, and no undocumented byte may be — so the set can't silently grow.
+
+Two limits worth stating. The measurement covers the manifest region, not the
+whole file. And it is measured against this verifier only: whether `c2patool`
+or another implementation would catch some of these bytes is untested here.
 
 | Field | Bytes | Why it's outside the hash |
 |---|---|---|

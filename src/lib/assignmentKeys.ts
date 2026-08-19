@@ -4,9 +4,12 @@
  *
  * When assignment mode is on, captures sign with a dedicated key per
  * assignment instead of the device's long-lived key:
- *   - assignments are unlinkable to each other and to the device
- *     fingerprint by construction (independent random keys);
+ *   - different assignments are unlinkable to each other and to the device
+ *     fingerprint (independent random keys, no org credential attached);
  *   - rotating an assignment key breaks linkability across rotations;
+ *   - captures WITHIN one assignment are linkable to each other: they share a
+ *     key fingerprint, and the assignment label is written into the signed
+ *     record as plain text. The label is user-chosen and can itself identify;
  *   - a desk that holds the newsroom roster can still vouch for an
  *     assignment key — the editor adds its fingerprint to the roster,
  *     which is exactly what the roster format is for.

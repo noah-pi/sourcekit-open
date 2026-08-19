@@ -213,7 +213,7 @@ footer a:hover{color:var(--accent)}
 <header style="padding:var(--s-xxl) 0 var(--s-xl)"><div class="wrap" style="display:grid;grid-template-columns:1fr 330px;gap:var(--s-xxl);align-items:center">
   <div>
     <h1>Fuck deepfakes.<br>Prove your work.</h1>
-    <p class="lede">Source Kit is a cryptographic camera app that signs each photo and video as you take it. The signature and the capture context go inside the file, on the device, with no network involved — so anyone can check it later without needing anything from me. Any C2PA reader opens it.</p>
+    <p class="lede">Source Kit is a cryptographic camera app that signs each photo and video as you take it. The signature and the capture context go inside the file, on the device, with no network involved — so anyone can check it later without needing anything from me. It's a standard C2PA manifest, and CI checks on every run that <code>c2patool</code> reads it.</p>
     <p style="color:var(--textDim);max-width:48ch">I'm a journalist who became a product designer. I'm not a cryptographer, and I'm not a career engineer. This is a side project, published in full — camera, cryptography, native modules, interface, test suite — because people who know more than I do will get further with it than I will.</p>
     <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
@@ -576,7 +576,7 @@ footer a:hover{color:var(--accent)}
     <h3>Being straight about where this is weaker</h3>
     <p>Everyone protects the key in hardware — the Secure Enclave here, Titan M2 on the Pixel, the TEE on Snapdragon. That isn't the difference. The difference is how much untrusted code touches the pixels before they reach the signer.</p>
     <p>Source Kit signs in the app's own process. The Pixel signs inside the imaging pipeline, with the key in a security chip and a timestamp authority on the same silicon. Nothing in Android userspace can reach in between. On a jailbroken iPhone, someone can hook this app's process and hand the Enclave pixels of their choosing.</p>
-    <p><b>That's a real gap, and moving signing into the silicon is a genuine achievement</b> — better than anything a third-party app on iOS can do. What the key binding still buys is that the attack stays per-device: nobody can take a real device's attestation and point it at a key they control. For iPhones today, and for the very large number of Android phones that will never get in-pipeline signing, this is roughly as far as an app can go.</p>
+    <p><b>That's a real gap, and moving signing into the silicon is a genuine achievement</b> — better than anything a third-party app on iOS can do. What the key binding still buys is that the attack stays per-device: an attestation is welded to one signing key, so it can't be lifted from a real device and pointed at a key someone else controls. For iPhones today, and for the very large number of Android phones that will never get in-pipeline signing, this is roughly as far as an app can go.</p>
     <p>Which makes the interesting question what <em>doesn't</em> improve when that gap closes.</p>
     <p>Two things. <b>Rephotography</b> — point any camera, hardware-signed or not, at a good monitor, and every guarantee holds, because the sensor really did see those photons. And <b>spoofable claims</b> — in-pipeline signing binds a forged GPS fix just as faithfully as a real one. The Nikon Z6 III made the point sharply: that implementation was hardware-rooted, and Multiple Exposure mode still let a researcher get the camera to sign an AI-generated image. Valid signature, abuse upstream of it.</p>
     <p>So as the injection problem gets solved by people with fabs, the work worth doing moves to those two. The approach in both cases is the same, and it's the thing this whole app is arguing for: don't try to detect the forgery. Raise what a spoofer has to keep consistent — the geometry, the motion, the shadows, the time — and then lay it out so a person can weigh it in about four seconds. Any one check falls to someone who knows it's there. Together they turn a prompt into a physical production.</p>
@@ -707,7 +707,7 @@ footer a:hover{color:var(--accent)}
 <!-- ===================== TWO LENSES ===================== -->
 <section class="block" id="stereo"><div class="wrap">
   <h2>Two lenses</h2>
-  <p class="dek">A screen is a plane. A room is not. That difference is measurable, and it is the only part of the design that reaches past the file and into the scene.</p>
+  <p class="dek">A screen is a plane. A room is not. That difference is measurable — and this is the one check that measures the scene directly, rather than comparing a claim against what the physics say to expect.</p>
 
   <figure>
     <div class="fig">
