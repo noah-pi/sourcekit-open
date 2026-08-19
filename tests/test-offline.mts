@@ -35,6 +35,18 @@ const check = (name: string, ok: boolean, detail = '') => {
   else { fail++; console.log(`  FAIL ${name} :: ${detail}`); }
 };
 
+/**
+ * A bare verdict code is not enough to debug a failure on someone else's
+ * machine: SIGNATURE_INVALID has four separate causes in verifyAsset, and
+ * the one that fired is only visible in the checks. So failures print the
+ * check flags and any reason the verifier recorded for a check it skipped.
+ */
+const why = (report: any) =>
+  [report.verdict,
+   `checks=${JSON.stringify(report.checks ?? null)}`,
+   `notPerformed=${JSON.stringify(report.checksNotPerformed ?? [])}`,
+  ].join(' ');
+
 const JPEG_1PX = Buffer.from(
   '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAc//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAs//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/As//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QH//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QH//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QH//Z',
   'base64'
@@ -61,7 +73,7 @@ check(
 // 2. Verification is INTACT — and performs ZERO network calls.
 fetchCalls = 0;
 const report = await verifyPhotoBytes(signed.signedPhotoBytes!);
-check('signed photo verifies INTACT offline', report.verdict === 'INTACT', report.verdict);
+check('signed photo verifies INTACT offline', report.verdict === 'INTACT', why(report));
 check('verification performs zero network calls', fetchCalls === 0, `${fetchCalls} fetch attempts during verify`);
 
 // 3. Time evidence degrades honestly: no tokens, stated as none.
@@ -75,7 +87,7 @@ check('App Attest honestly absent on an unattested device', report.c2pa?.appAtte
 const tampered = new Uint8Array(signed.signedPhotoBytes!);
 tampered[tampered.length - 100] ^= 0xff;
 const tamperedReport = await verifyPhotoBytes(tampered);
-check('tampered copy rejected offline', tamperedReport.verdict === 'CONTENT_MODIFIED', tamperedReport.verdict);
+check('tampered copy rejected offline', tamperedReport.verdict === 'CONTENT_MODIFIED', why(tamperedReport));
 
 // 5. Every export builds offline.
 const claim = buildHashClaim(signed.record);
