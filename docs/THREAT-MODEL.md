@@ -62,6 +62,79 @@ is built the way it is).
    Bitcoin network) is *available* but not necessarily *honest* — see
    scenarios 14–17.
 
+## Where the signature sits
+
+Every serious implementation protects the signing key in hardware. Source Kit
+uses the Secure Enclave; the Pixel 10 uses Titan M2 through Android StrongBox;
+Snapdragon devices use Qualcomm's TEE. Extracting the key is very hard in all
+three cases, and that is not where they differ.
+
+What differs is how much untrusted code touches the pixels before they reach
+the signer.
+
+| | Path from sensor to signature | What can interfere |
+|---|---|---|
+| Source Kit | sensor → kernel → AVFoundation → **the app's own process** → Enclave signs | anything with code execution in that process |
+| Pixel 10 | sensor → image signal pipeline in Tensor G5 → Titan M2 signs | nothing in Android userspace |
+| Snapdragon | sensor → TEE → TEE signs | nothing in Android userspace |
+
+Source Kit signs in userspace. On a jailbroken device, an attacker can attach a
+dynamic instrumentation tool, hook the path before the Enclave call, hand it
+pixels of their choosing and get a valid signature. Apple does not expose
+jailbreak status to apps, so this cannot be reliably detected from inside. On a
+Pixel the equivalent attack means compromising the ISP or the Titan M2 — a
+different order of difficulty.
+
+**This is a real gap and it should be said plainly: in-pipeline hardware signing
+is a genuine achievement, and it is better than what any third-party app on iOS
+can do.** Google shipped signing inside the imaging pipeline with hardware-held
+keys, per-image certificates and an on-device timestamp authority. Qualcomm put
+a C2PA signer in the TEE. That closes the injection problem properly, in a way
+no application-layer design can.
+
+What the emulated key attestation still buys, and it is not nothing: an attacker
+cannot take a genuine device's attestation and bind it to a key they control,
+because the nonce covers `SHA256(challenge ‖ signingPublicKey)`. The attack is
+therefore per-device — someone must compromise a real device running a real
+build — rather than a break of the scheme. For iPhones today, and for the very
+large number of Android devices that will never get in-pipeline signing, this
+is about as far as an app can go.
+
+### What the gap closing means
+
+Two things do not improve when signing moves into the silicon.
+
+**Rephotography.** Point any camera, hardware-signed or not, at a good monitor.
+Every guarantee holds. The sensor really did see those photons. No amount of
+key protection touches this, and as injection gets harder it becomes the main
+road in.
+
+**Spoofable assertions.** A signature binds the sensor readings into the file;
+it does not make them true. Civilian GNSS is unauthenticated, spoofers are
+commodity hardware, and a phone will report a confidently wrong position with no
+idea anything is wrong. The same goes for the system clock and any
+network-derived location. In-pipeline signing does not help here either — it
+signs the false claim just as faithfully.
+
+The Nikon Z6 III case is the proof that hardware custody is not the whole story.
+That implementation was hardware-rooted, and Multiple Exposure mode still let a
+researcher get the camera to sign an AI-generated image. The signature was
+valid. The abuse happened upstream of the signing step, inside the trusted
+pipeline.
+
+So the work this project can usefully do sits in those two places, and the
+approach is the same for both: rather than trying to detect a forgery, raise
+what a spoofer has to keep consistent, and present the result so that a person
+can judge it quickly and reasonably. Committing a second lens means the geometry
+has to hold. Committing a motion trace means the movement has to match the
+frames. Committing time and place means the shadows have to fall where the sun
+actually put them. None of these is a verdict, and any one of them can be
+defeated by someone who knows it is there. Together they turn a prompt into a
+physical production that has to survive a reader looking at it for four seconds.
+
+That is the design goal, stated plainly: not detection, but enough clearly
+presented evidence that ordinary human judgment gets traction.
+
 ## The AI-assisted attacker (design assumption, noah-pi directive Aug 2026)
 
 We assume the person attacking this app is aided by frontier AI models with
@@ -233,8 +306,9 @@ root is pinned in the binary, never fetched at runtime. *Defended
 (lab-tested — forged-attestation fixtures are permanent regression tests).*
 
 **20. Compromised enrolled device (genuine key, dishonest device).** The
-hardest case this side of the Enclave: a jailbroken device with its own key
-can sign fabricated sensor traces, fabricated timing, a fabricated clean
+hardest case this side of the Enclave, and the one the userspace signing path
+above makes possible: a jailbroken device with its own key can sign fabricated
+pixels, fabricated sensor traces, fabricated timing and a fabricated clean
 integrity report — all *validly signed*. Every one of those signals is
 therefore displayed as self-reported commitment, with "a compromised device
 can lie about being compromised" attached; none is a gate; the

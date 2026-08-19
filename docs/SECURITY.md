@@ -19,8 +19,12 @@ vulnerability see [SECURITY.md](../SECURITY.md) in the repo root.
 - **What the camera was pointed at.** Signatures prove custody of bytes, not
   reality. Screenshots of screens, staged scenes and AI images photographed off
   a monitor are all validly signed. The app never calls content real.
-- **A compromised or jailbroken device.** Secure Enclave extraction is out of
-  scope. App Attest raises the bar; it isn't a guarantee.
+- **A compromised or jailbroken device.** Signing happens in the app's own
+  process, so code execution there can feed the signer pixels of its choosing.
+  App Attest raises the cost and the key binding keeps the attack per-device,
+  but it isn't a guarantee. In-pipeline hardware signing — the Pixel 10, or a
+  Snapdragon TEE — closes this properly in a way an app can't. See
+  [THREAT-MODEL.md](THREAT-MODEL.md) ▸ Where the signature sits.
 - **Stripped credentials.** Any file can have its manifest removed, and the
   absence of credentials proves nothing either way.
 

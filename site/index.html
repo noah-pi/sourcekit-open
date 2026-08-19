@@ -572,6 +572,16 @@ footer a:hover{color:var(--accent)}
     <figcaption>When a platform credential exists, it becomes an ingredient in the record rather than a competitor to it. The strongest future file carries both.</figcaption>
   </figure>
 
+  <div class="col">
+    <h3>Being straight about where this is weaker</h3>
+    <p>Everyone protects the key in hardware — the Secure Enclave here, Titan M2 on the Pixel, the TEE on Snapdragon. That isn't the difference. The difference is how much untrusted code touches the pixels before they reach the signer.</p>
+    <p>Source Kit signs in the app's own process. The Pixel signs inside the imaging pipeline, with the key in a security chip and a timestamp authority on the same silicon. Nothing in Android userspace can reach in between. On a jailbroken iPhone, someone can hook this app's process and hand the Enclave pixels of their choosing.</p>
+    <p><b>That's a real gap, and moving signing into the silicon is a genuine achievement</b> — better than anything a third-party app on iOS can do. What the key binding still buys is that the attack stays per-device: nobody can take a real device's attestation and point it at a key they control. For iPhones today, and for the very large number of Android phones that will never get in-pipeline signing, this is roughly as far as an app can go.</p>
+    <p>Which makes the interesting question what <em>doesn't</em> improve when that gap closes.</p>
+    <p>Two things. <b>Rephotography</b> — point any camera, hardware-signed or not, at a good monitor, and every guarantee holds, because the sensor really did see those photons. And <b>spoofable claims</b> — in-pipeline signing binds a forged GPS fix just as faithfully as a real one. The Nikon Z6 III made the point sharply: that implementation was hardware-rooted, and Multiple Exposure mode still let a researcher get the camera to sign an AI-generated image. Valid signature, abuse upstream of it.</p>
+    <p>So as the injection problem gets solved by people with fabs, the work worth doing moves to those two. The approach in both cases is the same, and it's the thing this whole app is arguing for: don't try to detect the forgery. Raise what a spoofer has to keep consistent — the geometry, the motion, the shadows, the time — and then lay it out so a person can weigh it in about four seconds. Any one check falls to someone who knows it's there. Together they turn a prompt into a physical production.</p>
+  </div>
+
   <h2 style="margin-top:var(--s-xxl)">What gets collected, and what each thing is worth</h2>
   <p class="dek">Everything here is optional and individually switchable, live in the viewfinder. The last column is the one that matters.</p>
 
