@@ -236,17 +236,20 @@ file for signs of forgery, seal it at the source so any later change reads as a 
 watermark says a machine was involved. A manifest says which device, which moment, and what
 has happened since.
 
-### Four assurance levels grade the signer, and only two of them are available
+### Two assurance levels grade the signer, and the second one needs hardware
 
-A signature is worth the process that produced it, so C2PA's
-[conformance program](https://c2pa.org/conformance/) grades the signer and writes the grade
-into the certificate. **Level 1** covers documented key handling with software protection.
-**Level 2** adds hardware-backed keys and a live attestation from the silicon at enrolment —
-reached so far by the
-[Pixel 10 camera](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/),
-and for a mobile app currently reachable only on Android. Levels 3 and 4 exist in the
-specification and are not yet issued. Source Kit signs at the software tier, holds no
-certificate, and says so in every manifest.
+A signature is worth the process that produced it, so C2PA's [conformance
+program](https://github.com/c2pa-org/conformance-public) grades the signer and writes the grade
+into the certificate. There are two levels, and both cover the same six objectives: certificate
+enrolment, key confidentiality, protecting the claim generator from misuse, protecting the asset
+and assertions at generation, protecting traffic between components, and the hosting
+environment. **Level 1** can meet them in software — the signing key encrypted at rest, a shared
+secret to authenticate at enrolment. **Level 2** adds two things: the key must be generated,
+stored and used at a higher privilege level than the code asking for the signature, and the
+device must present a hardware-rooted attestation of the signing binary when it enrols. The
+[Pixel 10 camera](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/)
+is the first to reach it, and for a mobile app it is currently reachable only on Android. Source Kit meets the software tier, holds no certificate, and says so in every
+manifest.
 
 ## From bytes to photons
 
