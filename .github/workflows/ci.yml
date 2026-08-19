@@ -200,12 +200,10 @@ jobs:
         run: node scripts/check-dependency-budget.mjs
 
 
-      - name: npm audit — server
-        run: npm audit --audit-level=high
-        working-directory: server
+      - name: Audit gate — server
+        run: node scripts/check-audit.mjs server
 
-      - name: npm audit — app
-        # The repo root is the app's manifest; it commits no lockfile
-        # (the private app tree holds that), so one is generated in-place
-        # for the audit and thrown away with the runner.
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund && npm audit --audit-level=high
+      - name: Audit gate — app
+        # Every high or critical advisory fails unless it is declared in the
+        # script with the reason it cannot reach the shipped app.
+        run: node scripts/check-audit.mjs .
