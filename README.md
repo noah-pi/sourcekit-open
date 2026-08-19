@@ -15,9 +15,10 @@
 # Fuck deepfakes. Prove your work.
 
 **Source Kit is a cryptographic camera app that signs each photo and video as you take
-it.** The signature and the capture context go inside the file, on the device, with no
-network involved — so anyone can check it later without needing anything from me. Any C2PA
-reader opens it.
+it.** The signature, and everything the sensors reported at the time, go inside the file
+itself. On the device, without a network. Anyone can check it later without needing anything
+from me. The manifest is standard C2PA, and CI confirms on every run that `c2patool` reads
+it.
 
 I'm a journalist who became a product designer. I'm not a cryptographer, and I'm not a
 career engineer. This is a side project, published in full — camera, cryptography, native
@@ -31,32 +32,33 @@ Kit isn't either of those jobs. It's a side project, built nights and weekends, 
 wanted a camera that could show its work and couldn't find one. It isn't affiliated with or
 endorsed by either organization.
 
-So the honest framing: I've read the specifications closely and tested this as carefully as
-I know how — 27 suites, cross-checked against the C2PA reference implementation on every
-run. I've also almost certainly missed things a cryptographer or a career iOS engineer
-would catch in an afternoon. If that's you, I would genuinely rather you found them than
-didn't.
+I have read the specifications closely and tested this as carefully as I know how:
+twenty-seven suites, cross-checked against the C2PA reference implementation on every run. I
+have also missed things that a cryptographer, or a career iOS engineer, would find in an
+afternoon. If you are one of those people, I would rather you found them than didn't.
 
-The people working on this properly — Apple, Google, the C2PA working group, newsrooms with
-real security teams — have resources I don't. What a solo project can do is try things
-quickly, publish all of it, and be straight about where the limits are.
+Apple, Google, the C2PA working group and newsrooms with security teams are all working on
+this, with resources I do not have. A side project has one advantage over them. It can move
+quickly, publish everything, and say where the limits are without asking permission.
 
 ### The tech arrived. Here's what it still doesn't do.
 
 There was never a golden age of photographic truth. Conan Doyle published two schoolgirls'
-paper cut-outs as evidence of fairies in 1920, after Kodak experts confirmed the negatives
-showed no tampering — which was true, and beside the point. What a photograph had was never
-self-evidence. It was friction: a darkroom, a skill, an afternoon. Generative models didn't
-make images forgeable, they made forgery free and fast.
+paper cut-outs as evidence of fairies in 1920, after Kodak's experts confirmed the negatives
+showed no sign of tampering. They were right about the negatives. What a photograph had was
+never self-evidence. It was friction: a darkroom, a skill, an afternoon. Generative models
+did not make images forgeable. They made forgery free and fast.
 
 The industry went looking for a replacement for friction and settled on provenance: sign the
-file where it's made and carry the record with it. That is no longer a proposal. The
-**Pixel 10** signs every camera photo inside the imaging pipeline, keys in the Titan M2, a
-timestamp authority on the same silicon, certified at the highest assurance level C2PA
-defines. Qualcomm put a signer in the Snapdragon TEE. **Apple's Reference Image** is visible
-in an iOS 27 beta. Moving the signature into the silicon is a real achievement and it solves
-something no application can: when the pixels never leave the chip between sensor and
-signature, there's nothing in between to attack.
+file where it is made, and carry the record with it. It shipped. The **Pixel 10** signs
+every photo its camera takes from inside the imaging pipeline, with the claim keys in a
+Titan M2 security chip and a timestamp authority on the same die, certified at the highest
+assurance level C2PA defines. Qualcomm put a signer in the Snapdragon trusted execution
+environment. **Apple's Reference Image** is visible in an iOS 27 beta.
+
+Moving the signature into the silicon solves a problem no application can. If the pixels
+never leave the chip between the sensor and the signature, there is nothing in between to
+attack.
 
 Four things it doesn't solve:
 
@@ -71,16 +73,17 @@ Four things it doesn't solve:
 4. **The credential dies in transit.** Most platforms strip metadata on upload, so the
    manifest disappears exactly when an image starts to spread.
 
-The Nikon Z6 III is the demonstration. In August 2025 a researcher got a hardware-rooted
-camera to sign an AI-generated image through its Multiple Exposure mode. The signature was
-valid; the abuse happened upstream of it, inside the trusted pipeline. Nikon revoked every
-certificate it had issued and the service is still suspended.
+The Nikon Z6 III is the demonstration. In August 2025 a researcher discovered that the
+camera would sign an AI-generated image if you passed it through Multiple Exposure mode. The
+implementation was hardware-rooted. The signature was cryptographically valid. Nothing had
+been broken. The picture had simply been handed to the signer, which signed it, as designed.
+Nikon revoked every certificate it had issued. A year later the service is still suspended.
 
-So detection is the obvious response and I think it's the wrong one: a detector is a
+Detection is the obvious response, and I think it is the wrong one. A detector is a
 classifier guessing at the output of a generator, and it gets worse exactly as the generator
-gets better. What's left is narrower — raise what a forger has to keep consistent across
-geometry, motion, shadows and time, and present it so a person can weigh it quickly. This
-repo is an attempt at holes two and three, a careful pass at one, and honest unfinished
+gets better. What is left is narrower: raise what a forger has to keep consistent across
+geometry, motion, shadows and time, then present it so that a person can weigh it quickly.
+This repo is an attempt at holes two and three, a careful pass at one, and unfinished
 business on four.
 
 **[Read the deep dive →](https://noah-pi.github.io/sourcekit-open/)**
@@ -104,9 +107,9 @@ launch-time network calls. Every optional network event is named in
 
 ## Tying the signature to the hardware
 
-App Attest certifies that a genuine build is running on genuine hardware, but Apple gives
-apps no access to the attested key — so you can't simply attest your signing key. The
-workaround is a commitment: set the App Attest `clientDataHash` to
+App Attest certifies that a genuine build is running on genuine hardware. But Apple gives
+apps no access to the attested key, so you cannot simply attest your signing key with it.
+The workaround is a commitment: set the App Attest `clientDataHash` to
 `SHA256(challenge ‖ signingPublicKey)`. Apple's nonce extension in the attestation
 certificate then vouches for *exactly that key*, not merely for some key on some genuine
 device.
@@ -125,7 +128,7 @@ real recording of a fake scene.
 
 Attestation closes *injection*: substituted frames, virtual camera drivers, forged sensor
 data. It does nothing about *rephotography*: real photons, fake scene. Closing injection
-doesn't reduce rephotography — it concentrates every attacker on it.
+does not reduce rephotography. It concentrates every attacker on it.
 
 The Cottingley photographs are the clean illustration. Everything here would have
 sealed them: real camera, real plate, cut-outs propped up with hatpins at a real

@@ -214,7 +214,7 @@ footer a:hover{color:var(--accent)}
 <header style="padding:var(--s-xxl) 0 var(--s-xl)"><div class="wrap" style="display:grid;grid-template-columns:1fr 330px;gap:var(--s-xxl);align-items:center">
   <div>
     <h1>Fuck deepfakes.<br>Prove your work.</h1>
-    <p class="lede">Source Kit is a cryptographic camera app that signs each photo and video as you take it. The signature and the capture context go inside the file, on the device, with no network involved — so anyone can check it later without needing anything from me. It's a standard C2PA manifest, and CI checks on every run that <code>c2patool</code> reads it.</p>
+    <p class="lede">Source Kit is a cryptographic camera app that signs each photo and video as you take it. The signature, and everything the sensors reported at the time, go inside the file itself. On the device, without a network. Anyone can check it later without needing anything from me. The manifest is standard C2PA, and CI confirms on every run that <code>c2patool</code> reads it.</p>
     <p style="color:var(--textDim);max-width:48ch">I'm a journalist who became a product designer. I'm not a cryptographer, and I'm not a career engineer. This is a side project, published in full — camera, cryptography, native modules, interface, test suite — because people who know more than I do will get further with it than I will.</p>
     <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
@@ -246,8 +246,8 @@ footer a:hover{color:var(--accent)}
   <div class="card" style="border-left:3px solid var(--accent)">
     <h3 style="margin-top:0">Where this comes from</h3>
     <p style="color:var(--textDim);margin-bottom:var(--s-sm)">I was a journalist at the New York Times and I'm now a product designer at Google. Source Kit isn't either of those jobs. It's a side project, built nights and weekends, because I wanted a camera that could show its work and couldn't find one. It isn't affiliated with or endorsed by either organization.</p>
-    <p style="color:var(--textDim);margin-bottom:var(--s-sm)">So the honest framing: I've read the specifications closely and tested this as carefully as I know how — 27 suites, cross-checked against the C2PA reference implementation on every run. I've also almost certainly missed things a cryptographer or a career iOS engineer would catch in an afternoon. If that's you, I would genuinely rather you found them than didn't.</p>
-    <p style="color:var(--textDim);margin:0">The people working on this properly — Apple, Google, the C2PA working group, newsrooms with real security teams — have resources I don't. What a solo project can do is try things quickly, publish all of it, and be straight about where the limits are. That's what this is for.</p>
+    <p style="color:var(--textDim);margin-bottom:var(--s-sm)">I have read the specifications closely and tested this as carefully as I know how: twenty-seven suites, cross-checked against the C2PA reference implementation on every run. I have also missed things that a cryptographer, or a career iOS engineer, would find in an afternoon. If you are one of those people, I would rather you found them than didn't.</p>
+    <p style="color:var(--textDim);margin:0">Apple, Google, the C2PA working group and newsrooms with security teams are all working on this, with resources I do not have. A side project has one advantage over them. It can move quickly, publish everything, and say where the limits are without asking permission.</p>
   </div>
 </div></section>
 
@@ -275,8 +275,8 @@ footer a:hover{color:var(--accent)}
   </figure>
 
   <div class="col">
-    <p>Retouching is as old as the negative. Soviet censors airbrushed the disgraced out of group portraits for fifty years before Photoshop shipped in 1990. What a photograph had was never self-evidence. It was friction — a darkroom, a skill, an afternoon — plus picture desks and wire services and libel law that made lying expensive some other way.</p>
-    <p>Generative models didn't make images forgeable. They made forgery free and fast. So the industry went looking for a replacement for friction and settled on provenance: sign the file where it's made, and carry the record with it.</p>
+    <p>Retouching is as old as the negative. Soviet censors airbrushed the disgraced out of group portraits for fifty years before Photoshop shipped in 1990. What a photograph had was never self-evidence. It was friction: a darkroom, a skill, an afternoon. Around that sat picture desks, wire services and libel law, which made lying expensive by other means.</p>
+    <p>Generative models did not make images forgeable. They made forgery free and fast. The industry went looking for a replacement for friction and settled on provenance: sign the file where it is made, and carry the record with it.</p>
   </div>
 
   <figure>
@@ -324,12 +324,12 @@ footer a:hover{color:var(--accent)}
   </figure>
 
   <div class="col">
-    <p>That is no longer a proposal. It shipped, and the engineering is genuinely impressive. The <b>Pixel 10</b> signs every camera photo inside the imaging pipeline, with claim keys held in the Titan M2 security chip and a timestamp authority running on the same silicon — the first phone to do it, certified at the highest assurance level the C2PA conformance programme defines. Qualcomm put a signer inside the Snapdragon trusted execution environment. <b>Apple's Reference Image</b>, visible in an iOS 27 beta, captures sensor signatures and hardware identifiers alongside the frame.</p>
-    <p>Moving the signature down into the silicon is a real achievement, and it solves something no application can. When the pixels never leave the chip between the sensor and the signature, there is nothing in between for an attacker to reach.</p>
+    <p>It shipped. The <b>Pixel 10</b> signs every photo its camera takes from inside the imaging pipeline, with the claim keys held in a Titan M2 security chip and a timestamp authority running on the same die. It was the first phone to do it, and it is certified at the highest assurance level the C2PA conformance programme defines. Qualcomm put a signer in the Snapdragon trusted execution environment. <b>Apple's Reference Image</b>, visible in an iOS 27 beta, captures sensor signatures and hardware identifiers alongside the frame.</p>
+    <p>Moving the signature into the silicon solves a problem no application can. If the pixels never leave the chip between the sensor and the signature, there is nothing in between to attack.</p>
   </div>
 
   <h2 id="holes" style="margin-top:var(--s-xxl);scroll-margin-top:70px">What it doesn't solve</h2>
-  <p class="dek">Four holes, and they're the reason there's still work to do. Everything further down this page is an attempt at one of them.</p>
+  <p class="dek">It leaves four holes. Everything below this is an attempt at one of them.</p>
 
   <div class="grid2" style="align-items:start;margin-bottom:var(--s-xl)">
     <div class="card">
@@ -355,14 +355,14 @@ footer a:hover{color:var(--accent)}
   </div>
 
   <div class="col">
-    <p>There's a fifth thing that isn't a hole in the design so much as a demonstration of the first four. In August 2025 a researcher found that the Nikon Z6 III's Multiple Exposure mode could be used to make the camera sign an AI-generated image. That implementation was hardware-rooted. The signature was cryptographically valid. The abuse happened upstream of the signing step, inside the trusted pipeline — which is the thing key protection cannot help with. Nikon revoked every certificate it had issued and the service is still suspended a year later.</p>
+    <p>In August 2025 a researcher discovered that the Nikon Z6 III would sign an AI-generated image if you passed it through the camera's Multiple Exposure mode. The implementation was hardware-rooted. The signature was cryptographically valid. Nothing had been broken. The picture had simply been handed to the signer, which signed it, as designed. Nikon revoked every certificate it had issued. A year later the service is still suspended.</p>
     <p>Take the holes in order.</p>
     <h3>One: the standard</h3>
   </div>
 
   <div class="col">
     <h3>Two: nothing reaches the scene</h3>
-    <p>This is the one that survives every improvement in hardware, and it gets worse as the others get better — as injection closes, this becomes the only road in.</p>
+    <p>This hole survives every improvement in hardware, and widens as the others narrow. The better attestation gets, the more it becomes the only way in.</p>
   </div>
 
   <figure>
@@ -435,7 +435,7 @@ footer a:hover{color:var(--accent)}
 
   <div class="col">
     <h3>Three: a signature doesn't make a claim true</h3>
-    <p>A signature binds the sensor readings into the file. It doesn't make them true. Civilian GPS is unauthenticated and spoofers are commodity hardware; a phone will report a confidently wrong position and never know. Same for the system clock, and for any network-derived location.</p>
+    <p>A signature binds the sensor readings into the file. It does not make them true. Civilian GPS is unauthenticated, spoofers are commodity hardware, and a phone will report a confidently wrong position without any idea that it is wrong. The same goes for the system clock, and for any location derived from the network.</p>
     <p>That failure isn't cryptographic. It's presentational — showing a spoofable claim in the same visual register as a proven one. Which is a design problem, and the one place this project has a real advantage: deciding how a thing is shown is the job I actually know how to do.</p>
 
     <h3>Four: the credential dies in transit</h3>
@@ -709,7 +709,7 @@ footer a:hover{color:var(--accent)}
   <div class="grid2" style="align-items:start">
     <div class="col">
       <p>The vocabulary follows from the same rule. <i>Verified</i>, <i>authentic</i> and <i>trusted</i> all describe a conclusion somebody reached, and nothing in this software reaches conclusions. So the interface names the operation instead: <i>signature mathematically valid</i>, <i>media unchanged since signing</i>, <i>proven tamper</i>. Verbs attached to things that actually ran.</p>
-      <p>A test fails the build if a verdict word turns up in a summary position. That kept the copy honest as the feature count grew, because the pressure to round a qualified result up to a confident one is constant, and a fair amount of it came from me.</p>
+      <p>A test fails the build if a verdict word turns up in a summary position. It sounds fussy. It is the one thing that kept the copy honest, because the pressure to round a qualified result up to a confident one is constant, and a good deal of it came from me.</p>
       <p class="note">The card carries its own title and limits inside its frame, because the way this actually gets read is as a cropped screenshot in a group chat.</p>
     </div>
     <div>
@@ -738,7 +738,7 @@ footer a:hover{color:var(--accent)}
 <!-- ===================== TWO LENSES ===================== -->
 <section class="block" id="stereo"><div class="wrap">
   <h2>Two lenses</h2>
-  <p class="dek">A screen is a plane. A room is not. That difference is measurable — and this is the one check that measures the scene directly, rather than comparing a claim against what the physics say to expect.</p>
+  <p class="dek">A screen is a plane. A room is not. That difference is measurable, and this is the one check that measures the scene itself, rather than holding a claim up against what the physics predict.</p>
 
   <figure>
     <div class="fig">
@@ -839,7 +839,7 @@ footer a:hover{color:var(--accent)}
         <text x="640" y="264" class="cap s-dim">Faking both consistently is hard.</text>
       </svg>
     </div>
-    <figcaption>This reverses the usual arrangement. A detector takes an image and returns a number nobody can audit; these take a signed claim and render it against an independent expectation. The reader does the inference — which means there's no training distribution to drift, no ROC curve to hide, and no failure mode where a model is confidently wrong about something a person catches instantly.</figcaption>
+    <figcaption>This reverses the usual arrangement. A detector takes an image and returns a number nobody can audit; these take a signed claim and render it against an independent expectation. The reader does the inference. There is no training distribution to drift, no ROC curve to hide, and no failure mode in which a model is confidently wrong about something a person catches instantly.</figcaption>
   </figure>
 
   <div class="grid3">
@@ -851,16 +851,16 @@ footer a:hover{color:var(--accent)}
     <div class="card" style="border-style:dashed"><h3 style="margin:0 0 4px">When nothing ran</h3><p style="font-size:14.5px;color:var(--textDim);margin:0">A check that didn't run says it didn't run. Insufficient data reports insufficient. Nothing is inferred from absence.</p></div>
   </div>
 
-  <p class="col" style="margin-top:var(--s-lg)">None of this is a panacea. Any single check falls to someone who knows it's there. What the stack restores is friction — it raises forgery from a prompt to a coordinated physical production that has to stay consistent across geometry, optics, motion, audio and time, all of it committed before the forger knew which checks would be run. That isn't proof. It's what photographs used to have.</p>
+  <p class="col" style="margin-top:var(--s-lg)">None of this is a panacea. Any single check falls to someone who knows it is there. What the stack restores is friction. It raises forgery from a prompt to a physical production that has to stay consistent across geometry, optics, motion, audio and time, all of it committed before the forger knew which checks would be run. That is not proof. It is what photographs used to have.</p>
 </div></section>
 
 <!-- ===================== PRIVACY ===================== -->
 <section class="block" id="privacy"><div class="wrap">
   <h2>The people who need this most are the people it can most endanger</h2>
-  <p class="dek">A provenance record is a dossier: where you were, when, on which device, sometimes who you are. So disclosure is built in, not bolted on as an export option.</p>
+  <p class="dek">A provenance record is a dossier: where you were, when, on which device, sometimes who you are. For a photographer working somewhere hostile that file is a threat as much as a defence, so disclosure is a capture-time decision rather than an export option.</p>
 
   <div class="col">
-    <p>Every signal is a live toggle in the viewfinder, which puts the decision at capture, in context, rather than in a settings screen from months ago. And every field is committed under its own salt, so you can reveal one later and have it check out against the original signature. Withholding doesn't break the seal.</p>
+    <p>Every signal is a live toggle in the viewfinder, so the decision happens at capture, in context, rather than in a settings screen from months earlier. Every field is committed under its own salt, which means you can reveal one later and have it check out against the original signature. Withholding does not break the seal.</p>
   </div>
 
   <figure>
@@ -991,11 +991,11 @@ footer a:hover{color:var(--accent)}
 <section class="block" id="close"><div class="wrap">
   <div class="col">
     <p class="pull">Prove your work.</p>
-    <p style="margin-top:var(--s-lg);color:var(--textDim)">One last thing about the fairies. Everything here would have sealed them, cleanly. Elsie Wright used a real camera and a real plate. The cut-outs were propped up with hatpins at a real distance, in a real garden, in real light. Two lenses would measure genuine depth, because there was genuine depth. The shadows would fall where the sun put them. The motion trace would look exactly like a girl holding a quarter-plate camera. Every rung on the ladder would be reached, and every one of them would be telling the truth.</p>
-    <p style="color:var(--textDim)">That isn't a hole in this design so much as the edge of what any of it can do. Provenance can tell you a file is what it claims to be and came from where it claims to have come from. It can't tell you the world was as the picture says. That was always the reader's job, and the desk's, and it still is.</p>
+    <p style="margin-top:var(--s-lg);color:var(--textDim)">One last thing about the fairies. Everything here would have sealed them without complaint. Elsie Wright used a real camera and a real plate. The cut-outs were propped up with hatpins at a real distance, in a real garden, in real light. Two lenses would measure genuine depth, because there was genuine depth. The shadows would fall where the sun put them. The motion trace would look like a girl holding a quarter-plate camera. Every rung on the ladder would be reached, and every one of them would be telling the truth.</p>
+    <p style="color:var(--textDim)">That is not a hole in this design so much as the edge of what any of it can do. Provenance can tell you that a file is what it claims to be, and came from where it claims to have come from. It cannot tell you that the world was as the picture says. That was always the reader's job, and the desk's, and it still is.</p>
     <p style="color:var(--textDim)">Provenance doesn't solve misinformation. I don't think anything does. It does something narrower and, I hope, useful: it gives an honest photographer a way to show their work, and it makes the alternative more expensive than it currently is.</p>
-    <p style="color:var(--textDim)">The platform layer is coming, and that's good news — Apple and Google will attest sensors better than any app can. It will still be silent on what the sensor was pointed at, it will mostly want a network, and the standard underneath has real problems the UMBC paper lays out. Those gaps are where something like this can be useful for a while. Eventually it shouldn't need to exist, and that would be the right outcome.</p>
-    <p style="color:var(--textDim)">So it's all here. Take whatever's useful, fork the whole thing under your own name, or read it and tell me where I've got it wrong — I'd count that as the most valuable thing anyone could do with it. I'd much rather this turned into five better projects than stayed one.</p>
+    <p style="color:var(--textDim)">The platform layer has arrived and it will keep improving. Apple and Google will attest sensors more convincingly than any application can. They will still be silent on what the sensor was pointed at, they will mostly want a network, and the standard underneath has the problems the UMBC paper sets out. Those are the gaps something like this can sit in for a while. Eventually it should not need to exist. That would be the right outcome.</p>
+    <p style="color:var(--textDim)">It is all here. Take whatever is useful, fork the whole thing under your own name, or read it and tell me where I have it wrong, which would be the most valuable thing anyone could do with it. I would rather this turned into five better projects than stayed one.</p>
     <p style="font-weight:600">— Noah Bassetti-Blum</p>
     <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">Read the source</a>
