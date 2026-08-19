@@ -7,6 +7,7 @@
   <a href=".github/workflows/ci.yml"><img alt="CI" src="https://github.com/noah-pi/sourcekit-open/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Opens in c2patool" src="https://img.shields.io/badge/C2PA-opens%20in%20c2patool-1F6B45?style=flat-square">
   <img alt="Platform iOS" src="https://img.shields.io/badge/platform-iOS-6E6E73?style=flat-square">
+  &nbsp;<a href="https://testflight.apple.com/join/cRuRw2MN"><b>Try it on TestFlight →</b></a>
   &nbsp;<a href="https://noah-pi.github.io/sourcekit-open/"><b>Deep dive →</b></a>
 </p>
 
@@ -86,6 +87,7 @@ geometry, motion, shadows and time, then present it so that a person can weigh i
 This repo is an attempt at holes two and three, a careful pass at one, and unfinished
 business on four.
 
+**[Try it on TestFlight →](https://testflight.apple.com/join/cRuRw2MN)** ·
 **[Read the deep dive →](https://noah-pi.github.io/sourcekit-open/)**
 
 ## The shutter path
@@ -239,6 +241,10 @@ No coordination needed, no permission to ask.
 
 ## Building it
 
+If you just want to use it, the beta is on
+[TestFlight](https://testflight.apple.com/join/cRuRw2MN).
+
+To build it yourself:
 [`docs/BUILDING.md`](docs/BUILDING.md). It's an Expo app: `npm install`, then
 `npx expo run:ios` on a Mac with Xcode. Secure Enclave and App Attest need a real
 device; the simulator falls back to a software key and labels itself as such. Forking
