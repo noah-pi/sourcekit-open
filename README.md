@@ -38,217 +38,7 @@ cryptography, native modules, interface, test suite.
 
 ## What it commits
 
-- **A second lens.** A simultaneous ultra-wide frame, sealed in the same file.
-- **The motion of the phone.** Gyro and attitude around the shutter.
-- **A raw audio master.** Uncompressed, beside the delivery track.
-- **Hardware attestation.** Apple's certificate, bound to this signing key.
-- **Independent time.** RFC 3161 and a Bitcoin anchor.
-- **A post-quantum signature.** So the file still verifies in twenty years.
-- **Field-by-field disclosure.** Decided at the shutter, not on export.
-- **Forensic checks any person can run.** No model, no upload, no score.
-
-All of it optional, all of it switchable in the viewfinder, all of it readable by any C2PA
-tool. [How it works ↓](#how-it-works)
-
-## Chasing instruments of truth
-
-A photograph has never been proof. It has only ever been expensive to fake.
-
-In July 1917 two girls in Yorkshire photographed some fairies. The images were examined by
-Arthur Conan Doyle, who found them persuasive, and by Kodak, which declined to certify them
-but conceded it could not prove them fake. The fairies were cardboard, copied from a
-children's book and held up with hatpins. What is striking about the Cottingley affair is
-not that anyone was fooled but that the question was already understood to be a technical
-one, a matter for Kodak, rather than a question about two girls and a hatpin.
-
-"A photograph passes for incontrovertible proof that a given thing happened," wrote Susan
-Sontag in [1973](https://www.nybooks.com/articles/1973/10/18/photography/). "The picture may
-distort; but there is always a presumption that something exists, or did exist, which is
-like what's in the picture." She did not mean it as a compliment. The essay became the
-opening chapter of *On Photography*, and the book is a sustained argument that the
-presumption is unearned — that photographs are "as much an interpretation of the world as
-paintings and drawings are," and that seeming innocent of interpretation is exactly what
-makes them persuasive. Sontag was naming a credulity she wanted her readers to lose. It has
-instead been the working assumption of newspapers, courts and juries ever since.
-
-What the medium had was never integrity. It was friction. Retouching is as old as the
-negative, and Soviet censors
-[airbrushed the disgraced out of group portraits](https://en.wikipedia.org/wiki/The_Commissar_Vanishes)
-for fifty years before Photoshop shipped in 1990. A convincing lie took a darkroom, a skill
-and an afternoon, and picture desks, wire services and libel law made it expensive to
-attempt.
-
-Generative models did not make images forgeable. They made forgery fast and essentially
-free, which is lighter fluid on an already smouldering sense of reality.
-
-### Lawmakers have written more bills about synthetic media than about any other use of AI
-
-State legislatures introduced
-[635 AI bills in 2024 and more than 1,200 in 2025](https://www.multistate.ai/artificial-intelligence-ai-legislation),
-the first year all fifty states filed at least one, and 2026 passed both totals before most
-sessions closed. Across that pile the most-legislated subject is synthetic media — deepfakes
-and disclosure —
-[ahead of chatbots, hiring, policing and the rest](https://www.transparencycoalition.ai/news/state-bill-topic-tracker-ai-deepfakes).
-
-What the laws require, and what they cost you for ignoring them, varies by jurisdiction.
-What does not vary is the technology they lean on. The
-[EU AI Act's Article 50 transparency obligations](https://artificialintelligenceact.eu/article/50/)
-became applicable on 2 August 2026;
-[California's AI Transparency Act](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942)
-became operative the same day. Both rest on the same two mechanisms, and both mechanisms are
-necessary. Only one of them still works when someone is actively trying to defeat it.
-
-### Watermarking marks what a machine made, and it can be washed off
-
-Google's [SynthID](https://deepmind.google/technologies/synthid/) and Anthropic's text
-watermarking, announced on 11 August 2026 and built on the SynthID-Text approach, embed a
-machine-readable signal in what a model produces. Both are worth doing. The signal survives
-ordinary handling — resizing, re-encoding, a screenshot — and does not survive an adversary.
-Passing an image back through a diffusion model
-[reconstructs it faithfully with the mark gone](https://arxiv.org/abs/2408.10446), one
-watermark can be used to [overwrite another](https://arxiv.org/abs/2605.16796), and there are
-[off-the-shelf tools](https://github.com/guillaumemeyer/watermarks-remover) that do it in a
-command. Open-weight models emit unmarked output by default. And nothing marks a photograph
-that was never generated in the first place.
-
-That last gap is where the liar's dividend collects. Once everyone knows video can be faked,
-real video can be dismissed as fake. In 2023 Tesla's lawyers told a California court they
-could neither admit nor deny the authenticity of recordings of Elon Musk describing
-Autopilot's safety, on the grounds that a man that famous is a likely deepfake target; Judge
-Evette Pennypacker called the position
-["deeply troubling"](https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/)
-and ordered him deposed. Two January 6th defendants
-[ran the same argument](https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/)
-about the video placing them inside the Capitol, and lost. Marking what is synthetic does
-nothing for the person who has to prove that something is not.
-
-### Provenance signs what a camera saw, and the signature travels with the file
-
-In February 2021, Adobe, Arm, the BBC, Intel, Microsoft and Truepic folded two existing
-efforts — Adobe's Content Authenticity Initiative and the Microsoft and BBC Project Origin —
-into the [Coalition for Content Provenance and Authenticity](https://c2pa.org/). The first
-specification followed in 2022.
-
-It inverts the detection problem. Rather than examine a file for signs of forgery, put a
-tamper-evident seal on it at the source, so any later change reads as a change. A watermark
-says a machine was involved; a provenance manifest says which device, which moment, and what
-has happened since. The seal is a signature over the bytes, so it does not wash off — it
-breaks, visibly, which is the point.
-
-### Four assurance levels grade the signer, and only two of them are available
-
-A signature is only worth the process that produced it, so C2PA's
-[conformance program](https://c2pa.org/conformance/) grades the signer and writes the grade
-into the signing certificate. The specification defines four levels. The program currently
-issues two.
-
-| Level | What it requires | What has reached it |
-|---|---|---|
-| **1** | Documented key generation and storage and a reviewed security architecture, verified by self-assertion. Keys may be protected in software. | Desktop and cloud tools — the ordinary tier for an application that signs on a general-purpose computer. |
-| **2** | Everything in Level 1, plus hardware-backed key storage and *dynamic security evidence*: a live hardware attestation the device presents when it enrols for its certificate, so the authority checks the silicon rather than taking the vendor's word. | The [Pixel 10 camera](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/), the first shipping phone to reach it. For a mobile app, Level 2 is currently only achievable on Android. |
-| **3–4** | Defined in the specification for stronger isolation and independent evaluation. The program has not published the requirements or begun issuing at these levels. | Nothing yet. |
-
-Source Kit signs at the software tier and says so in every manifest. It holds no C2PA
-certificate at any level; it is not in the program.
-
-## From bytes to photons
-
-Between the sensor and the signature there is a stretch of code. How long it is decides what
-the signature is worth.
-
-A digital photograph begins as electrical charge on a grid of sensor wells and ends as a
-compressed file. Something has to turn one into the other: read the wells, interpolate colour
-across the filter mosaic, correct the lens, reduce noise, tone-map, encode. That chain runs
-for tens of milliseconds, and every stage of it is code that could in principle hand the next
-stage a different picture. So the question that decides what a provenance signature actually
-proves is not how strong the key is. Everyone keeps the key in hardware. The question is how
-much of that chain sits between the photons and the signing, and whether any of it can be
-replaced.
-
-On the
-[Pixel 10](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/),
-almost none of it can. Google signs inside the imaging pipeline on the Tensor G5; the claim
-key is generated and held in Android StrongBox on the Titan M2 security chip; a timestamp
-authority runs on the device, so a capture made with the radio off still carries trusted
-time. The frame is never handed to general-purpose code between the sensor and the
-signature, which means there is no seam at which a different image could be substituted.
-Photograph something with a Pixel 10 and the file can support a claim almost nothing else
-can: that these are the photons that struck the sensor.
-
-Qualcomm took the same idea to the other end of the Android market, putting a signer inside
-the Snapdragon trusted execution environment so the pipeline is isolated from the operating
-system running above it. Apple's Reference Image, visible in the iOS 27 beta, captures sensor
-signatures and hardware identifiers with the frame — but it sends them to Private Cloud
-Compute and returns an authenticated copy, and it is not built on C2PA.
-
-Source Kit sits at the far end of that chain. It receives a finished image from the operating
-system and signs the bytes it was handed, in its own process, with a key in the Secure
-Enclave. Everything upstream of that hand-off is code it cannot attest to. This is the
-ceiling for a third-party app on iOS, not a design preference: Assurance Level 2 for a mobile
-app is currently reachable only on Android. What the app can do is commit far more *around*
-the frame — a second lens, the motion of the phone, independent time — so that a forger has
-to keep several signals consistent rather than one.
-
-### Cameras got there first, and California is about to make it universal
-
-Phones are the late arrivals. Leica shipped the
-[first camera with Content Credentials](https://leica-camera.com/en-US/photography/content-credentials),
-the M11-P, in October 2023, with a signing certificate in the body. Sony added capture-time
-signing across the Alpha 1 II and Alpha 9 III, Canon launched its
-[Authenticity Imaging System](https://c2paviewer.com/articles/canon-authenticity-imaging-system)
-for newsrooms in May 2026, and Nikon
-[added C2PA to the Z6III](https://www.nikonusa.com/press-room/nikon-develops-firmware-that-adds-function-compliant-with-cp2a-standards-to-z6iii)
-in firmware — then withdrew it within a week, when a researcher used the camera's
-multiple-exposure mode to make it sign a composite it had not photographed. Nikon suspended
-the service and invalidated every certificate it had issued. The credentials from that window
-no longer verify, which is the standard working exactly as intended, and a fair measure of
-how new all of this is.
-
-From 1 January 2028, this stops being a feature. California's
-[AB 853](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853)
-requires every capture device sold in the state — the statute names "video and still
-photography cameras, mobile phones with built-in cameras or microphones, and voice
-recorders" — to offer a latent disclosure carrying the manufacturer, the device, and the time
-and date of capture, and to embed it *by default*. Provenance metadata goes from a
-differentiator on a flagship to a condition of selling a camera in the largest state in the
-country.
-
-## Four gaps remain
-
-None of them is closed by moving the signature into the silicon.
-
-1. **The standard underneath has real problems.** C2PA's first comprehensive independent
-   security analysis found generators and validators disagreeing on trusted timestamps,
-   revocation weak enough that validators accept known-compromised certificates, and an
-   exclusion range permitting undetectable alterations. Their conclusion: don't stake
-   journalism or legal evidence on C2PA yet.
-   ([Golaszewski et al., UMBC, 2026](https://eprint.iacr.org/2026/804))
-2. **No signature reaches the scene.** Point a hardware-signed camera at a good monitor and
-   every guarantee holds: the sensor did see those photons.
-3. **Signing a claim doesn't make it true.** Civilian GPS is unauthenticated and spoofers
-   are commodity hardware. In-pipeline signing binds a forged fix as faithfully as a real
-   one.
-4. **The credential dies in transit.** Most platforms strip metadata on upload, so the
-   manifest disappears exactly when an image starts to spread.
-
-The Nikon Z6 III is the demonstration. In August 2025 a researcher found the camera would
-sign an AI-generated image run through Multiple Exposure mode. Hardware-rooted,
-cryptographically valid, nothing broken: the picture was handed to the signer, which signed
-it as designed. Nikon revoked every certificate it had issued; a year later the service is
-still suspended.
-
-Detection is the obvious response and the wrong one. A detector is a
-classifier guessing at the output of a generator, and it gets worse exactly as the generator
-gets better. What is left is narrower: raise what a forger has to keep consistent across
-geometry, motion, shadows and time, then present it so that a person can weigh it quickly.
-This repo is an attempt at gaps two and three, a careful pass at one. Gap four is not
-addressed.
-
-## How it works
-
-Take a photo, video or audio recording in a familiar interface. As on most C2PA-enabled
-hardware, the basics go into the file at capture: time, device, and location if you allow it.
-Source Kit commits a good deal more, and commits it in a form other C2PA tools can read.
+All of it optional, all of it switchable in the viewfinder, all of it readable by any C2PA tool.
 
 <details>
 <summary><b>A second lens</b> — the cheapest counter to photographing a screen</summary>
@@ -351,7 +141,7 @@ seed, and the withheld fields become permanently underivable by anyone, includin
 </details>
 
 <details>
-<summary><b>Checks a person can run</b> — no model, no upload, no probability</summary>
+<summary><b>Forensic checks any person can run</b> — no model, no upload, no probability</summary>
 
 Inspect renders the signed claims against independent physical expectations and leaves the
 inference to you. The sun's elevation and azimuth are deterministic from the signed time and
@@ -389,6 +179,179 @@ Private Cloud Compute and returns an authenticated copy. That is a reasonable tr
 people. It is not available to someone who cannot afford to be seen talking to a server.
 
 </details>
+
+## Chasing instruments of truth
+
+A photograph has never been proof. It has only ever been expensive to fake.
+
+In July 1917 two girls in Yorkshire photographed some fairies. The images were examined by
+Arthur Conan Doyle, who found them persuasive, and by Kodak, which declined to certify them
+but conceded it could not prove them fake. The fairies were cardboard, copied from a
+children's book and held up with hatpins. What is striking about the Cottingley affair is
+not that anyone was fooled but that the question was already understood to be a technical
+one, a matter for Kodak, rather than a question about two girls and a hatpin.
+
+Retouching is as old as the negative, and Soviet censors
+[airbrushed the disgraced out of group portraits](https://en.wikipedia.org/wiki/The_Commissar_Vanishes)
+for fifty years before Photoshop shipped in 1990. A convincing lie took a darkroom, a skill
+and an afternoon, and picture desks, wire services and libel law made it expensive to
+attempt.
+
+Generative models did not make images forgeable. They made forgery fast and essentially
+free, which is lighter fluid on an already smouldering sense of reality.
+
+### Lawmakers have written more bills about synthetic media than about any other use of AI
+
+State legislatures introduced
+[635 AI bills in 2024 and more than 1,200 in 2025](https://www.multistate.ai/artificial-intelligence-ai-legislation),
+and synthetic media is the
+[most-legislated corner](https://www.transparencycoalition.ai/news/state-bill-topic-tracker-ai-deepfakes)
+of the subject. The [EU AI Act's Article 50](https://artificialintelligenceact.eu/article/50/)
+and [California's AI Transparency Act](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942)
+both took effect on 2 August 2026. Penalties differ; the two technologies they lean on do not.
+
+### Watermarking marks what a machine made, and it can be washed off
+
+A watermark rides inside what a model generates, and it holds up against ordinary handling.
+It does not hold up against effort. Regenerating an image through a diffusion model
+[strips the mark and keeps the picture](https://arxiv.org/abs/2408.10446), one watermark can
+[overwrite another](https://arxiv.org/abs/2605.16796), and there is
+[tooling for it on GitHub](https://github.com/guillaumemeyer/watermarks-remover).
+Open-weight models emit nothing to strip in the first place.
+
+The deeper limit is that a watermark can only speak for what a machine made. It says nothing
+about a photograph, which leaves the person holding real footage with nothing to show. Once
+everyone knows video can be faked, real video gets dismissed as fake — a move already run in
+court by
+[Tesla's lawyers over recordings of Elon Musk](https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/)
+and by
+[January 6th defendants over footage from inside the Capitol](https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/).
+
+### Provenance signs what a camera saw, and the signature travels with the file
+
+Adobe, Arm, the BBC, Intel, Microsoft and Truepic founded the
+[Coalition for Content Provenance and Authenticity](https://c2pa.org/) in February 2021, and
+the first specification followed a year later. It inverts the problem: instead of examining a
+file for signs of forgery, seal it at the source so any later change reads as a change. A
+watermark says a machine was involved. A manifest says which device, which moment, and what
+has happened since.
+
+### Four assurance levels grade the signer, and only two of them are available
+
+A signature is worth the process that produced it, so C2PA's
+[conformance program](https://c2pa.org/conformance/) grades the signer and writes the grade
+into the certificate. **Level 1** covers documented key handling with software protection.
+**Level 2** adds hardware-backed keys and a live attestation from the silicon at enrolment —
+reached so far by the
+[Pixel 10 camera](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/),
+and for a mobile app currently reachable only on Android. Levels 3 and 4 exist in the
+specification and are not yet issued. Source Kit signs at the software tier, holds no
+certificate, and says so in every manifest.
+
+## From bytes to photons
+
+Between the sensor and the signature there is a stretch of code. How long it is decides what
+the signature is worth.
+
+A digital photograph begins as electrical charge on a grid of sensor wells and ends as a
+compressed file. Something has to turn one into the other: read the wells, interpolate colour
+across the filter mosaic, correct the lens, reduce noise, tone-map, encode. That chain runs
+for tens of milliseconds, and every stage of it is code that could in principle hand the next
+stage a different picture. So the question that decides what a provenance signature actually
+proves is not how strong the key is. Everyone keeps the key in hardware. The question is how
+much of that chain sits between the photons and the signing, and whether any of it can be
+replaced.
+
+On the
+[Pixel 10](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/),
+almost none of it can. Google signs inside the imaging pipeline on the Tensor G5; the claim
+key is generated and held in Android StrongBox on the Titan M2 security chip; a timestamp
+authority runs on the device, so a capture made with the radio off still carries trusted
+time. The frame is never handed to general-purpose code between the sensor and the
+signature, which means there is no seam at which a different image could be substituted.
+Photograph something with a Pixel 10 and the file can support a claim almost nothing else
+can: that these are the photons that struck the sensor.
+
+Qualcomm took the same idea to the other end of the Android market, putting a signer inside
+the Snapdragon trusted execution environment so the pipeline is isolated from the operating
+system running above it. Apple's Reference Image, visible in the iOS 27 beta, captures sensor
+signatures and hardware identifiers with the frame — but it sends them to Private Cloud
+Compute and returns an authenticated copy, and it is not built on C2PA.
+
+Source Kit sits at the far end of that chain. It receives a finished image from the operating
+system and signs the bytes it was handed, in its own process, with a key in the Secure
+Enclave. Everything upstream of that hand-off is code it cannot attest to. This is the
+ceiling for a third-party app on iOS, not a design preference: Assurance Level 2 for a mobile
+app is currently reachable only on Android. What the app can do is commit far more *around*
+the frame — a second lens, the motion of the phone, independent time — so that a forger has
+to keep several signals consistent rather than one.
+
+### Cameras got there first, and California is about to make it universal
+
+Phones are the late arrivals. Leica shipped the
+[first camera with Content Credentials](https://leica-camera.com/en-US/photography/content-credentials),
+the M11-P, in October 2023, with a signing certificate in the body. Sony added capture-time
+signing across the Alpha 1 II and Alpha 9 III, Canon launched its
+[Authenticity Imaging System](https://c2paviewer.com/articles/canon-authenticity-imaging-system)
+for newsrooms in May 2026, and Nikon
+[added C2PA to the Z6III](https://www.nikonusa.com/press-room/nikon-develops-firmware-that-adds-function-compliant-with-cp2a-standards-to-z6iii)
+in firmware — then withdrew it within a week, when a researcher used the camera's
+multiple-exposure mode to make it sign a composite it had not photographed. Nikon suspended
+the service and invalidated every certificate it had issued. The credentials from that window
+no longer verify, which is the standard working exactly as intended, and a fair measure of
+how new all of this is.
+
+From 1 January 2028, this stops being a feature. California's
+[AB 853](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853)
+requires every capture device sold in the state — the statute names "video and still
+photography cameras, mobile phones with built-in cameras or microphones, and voice
+recorders" — to offer a latent disclosure carrying the manufacturer, the device, and the time
+and date of capture, and to embed it *by default*. Provenance metadata goes from a
+differentiator on a flagship to a condition of selling a camera in the largest state in the
+country.
+
+## Where it still comes up short
+
+Six ways a file can carry a perfect signature and still mislead you. The first independent
+security review of the specification,
+[Golaszewski et al. at UMBC](https://eprint.iacr.org/2026/804), found implementation problems
+on top of these — disagreeing validators, weak revocation, an exclusion range that hides
+edits. Those are fixable. The six below are structural.
+
+**The lens can be pointed at a screen.** Photograph a good monitor and every guarantee holds,
+because they are all true: that sensor really did see those photons. No signature, from any
+device, reaches past the front of the lens.
+
+**A signature binds a claim without checking it.** Civilian GPS is unauthenticated and
+spoofers cost less than a phone. The scene can be entirely real while the time and place
+sealed beside it are not, and the seal makes a forged fix look exactly as solid as a true one.
+
+**Most platforms strip the credential on upload.** The manifest disappears at the exact moment
+a picture starts to travel, and an unsigned file is indistinguishable from one that never had
+a signature. The industry answer is a fingerprint plus a lookup service. The fingerprint
+exists here; the lookup does not.
+
+**Below Level 2, a picture can be handed to the signer.** If the frame reaches the signing
+step through code that isn't attested, whatever arrives gets signed correctly. In 2025 a
+researcher used the Nikon Z6III's multiple-exposure mode to do exactly this; Nikon invalidated
+every certificate it had issued.
+
+**A staged scene is a true photograph of a lie.** Everything here would have sealed the
+Cottingley fairies without complaint. Real camera, real plate, real garden, real light, real
+distance — two lenses would even measure genuine depth, because there was genuine depth. Every
+check passes and every one of them is telling the truth.
+
+**Protecting someone in the frame breaks the proof.** Blur a bystander's face, crop a
+landmark, drop the coordinates, and the signature fails — the file now reads as modified,
+which is the same verdict a forgery gets. Selective disclosure here covers the metadata, so
+fields can be withheld and still verify. Nothing yet covers the pixels.
+
+None of this is fixed by detection. You cannot out-classify a generator — it improves as the
+classifier does. What you can do is raise what a forger has to keep consistent at once:
+geometry, motion, shadows, time. Everything this app commits is aimed at the first gap, the
+one that stays open however good the hardware gets.
+
+[Diagrams for each of these are on the page.](https://noah-pi.github.io/sourcekit-open/#holes)
 
 ## The shutter path
 
