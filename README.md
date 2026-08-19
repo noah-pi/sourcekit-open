@@ -45,7 +45,7 @@ cryptography, native modules, interface, test suite.
 - **Independent time.** RFC 3161 and a Bitcoin anchor.
 - **A post-quantum signature.** So the file still verifies in twenty years.
 - **Field-by-field disclosure.** Decided at the shutter, not on export.
-- **Checks a person can run.** No model, no upload, no score.
+- **Forensic checks any person can run.** No model, no upload, no score.
 
 All of it optional, all of it switchable in the viewfinder, all of it readable by any C2PA
 tool. [How it works ↓](#how-it-works)
