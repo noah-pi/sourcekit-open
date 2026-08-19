@@ -33,18 +33,16 @@
  *   2. a `stereo` section in the proof bundle (lib/proofBundle.ts,
  *      format 'exhibit-proof-bundle/2') carrying per-artifact state, hash,
  *      byte count, and — for every artifact except the multi-megabyte DNG —
- *      the bytes themselves, inline as base64. The desk needs the PIXELS:
- *      the stereo verifier never accepts a hash-only secondary frame
- *      (desk/stereo/types.ts). The raw DNG rides hash-only; its bytes stay
- *      in the vault (stated in the entry, never implied).
+ *      the bytes themselves, inline as base64. A verifier needs the PIXELS:
+ *      the stereo check never accepts a hash-only secondary frame. The raw
+ *      DNG rides hash-only; its bytes stay in the vault (stated in the
+ *      entry, never implied).
  *
- * This module also builds the StereoCommitment the desk feeds to
- * verifyStereoCommitment. desk/stereo/types.ts is the CANONICAL contract;
- * the interfaces here mirror it structurally (this file must stay importable
- * from the app tree, which does not carry desk/). The desk command
- * (desk/cli/stereoVerify.ts) assigns the result to the canonical type, so
- * drift fails the desk's own typecheck — and the bundle suite
- * (tests/test-stereo-bundle.mts) runs the result through the real verifier.
+ * This module also builds the StereoCommitment that verifyStereoCommitment
+ * consumes. The interfaces here are structural mirrors of that contract, so
+ * this file stays importable from the app tree with no extra dependency.
+ * The bundle suite (tests/test-stereo-bundle.mts) runs the result through
+ * the real verifier, which is what catches drift.
  *
  * HONESTY RULES (standing): absence is never suspicion; a hash mismatch
  * between the bundle's embedded bytes and the committed hash is PROVEN
@@ -237,10 +235,10 @@ export function commitStereoArtifacts(
 }
 
 // ---------------------------------------------------------------------------
-// Output (b): the StereoCommitment. MIRRORED types — canonical contract is
-// desk/stereo/types.ts; keep field-for-field identical (the desk command
-// assigns through the canonical type, and the bundle suite exercises the
-// real verifier on this output).
+// Output (b): the StereoCommitment. These types mirror what
+// verifyStereoCommitment expects; keep them field-for-field identical. The
+// bundle suite exercises the real verifier on this output, so a mismatch
+// shows up as a test failure rather than a silent shape drift.
 // ---------------------------------------------------------------------------
 
 export interface CameraIntrinsicsShape {
@@ -477,7 +475,7 @@ export function stereoEntryBytes(entry: StereoArtifactBundleEntry, id: StereoArt
 }
 
 /**
- * Build the StereoCommitment (desk/stereo/types.ts shape) from a bundle
+ * Build the StereoCommitment from a bundle
  * section. Requires recorded+intact secondaryFrame, calibration, timestamps,
  * and metadata — anything less and the caller reports the per-artifact
  * states instead of fabricating geometry inputs. Hash integrity is checked

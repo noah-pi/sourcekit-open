@@ -23,16 +23,19 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
  * cap:   hard ceiling on the total direct-dependency count.
  */
 const BUDGET = {
-  'desk/package.json': {
+  'package.json': {
     allow: [
-      '@noble/curves', '@noble/hashes', '@noble/ciphers', '@noble/post-quantum', 'cbor-x', 'react', 'react-dom',
-      'jpeg-js',
-      // Official C2PA engine (wasm fallback binding, pinned) for
-      // desk/src/core/resolve.ts.
-      '@contentauth/c2pa-wasm',
-      '@types/node', '@types/react', '@types/react-dom', '@vitejs/plugin-react', 'tsx', 'typescript', 'vite',
+      '@noble/curves', '@noble/hashes', '@noble/ciphers', '@noble/post-quantum', 'cbor-x', 'jpeg-js',
+      'react', 'react-native', 'react-native-safe-area-context', 'react-native-screens', 'zustand',
+      'expo', 'expo-blur', 'expo-clipboard', 'expo-constants', 'expo-crypto', 'expo-device',
+      'expo-document-picker', 'expo-file-system', 'expo-font', 'expo-haptics', 'expo-image',
+      'expo-image-manipulator', 'expo-image-picker', 'expo-linear-gradient', 'expo-linking',
+      'expo-local-authentication', 'expo-location', 'expo-media-library', 'expo-modules-core',
+      'expo-router', 'expo-secure-store', 'expo-sensors', 'expo-sharing', 'expo-status-bar',
+      'expo-video', 'expo-video-thumbnails', '@expo/vector-icons',
+      '@types/jpeg-js', '@types/node', '@types/react', 'tsx', 'typescript',
     ],
-    cap: 17,
+    cap: 43,
   },
   'server/package.json': {
     allow: ['cbor-x'],
@@ -84,23 +87,35 @@ for (const rel of Object.keys(BUDGET)) {
 // every primitive to vet. Any package whose lockfile resolves to MORE THAN
 // ONE version must be declared here with the exact version set and the
 // reason; an undeclared split fails the gate.
+// Resolved-VERSION budget: names alone undercount the supply chain — two
+// resolved versions of one package are two copies of every primitive to vet.
+//
+// The app's lockfile carries the whole Expo and React Native tree, where
+// duplicate transitive versions are routine and not something we choose. So
+// the gate is scoped: `watch` names the packages we actually vouch for, and
+// only those are checked. Any watched package resolving to more than one
+// version must be declared with the exact set and the reason.
 const KNOWN_VERSION_SPLITS = {
-  'desk/package-lock.json': {
-    // @noble/post-quantum@ is written against the noble 2.x API line
-    // (it imports 2.x-only modules such as @noble/curves/abstract/fft.js),
-    // while the rest of the tree pins the 1.x line. npm overrides CANNOT
-    // safely collapse these — forcing one line breaks the other consumer
-    // (tests/test-pq.mts pins the PQ behavior). The split is accepted,
-    // documented in docs/DECISIONS.md, and re-vetted on every bump.
-    '@noble/ciphers': ['1.3.0', '2.2.0'],
-    '@noble/curves': ['1.9.7', '2.2.0'],
-    '@noble/hashes': ['1.8.0', '2.2.0'],
-    // Dev tooling only (never shipped): vite pins esbuild, tsx pins
-    // 0.28.x. Build-time bundlers, not runtime attack surface.
-    'esbuild': ['0.25.12', '0.28.2'],
+  'package-lock.json': {
+    watch: ['@noble/curves', '@noble/hashes', '@noble/ciphers', '@noble/post-quantum', 'cbor-x', 'jpeg-js'],
+    declared: {
+      // @noble/post-quantum is written against the noble 2.x API line (it
+      // imports 2.x-only modules such as @noble/curves/abstract/fft.js),
+      // while the rest of the tree pins the 1.x line. npm overrides CANNOT
+      // safely collapse these — forcing one line breaks the other consumer
+      // (tests/test-pq.mts pins the PQ behavior). The split is accepted,
+      // documented in docs/DECISIONS.md, and re-vetted on every bump.
+      '@noble/ciphers': ['1.3.0', '2.2.0'],
+      '@noble/curves': ['1.9.7', '2.2.0'],
+      '@noble/hashes': ['1.8.0', '2.2.0'],
+    },
+  },
+  'server/package-lock.json': {
+    watch: ['cbor-x'],
+    declared: {},
   },
 };
-for (const [lockRel, known] of Object.entries(KNOWN_VERSION_SPLITS)) {
+for (const [lockRel, { watch, declared }] of Object.entries(KNOWN_VERSION_SPLITS)) {
   const lockPath = path.join(root, lockRel);
   if (!fs.existsSync(lockPath)) continue;
   const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
@@ -108,6 +123,7 @@ for (const [lockRel, known] of Object.entries(KNOWN_VERSION_SPLITS)) {
   for (const [loc, info] of Object.entries(lock.packages ?? {})) {
     const m = loc.match(/node_modules\/((?:@[^/]+\/)?[^/]+)$/);
     if (!m || !info.version) continue;
+    if (!watch.includes(m[1])) continue;
     // OS-conditioned optional packages (esbuild/@rollup platform binaries)
     // are never co-resident: exactly one installs per platform, so a
     // "split" across them is an artifact of the lockfile listing every
@@ -120,16 +136,16 @@ for (const [lockRel, known] of Object.entries(KNOWN_VERSION_SPLITS)) {
   for (const [name, versions] of versionsByName) {
     totalVersions += versions.size;
     if (versions.size <= 1) continue;
-    const declared = known[name];
+    const expected = declared[name];
     const actual = [...versions].sort();
-    if (declared && JSON.stringify([...declared].sort()) === JSON.stringify(actual)) {
+    if (expected && JSON.stringify([...expected].sort()) === JSON.stringify(actual)) {
       console.log(`ok   ${lockRel}: ${name} resolves to ${actual.length} DECLARED versions (${actual.join(', ')})`);
     } else {
       console.error(`${lockRel}: ${name} resolves to ${actual.length} versions (${actual.join(', ')}) — undeclared version split; vet it and declare it in KNOWN_VERSION_SPLITS with the reason`);
       failures++;
     }
   }
-  console.log(`info ${lockRel}: ${versionsByName.size} package names, ${totalVersions} resolved versions`);
+  console.log(`info ${lockRel}: ${versionsByName.size} watched package names, ${totalVersions} resolved versions`);
 }
 
 if (failures > 0) {
