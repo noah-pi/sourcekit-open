@@ -37,50 +37,158 @@ designer, not a cryptographer or a career engineer. Everything is here — camer
 cryptography, native modules, interface, test suite — because people who know more will get
 further with it than I will.
 
-I was a journalist at the New York Times and am now a product designer at Google. Source Kit
-is neither job, and neither organization endorses it. I built it nights and weekends,
-wanting a camera that could show its work.
-
-Twenty-seven test suites, cross-checked against the C2PA reference implementation on every
-run. I have also missed things a cryptographer, or a career iOS engineer, would find in an
-afternoon. I would rather you found them.
-
 ## How Source Kit works
 
 Take a photo, video or audio recording in a familiar interface. As on most C2PA-enabled
 hardware, the basics go into the file at the moment of capture: time, device, and location
-if you allow it. Source Kit commits a good deal more.
+if you allow it. Source Kit commits a good deal more, and commits it in a form other C2PA
+tools can read.
 
-- **A second lens.** A downsampled view from a different physical camera, with its
-  calibration, committed alongside the frame. Two lenses a known distance apart see a flat
-  screen and a real room differently, and the difference is measurable.
-  [`modules/exhibit-camera`](https://github.com/noah-pi/sourcekit-open/tree/main/modules/exhibit-camera)
-- **The motion of the phone.** Gyroscope and attitude around the shutter, decimated and
-  signed, so the movement can be checked against the optical flow of the frames it
-  accompanies. [`src/provenance/poseTrace.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts)
-- **A raw audio master.** Uncompressed LPCM beside the delivery file. Delivery codecs filter
-  out exactly the frequencies forensic work needs, so it has to be captured now or not at
-  all. [`modules/capture-kit`](https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit)
-- **Hardware attestation, bound to the signing key.** Apple's App Attest certifies the
-  device and app; a commitment construction welds that certificate to this specific key.
-  [`src/lib/appAttest.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
-- **Independent time.** An RFC 3161 countersignature and an OpenTimestamps receipt anchored
-  to Bitcoin — the only claims in the record that don't come from the device itself.
-  [`timestamp.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts) · [`ots.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts)
-- **A post-quantum signature.** ML-DSA-65 over the same commitment, so a future break of
-  P-256 doesn't quietly invalidate an archive. [`src/lib/pq.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/pq.ts)
-- **Selective disclosure.** Every field committed under its own salt, so you can reveal one
-  later without breaking the seal, or destroy the seed and make it permanently unreadable.
-  [`src/disclosure`](https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure)
-- **Checks a person can run.** Shadows against the sun's real position, the horizon against
-  the committed gyro, the motion trace against the footage. No model, no upload, no score.
-  [`src/components/forensic`](https://github.com/noah-pi/sourcekit-open/tree/main/src/components/forensic)
-- **A verdict surface that refuses to be a badge.** Five separate questions, each answered
-  on its own terms, with the unreached ones saying why.
-  [`src/lib/trustLadder.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts)
+### A second lens
 
-The C2PA engine itself is written from the specification rather than bound to the reference
-library, which is what makes the differential testing possible. [`src/c2pa`](https://github.com/noah-pi/sourcekit-open/tree/main/src/c2pa)
+Nearly every flagship phone ships a multi-camera array — a main wide, an ultra-wide, usually
+a telephoto. Almost nothing uses the second one for provenance.
+
+Source Kit captures a simultaneous downsampled frame from a secondary lens, usually the
+ultra-wide, and seals it alongside the main image as a first-class C2PA ingredient: the
+`c2pa.ingredient.v3` schema with relationship `componentOf`, meaning the second frame is a
+component of this exhibit rather than a parent it was derived from. A 512-pixel thumbnail
+rides in the manifest as `c2pa.thumbnail.ingredient.jpeg`. Anyone opening the file in any
+C2PA reader sees the second viewpoint.
+
+The cheap attack it counters is rephotography: point a camera at a screen. An ultra-wide sees
+far more of the room than the frame you composed, so a monitor bezel, the edge of a laptop,
+the reflection off an OLED panel all land in the second view.
+
+Past that, the geometry. Two lenses a known distance apart see a flat plane identically, up
+to a single projective transform. They see a scene with real depth with a residual
+disagreement no homography removes. Because the second frame and the full calibration are
+both committed, anyone can undistort the pair, match features, fit a homography and measure
+that residual themselves rather than trusting the device's arithmetic. Disparity falls off
+with distance, so beyond a few metres the answer is **insufficient**, never *passed*.
+
+*Status: the verification side is lab-tested and green. The capture path moved to Apple's
+virtual dual-wide device graph and has not been confirmed in the field on iPhone 17 / iOS 26.
+It is not finished.* [`modules/exhibit-camera`](https://github.com/noah-pi/sourcekit-open/tree/main/modules/exhibit-camera)
+
+### The motion of the phone
+
+A decimated, quantized window of gyroscope and fused-attitude samples from around the shutter
+is signed into the record as `context.poseTrace`, and drawn against the optical flow of the
+frames themselves.
+
+Natural hand movement over a real three-dimensional scene produces motion the footage should
+agree with: near detail moves the way the gyro says the phone moved. A recapture of a screen
+inherits the screen's horizon rather than the phone's, and a synthetic trace that matches the
+frames has to be fabricated consistently across two independent signals.
+[`src/provenance/poseTrace.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts)
+
+### A raw audio master
+
+Alongside the AAC delivery track, Source Kit writes an uncompressed 16 kHz mono LPCM master,
+converted on-device from the same native buffers that feed the delivery file. Its path and
+hash are signed into the record.
+
+The reason is electrical network frequency. Mains hum at 50 or 60 Hz leaks into any indoor
+recording and fluctuates in a pattern unique to a grid region over time, which makes it a
+timestamp you cannot forge without the grid's own history. Delivery codecs filter exactly
+that band. Capturing the master costs a few megabytes and keeps the analysis possible for as
+long as the file exists. Source Kit does not perform that analysis; it preserves the evidence
+for someone who can. [`modules/capture-kit`](https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit)
+
+### Hardware attestation, welded to the signing key
+
+Signing keys are generated inside the Secure Enclave and cannot be extracted. App Attest
+certifies the device and the app — but Apple gives applications no access to the attested
+key, so there is no direct way to say "and this is the key I sign with."
+
+The workaround is a commitment. Set the App Attest `clientDataHash` to
+`SHA256(challenge ‖ signingPublicKey)`. Apple's nonce extension in the resulting certificate
+then vouches for exactly that key rather than for some key on some genuine device. An
+attestation cannot be lifted from a real phone and pointed at a key someone else controls.
+
+The binding rides inside every manifest, so it can be re-checked offline years later with
+nothing running anywhere. It is the piece I would most like a cryptographer to check.
+[`src/lib/appAttest.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
+
+### Time from somewhere other than the phone
+
+Two independent anchors. An RFC 3161 countersignature from a public timestamp authority,
+verified cryptographically on-device rather than scraped: the message imprint must match, the
+CMS signature must verify over correctly re-tagged signed attributes, the chain must link,
+and the authority's certificate must have been valid at the stated time. And an
+OpenTimestamps receipt, which lands the record's digest in a Bitcoin block and gives a lower
+bound nobody controls.
+
+Offline, the capture signs without either and the record says the anchor is missing. Queued
+anchors record their own delay rather than backdating.
+[`timestamp.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts) · [`ots.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts)
+
+### A second signature, for later
+
+Every record carries an ML-DSA-65 signature over the same commitment as the ECDSA one. If
+P-256 is broken in twenty years, an archive sealed today does not quietly become
+unverifiable. [`src/lib/pq.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/pq.ts)
+
+### Deciding what travels, at the shutter
+
+Every signal is a live toggle in the viewfinder, so the decision happens in context rather
+than in a settings screen from months earlier. What is switched off is recorded as
+deliberately absent, a different and more useful fact than silently missing.
+
+Each field is also committed under its own salt, derived from one master seed, into a Merkle
+tree whose root is signed. That gives three states a verifier can tell apart: **disclosed**,
+opened in this bundle and checkable against the root; **withheld**, committed but absent,
+with no ciphertext to attack because nothing was encrypted; and **never-recorded**, declared
+at capture time and bound into the root, so a withheld field cannot later be relabelled as
+one that never existed.
+
+You can reveal a single field later and have it verify against the original signature. Or
+destroy the master seed, which makes the withheld fields permanently underivable — by anyone,
+including me. [`src/disclosure`](https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure)
+
+### Checks a person can run, with no model in the loop
+
+Inspect opens any sealed file and renders the signed claims against independent physical
+expectations, then leaves the inference to the reader. From the signed time and place, the
+sun's true elevation and azimuth are deterministic, so the card shows which way shadows
+should fall. The committed gyro attitude predicts where level sits in the frame. The motion
+trace is drawn against the optical flow. The parallax measurement runs on-device from the
+committed second view.
+
+It uploads nothing, runs no classifier and returns no probability. A check that could not run
+says so, and insufficient data reports insufficient.
+
+None of this is a panacea. Any single check falls to someone who knows it is there. What the
+stack restores is friction: forgery becomes a physical production, consistent across
+geometry, optics, motion, audio and time, committed before the forger knew which checks would
+run. Not proof. What photographs used to have.
+[`src/components/forensic`](https://github.com/noah-pi/sourcekit-open/tree/main/src/components/forensic)
+
+### A verdict surface that refuses to be a badge
+
+A checkmark borrows the authority of a body that supposedly did the checking. No such body
+exists here. The result is a ladder of five separate questions, each answered on its own
+terms, with the unreached rungs stating why. Unsigned renders neutral grey rather than red,
+because the absence of a credential is not evidence of tampering.
+
+*Verified*, *authentic* and *trusted* name a conclusion somebody reached, and nothing here
+reaches conclusions, so the interface names the operation instead: *signature mathematically
+valid*, *media unchanged since signing*, *proven tamper*. A test fails the build if a verdict
+word appears in a summary position. [`src/lib/trustLadder.ts`](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts)
+
+### None of it needs a network
+
+Sealing and verifying both complete with the radio off. No accounts, no analytics, no
+launch-time network calls, and no registry address bundled in the app at all. The optional
+calls that exist — a timestamp authority, a Bitcoin anchor, an attestation relay you choose
+and host — are enumerated by name in [`docs/NETWORK.md`](docs/NETWORK.md), and an offline
+capture signs without them and says so.
+
+Apple's Reference Image sends the raw image, sensor signatures and hardware identifiers to
+Private Cloud Compute and returns an authenticated copy. That is a reasonable trade for most
+people. It is not available to someone who cannot afford to be seen talking to a server, and
+that person is who this was built for.
 
 ## Chasing instruments of truth
 
@@ -201,44 +309,6 @@ Sealing and verifying both work with the radio off. No accounts, no analytics, n
 launch-time network calls. Every optional network event is named in
 [`docs/NETWORK.md`](docs/NETWORK.md).
 
-## Tying the signature to the hardware
-
-App Attest certifies that a genuine build is running on genuine hardware. But Apple gives
-apps no access to the attested key, so you cannot simply attest your signing key with it.
-The workaround is a commitment: set the App Attest `clientDataHash` to
-`SHA256(challenge ‖ signingPublicKey)`. Apple's nonce extension in the attestation
-certificate then vouches for *exactly that key*, not merely for some key on some genuine
-device.
-
-The binding rides inside every manifest, so it can be re-checked offline years later with
-nothing running anywhere. `src/lib/appAttest.ts` and `server/server.mjs`.
-
-As far as I can tell this holds, but it's the piece where I'm furthest outside my depth, and
-the one I'd most like a cryptographer to either reuse or tell me is wrong.
-
-## Gap two, in detail
-
-A signature proves custody of bytes. It cannot prove what the lens was pointed at. Shoot
-a monitor showing a generated video and you get a perfectly valid seal over a perfectly
-real recording of a fake scene.
-
-Attestation closes *injection*: substituted frames, virtual camera drivers, forged sensor
-data. It does nothing about *rephotography*: real photons, fake scene. Closing injection
-does not reduce rephotography. It concentrates every attacker on it.
-
-The Cottingley photographs are the clean illustration. Everything here would have
-sealed them: real camera, real plate, cut-outs propped up with hatpins at a real
-distance in real light. Two lenses would measure genuine depth, because there was
-genuine depth. Every rung on the ladder would be reached, and every one would be
-telling the truth. That's the edge of what provenance can do — it speaks to the file,
-never to the world the file depicts.
-
-Rephotography is geometric. A flat screen three metres away is a plane, and two lenses
-with a known baseline can measure that. The stereo capture path and the parallax work
-exist for this reason, and the honest status is in the limits below. Everything in the
-verifier is careful to keep custody and scene separate, because conflating them is how
-this category loses credibility.
-
 ## What you can take
 
 Most of it is platform-neutral TypeScript with no build step.
@@ -254,32 +324,6 @@ Most of it is platform-neutral TypeScript with no build step.
 | `modules/` | The Swift: Secure Enclave keygen and signing, App Attest, the AVFoundation capture engine, the raw-audio sink, the C2PA Rust binding. |
 | `server/` | An App Attest relay in one dependency-free file. Run your own or skip it — offline devices sign unattested and say so. |
 | `tests/` | 27 suites, 769 checks, run against the real shipping code. |
-
-## The interface
-
-This is the part I'm actually qualified for, and I think it matters as much as the
-cryptography: saying what a signature means without overstating it.
-
-The verdict surface is a **ladder, not a badge** — five separate questions, each with its
-own answer, and an unreached rung that says why. There are no seals, shields or checkmarks
-anywhere in the product. A checkmark is an institutional gesture: it works by borrowing the
-authority of some body that has supposedly done the checking, a notary or a ratings board or
-a verification team. No such body exists here, so a badge would be borrowed furniture — and
-the borrowing, rather than the cryptography, would be the dishonest part.
-
-So the card carries its title and limits *inside* the frame, where they survive being
-screenshotted. Unsigned renders neutral grey, never red: the absence of a credential is
-not evidence of tampering, and colouring it like a failure would smuggle in a claim
-nobody checked.
-
-A test fails the build if *verified*, *authentic*, *trusted*, *proven*, *real*, *secure* or
-*guaranteed* turns up in a verdict position. Operations that actually ran keep their precise
-verbs. That test kept the copy honest as the feature count grew, because the pressure to
-round a qualified result up to a confident one is constant, and a fair amount of it came
-from me.
-
-All of it is in `src/theme.ts` and `src/components/`. Lift it if it's useful — none of it is
-specific to this app, and I'd be glad to see it somewhere better engineered.
 
 ## Run the lab
 
