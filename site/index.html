@@ -114,9 +114,6 @@ svg .cl.hi { fill:var(--text); font-weight:700; }
 svg .cn { font-size:10px; font-family:var(--mono); fill:var(--textFaint); }
 svg .cn.hi { fill:var(--accent); font-weight:700; }
 .f-soft2 { fill:var(--textFaint); opacity:.42; }
-.routes { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:var(--s-lg); margin-top:var(--s-xl); padding-top:var(--s-lg); border-top:1px solid var(--border); }
-.routes p { margin:0; font-size:14.5px; color:var(--textDim); line-height:1.5; }
-.rhead { font-size:10.5px !important; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--textFaint) !important; margin-bottom:6px !important; }
 .gname { margin:8px 0 2px; font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--textFaint); }
 .gtag .chip { font-size:9.5px; letter-spacing:0.6px; text-transform:uppercase; font-weight:800; padding:4px 9px; }
 .gap svg { width:100%; max-width:400px; height:auto; display:block; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); }
@@ -294,9 +291,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     </div>
 
     <div style="margin-top:var(--s-xl);max-width:52ch">
-      <h3 style="margin:0 0 6px">How the work is checked</h3>
-      <p style="color:var(--textDim);margin:0 0 var(--s-md)">Every push runs 27 suites and 758 checks, including a differential oracle that runs the hand-rolled C2PA engine against the upstream <code>c2patool</code> on the same corpus and fails on any divergence that is not explicitly whitelisted. The fixtures are in the repo. All 61,000 lines are published under Apache-2.0 — camera, cryptography, native modules, interface, test lab.</p>
-      <div class="cta"><a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a> <a class="btn ghost" href="https://github.com/noah-pi/sourcekit-open/actions">See the checks run</a></div>
+      <h3 style="margin:0 0 6px">An open source proof-of-concept</h3>
+      <p style="color:var(--textDim);margin:0 0 var(--s-md)">All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product designer, not a cryptographer or a career engineer. Everything is here: camera, cryptography, native modules, interface, test suite.</p>
+      <div class="cta"><a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a></div>
     </div>
   </div>
   <div class="phone">
@@ -340,7 +337,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <p>In July 1917 two girls in the Yorkshire village of Cottingley photographed some fairies at the bottom of the garden. The images were examined by Arthur Conan Doyle, who found them persuasive, and by Kodak, which declined to certify them but conceded it could not prove them fake. The fairies were cardboard, copied from a children's book and held up with hatpins. What is striking about the Cottingley affair is not that anyone was fooled but that the question was already understood to be a technical one, a matter for Kodak, rather than a question about two girls and a hatpin.</p>
 
 
-    <p>Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team <a href="https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html">moved a dead soldier forty yards</a> into a rocky niche and leaned a rifle beside him — the wrong rifle, as it turned out, of a type no sharpshooter carried. Soviet censors <a href="https://en.wikipedia.org/wiki/The_Commissar_Vanishes">airbrushed the disgraced out of group portraits</a> for fifty years before Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a skill and an afternoon, and picture desks, wire services and libel law made the attempt more expensive still.</p>
+    <p>Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team <a href="https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html">moved a dead soldier forty yards</a> into a rocky niche and leaned a rifle beside him. Soviet censors <a href="https://en.wikipedia.org/wiki/The_Commissar_Vanishes">airbrushed the disgraced out of group portraits</a> for fifty years before Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a skill and an afternoon, and picture desks, wire services and libel law made the attempt more expensive still.</p>
 
     <p>Generative models did not make images forgeable. They made forgery fast and essentially free.</p>
 
@@ -424,7 +421,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
       <figcaption>Source: NCSL, <i>Artificial Intelligence 2025 Legislation</i>, as of 10 July 2025. Categories collapse NCSL's 24 subject tags; a bill can carry several, so the bars sum past 1,143.</figcaption>
     </figure>
 
-    <p>The contrast underneath those bars is the more interesting finding. Ninety-nine bills on algorithmic accountability produced a single statute, and all twenty-five audit mandates died. Sixty-nine bills tried to stop landlords setting rents with pricing algorithms, and not one passed. Legislators who could not agree on what an algorithm owes a renter had no difficulty agreeing that a fabricated nude is contraband. The impulse is not confined to the United States.</p>
+    <p>The impulse is not confined to the United States. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on August 2, 2026, requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties up to €15 million or 3% of global turnover. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day, China has required labeling of synthetic media since its deep synthesis rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge; the two technical demands underneath them do not.</p>
 
     <h3 class="lawhed">1 / &nbsp;Requiring invisible watermarks on generated media</h3>
     <p>A watermark rides inside what a model generates, and it holds up against ordinary handling. It does not hold up against effort. Regenerating an image through a diffusion model <a href="https://arxiv.org/abs/2408.10446">strips the mark and keeps the picture</a>, one watermark can <a href="https://arxiv.org/abs/2605.16796">overwrite another</a>, and the <a href="https://github.com/guillaumemeyer/watermarks-remover">tools to do it are published</a>. Open-weight models emit nothing to strip in the first place. Detection has the same shape of problem: a classifier chasing a generator gets worse exactly as the generator improves.</p>
@@ -864,13 +861,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <p style="color:var(--textDim)">Most of what is out there will have nothing to show. An interface that displays a credential also displays its absence, and absence is the easiest thing in the world to misread. A photograph with no manifest is not a lie. It is a photograph taken on an older phone, or run through an editor that dropped the metadata, or sent by someone with good reasons not to carry a record of where they were standing.</p>
     <p style="color:var(--textDim)">Which leaves the question the art dealers never solved either. A file can arrive with a spotless history and still be a picture of cardboard fairies on hatpins, and nothing in the record will say so. Provenance establishes that a file is what it claims to be. The harder question goes back to a person, where it has always been — the reader's, and the desk's.</p>
     <p style="color:var(--textDim)">None of this solves misinformation. What it offers is narrower: a way for an honest photographer to show their work, and one more expense for everybody else.</p>
-    <p style="font-weight:600;margin-bottom:4px">— Noah Bassetti-Blum</p>
-    <p class="note" style="margin:0 0 var(--s-md)">A journalist turned product designer, not a cryptographer or a career engineer. Which is why everything above is checked by something other than my word for it.</p>
-    <div class="routes">
-      <div><p class="rhead">Photographers</p><p><a href="https://testflight.apple.com/join/cRuRw2MN">Install the TestFlight build</a> and shoot something. Everything is off by default until you switch it on.</p></div>
-      <div><p class="rhead">Newsrooms</p><p><a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">Read the threat model</a> first. It lists 25 scenarios and says which ones this does not cover.</p></div>
-      <div><p class="rhead">Developers</p><p><a href="https://github.com/noah-pi/sourcekit-open">Fork the repo</a>, or lift the C2PA engine on its own — it has no dependency on the app.</p></div>
-    </div>
+    <p style="font-weight:600">— Noah Bassetti-Blum</p>
     <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a>
       <a class="btn ghost" href="https://www.filmnoah.com">Personal site</a>

@@ -30,12 +30,11 @@ manifest. It works without a network, and it can be checked with any C2PA tool.
 Secure Enclave and App Attest need real hardware. The simulator falls back to a software key
 and says so.
 
-## How the work is checked
+## An open source proof-of-concept
 
-Every push runs 27 suites and 758 checks, including a differential oracle that runs the hand-
-rolled C2PA engine against the upstream `c2patool` on the same corpus and fails on any
-divergence that is not explicitly whitelisted. The fixtures are in the repo. All 61,000 lines
-are published under Apache-2.0 — camera, cryptography, native modules, interface, test lab.
+All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product
+designer, not a cryptographer or a career engineer. Everything is here: camera, cryptography,
+native modules, interface, test suite.
 
 ## A photograph has never been proof
 
@@ -86,11 +85,15 @@ states wrote for their own agencies.
 Source: NCSL, *Artificial Intelligence 2025 Legislation*, as of 10 July 2025. Categories
 collapse NCSL's 24 subject tags; a bill can carry several, so the counts sum past 1,143.
 
-The contrast underneath those bars is the more interesting finding. Ninety-nine bills on
-algorithmic accountability produced a single statute, and all twenty-five audit mandates died.
-Sixty-nine bills tried to stop landlords setting rents with pricing algorithms, and not one
-passed. Legislators who could not agree on what an algorithm owes a renter had no difficulty
-agreeing that a fabricated nude is contraband. The impulse is not confined to the United States.
+The impulse is not confined to the United States. The [EU AI Act's Article
+50](https://artificialintelligenceact.eu/article/50/) became applicable on August 2, 2026,
+requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties
+up to €15 million or 3% of global turnover. [California's AI Transparency
+Act](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942) took
+effect the same day, China has required labeling of synthetic media since its deep synthesis
+rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and
+Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge;
+the two technical demands underneath them do not.
 
 ### 1 / Requiring invisible watermarks on generated media
 
