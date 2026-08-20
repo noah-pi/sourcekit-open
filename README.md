@@ -429,60 +429,22 @@ however good the hardware gets.
 A file that can prove where it came from can also prove where you were.
 
 A wedding photographer wants every field filled in. A photographer at a protest wants the frame
-and nothing else: the same GPS fix that corroborates a story for a picture desk will place a
-named person at a named corner on a named afternoon, and once the file is shared it cannot be
-recalled. A newsroom byline that vouches for one photograph identifies that photographer in
-every other one they sign. There is no setting that is correct for both, which is why each of
-these is switchable in the viewfinder rather than chosen once.
+and nothing else, because the GPS fix that corroborates a story for a picture desk also places a
+named person at a named corner on a named afternoon. There is no setting that is right for both,
+so the choice gets made twice: once at the shutter, and again at export.
 
-## The shutter path
+Both are the same mechanism. Every field is committed under its own salt into a Merkle tree, and
+the signature covers the root rather than the values — which is what makes three states
+distinguishable to a verifier instead of a matter of trust. A field can be **disclosed**,
+present and checkable. It can be **withheld**: committed at capture, absent from the file, with
+no ciphertext for anyone to attack later. Or it can be **never-recorded**, declared at capture
+and bound into the root, so the file carries proof that the sensor was off.
 
-Six things happen on the device before the file exists.
-
-| | | |
-|---|---|---|
-| 1 | **Hash the exact bytes.** SHA-256, chunked, so verifying a video never loads it whole. | `src/lib/fileHash.ts` |
-| 2 | **Record what the sensors said.** Time, GPS (opt-in), heading, barometric altitude, a motion signal. | `src/sensors/` |
-| 3 | **Sign in the Secure Enclave.** ECDSA P-256. The key is generated on the chip and can't leave it; signing happens there, not in app memory. | `src/lib/deviceKey.ts`, `modules/secure-enclave/` |
-| 4 | **Write Content Credentials into the file.** A real C2PA manifest — CBOR claim, hard binding, COSE_Sign1 — inside the JPEG, PNG, MP4, MOV or M4A. CI checks on every run that `c2patool` reads it. | `src/c2pa/` |
-| 5 | **Sign it again, post-quantum.** ML-DSA-65 over the same commitment, so a future break of P-256 doesn't quietly invalidate an archive. | `src/lib/pq.ts` |
-| 6 | **Anchor the time.** RFC 3161 when there's a network, OpenTimestamps for independent proof-of-existence. Offline it signs without, and says so. | `src/lib/timestamp.ts`, `src/lib/ots.ts` |
-
-Sealing and verifying both work with the radio off. No accounts, no analytics, no
-launch-time network calls. Every optional network event is named in
-[`docs/NETWORK.md`](docs/NETWORK.md).
-
-## What you can take
-
-Most of it is platform-neutral TypeScript with no build step.
-
-| Path | What it is |
-|---|---|
-| `src/c2pa/` | A complete, dependency-light C2PA implementation: CBOR claims, COSE_Sign1, JPEG APP11/JUMBF, PNG `caBX`, BMFF/MP4 embedding with chunk-offset repair, and the verifier. Cross-checked against `c2patool` on every CI run. Probably the most reusable thing here. |
-| `src/lib/` | Crypto plumbing, pure TS: a strict X.509 chain verifier, RFC 3161 tokens, COSE/DER, ECDSA, the ML-DSA-65 layer, AES-256-GCM, canonical JSON. No WebCrypto, no network. |
-| `src/provenance/` | Capture → sealed record: orchestration, schema, background seal queue, detached manifests, and a differential oracle that runs two independent engines against each other and flags disagreement. |
-| `src/disclosure/` | Commit every field at capture, reveal them individually later, without breaking the original signature. |
-| `src/vault/` | Encrypted storage. Media, records and thumbnails all sealed; plaintext exists only in a cache folder shredded on lock. |
-| `src/theme.ts`, `src/components/`, `app/` | The whole interface — tokens, UI kit, screens. |
-| `modules/` | The Swift: Secure Enclave keygen and signing, App Attest, the AVFoundation capture engine, the raw-audio sink, the C2PA Rust binding. |
-| `server/` | An App Attest relay in one dependency-free file. Run your own or skip it — offline devices sign unattested and say so. |
-| `tests/` | 27 suites, 769 checks, run against the real shipping code. |
-
-## Run the lab
-
-```sh
-node tests/stage.mjs
-cd tests/.staged && npm install
-./node_modules/.bin/tsx test-verification.mts     # → 146 passed, 0 failed
-```
-
-Staging rewires only device services — keychain, filesystem, device model — to small
-shims. Every cryptographic operation is the code that runs on the phone. The suites
-sign fresh media with a random key each run, then attack it: flipped bits, transplanted
-manifests, a self-issued "O=Reuters" certificate, truncated files, hostile parsers.
-
-With `c2patool` on your path the independent-verifier checks run too. Without it they
-report `SKIP` and are counted separately.
+That last state is the one that matters under pressure. A file with the location redacted
+invites the question of what was removed and why. A file that never recorded a location can
+demonstrate as much to anyone who asks, cryptographically, without asking to be believed. And a
+field withheld today can be revealed years later and still verify against the original signature
+— or the seed can be destroyed, and it becomes permanently underivable by anyone, including me.
 
 ## Things I have not built yet
 

@@ -793,7 +793,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 <section class="block" id="signals"><div class="wrap">
   <h2>The danger in a permanent record of everything</h2>
   <p class="dek">A file that can prove where it came from can also prove where you were.</p>
-  <div class="col" style="margin-bottom:var(--s-xl)"><p>A wedding photographer wants every field filled in. A photographer at a protest wants the frame and nothing else: the same GPS fix that corroborates a story for a picture desk will place a named person at a named corner on a named afternoon, and once the file is shared it cannot be recalled. A newsroom byline that vouches for one photograph identifies that photographer in every other one they sign. There is no setting that is correct for both, which is why each of these is switchable in the viewfinder, not chosen once.</p></div>
+  <div class="col" style="margin-bottom:var(--s-xl)"><p>A wedding photographer wants every field filled in. A photographer at a protest wants the frame and nothing else, because the GPS fix that corroborates a story for a picture desk also places a named person at a named corner on a named afternoon. There is no setting that is right for both, so the choice gets made twice: once at the shutter, and again at export.</p>
+    <p>Both are the same mechanism. Every field is committed under its own salt into a Merkle tree, and the signature covers the root rather than the values — which is what makes three states distinguishable to a verifier instead of a matter of trust. A field can be <b>disclosed</b>, present and checkable. It can be <b>withheld</b>: committed at capture, absent from the file, with no ciphertext for anyone to attack later. Or it can be <b>never-recorded</b>, declared at capture and bound into the root, so the file carries proof that the sensor was off.</p>
+    <p>That last state is the one that matters under pressure. A file with the location redacted invites the question of what was removed and why. A file that never recorded a location can demonstrate as much to anyone who asks, cryptographically, without asking to be believed. And a field withheld today can be revealed years later and still verify against the original signature — or the seed can be destroyed, and it becomes permanently underivable by anyone, including me.</p></div>
 
   <div style="max-width:300px;margin:0 0 var(--s-xl)">
       <div class="phone sm">
@@ -831,7 +833,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     </tbody>
   </table></div>
 
-  <p class="note" style="margin-top:var(--s-lg)">Apple's Reference Image asks whether the silicon vouches for the frame; Source Kit asks what else was true in the room. Where a platform credential exists, it goes into the manifest as one more ingredient.</p>
+  
 </div></section>
 
 
