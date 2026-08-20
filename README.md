@@ -43,16 +43,16 @@ All of it optional, all of it switchable in the viewfinder, all of it readable b
 <details>
 <summary><b>Hardware attestation</b> — proof the key is held somewhere you cannot reach into</summary>
 
-This would be much stronger on a Pixel 10, where the signing key is generated inside the Titan
-M2, never leaves it, and the phone proves as much to the certificate authority at enrollment. On
-Apple the best available is App Attest, which certifies that a genuine iPhone is running an
-unmodified build of this app — and then hands the app no access at all to the key it just
+Hardware attestation is much stronger on a Pixel 10, where the signing key is generated inside
+the Titan M2, never leaves it, and the phone proves as much to the certificate authority at
+enrollment. On Apple the best available is App Attest, which certifies that a genuine iPhone is
+running an unmodified build of this app, and then hands it no access to the key it just
 attested.
 
 The two get tied together with a commitment. The attestation's `clientDataHash` is set to
 `SHA256(challenge ‖ signingPublicKey)`, which pins Apple's certificate to this exact key rather
-than to some key on some genuine device. The binding rides inside every manifest and re-checks
-offline years later. [appAttest.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
+than to some key on some genuine device. The binding travels inside every manifest, and anyone
+can recompute it offline years later. [appAttest.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
 
 </details>
 
@@ -61,14 +61,12 @@ offline years later. [appAttest.ts](https://github.com/noah-pi/sourcekit-open/bl
 
 Time is the rare claim that can be proved rather than asserted, because it only moves forward.
 Nobody can place a digest in a Bitcoin block mined before the file existed, and no timestamp
-authority will countersign something it has not yet been shown. That one-way property is the
-whole mechanism.
+authority will countersign something it has not yet been shown.
 
-So a capture carries an RFC 3161 countersignature — verified cryptographically on device rather
-than read off the token — and an OpenTimestamps receipt that lands the record's digest in a
-block. Newer hardware does this without leaving the phone: the Pixel 10 runs a timestamp
-authority on the device itself, so a capture made in airplane mode still carries trusted time.
-Here, offline, the capture signs anyway and names the anchor it is missing.
+So a capture carries an RFC 3161 countersignature, verified cryptographically on device instead
+of read off the token, and an OpenTimestamps receipt that lands the record's digest in a block.
+Newer hardware does this without leaving the phone: the Pixel 10 runs a timestamp authority on
+the device itself, so a capture made in airplane mode still carries trusted time.
 [timestamp.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts) ·
 [ots.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts)
 
@@ -77,10 +75,10 @@ Here, offline, the capture signs anyway and names the anchor it is missing.
 <details>
 <summary><b>Organizational credentials</b> — optional. the only thing that can attach a name to a key</summary>
 
-A self-signed device key proves consistency and nothing about who you are, and nothing inside
-the file can fix that. An organization can, by issuing a certificate for the device's public key
-— which never requires the private key to leave the Secure Enclave. Every signature then chains
-into the newsroom instead of into itself.
+A self-signed device key proves consistency and nothing about who you are. An organization can
+supply the missing half by issuing a certificate for the device's public key, which never
+requires the private key to leave the Secure Enclave. Every signature then chains into the
+newsroom instead of into itself.
 
 There is a hands-off version: an organization publishes a static document at `/.well-
 known/sourcekit-org.json` listing member fingerprints and their certificates, and a member
@@ -95,8 +93,9 @@ ignored and flagged. [orgCert.ts](https://github.com/noah-pi/sourcekit-open/blob
 <details>
 <summary><b>A verdict that refuses to be a badge</b> — four questions, four answers, no checkmark</summary>
 
-A checkmark borrows the authority of whoever supposedly did the checking, and there is nobody
-here to borrow from. So the result is four questions, each answered on its own evidence:
+A checkmark borrows the authority of whoever did the checking, and there is nobody here to
+borrow from. So the result is four questions, each answered on its own evidence, and each one a
+rung the file either reaches or does not:
 
 Each rung reads *reached*, *not reached*, *failed*, or *not applicable*, and the unreached ones
 say why. Unsigned renders neutral grey rather than red, because the absence of a credential is
@@ -120,14 +119,13 @@ someone photographing a police stop, a picket line or a border crossing, the sam
 piece of evidence about them, carried in voluntarily and impossible to recall once shared.
 
 So the choosing happens before the shutter, not on export. Every field is committed under its
-own salt into a signed Merkle tree, which lets a verifier tell three states apart:
-**disclosed**, **withheld** — committed but absent, with no ciphertext to attack — and **never-
-recorded**, declared at capture and bound into the root, so a withheld field cannot later be
-passed off as one that was never collected.
+own salt into a signed Merkle tree, which lets a verifier tell three states apart. **Disclosed**
+is what it sounds like. **Withheld** means committed but absent, with no ciphertext for anyone
+to attack. **Never-recorded** is declared at capture and bound into the root, so a field you
+withheld cannot later be passed off as one you never collected.
 
 Reveal a field later and it still verifies against the original signature. Destroy the seed and
-the withheld fields become permanently underivable by anyone, including me. What none of it
-covers is the picture itself: blur a face and the signature breaks.
+the withheld fields become permanently underivable by anyone, including me.
 [src/disclosure](https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure)
 
 </details>
@@ -146,9 +144,9 @@ of a laptop, the glow off an OLED panel — all of it lands in the second view.
 Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a
 scene with real depth differently, and no homography removes the difference. On an iPhone Pro
 they sit [about 19.2 mm apart](https://arxiv.org/pdf/2506.06037), which is enough to measure
-depth out to roughly nine metres from the sealed frame. That is a lot of room, and rephotography
-lives at the near end of it: a monitor filling the frame sits about 60 cm away, nowhere near the
-limit.
+depth out to roughly nine meters from the sealed frame. Rephotography sits at the easy end of
+that range: a monitor filling the frame is about 60 cm from the lens, where the disagreement
+between the two views is large enough to be unmistakable.
 
 Parallax range calculator
 
@@ -159,8 +157,8 @@ horizontal field of view at the analysed width. A patch has to shift by at least
 measurable, so that is the range floor. Below roughly 9 cm the shift exceeds the ±14 px search
 window and matching fails outright.
 
-The card reports the matched-patch count and the median disparity, and leaves the reading to
-you. [MultipleLensCard.tsx](https://github.com/noah-pi/sourcekit-open/blob/main/src/components/forensic/MultipleLensCard.tsx)
+The card reports the matched-patch count and the median disparity.
+[MultipleLensCard.tsx](https://github.com/noah-pi/sourcekit-open/blob/main/src/components/forensic/MultipleLensCard.tsx)
 
 There is an interactive range calculator for this on the [page](https://noah-pi.github.io/sourcekit-open/#glance-sec).
 
@@ -170,14 +168,13 @@ There is an interactive range calculator for this on the [page](https://noah-pi.
 <summary><b>The motion of your hand</b> — nobody holds a phone still, and the wobble is specific</summary>
 
 A window of gyroscope and accelerometer samples from around the shutter rides in the record. Not
-every photograph is handheld — a tripod or a copy stand reads as still, and that is a fine
+every photograph is handheld: a tripod or a copy stand reads as still, which is its own kind of
 answer. But for the ones that are, hand tremor over a second or two is unglamorous and highly
 particular, and a generator does not produce it by accident.
 
 On a video or a burst — an option in the viewfinder — that trace is drawn against the optical
 flow of the frames themselves, so the movement the device felt is checked against the movement
-it saw. Two sensors on two different physical principles, obliged to tell the same story.
-[poseTrace.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts)
+it saw. [poseTrace.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts)
 
 </details>
 
@@ -186,18 +183,17 @@ it saw. Two sensors on two different physical principles, obliged to tell the sa
 
 The device knows which way is down from gravity, and roughly where north is from the
 magnetometer. Together with the fused attitude at the shutter instant, that gives the direction
-the camera was actually pointing — and each of those predicts something visible in the frame:
-where the horizon should sit, and, with the signed time and place, which way shadows should
-fall.
+the camera was actually pointing. Each of those predicts something visible in the frame: where
+the horizon should sit, and, with the signed time and place, which way shadows should fall.
 
 None of this reads the content of the picture. It looks for agreement between what the sensors
 claimed and what the frame shows. A recapture of a screen inherits the screen's horizon rather
 than the phone's.
 
 Any one of these values can be spoofed alone. They are useful together: a forgery has to satisfy
-all of them at once, which is a much harder thing to arrange than any single one. It is a cost
-rather than a wall, and it is the kind of cost that falls as generative systems get better at
-physical consistency. [context.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/sensors/context.ts)
+all of them at once, which is a much harder thing to arrange than any single one. That is a cost
+rather than a wall, and the kind of cost that falls as generative systems get better at physical
+consistency. [context.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/sensors/context.ts)
 
 </details>
 
@@ -205,38 +201,37 @@ physical consistency. [context.ts](https://github.com/noah-pi/sourcekit-open/blo
 <summary><b>A raw audio master</b> — compression discards exactly what makes audio checkable</summary>
 
 Because delivery codecs throw away whatever the ear will not miss, they also throw away what
-forensic work needs. So alongside the compressed track, an uncompressed 16 kHz master is
-converted from the same native buffers and its hash signed into the record.
+forensic work needs. So alongside the compressed track, a PCM master is converted from the same
+native buffers at 16 kHz: not perceptually coded, and resampled low enough to keep the room and
+the mains band while discarding everything above 8 kHz and its hash signed into the record.
 
-The best-known use is the mains hum. Grids run at 50 or 60 Hz and drift in a pattern that is
-shared across a whole region and never repeats, so indoor audio carries a rough timestamp nobody
-can forge without the grid's own history. Matching against a grid database conventionally wants
-[ten minutes or more](https://www.sciencedirect.com/science/article/pii/S2352864823000226) of
-continuous audio; getting there on shorter clips is an open research problem.
+The best-known use is the mains hum. Grids run at 50 or 60 Hz and drift in a pattern shared
+across an entire synchronous interconnection, and no two stretches of it have ever been observed
+to match, so indoor audio carries a rough timestamp nobody can forge without the grid's own
+history. Matching against a grid database conventionally wants [ten minutes or
+more](https://www.sciencedirect.com/science/article/pii/S2352864823000226) of continuous audio;
+getting there on shorter clips is an open research problem.
 
 The more interesting direction is agreement between channels. The same grid frequency that
-modulates the hum also modulates the light — fluorescent and LED fixtures flicker at twice the
-mains rate — so the flicker measured in the picture and the hum measured in the sound are two
-readings of one physical quantity. A track dubbed in later has no particular reason to agree
-with the room it is supposed to have been recorded in. That comparison is a live research area
-rather than a shipped check, and Source Kit does not yet test audio-visual sync itself.
-[capture-kit](https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit)
+modulates the hum also modulates the light: fluorescent tubes, and LED fixtures with unfiltered
+drivers, flicker at twice the mains rate, so the flicker measured in the picture and the hum
+measured in the sound are two readings of one physical quantity. A track dubbed in later has no
+particular reason to agree with the room it is supposed to have been recorded in. The comparison
+is still a research problem. Source Kit seals the raw audio; it does not yet check the two
+channels against each other. [capture-kit](https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit)
 
 </details>
 
 <details>
 <summary><b>Forensic checks any person can run</b> — physics the signed record has to agree with</summary>
 
-A signed timestamp is not only a number. It constrains what the scene is allowed to look like:
-the sun's elevation and azimuth are deterministic from a time and a place, so a low sun and a
-noon timestamp do not add up. The card draws where shadows should fall and lets you compare. The
-committed gyro predicts where level sits in the frame. The motion trace is drawn against the
-optical flow.
+A signed timestamp constrains what the scene is allowed to look like. The sun's elevation and
+azimuth are deterministic from a time and a place, so a low sun and a noon timestamp do not add
+up. The card draws where shadows should fall and lets you compare.
 
-Nothing here returns a score. A detector gives a number nobody can audit, and it gets worse
-exactly as generators improve; this inverts the arrangement, rendering the signed claims against
-independent physical expectations and leaving the judgment to a person. A check that could not
-run says so. [src/components/forensic](https://github.com/noah-pi/sourcekit-open/tree/main/src/components/forensic)
+Nothing here returns a score. The signed claims are rendered against independent physical
+expectations, and a check that could not run says so.
+[src/components/forensic](https://github.com/noah-pi/sourcekit-open/tree/main/src/components/forensic)
 
 </details>
 
@@ -258,9 +253,9 @@ meaning anything. Nobody gets to re-sign the archive later. [pq.ts](https://gith
 <summary><b>Works without a network</b> — sealing and verifying both, with the radio off</summary>
 
 No accounts, no analytics, no launch-time network calls, and no registry address bundled in the
-app. The optional calls that exist — a timestamp authority, a Bitcoin anchor, an organization
-directory you host — are named individually in the docs, and a capture made offline signs anyway
-and says which anchors are missing.
+app. Three optional calls exist: a timestamp authority, a Bitcoin anchor, and an organization
+directory you host. Each is named in the docs, and a capture made offline signs anyway and says
+which anchors are missing.
 
 Apple's Reference Image sends the raw image, sensor signatures and hardware identifiers to
 Private Cloud Compute and returns an authenticated copy. That is a reasonable trade for most
@@ -281,27 +276,28 @@ about the Cottingley affair is not that anyone was fooled but that the question 
 understood to be a technical one, a matter for Kodak, rather than a question about two girls and
 a hatpin.
 
-Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team [carried a
-dead soldier seventy yards](https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html) and
-propped a prop rifle beside him to make a better picture. Soviet censors [airbrushed the
-disgraced out of group portraits](https://en.wikipedia.org/wiki/The_Commissar_Vanishes) for
-fifty years before Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a
-skill and an afternoon, and it was picture desks, wire services and libel law that made it all
-the more expensive to attempt.
+Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team [moved a
+dead soldier forty yards](https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html) into a
+rocky niche and leaned a rifle beside him — the wrong rifle, as it turned out, of a type no
+sharpshooter carried. Soviet censors [airbrushed the disgraced out of group
+portraits](https://en.wikipedia.org/wiki/The_Commissar_Vanishes) for fifty years before
+Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a skill and an afternoon,
+and picture desks, wire services and libel law made the attempt more expensive still.
 
 Generative models did not make images forgeable. They made forgery fast and essentially free.
 
-### Legislatures reached for two mechanisms, and both are now law
+### What the statutes actually demand
 
 Forty-nine states have passed [at least one deepfake
-statute](https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/) since 2019 — 244 enacted in all, 58 of them in 2026 — with forty-eight covering
-sexually explicit deepfakes and thirty-three political ones. The pattern is not American. The
-[EU AI Act's Article 50](https://artificialintelligenceact.eu/article/50/) became applicable on
-2 August 2026, requiring machine-readable marking of AI output and a visible label on deepfakes,
-with penalties up to €15 million or 3% of global turnover. [California's AI Transparency
+statute](https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/) since 2019 — 244 statutes in all, 58 of them in 2026 so far — with forty-eight
+covering sexually explicit deepfakes and thirty-three political ones. The impulse is not
+confined to the United States. The [EU AI Act's Article
+50](https://artificialintelligenceact.eu/article/50/) became applicable on August 2, 2026,
+requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties
+up to €15 million or 3% of global turnover. [California's AI Transparency
 Act](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942) took
-effect the same day, China has required labelling of synthetic media since its deep synthesis
-rules, South Korea criminalised sexual deepfakes without an intent-to-distribute test, and
+effect the same day, China has required labeling of synthetic media since its deep synthesis
+rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and
 Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge;
 the two technical demands underneath them do not.
 
@@ -310,30 +306,30 @@ the two technical demands underneath them do not.
 A watermark rides inside what a model generates, and it holds up against ordinary handling. It
 does not hold up against effort. Regenerating an image through a diffusion model [strips the
 mark and keeps the picture](https://arxiv.org/abs/2408.10446), one watermark can [overwrite
-another](https://arxiv.org/abs/2605.16796), and there is [tooling for it on
-GitHub](https://github.com/guillaumemeyer/watermarks-remover). Open-weight models emit nothing
-to strip in the first place. Detection has the same shape of problem: a classifier chasing a
-generator gets worse exactly as the generator improves.
+another](https://arxiv.org/abs/2605.16796), and the [tools to do it are
+published](https://github.com/guillaumemeyer/watermarks-remover). Open-weight models emit
+nothing to strip in the first place. Detection has the same shape of problem: a classifier
+chasing a generator gets worse exactly as the generator improves.
 
 A watermark can only speak for what a machine made. It says nothing about a photograph, which
 leaves the person holding real footage with nothing to show. Once everyone knows video can be
-faked, real video gets dismissed as fake — a move already run in court by [Tesla's lawyers over
+faked, real video gets dismissed as fake, a move already run in court by [Tesla's lawyers over
 recordings of Elon Musk](https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/) and by [January 6th defendants over
 footage from inside the Capitol](https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/).
 
 ### 2 / Requiring all media to carry tamper-proof data about its provenance
 
 Provenance is a word borrowed from the art trade, where it means the paper trail of a painting's
-owners — the chain of receipts, bills of sale and catalogue entries that says where a canvas has
+owners — the chain of receipts, bills of sale and catalog entries that says where a canvas has
 been since it left the studio. It was never a claim about the painting. A perfect provenance on
 a forgery is a well-documented forgery, and the trade has bought plenty of those. What the paper
 trail does is make lying laborious, because the liar has to manufacture a history rather than an
 object.
 
-The digital version is the same idea with a signature instead of a filing cabinet. Adobe, Arm,
-the BBC, Intel, Microsoft and Truepic founded the [Coalition for Content Provenance and
-Authenticity](https://c2pa.org/) in February 2021, and the first specification followed a year
-later. Instead of examining a file for signs of forgery, seal it at the source so any later
+The digital version is the same idea with a cryptographic signature instead of a filing cabinet.
+Adobe, Arm, the BBC, Intel, Microsoft and Truepic founded the [Coalition for Content Provenance
+and Authenticity](https://c2pa.org/) in February 2021, and the first specification followed a
+year later. Instead of examining a file for signs of forgery, seal it at the source so any later
 change reads as a change. A watermark says a machine was involved. A manifest says which device,
 which moment, and what has happened since.
 
@@ -341,10 +337,6 @@ which moment, and what has happened since.
 
 Between the sensor and the signature there is a stretch of code. How long it is decides what the
 signature is worth.
-
-*Roughly thirty milliseconds separate the photons from the pixels, and every stage of it runs
-before any third-party app is handed anything. A Pixel 10 signs at **A**. Source Kit signs at
-**B**.*
 
 A photograph starts as charge on a grid of sensor wells and ends as a file. Everything in
 between — demosaic, lens correction, noise reduction, tone-map, encode — is code that could hand
@@ -355,13 +347,13 @@ with how much of that chain stands between the photons and the signing.
 protected in software, or keys in hardware with a live attestation from the silicon. The [Pixel
 10](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/) is the
 first phone to reach the second, signing inside the imaging pipeline with the key in the Titan
-M2 — the frame never passes through general-purpose code, so there is no seam where another
-image could be substituted. Qualcomm has the same idea in the Snapdragon secure environment.
-(Dedicated cameras got here first, starting with Leica in 2023; this is a smartphone story now.)
+M2. The frame never passes through general-purpose code, so there is no seam where another image
+could be substituted. Qualcomm has the same idea in the Snapdragon secure environment. Dedicated
+cameras got there first, starting with Leica in 2023.
 
 Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in
 the Secure Enclave, and can attest to nothing upstream of that hand-off. That is the ceiling for
-a third-party app on iOS, which is why it commits more *around* the frame rather than claiming
+a third-party app on iOS, which is why it commits more *around* the frame instead of claiming
 more about it.
 
 ## Where it still comes up short
