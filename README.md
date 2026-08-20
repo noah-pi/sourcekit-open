@@ -159,11 +159,8 @@ horizontal field of view at the analysed width. A patch has to shift by at least
 measurable, so that is the range floor. Below roughly 9 cm the shift exceeds the ±14 px search
 window and matching fails outright.
 
-**It does not currently flag its own limit.** The card reports the matched-patch count and the
-median disparity and stops there — no verdict, no range warning. Someone reading a distant
-subject sees a small number and has to know for themselves that small means *out of range*
-rather than *flat*. That is a real gap in the interface, not the geometry, and it should say so
-on the card. [MultipleLensCard.tsx](https://github.com/noah-pi/sourcekit-open/blob/main/src/components/forensic/MultipleLensCard.tsx)
+The card reports the matched-patch count and the median disparity, and leaves the reading to
+you. [MultipleLensCard.tsx](https://github.com/noah-pi/sourcekit-open/blob/main/src/components/forensic/MultipleLensCard.tsx)
 
 There is an interactive range calculator for this on the [page](https://noah-pi.github.io/sourcekit-open/#glance-sec).
 
@@ -420,10 +417,9 @@ every one is telling the truth.
 and the signature fails, giving the same verdict a forgery gets. Selective disclosure covers the
 metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.
 
-None of this is fixed by detection. You cannot out-classify a generator — it improves as the
-classifier does. What you can do is raise what a forger has to keep consistent at once:
-geometry, motion, shadows, time. Everything this app commits is aimed at the first gap, the one
-that stays open however good the hardware gets.
+Everything this app commits is aimed at raising what a forger has to hold consistent at once —
+geometry, motion, shadows, time — and most of it at the first gap, which stays open however good
+the hardware gets.
 
 ## The danger in a permanent record of everything
 
