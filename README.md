@@ -61,18 +61,40 @@ Generative models did not make images forgeable. They made forgery fast and esse
 
 ### What the statutes actually demand
 
-The [National Conference of State Legislatures](https://www.ncsl.org/technology-and-communication/artificial-intelligence-2026-legislation) counts 1,425 artificial-intelligence
-bills introduced across 49 states so far in 2026. Of those, 312 concern deepfakes or provenance
-— better than one bill in five, in a field that also covers hiring, healthcare, policing and
-procurement. The impulse is not confined to the United States. The [EU AI Act's Article
-50](https://artificialintelligenceact.eu/article/50/) became applicable on August 2, 2026,
-requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties
-up to €15 million or 3% of global turnover. [California's AI Transparency
-Act](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942) took
-effect the same day, China has required labeling of synthetic media since its deep synthesis
-rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and
-Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge;
-the two technical demands underneath them do not.
+The [National Conference of State Legislatures](https://www.ncsl.org/technology-and-communication/artificial-intelligence-2025-legislation) recorded 1,143 artificial-intelligence
+measures across 53 jurisdictions in 2025, and 2026 is already running ahead of that pace. Sorted
+by subject, work on deepfakes, provenance and transparency is second by volume. What matters
+more is that it converts: 44 of those bills became law, more than any group except the rules
+states wrote for their own agencies.
+
+**State AI legislation by subject, 2025**
+
+| Subject | Bills introduced | Laws enacted |
+|---|---:|---:|
+| Commercial AI and consumer protection | 473 | 41 |
+| **Deepfakes, provenance, transparency** | **319** | **44** |
+| Government and court use of AI | 267 | 53 |
+| Risk management, audits, governance | 203 | 14 |
+| Schools and AI workforce training | 199 | 24 |
+| Health care and insurance | 152 | 19 |
+| Task forces and studies | 141 | 21 |
+| Jobs, hiring, the workplace | 119 | 11 |
+| Budgets and tax incentives | 118 | 28 |
+| Housing and rent-setting | 69 | 0 |
+| Energy and data centers | 35 | 3 |
+
+Source: NCSL, *Artificial Intelligence 2025 Legislation*, as of 10 July 2025. Categories
+collapse NCSL's 24 subject tags; a bill can carry several, so the counts sum past 1,143. "Laws
+enacted" excludes 52 adopted resolutions. The deepfakes group is the union of five tags —
+criminal use, child pornography, elections, provenance, notification — and about half the
+notification bills concern chatbot and insurer disclosure rather than synthetic media. Read
+narrowly, the group is 253 introduced and 38 enacted.
+
+The contrast underneath those bars is the more interesting finding. Ninety-nine bills on
+algorithmic accountability produced a single statute, and all twenty-five audit mandates died.
+Sixty-nine bills tried to stop landlords setting rents with pricing algorithms, and not one
+passed. Legislators who could not agree on what an algorithm owes a renter had no difficulty
+agreeing that a fabricated nude is contraband. The impulse is not confined to the United States.
 
 ### 1 / Requiring invisible watermarks on generated media
 

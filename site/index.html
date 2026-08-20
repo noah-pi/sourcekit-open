@@ -105,6 +105,15 @@ section.block { padding:var(--s-xxl) 0; border-top:1px solid var(--border); scro
 .grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:var(--s-md); }
 .gaps { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-xl) var(--s-xl); margin-top:var(--s-xl); }
 .gtag { margin:var(--s-md) 0 0; }
+.chartfig { margin:var(--s-lg) 0 var(--s-xl); }
+.chartfig svg { width:100%; height:auto; display:block; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s-md) var(--s-md) var(--s-sm); box-sizing:border-box; }
+.chart-title { font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--textFaint); margin:0 0 var(--s-sm); }
+.chartfig figcaption { font-size:11.5px; line-height:1.55; color:var(--textFaint); margin-top:var(--s-sm); max-width:none; }
+svg .cl { font-size:10.5px; fill:var(--textDim); }
+svg .cl.hi { fill:var(--text); font-weight:700; }
+svg .cn { font-size:10px; font-family:var(--mono); fill:var(--textFaint); }
+svg .cn.hi { fill:var(--accent); font-weight:700; }
+.f-soft2 { fill:var(--textFaint); opacity:.42; }
 .routes { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:var(--s-lg); margin-top:var(--s-xl); padding-top:var(--s-lg); border-top:1px solid var(--border); }
 .routes p { margin:0; font-size:14.5px; color:var(--textDim); line-height:1.5; }
 .rhead { font-size:10.5px !important; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--textFaint) !important; margin-bottom:6px !important; }
@@ -336,7 +345,86 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <p>Generative models did not make images forgeable. They made forgery fast and essentially free.</p>
 
     <h3 class="lawhed">What the statutes actually demand</h3>
-    <p>The <a href="https://www.ncsl.org/technology-and-communication/artificial-intelligence-2026-legislation">National Conference of State Legislatures</a> counts 1,425 artificial-intelligence bills introduced across 49 states so far in 2026. Of those, 312 concern deepfakes or provenance — better than one bill in five, in a field that also covers hiring, healthcare, policing and procurement. The impulse is not confined to the United States. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on August 2, 2026, requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties up to €15 million or 3% of global turnover. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day, China has required labeling of synthetic media since its deep synthesis rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge; the two technical demands underneath them do not.</p>
+    <p>The <a href="https://www.ncsl.org/technology-and-communication/artificial-intelligence-2025-legislation">National Conference of State Legislatures</a> recorded 1,143 artificial-intelligence measures across 53 jurisdictions in 2025, and 2026 is already running ahead of that pace. Sorted by subject, work on deepfakes, provenance and transparency is second by volume. What matters more is that it converts: 44 of those bills became law, more than any group except the rules states wrote for their own agencies.</p>
+
+    <figure class="chartfig">
+      <p class="chart-title">State AI legislation by subject, 2025</p>
+      <svg viewBox="0 0 700 496" role="img" aria-label="Horizontal bar chart of 2025 state artificial-intelligence bills by subject, showing bills introduced against laws enacted. Deepfakes, provenance and transparency is second by volume with 319 introduced and 44 enacted. Housing and rent-setting shows 69 introduced and none enacted.">
+        <rect x="240" y="14" width="20" height="9" rx="2" class="f-soft2"/>
+        <text x="266" y="22" class="cl">Bills introduced</text>
+        <rect x="368" y="14" width="20" height="9" rx="2" class="s-ac"/>
+        <text x="394" y="22" class="cl">Laws enacted</text>
+        <line x1="240.0" y1="38" x2="240.0" y2="454" class="k-line" stroke-width="1"/>
+        <text x="240.0" y="472" text-anchor="middle" class="cn">0</text>
+        <line x1="324.0" y1="38" x2="324.0" y2="454" class="k-line" stroke-width="1"/>
+        <text x="324.0" y="472" text-anchor="middle" class="cn">100</text>
+        <line x1="408.0" y1="38" x2="408.0" y2="454" class="k-line" stroke-width="1"/>
+        <text x="408.0" y="472" text-anchor="middle" class="cn">200</text>
+        <line x1="492.0" y1="38" x2="492.0" y2="454" class="k-line" stroke-width="1"/>
+        <text x="492.0" y="472" text-anchor="middle" class="cn">300</text>
+        <line x1="576.0" y1="38" x2="576.0" y2="454" class="k-line" stroke-width="1"/>
+        <text x="576.0" y="472" text-anchor="middle" class="cn">400</text>
+        <line x1="660.0" y1="38" x2="660.0" y2="454" class="k-line" stroke-width="1"/>
+        <text x="660.0" y="472" text-anchor="middle" class="cn">500</text>
+        <text x="232" y="57" text-anchor="end" class="cl">Commercial AI and consumer protection</text>
+        <rect x="240" y="44" width="397.3" height="11" rx="2" class="f-soft2"/>
+        <text x="643.3" y="53" class="cn">473</text>
+        <rect x="240" y="58" width="34.4" height="11" rx="2" class="s-ac"/>
+        <text x="280.4" y="67" class="cn">41</text>
+        <text x="232" y="95" text-anchor="end" class="cl hi">Deepfakes, provenance, transparency</text>
+        <rect x="240" y="82" width="268.0" height="11" rx="2" class="f-soft2"/>
+        <text x="514.0" y="91" class="cn">319</text>
+        <rect x="240" y="96" width="37.0" height="11" rx="2" class="s-ac"/>
+        <text x="283.0" y="105" class="cn hi">44</text>
+        <text x="232" y="133" text-anchor="end" class="cl">Government and court use of AI</text>
+        <rect x="240" y="120" width="224.3" height="11" rx="2" class="f-soft2"/>
+        <text x="470.3" y="129" class="cn">267</text>
+        <rect x="240" y="134" width="44.5" height="11" rx="2" class="s-ac"/>
+        <text x="290.5" y="143" class="cn">53</text>
+        <text x="232" y="171" text-anchor="end" class="cl">Risk management, audits, governance</text>
+        <rect x="240" y="158" width="170.5" height="11" rx="2" class="f-soft2"/>
+        <text x="416.5" y="167" class="cn">203</text>
+        <rect x="240" y="172" width="11.8" height="11" rx="2" class="s-ac"/>
+        <text x="257.8" y="181" class="cn">14</text>
+        <text x="232" y="209" text-anchor="end" class="cl">Schools and AI workforce training</text>
+        <rect x="240" y="196" width="167.2" height="11" rx="2" class="f-soft2"/>
+        <text x="413.2" y="205" class="cn">199</text>
+        <rect x="240" y="210" width="20.2" height="11" rx="2" class="s-ac"/>
+        <text x="266.2" y="219" class="cn">24</text>
+        <text x="232" y="247" text-anchor="end" class="cl">Health care and insurance</text>
+        <rect x="240" y="234" width="127.7" height="11" rx="2" class="f-soft2"/>
+        <text x="373.7" y="243" class="cn">152</text>
+        <rect x="240" y="248" width="16.0" height="11" rx="2" class="s-ac"/>
+        <text x="262.0" y="257" class="cn">19</text>
+        <text x="232" y="285" text-anchor="end" class="cl">Task forces and studies</text>
+        <rect x="240" y="272" width="118.4" height="11" rx="2" class="f-soft2"/>
+        <text x="364.4" y="281" class="cn">141</text>
+        <rect x="240" y="286" width="17.6" height="11" rx="2" class="s-ac"/>
+        <text x="263.6" y="295" class="cn">21</text>
+        <text x="232" y="323" text-anchor="end" class="cl">Jobs, hiring, the workplace</text>
+        <rect x="240" y="310" width="100.0" height="11" rx="2" class="f-soft2"/>
+        <text x="346.0" y="319" class="cn">119</text>
+        <rect x="240" y="324" width="9.2" height="11" rx="2" class="s-ac"/>
+        <text x="255.2" y="333" class="cn">11</text>
+        <text x="232" y="361" text-anchor="end" class="cl">Budgets and tax incentives</text>
+        <rect x="240" y="348" width="99.1" height="11" rx="2" class="f-soft2"/>
+        <text x="345.1" y="357" class="cn">118</text>
+        <rect x="240" y="362" width="23.5" height="11" rx="2" class="s-ac"/>
+        <text x="269.5" y="371" class="cn">28</text>
+        <text x="232" y="399" text-anchor="end" class="cl">Housing and rent-setting</text>
+        <rect x="240" y="386" width="58.0" height="11" rx="2" class="f-soft2"/>
+        <text x="304.0" y="395" class="cn">69</text>
+        <text x="248.0" y="409" class="cn">0</text>
+        <text x="232" y="437" text-anchor="end" class="cl">Energy and data centers</text>
+        <rect x="240" y="424" width="29.4" height="11" rx="2" class="f-soft2"/>
+        <text x="275.4" y="433" class="cn">35</text>
+        <rect x="240" y="438" width="2.5" height="11" rx="2" class="s-ac"/>
+        <text x="248.5" y="447" class="cn">3</text>
+        </svg>
+      <figcaption>Source: NCSL, <i>Artificial Intelligence 2025 Legislation</i>, as of 10 July 2025. Categories collapse NCSL's 24 subject tags; a bill can carry several, so the bars sum past 1,143. "Laws enacted" excludes 52 adopted resolutions. The deepfakes group is the union of five tags — criminal use, child pornography, elections, provenance, notification — and about half the notification bills concern chatbot and insurer disclosure rather than synthetic media. Read narrowly, the group is 253 introduced and 38 enacted.</figcaption>
+    </figure>
+
+    <p>The contrast underneath those bars is the more interesting finding. Ninety-nine bills on algorithmic accountability produced a single statute, and all twenty-five audit mandates died. Sixty-nine bills tried to stop landlords setting rents with pricing algorithms, and not one passed. Legislators who could not agree on what an algorithm owes a renter had no difficulty agreeing that a fabricated nude is contraband. The impulse is not confined to the United States.</p>
 
     <h3 class="lawhed">1 / &nbsp;Requiring invisible watermarks on generated media</h3>
     <p>A watermark rides inside what a model generates, and it holds up against ordinary handling. It does not hold up against effort. Regenerating an image through a diffusion model <a href="https://arxiv.org/abs/2408.10446">strips the mark and keeps the picture</a>, one watermark can <a href="https://arxiv.org/abs/2605.16796">overwrite another</a>, and the <a href="https://github.com/guillaumemeyer/watermarks-remover">tools to do it are published</a>. Open-weight models emit nothing to strip in the first place. Detection has the same shape of problem: a classifier chasing a generator gets worse exactly as the generator improves.</p>
