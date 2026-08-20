@@ -7,6 +7,6 @@
 
 export { ForensicCard, ForensicMono, NotRecorded } from './ForensicCard';
 export { MultipleLensCard, type SecondaryFrameRef } from './MultipleLensCard';
-export { MotionTraceCard } from './MotionTraceCard';
+export { MotionTraceCard, VideoMotionCard } from './MotionTraceCard';
 export { EnvironmentCard } from './EnvironmentCard';
 export { RawAudioCard, type EnfAnchor } from './RawAudioCard';

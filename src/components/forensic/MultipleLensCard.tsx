@@ -17,9 +17,8 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, PanResponder, ScrollView, Pressable } from 'react-native';
 import { Image } from 'expo-image';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { getThumbnailAsync } from 'expo-video-thumbnails';
 
 import * as FileSystem from 'expo-file-system/legacy';
@@ -44,21 +43,86 @@ type ParallaxState =
   | { state: 'done'; result: ParallaxResult }
   | { state: 'unavailable' };
 
-/** The primary view: the photo itself, or the paused video surface. */
-function PrimaryView({ kind, uri, style }: { kind: 'photo' | 'video'; uri: string; style: object }) {
-  if (kind === 'video') return <VideoPrimary uri={uri} style={style} />;
+/** The primary view: the photo itself, or — for video — a thumbnail
+    extracted at the pair's primary PTS anchor. (0.18.6 field fix: a
+    paused VideoView sat at frame 0 and rendered BLACK for the whole
+    blend box, so the slider blended the second camera against nothing.
+    A thumbnail is also exactly what the parallax measurement below
+    compares against — one frame, both uses.) */
+function PrimaryView({ kind, uri, atSeconds, style }: {
+  kind: 'photo' | 'video';
+  uri: string;
+  atSeconds?: number | null;
+  style: object;
+}) {
+  if (kind === 'video') return <VideoPrimary uri={uri} atSeconds={atSeconds ?? 0} style={style} />;
   return <Image source={{ uri }} style={style} contentFit="cover" />;
 }
 
-function VideoPrimary({ uri, style }: { uri: string; style: object }) {
-  const player = useVideoPlayer(uri, (p) => {
-    p.loop = false;
-    p.muted = true;
-  });
-  return <VideoView player={player} style={style} contentFit="cover" nativeControls={false} />;
+function VideoPrimary({ uri, atSeconds, style }: { uri: string; atSeconds: number; style: object }) {
+  const [thumbUri, setThumbUri] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getThumbnailAsync(uri, { time: Math.max(0, Math.round(atSeconds * 1000)) })
+      .then((t) => { if (!cancelled) setThumbUri(t.uri); })
+      .catch(() => { if (!cancelled) setThumbUri(null); });
+    return () => { cancelled = true; };
+  }, [uri, atSeconds]);
+  if (!thumbUri) return <View style={style} />;
+  return <Image source={{ uri: thumbUri }} style={style} contentFit="cover" />;
 }
 
-export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFrameTimeSeconds, recordError }: {
+/** One committed video pair frame for the filmstrip (0.18.5 post-field). */
+export interface VideoPairFrameRef {
+  frame: SecondaryFrameRef;
+  /** The capture-side pair sequence number — the label, never a time claim. */
+  pairIndex: number;
+  /** The pair's primary PTS anchor (s) when the record carries it — the
+      moment the blend/parallax primary frame is pulled from when this
+      pair is selected. Null → unknown, the first frame is used. */
+  ptsSeconds?: number | null;
+}
+
+/** A video pair frame materialized to cache once (expo-image caches decodes
+    by URI — the path keys on the committed sha256, same discipline as the
+    compare view's frame). */
+function FilmstripThumb({ frameRef, selected, onSelect }: {
+  frameRef: VideoPairFrameRef;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const styles = useThemedStyles(buildStyles);
+  const [uri, setUri] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const key = (frameRef.frame.sha256?.slice(0, 16)
+      ?? `${frameRef.frame.dataBase64.length}-${frameRef.frame.dataBase64.slice(0, 24)}`)
+      .replace(/[^A-Za-z0-9-]/g, '');
+    const path = `${FileSystem.cacheDirectory}forensic-video-pair-${key}.jpg`;
+    writeFileBytes(path, base64ToBytes(frameRef.frame.dataBase64))
+      .then(() => { if (!cancelled) setUri(path); })
+      .catch(() => { if (!cancelled) setUri(null); });
+    return () => { cancelled = true; };
+  }, [frameRef]);
+  return (
+    // 0.18.6 (Noah): the strip frames are tappable — a tap swaps THAT
+    // pair into the blend view + parallax above.
+    <Pressable
+      style={({ pressed }) => [styles.stripItem, pressed && { opacity: 0.7 }]}
+      onPress={onSelect}
+      accessibilityLabel={`Show pair ${frameRef.pairIndex} in the compare view`}
+    >
+      {uri ? (
+        <Image source={{ uri }} style={[styles.stripImage, selected && styles.stripImageSelected]} contentFit="cover" />
+      ) : (
+        <View style={[styles.stripImage, selected && styles.stripImageSelected]} />
+      )}
+      <Text style={styles.stripLabel}>{`pair #${frameRef.pairIndex}`}</Text>
+    </Pressable>
+  );
+}
+
+export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFrameTimeSeconds, recordError, videoFrames }: {
   kind: 'photo' | 'video' | 'audio';
   /** The decrypted media URI — the primary view (photo or video). */
   primaryUri: string | null;
@@ -70,10 +134,23 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   /** The committed native error string when the sink was enabled but failed
       at capture — a failure, stated as one (never "Not recorded"). */
   recordError?: string | null;
+  /** Video only (0.18.5 post-field): every committed pair frame — the
+      second camera's view ACROSS the take, not only the compared moment. */
+  videoFrames?: VideoPairFrameRef[] | null;
 }) {
   const styles = useThemedStyles(buildStyles);
   // 0 = primary only, 1 = secondary fully blended over the primary.
   const [mix, setMix] = useState(0.5);
+  // 0.18.6 (Noah): which take pair the blend view shows. Null → the
+  // card's own secondaryFrame (the first recorded pair). A filmstrip tap
+  // swaps the pair in — frame AND its PTS anchor.
+  const [activePair, setActivePair] = useState<number | null>(null);
+  useEffect(() => { setActivePair(null); }, [secondaryFrame]);
+  const activeRef = activePair != null
+    ? (videoFrames ?? []).find((f) => f.pairIndex === activePair) ?? null
+    : null;
+  const shownFrame = activeRef?.frame ?? secondaryFrame;
+  const shownPtsSeconds = (activeRef?.ptsSeconds ?? primaryFrameTimeSeconds) ?? null;
   const trackW = useRef(0);
   const mixRef = useRef(0.5);
   const [parallax, setParallax] = useState<ParallaxState>({ state: 'computing' });
@@ -84,20 +161,25 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   const [secondaryUri, setSecondaryUri] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    if (!secondaryFrame) {
+    if (!shownFrame) {
       setSecondaryUri(null);
       return;
     }
-    // The materialized path must be UNIQUE per
+    // 0.18.5 stale-frame fix: the materialized path must be UNIQUE per
     // frame — expo-image caches decodes by URI, so a constant path showed
     // the FIRST exhibit's secondary frame on every later exhibit (the
     // bytes on disk were correct; the decode cache was not). Key the file
     // by the committed sha256; fall back to a cheap content fingerprint
     // when a legacy bundle lacks it.
-    const frameKey = secondaryFrame.sha256?.slice(0, 16)
-      ?? `${secondaryFrame.dataBase64.length}-${secondaryFrame.dataBase64.slice(0, 24)}`;
+    // 0.18.6 field fix (the Inspect second-view vanish): the fallback
+    // fingerprint is raw base64 — a '/' in it made the cache path traverse
+    // a nonexistent directory, the write failed, and the blend view
+    // silently disappeared. Strip to a path-safe alphabet.
+    const frameKey = (shownFrame.sha256?.slice(0, 16)
+      ?? `${shownFrame.dataBase64.length}-${shownFrame.dataBase64.slice(0, 24)}`)
+      .replace(/[^A-Za-z0-9-]/g, '');
     const path = `${FileSystem.cacheDirectory}forensic-secondary-view-${frameKey}.jpg`;
-    writeFileBytes(path, base64ToBytes(secondaryFrame.dataBase64))
+    writeFileBytes(path, base64ToBytes(shownFrame.dataBase64))
       .then(() => {
         if (!cancelled) setSecondaryUri(path);
       })
@@ -107,17 +189,22 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
     return () => {
       cancelled = true;
     };
-  }, [secondaryFrame]);
+  }, [shownFrame]);
 
   const slider = useMemo(
     () =>
       PanResponder.create({
+        // 0.18.6 field fix, corrected: the drag-thief was the detail
+        // screen's swipe-back gesture, now disabled on that screen — so
+        // the wrap claims its touches directly again (tap sets the blend,
+        // a drag follows the finger). The wrap is a dedicated 44 px
+        // control row; page scroll starts above or below it.
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        // Never cede
-        // the drag to the enclosing ScrollView mid-gesture — the default
-        // termination request lets a parent scroller steal the responder,
-        // freezing the thumb.
+        // 0.18.1 field fix ("the compare slider doesn't work"): once a
+        // horizontal drag IS claimed, never cede it to the enclosing
+        // ScrollView mid-gesture — the default termination request lets a
+        // parent scroller steal the responder, freezing the thumb.
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (e) => {
@@ -144,18 +231,28 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   // the way lands in the neutral "could not be computed" state.
   useEffect(() => {
     let cancelled = false;
-    if (!secondaryFrame || !primaryUri || kind === 'audio') return;
+    if (!shownFrame || !primaryUri || kind === 'audio') return;
     setParallax({ state: 'computing' });
     (async () => {
       try {
-        const secBytes = base64ToBytes(secondaryFrame.dataBase64);
+        const secBytes = base64ToBytes(shownFrame.dataBase64);
         const secondary = await decodeBytesToGray(secBytes, 96, 64, 'forensic-secondary.jpg');
         let primarySource = primaryUri;
         if (kind === 'video') {
-          const thumb = await getThumbnailAsync(primaryUri, {
-            time: Math.max(0, Math.round((primaryFrameTimeSeconds ?? 0) * 1000)),
-          });
-          primarySource = thumb.uri;
+          // 0.18.6: try the pair's moment first, then fall back through
+          // fixed offsets before declaring the measurement uncomputable —
+          // one bad seek (e.g. t=0 on a moov-last file) must not kill it.
+          const anchorMs = Math.max(0, Math.round((shownPtsSeconds ?? 0) * 1000));
+          const attempts = [anchorMs, 0, 250, 1000].filter((v, i, a) => a.indexOf(v) === i);
+          let thumbUri: string | null = null;
+          for (const time of attempts) {
+            try {
+              thumbUri = (await getThumbnailAsync(primaryUri, { time })).uri;
+              break;
+            } catch { /* try the next offset */ }
+          }
+          if (!thumbUri) throw new Error('no frame could be extracted');
+          primarySource = thumbUri;
         }
         const primary = await decodeUriToGray(primarySource, 96, 64);
         const result = measureParallax(primary, secondary);
@@ -167,7 +264,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
     return () => {
       cancelled = true;
     };
-  }, [secondaryFrame, primaryUri, kind, primaryFrameTimeSeconds]);
+  }, [shownFrame, primaryUri, kind, shownPtsSeconds]);
 
   // Audio exhibits: the module does not apply — the card hides entirely.
   if (kind === 'audio') return null;
@@ -184,7 +281,10 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
           {primaryUri && secondaryUri ? (
             <View>
               <View style={styles.compareBox}>
-                <PrimaryView kind={kind} uri={primaryUri} style={StyleSheet.absoluteFill} />
+                {/* 0.18.6 (Noah): the primary frame follows the SELECTED
+                    pair's anchor — tapping a strip frame re-seeks the
+                    primary thumbnail to that pair's moment. */}
+                <PrimaryView kind={kind} uri={primaryUri} atSeconds={shownPtsSeconds} style={StyleSheet.absoluteFill} />
                 <View style={[StyleSheet.absoluteFill, { opacity: mix }]}>
                   <Image source={{ uri: secondaryUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
                 </View>
@@ -203,10 +303,11 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
                 {...slider.panHandlers}
                 accessibilityLabel="Blend between primary and second camera"
               >
-                {/* Children are pointerEvents="none" so the wrap stays the
-                    touch target. A touch landing on the track or thumb would
-                    report locationX relative to that child, and the 14 px
-                    thumb would snap the blend to ~0. */}
+                {/* pointerEvents="none" on the children: the WRAP must stay
+                    the touch target — a touch landing on the track/thumb
+                    otherwise reports locationX relative to that child (the
+                    thumb is 14 px wide) and the blend jumps to ~0 (0.18.1
+                    field fix). */}
                 <View style={styles.sliderTrack} pointerEvents="none">
                   <View style={[styles.sliderFill, { width: `${mix * 100}%` }]} />
                 </View>
@@ -230,11 +331,33 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
                   {`Median horizontal disparity: ${Math.round(parallax.result.medianDisparityPx * 10) / 10} px`}
                 </Text>
                 <Text style={styles.parallaxNote}>
-                  {`Both views decoded at 96 px grayscale; a patch counts as matched at cross-correlation ≥ ${parallax.result.matchThreshold}. Numbers only; what they mean is for a person to weigh.`}
+                  {`Both views decoded at 96 px grayscale; a patch counts as matched at cross-correlation ≥ ${parallax.result.matchThreshold}. Numbers only.`}
                 </Text>
               </View>
             )}
           </View>
+
+          {/* 0.18.5 post-field: the whole take's second camera — every
+              committed pair frame as a strip, labeled by its capture-side
+              sequence number (never a time claim: the anchors are host
+              clock, not take-relative). */}
+          {kind === 'video' && videoFrames && videoFrames.length > 1 ? (
+            <View style={styles.stripBlock}>
+              <Text style={styles.stripHead}>
+                {`${videoFrames.length} second-camera frames across the take`}
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {videoFrames.map((f) => (
+                  <FilmstripThumb
+                    key={f.pairIndex}
+                    frameRef={f}
+                    selected={(activePair ?? videoFrames[0]?.pairIndex) === f.pairIndex}
+                    onSelect={() => setActivePair(f.pairIndex)}
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
         </View>
       )}
     </ForensicCard>
@@ -261,19 +384,34 @@ const buildStyles = () => StyleSheet.create({
     paddingVertical: 2,
   },
   mixTagText: { color: '#E8E8EC', fontSize: 9.5, fontWeight: '700' },
-  sliderWrap: { height: 34, justifyContent: 'center', marginTop: spacing.xs },
+  sliderWrap: { height: 44, justifyContent: 'center', marginTop: spacing.xs },
   sliderTrack: { height: 3, borderRadius: 2, backgroundColor: colors.surface2 },
   sliderFill: { height: 3, borderRadius: 2, backgroundColor: colors.textDim },
   sliderThumb: {
     position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    marginLeft: -7,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    marginLeft: -9,
     backgroundColor: colors.text,
   },
   sliderLab: { color: colors.textFaint, fontSize: 9.5, marginTop: 2 },
   parallaxBlock: { marginTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: spacing.sm },
   parallaxText: { color: colors.text, fontSize: fontSize.sm, lineHeight: 19 },
   parallaxNote: { color: colors.textFaint, fontSize: 9.5, lineHeight: 14, marginTop: spacing.xs },
+  stripBlock: { marginTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: spacing.sm },
+  stripHead: { color: colors.textDim, fontSize: fontSize.xs, fontWeight: '700', marginBottom: spacing.xs },
+  stripItem: { width: 108, marginRight: spacing.xs },
+  stripImage: {
+    width: 108,
+    height: 81,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#101013',
+  },
+  // 0.18.6 (Noah): the selected strip frame — an accent ring, nothing
+  // more (selection is UI state, not a claim about the frame).
+  stripImageSelected: { borderColor: colors.text, borderWidth: 2 },
+  stripLabel: { color: colors.textFaint, fontSize: 9.5, marginTop: 2, textAlign: 'center' },
 });

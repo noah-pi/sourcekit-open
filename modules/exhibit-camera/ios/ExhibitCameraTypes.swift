@@ -394,7 +394,7 @@ enum JpegColorSpaceReader {
   }
 }
 
-// MARK: - Depth map export (D1, — c2pa.depthmap capture side)
+// MARK: - Depth map export (D1, 0.16.0 — c2pa.depthmap capture side)
 
 /**
  * Canonicalizes a delivered AVDepthData into the committed depth artifact:
@@ -858,7 +858,7 @@ enum MetadataBlockBuilder {
 }
 
 
-// MARK: - Rotation + mirroring policy
+// MARK: - Rotation + mirroring policy (0.15.1 — per-device, never hardcoded)
 
 /**
  * Every connection's horizon-level rotation angle comes from
@@ -923,75 +923,92 @@ enum RotationPolicy {
   }
 }
 
-// MARK: - Debug flags
+// MARK: - W7 isolation debug flags (photo-path wave-5/6 suspects)
 
 /**
- * Switches for isolating camera-graph behaviour on hardware, flipped from
- * Settings ▸ Diagnostics:
- *   - photoConnectionRotation   — RotationPolicy on photo-output
- *                                 connections. Defaults false. Data and
- *                                 preview rotation stay unconditional.
- *   - photoMaxDimensionsPolicy  — the ≤12 MP maxPhotoDimensions clamp on
- *                                 photo outputs. Defaults true.
- *   - sessionCalibrationPhoto   — the calibration one-shot. Defaults false.
- *   - thirdViewEnabled          — the third-view extension point. Defaults
- *                                 false and is untested on hardware.
- *
- * Backed by a UserDefaults suite, so the flags survive a session rebuild
- * and can be read from any queue. Diagnostic scaffolding, not a product
- * surface.
+ * Runtime-flippable switches for the wave-7 isolation build, flipped from
+ * Settings ▸ Diagnostics to A/B the universal photo-path changes against
+ * the field failure (every photo capture failing on iPhone 17 since wave
+ * 5, even with stereo off). 0.17.2 default split — see the key notes:
+ * photoConnectionRotation still defaults false (pre-wave-5 behavior);
+ * photoMaxDimensionsPolicy now defaults TRUE; the 0.17.2
+ * sessionCalibrationPhoto and thirdViewEnabled keys default FALSE:
+ *   - photoConnectionRotation   — wave-5 RotationPolicy on PHOTO-output
+ *                                 connections (data/preview rotation stays
+ *                                 unconditional; it fixed real bugs).
+ *   - photoMaxDimensionsPolicy  — wave-6 maxPhotoDimensions clamp (≤12 MP)
+ *                                 on photo outputs + degraded-path settings.
+ * 0.17.2 verdict folded in: the maxPhotoDimensions clamp is ON by default
+ * (unset suite = ON; the flag is now the escape hatch to reproduce the
+ * pre-clamp reservation), and the session-calibration one-shot is OFF by
+ * default behind the new sessionCalibrationPhoto key — see the key notes.
+ * Backed by a UserDefaults suite so the flags survive a session rebuild
+ * and are readable from any queue. Isolation scaffolding, not a product
+ * surface — remove with the wave-7 verdict.
  */
 enum ExhibitDebugFlags {
   static let suite = "exhibit.debug"
   static let photoConnectionRotationKey = "photoConnectionRotation"
   static let photoMaxDimensionsPolicyKey = "photoMaxDimensionsPolicy"
   static let depthCaptureKey = "depthCapture"
-  /// The session-calibration dual-photo one-shot on the live
-  /// multi-cam graph. Default FALSE — the field flood (primary-half
-  /// A photo capture can leave a video output unwilling to deliver
-  /// afterwards, so this one-shot is off by default. With it off the "full"
-  /// calibration block commits 'unavailable'; per-frame intrinsics arrive on
-  /// the frame attachments either way.
+  /// 0.17.2: the session-calibration dual-photo one-shot on the live
+  /// multi-cam graph. Default FALSE — the 0.17.1 field flood (primary-half
+  /// drops 0, secondary-half drops 100%, onset ~1 s into the session =
+  /// exactly when the one-shot fired; build-26 showed a photo capture can
+  /// leave an output unwilling to deliver afterward) names it the primary
+  /// suspect for the dead secondary stream. With it off, the "full"
+  /// calibration block commits 'unavailable' (stated, never fabricated);
+  /// per-frame intrinsics ride the frame attachments, unaffected.
+  /// 0.18.6: INERT — the one-shot is retired (no call site remains) and the
+  /// settings switch is gone; the key stays registered so a stale flipped
+  /// value in the suite reads as a no-op, not an unknown-key error.
   static let sessionCalibrationPhotoKey = "sessionCalibrationPhoto"
-  /// EXTENSION-POINT GATE for the opportunistic third synchronized
+  /// 0.17.2: EXTENSION-POINT GATE for the opportunistic third synchronized
   /// view. UNTESTED ON HARDWARE — must stay OFF in shipping builds until an
   /// on-device soak validates the path. Default FALSE; the probe result is
-  /// reported via capabilities.thirdViewCapable regardless.
+  /// reported via capabilities().thirdViewCapable regardless.
   static let thirdViewEnabledKey = "thirdViewEnabled"
-  /// Rear stereo runs on the dual-wide virtual device by default: one input,
-  /// constituent ports requested by name, hardware-synced. Setting this flag
-  /// restores the older two-device-input graph, which is a different OS code
-  /// path.
+  /// 0.18.4: A/B for the dual-wide VIRTUAL-device rear-stereo graph, which
+  /// is the DEFAULT (this flag ON restores the pre-0.18.4 two-device-input
+  /// graph). The 0.18.3 iPhone 17 field log exonerated format, wiring,
+  /// hardware cost, system pressure and the 30 fps billing promise on the
+  /// multi-input graph while the OS delivered zero secondary frames with
+  /// zero error callbacks — the virtual path (one input, constituent ports
+  /// requested by name, hardware-synced; Apple's AVDualCam architecture,
+  /// WWDC19-249) is a different OS code path entirely. Flip ON only to A/B.
   static let legacyMultiInputGraphKey = "legacyMultiInputGraph"
 
   static var photoConnectionRotation: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: photoConnectionRotationKey) ?? false
   }
-  /// The ≤12 MP maxPhotoDimensions clamp is on by default: an unclamped
-  /// 48 MP photo-stream reservation on a live multi-cam graph is expensive,
-  /// and the committed dimensions record what actually arrived. Settable to
-  /// false to reproduce the unclamped reservation.
+  /// 0.17.2 DEFAULT FLIP: the ≤12 MP maxPhotoDimensions clamp is now ON by
+  /// default — the unclamped 48 MP photo-stream reservation on a live
+  /// multi-cam graph was named "the structural suspect for BOTH field
+  /// failures" in the 0.15.2 note, and the clamp is honest evidence (the
+  /// committed dimensions state what actually arrived). The flag remains
+  /// settable to false so the wave-7 isolation can still A/B it.
   static var photoMaxDimensionsPolicy: Bool {
     guard let defaults = UserDefaults(suiteName: suite),
           defaults.object(forKey: photoMaxDimensionsPolicyKey) != nil else { return true }
     return defaults.bool(forKey: photoMaxDimensionsPolicyKey)
   }
-  /// Default FALSE — see the key's note above.
+  /// Default FALSE (0.17.2) — see the key's note above.
   static var sessionCalibrationPhoto: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: sessionCalibrationPhotoKey) ?? false
   }
-  /// Default FALSE — UNTESTED ON HARDWARE.
+  /// Default FALSE — UNTESTED ON HARDWARE (0.17.2 extension-point gate).
   static var thirdViewEnabled: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: thirdViewEnabledKey) ?? false
   }
   /// Default FALSE = the virtual-device graph is the rear-stereo default
-  ///. TRUE restores the two-device-input graph for A/B only.
+  /// (0.18.4). TRUE restores the two-device-input graph for A/B only.
   static var legacyMultiInputGraph: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: legacyMultiInputGraphKey) ?? false
   }
-  /// Depth export. Defaults true, since depth is a shipped feature — an
-  /// unset suite means on, unlike the diagnostic flags above. Provides an
-  /// on-device switch for isolating depth problems without a rebuild.
+  /// D1 depth export (0.16.0 feature): default TRUE — depth is a shipped
+  /// feature, so an UNSET suite means ON (unlike the W7 isolation flags
+  /// above, whose unset means OFF). The flag is the on-device escape
+  /// hatch: depth problems are isolable without a rebuild.
   static var depthCapture: Bool {
     guard let defaults = UserDefaults(suiteName: suite),
           defaults.object(forKey: depthCaptureKey) != nil else { return true }

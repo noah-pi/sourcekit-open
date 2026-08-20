@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Trust ladder card — the five rungs, always visible.
+ * Trust ladder card — the four rungs, always visible.
  *
  * Renders the projection from src/lib/trustLadder.ts as a vertical rail:
  * filled node = reached, hollow = unreached, ringed = highest reached,
@@ -112,10 +112,10 @@ const buildStyles = () => StyleSheet.create({
     marginTop: 2,
   },
   nodeRing: {
+    // The current-highest rung gets a thicker ring — SAME outer diameter as
+    // every other node (0.18.6, Noah: the ringed dot used to render 4 px
+    // larger, which read as emphasis-by-size on whichever rung sat last).
     borderWidth: 2.5,
-    width: NODE + 4,
-    height: NODE + 4,
-    borderRadius: (NODE + 4) / 2,
   },
   nodeFailedDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: colors.danger },
   rail: { flex: 1, width: 1.5, backgroundColor: colors.border, minHeight: 22 },

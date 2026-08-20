@@ -144,7 +144,7 @@ export default function SettingsScreen() {
   const handleDebugFlag = (key: ExhibitDebugFlagKey, value: boolean) => {
     void (async () => {
       const res = await setExhibitDebugFlag(key, value).catch(() => ({ applied: false, reason: 'error' }));
-      // a flip is recorded in the on-device log either way — the
+      // 0.18.4-R5: a flip is recorded in the on-device log either way — the
       // log then answers "did my switch take?" without guessing — and a
       // rejection is STATED, never a silent snap-back of the switch.
       logDiagnostic({
@@ -171,7 +171,7 @@ export default function SettingsScreen() {
     })();
   };
 
-  // Which diagnostics switches differ from their native defaults
+  // 0.18.4-R3: which diagnostics switches differ from their native defaults
   // (absent key = default). Drives the banner above the switches.
   const nonDefaultFlags = debugFlags
     ? (Object.keys(DEBUG_FLAG_DEFAULTS) as ExhibitDebugFlagKey[]).filter(
@@ -185,7 +185,7 @@ export default function SettingsScreen() {
       setPublicKey(k.publicKeyBase64);
       setKeyBackend(k.backend);
     }).catch(() => {});
-    // Attestation is set-and-forget: the launch path ensures it
+    // Attestation is set-and-forget (0.18.0): the launch path ensures it
     // silently; here we simply read the stored state for display.
     getAttestState().then(setAttestState).catch(() => {});
     getAttestServerUrl().then((u) => setAttestServer(u ?? ''));
@@ -297,7 +297,8 @@ export default function SettingsScreen() {
   };
 
   /**
-   * Each install path explains ITS OWN specifics before it runs (* the dense paragraph under the buttons became one quiet line; the
+   * Each install path explains ITS OWN specifics before it runs (0.18.2 —
+   * the dense paragraph under the buttons became one quiet line; the
    * mechanism lives here, at the moment of action). Both alerts state the
    * same enrollment fact: hand the org this device's key; the private key
    * never leaves the device.
@@ -603,7 +604,7 @@ export default function SettingsScreen() {
           </Text>
 
           <Divider />
-          {/* Same header rank as Alias — this is a second kind of
+          {/* Same header rank as Alias (0.14.0) — this is a second kind of
               signer identity, not a footnote under it. */}
           <View style={styles.aliasHeader}>
             <Text style={styles.rowTitle}>Organization Credential</Text>
@@ -668,7 +669,7 @@ export default function SettingsScreen() {
             evidence in the accent), one tight line per toggle. */}
         <SectionLabel text="What gets recorded" />
         <Card>
-          {/* Two explicit groups: terracotta marks the toggles that
+          {/* Two explicit groups (0.18.1): terracotta marks the toggles that
               seal WHO/WHERE-you-are into the file; sage marks evidence about
               the moment itself. One tight line per toggle. */}
           <GroupLabel tint={IDENTIFYING_TINT} text="Identifying · sealed into the file" />
@@ -770,11 +771,11 @@ export default function SettingsScreen() {
           <Divider />
           <ProofToggle
             icon="logo-bitcoin"
-            label="Public-ledger timestamp"
+            label="Free public-ledger timestamp"
             tint={EVIDENCE_TINT}
             sub={
-              'Independent Bitcoin-anchored timestamp. Only a hash leaves the phone, never the file. ' +
-              'Usually confirmed a couple of hours after capture.'
+              'Anchored to the Bitcoin public ledger via OpenTimestamps — no account, no cost, nothing to buy. ' +
+              'Only a hash leaves the phone, never the file. Usually confirmed a couple of hours after capture.'
             }
             value={settings.otsEnabled}
             onChange={(v) => saveSettings({ otsEnabled: v })}
@@ -846,7 +847,7 @@ export default function SettingsScreen() {
             error strings verbatim. */}
         <SectionLabel text="Diagnostics" />
         <Card>
-          {/*-R3: a flipped switch persists across app updates (only
+          {/* 0.18.4-R3: a flipped switch persists across app updates (only
               deleting the app resets the suite) and silently changes the
               camera pipeline under test. The banner states WHICH switches
               differ from defaults and how to reset — facts only, no verdict. */}
@@ -866,27 +867,31 @@ export default function SettingsScreen() {
             </View>
           ) : null}
           {/* Camera diagnostics switches — persisted natively (UserDefaults
-              suite "exhibit.debug"; the 12 MP clamp defaults ON as of, the others default off). A flip takes effect at the
+              suite "exhibit.debug"; the 12 MP clamp defaults ON as of
+              0.17.2, the others default off). A flip takes effect at the
               NEXT configureSession: the session rebuilds only in the
               camera tab's focus effect (photo connections and policies are
               constructed at session build), so the running session is
               untouched. The footnote says exactly that. */}
-          {/* the rotation (wave 5) and legacy-graph switches are
+          {/* 0.18.5: the rotation (wave 5) and legacy-graph switches are
               GONE — both hunts are settled (the four-run matrix exonerated
               every toggle; the virtual graph is the proven path). The
               native flags still exist for a future bisect, but a switch
               that no longer discriminates anything doesn't earn UI. */}
+          {/* 0.18.6: the session-calibration switch is GONE — with the
+              0.18.5 graph the secondary photo output is detached, so the
+              one-shot could only ever harvest a primary-only calibration
+              that no commitment path can use (the rig extrinsic needs both
+              lenses), while remaining the named suspect for the dead
+              secondary stream. The native one-shot is retired outright; the
+              calibration block states 'unavailable' as it already did by
+              default. Per-frame intrinsics ride frame attachments and were
+              never behind the switch. */}
           <ToggleRow
             label="12 MP photo clamp"
             detail="Full-resolution photos capped at 12 MP. On by default; off reserves the full 48 MP photo stream on a live dual-camera graph, which costs the pipeline real bandwidth."
             value={debugFlags?.photoMaxDimensionsPolicy ?? true}
             onChange={(v) => handleDebugFlag('photoMaxDimensionsPolicy', v)}
-          />
-          <ToggleRow
-            label="Session calibration photo"
-            detail="Fires one photo per session to harvest full camera calibration (focal length, distortion). Off by default: a photo capture on a live graph is the maximum-resource moment. With it off, the calibration block states 'unavailable' instead."
-            value={debugFlags?.sessionCalibrationPhoto ?? false}
-            onChange={(v) => handleDebugFlag('sessionCalibrationPhoto', v)}
           />
           <Text style={styles.rowDetail}>
             Switches apply the next time the camera session rebuilds: leave and reopen the camera tab, or relaunch the app.
@@ -923,7 +928,7 @@ export default function SettingsScreen() {
 }
 
 /**
- * The native defaults for
+ * 0.18.4-R3 (external camera-pipeline review R1): the native defaults for
  * every debug flag, mirrored for the non-default banner. A flag flipped and
  * left in the exhibit.debug suite survives TestFlight updates — only
  * deleting the app resets it — so a stale A/B switch can silently
@@ -933,7 +938,6 @@ const DEBUG_FLAG_DEFAULTS: Record<ExhibitDebugFlagKey, boolean> = {
   photoConnectionRotation: false,
   photoMaxDimensionsPolicy: true,
   depthCapture: true,
-  sessionCalibrationPhoto: false,
   thirdViewEnabled: false,
   legacyMultiInputGraph: false,
 };
@@ -943,13 +947,12 @@ const DEBUG_FLAG_LABELS: Record<ExhibitDebugFlagKey, string> = {
   photoConnectionRotation: 'Photo-connection rotation',
   photoMaxDimensionsPolicy: '12 MP photo clamp',
   depthCapture: 'Depth capture',
-  sessionCalibrationPhoto: 'Session calibration photo',
   thirdViewEnabled: 'Third view',
   legacyMultiInputGraph: 'Legacy dual-input graph',
 };
 
 // Toggle-board color language, paralleling the camera HUD icon palette
-//: muted terracotta marks the identifying signals, sage green the
+// (0.18.1): muted terracotta marks the identifying signals, sage green the
 // evidence sinks, violet keeps the face check's own lane. No pure yellow,
 // no blue — the same anchors the HUD uses.
 const IDENTIFYING_TINT = '#C08552'; // warm clay / terracotta
@@ -975,7 +978,7 @@ function GroupLabel({ text, tint }: { text: string; tint: string }) {
 }
 
 /** Toggle row — same icon+label language as the HUD and grid badges.
- *  Subs are NEVER truncated (field report: ellipsized copy reads as
+ *  0.18.2: subs are NEVER truncated (field report: ellipsized copy reads as
  *  a bug). Every sub reserves two lines (proofSubMin) so rows are evenly
  *  spaced whether the copy runs one line or two. */
 function ProofToggle({ icon, label, sub, value, onChange, tint, disabled, recommended }: {

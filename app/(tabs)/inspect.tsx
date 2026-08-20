@@ -1,8 +1,8 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Inspect — check a file against its seal. The result is a
+ * Inspect — check a file against its seal (0.18.2). The result is a
  * forensic reader, not a trophy case — and it mirrors the exhibit details
- * page 1:1:
+ * page 1:1 (Noah: "almost identical, especially the manifest points"):
  * the verdict card first, then ONE Capture claims card in the exhibit's
  * own format (When & where / Device / The seal / Sensors / Camera
  * settings — the old Manifest details drawer merged in, each fact exactly
@@ -28,6 +28,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Location from 'expo-location';
 import { Image } from 'expo-image';
 import * as VideoThumbnails from 'expo-video-thumbnails';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors, spacing, radii, fontSize, type, useThemedStyles } from '../../src/theme';
@@ -38,6 +39,7 @@ import type { OtsView } from '../../src/components/TrustedTime';
 import {
   MultipleLensCard,
   MotionTraceCard,
+  VideoMotionCard,
   EnvironmentCard,
   RawAudioCard,
   type SecondaryFrameRef,
@@ -66,13 +68,13 @@ import { projectTrustLadder, type LadderInput } from '../../src/lib/trustLadder'
 import { TrustLadderCard } from '../../src/components/TrustLadder';
 import { listItems } from '../../src/vault/vaultFs';
 import { payloadDigest } from '../../src/lib/sign';
-import { bytesToHex, base64ToBytes } from '../../src/lib/bytes';
+import { bytesToHex, base64ToBytes, bytesToBase64 } from '../../src/lib/bytes';
 import { verifyOtsReceipt } from '../../src/lib/ots';
 import { fetchBlockHeader } from '../../src/lib/otsClient';
 import { extractC2paStore, parseManifest, type C2paManifest, type EditAction, type IngredientInfo } from '../../src/c2pa/c2pa';
 import { extractC2paStoreBmff } from '../../src/c2pa/bmff';
 import { ManifestReel } from '../../src/components/ManifestReel';
-import { readFileBytes } from '../../src/lib/fileHash';
+import { readFileBytes, writeFileBytes } from '../../src/lib/fileHash';
 
 // ---------------------------------------------------------------------------
 // Verdict language — plain sentences, never overclaimed
@@ -102,7 +104,7 @@ interface VerdictContext {
  * key and a "valid signature" in 200 milliseconds; intact bytes alone never
  * earn green.
  *
- * Copy v5: seven verdicts, plain register. No "confirmed", no
+ * Copy v5 (0.17.0): seven verdicts, plain register. No "confirmed", no
  * "checks out" — icons carry status, words carry facts.
  */
 function verdictCopy(v: VerdictCode, ctx: VerdictContext): { headline: string; subline: string; tone: 'good' | 'bad' | 'warn' | 'neutral'; icon: keyof typeof Ionicons.glyphMap } {
@@ -233,24 +235,37 @@ function motionLabel(v: string): string {
  * exhibit page uses; the frame rides inside the signed record, so a
  * dropped file carries it too.
  */
-function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRef | null; ptsSeconds: number | null; recordError: string | null } {
+function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRef | null; ptsSeconds: number | null; recordError: string | null; videoFrames: import('../../src/components/forensic/MultipleLensCard').VideoPairFrameRef[] | null } {
   if (record.asset.kind === 'photo') {
     const f = record.stereo?.artifacts?.secondaryFrame;
     if (f?.state === 'recorded' && f.dataBase64) {
-      return { frame: { dataBase64: f.dataBase64, mime: f.mime, sha256: f.sha256 }, ptsSeconds: null, recordError: null };
+      return { frame: { dataBase64: f.dataBase64, mime: f.mime, sha256: f.sha256 }, ptsSeconds: null, recordError: null, videoFrames: null };
     }
-    return { frame: null, ptsSeconds: null, recordError: f?.state === 'error' ? f.error ?? 'the native module reported an error' : null };
+    return { frame: null, ptsSeconds: null, recordError: f?.state === 'error' ? f.error ?? 'the native module reported an error' : null, videoFrames: null };
   }
   if (record.asset.kind === 'video') {
-    const pair = record.videoStereo?.pairs?.find(
+    // 0.18.5 post-field: every recorded pair frame — the filmstrip surface.
+    const recordedPairs = (record.videoStereo?.pairs ?? []).filter(
       (p) => p.artifacts?.secondaryFrame?.state === 'recorded' && !!p.artifacts.secondaryFrame.dataBase64,
     );
+    const videoFrames = recordedPairs.map((p) => {
+      const f = p.artifacts.secondaryFrame;
+      return {
+        frame: { dataBase64: f.dataBase64!, mime: f.mime, sha256: f.sha256 },
+        pairIndex: p.pairIndex,
+        // 0.18.6 (Noah): the pair's own primary PTS anchor — a filmstrip
+        // tap re-seeks the blend's primary frame to THAT pair's moment.
+        ptsSeconds: p.anchors.primaryHostSeconds ?? null,
+      };
+    });
+    const pair = recordedPairs[0];
     const f = pair?.artifacts.secondaryFrame;
     if (f?.state === 'recorded' && f.dataBase64) {
       return {
         frame: { dataBase64: f.dataBase64, mime: f.mime, sha256: f.sha256 },
         ptsSeconds: pair?.anchors.primaryHostSeconds ?? null,
         recordError: null,
+        videoFrames: videoFrames.length > 0 ? videoFrames : null,
       };
     }
     // A committed pair whose frame errored is a stated failure; zero pairs
@@ -261,9 +276,53 @@ function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRe
       frame: null,
       ptsSeconds: null,
       recordError: ef?.state === 'error' ? ef.error ?? 'the native module reported an error' : null,
+      videoFrames: null,
     };
   }
-  return { frame: null, ptsSeconds: null, recordError: null };
+  return { frame: null, ptsSeconds: null, recordError: null, videoFrames: null };
+}
+
+/**
+ * 0.18.6 field fix ("when I run inspect on those files, the second view
+ * doesn't show up — we need to make sure that data is maintained and
+ * rendered once exported"): the sealed telemetry record does NOT carry
+ * the video pair frames (they ride the proof bundle on-device), so an
+ * exported video dropped here read "Not recorded" even though the frames
+ * ARE in the file — embedded as the c2pa.thumbnail.ingredient.jpeg{.#}
+ * boxes, one per committed pair, and by emission design the embedded
+ * frame IS the vaulted pair JPEG (the ingredient's data hash commits
+ * exactly these bytes). Surface them: referenced-gated (an unreferenced
+ * box is not claim content), labeled by the capture-side pair sequence
+ * number parsed from the label suffix or the ingredient title. Nothing
+ * is fabricated — absent boxes still land in "Not recorded".
+ */
+function manifestSecondaryFrames(manifest: C2paManifest): import('../../src/components/forensic/MultipleLensCard').VideoPairFrameRef[] {
+  const titlePairIndex = new Map<string, number>();
+  for (const ing of manifest.ingredients) {
+    const m = ing.title ? /pair #(\d+)/.exec(ing.title) : null;
+    if (m && ing.label) {
+      // The ingredient's thumbnail identifier is the ingredient label with
+      // the 'c2pa.ingredient.v3' prefix swapped for the thumbnail prefix —
+      // same suffix by emission construction.
+      const suffix = /\.(\d+)$/.exec(ing.label ?? '')?.[0] ?? '';
+      titlePairIndex.set(suffix, parseInt(m[1], 10));
+    }
+  }
+  const frames: import('../../src/components/forensic/MultipleLensCard').VideoPairFrameRef[] = [];
+  for (const t of manifest.thumbnails) {
+    if (!t.referenced) continue;
+    if (!t.label.startsWith('c2pa.thumbnail.ingredient.jpeg')) continue;
+    if (t.bytes.length === 0) continue;
+    const suffix = /\.(\d+)$/.exec(t.label)?.[0] ?? '';
+    const pairIndex = titlePairIndex.get(suffix)
+      ?? (suffix ? parseInt(suffix.slice(1), 10) : 0);
+    frames.push({
+      frame: { dataBase64: bytesToBase64(t.bytes), mime: 'image/jpeg' },
+      pairIndex,
+    });
+  }
+  frames.sort((a, b) => a.pairIndex - b.pairIndex);
+  return frames;
 }
 
 /**
@@ -492,7 +551,7 @@ function bitcoinCalendarValue(ots: OtsView): { text: string; color?: string } {
 }
 
 /**
- * The seal rows — the manifest lines that used to sit in the
+ * The seal rows (0.18.2) — the manifest lines that used to sit in the
  * "Manifest details" drawer, merged into the Capture claims card in the
  * exhibit page's row format. The old Signature detail section's copy rides
  * as the rows' details, so a failure still says exactly what failed. These
@@ -618,7 +677,21 @@ function VerdictCard({ report, identity }: { report: VerificationReport; identit
  * container has no frame to show — an honest placeholder, never a broken
  * image. The picked URI is local already (document-picker cache copy).
  */
-function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta }: {
+/** 0.18.6 (field: "videos are shown now but don't actually play back"):
+ *  the Inspect preview was a still frame with no playback path. A tap on
+ *  the still swaps in the real player (native controls — the OS's own
+ *  fullscreen/rotate handling, same contract as the exhibit page's
+ *  viewer). The forensic overlays annotate the STILL; playback replaces
+ *  it, never draws over moving video. */
+function InspectVideoPlayer({ uri, style }: { uri: string; style: object }) {
+  const player = useVideoPlayer(uri, (p) => {
+    p.loop = false;
+    p.play();
+  });
+  return <VideoView player={player} style={style} contentFit="contain" nativeControls />;
+}
+
+function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta, fallbackUri }: {
   uri: string;
   name: string;
   kind: 'photo' | 'bmff';
@@ -626,19 +699,35 @@ function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta }: 
   overlay: string;
   onOverlay: (key: string) => void;
   juxta: JuxtaInputs | null;
+  /** 0.18.6: the manifest's own embedded claim thumbnail, materialized to
+      cache — the preview when this device can't extract a frame from the
+      container. It is sealed content (referenced-gated), not a guess. */
+  fallbackUri?: string | null;
 }) {
   const styles = useThemedStyles(buildStyles);
   const [thumb, setThumb] = useState<string | null>(null);
   const [thumbFailed, setThumbFailed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [playing, setPlaying] = useState(false);
   useEffect(() => {
     if (kind !== 'bmff' || audioHint === true) return;
     let mounted = true;
     setThumb(null);
     setThumbFailed(false);
-    VideoThumbnails.getThumbnailAsync(uri, { time: 250 })
-      .then((t) => { if (mounted) setThumb(t.uri); })
-      .catch(() => { if (mounted) setThumbFailed(true); });
+    setPlaying(false);
+    // 0.18.6: try several offsets before declaring no frame — a fixed
+    // 250 ms seek fails on very short takes and on containers this
+    // device's AVFoundation seeks poorly in.
+    (async () => {
+      for (const time of [250, 0, 1000]) {
+        try {
+          const t = await VideoThumbnails.getThumbnailAsync(uri, { time });
+          if (mounted) setThumb(t.uri);
+          return;
+        } catch { /* try the next offset */ }
+      }
+      if (mounted) setThumbFailed(true);
+    })();
     return () => { mounted = false; };
   }, [uri, kind, audioHint]);
 
@@ -655,22 +744,45 @@ function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta }: 
   if (juxta?.lat != null && juxta?.lon != null && juxta?.at) options.push({ key: 'sun', label: 'Sun position' });
   if (juxta?.rollDeg != null && juxta?.pitchDeg != null) options.push({ key: 'gravity', label: 'Gravity' });
   const active = options.find((o) => o.key === overlay) ?? options[0];
-  const showOverlays = kind === 'photo' || (kind === 'bmff' && audioHint !== true && !!thumb);
+  const showOverlays = !playing && (kind === 'photo' || (kind === 'bmff' && audioHint !== true && (!!thumb || (thumbFailed && !!fallbackUri))));
 
   return (
     <Card style={styles.mediaCard}>
       <View style={styles.mediaFrame}>
         {kind === 'photo' ? (
           <Image source={{ uri }} style={styles.mediaStill} contentFit="contain" transition={100} />
-        ) : audioHint === true || thumbFailed ? (
+        ) : audioHint === true ? (
           <View style={[styles.mediaStill, styles.mediaPlaceholder]}>
             <Ionicons name={placeholderIcon} size={30} color={colors.textFaint} />
-            <Text style={styles.mediaPlaceholderText}>
-              {audioHint === true ? 'Audio file · no frame to show' : 'No preview available for this file'}
-            </Text>
+            <Text style={styles.mediaPlaceholderText}>Audio file · no frame to show</Text>
           </View>
+        ) : playing ? (
+          <InspectVideoPlayer uri={uri} style={styles.mediaStill} />
+        ) : thumbFailed && fallbackUri ? (
+          <Pressable onPress={() => setPlaying(true)} accessibilityLabel="Play the video">
+            <Image source={{ uri: fallbackUri }} style={styles.mediaStill} contentFit="contain" transition={100} />
+            <View style={styles.playBadge} pointerEvents="none">
+              <Ionicons name="play" size={26} color="#E8E8EC" />
+            </View>
+          </Pressable>
+        ) : thumbFailed ? (
+          // No still to show, but the file itself is right here — offer
+          // playback directly, never a dead end.
+          <Pressable
+            style={[styles.mediaStill, styles.mediaPlaceholder]}
+            onPress={() => setPlaying(true)}
+            accessibilityLabel="Play the video"
+          >
+            <Ionicons name="play-circle-outline" size={34} color={colors.textFaint} />
+            <Text style={styles.mediaPlaceholderText}>Tap to play</Text>
+          </Pressable>
         ) : thumb ? (
-          <Image source={{ uri: thumb }} style={styles.mediaStill} contentFit="contain" transition={100} />
+          <Pressable onPress={() => setPlaying(true)} accessibilityLabel="Play the video">
+            <Image source={{ uri: thumb }} style={styles.mediaStill} contentFit="contain" transition={100} />
+            <View style={styles.playBadge} pointerEvents="none">
+              <Ionicons name="play" size={26} color="#E8E8EC" />
+            </View>
+          </Pressable>
         ) : (
           <View style={[styles.mediaStill, styles.mediaPlaceholder]}>
             <ActivityIndicator color={colors.accent} />
@@ -956,7 +1068,7 @@ export default function InspectScreen() {
     [record, sealedWhenWhere],
   );
 
-  // ── How this was sealed: the five rungs, projected from the evidence by
+  // ── How this was sealed: the four rungs, projected from the evidence by
   //    src/lib/trustLadder (presentation logic — nothing recomputed here).
   //    The tier passes through honestly: the ladder maps 'this-device' to
   //    rung 2 UNREACHED with the local-history wording, because the device
@@ -1018,11 +1130,42 @@ export default function InspectScreen() {
   //    verification report. Where a check needs on-device capture context
   //    the file doesn't carry (burst frames, the raw audio master), the
   //    card's own neutral state says so — inputs are never fabricated. ──
-  const secondary = useMemo(
-    () => (record ? secondaryFrameFor(record) : { frame: null, ptsSeconds: null, recordError: null }),
-    [record],
-  );
+  const secondary = useMemo(() => {
+    const fromRecord = record
+      ? secondaryFrameFor(record)
+      : { frame: null, ptsSeconds: null, recordError: null, videoFrames: null };
+    // 0.18.6: an exported file's embedded frames are the fallback when the
+    // sealed record carries none (video pairs ride the proof bundle
+    // on-device, but ARE embedded in the file — see manifestSecondaryFrames).
+    if (fromRecord.frame || !parsedManifest) return fromRecord;
+    const embedded = manifestSecondaryFrames(parsedManifest);
+    if (embedded.length === 0) return fromRecord;
+    return {
+      frame: embedded[0].frame,
+      ptsSeconds: null,
+      recordError: null,
+      videoFrames: embedded.length > 0 ? embedded : null,
+    };
+  }, [record, parsedManifest]);
   const enfAnchor = useMemo(() => (record ? readEnfAnchor(record) : null), [record]);
+
+  // 0.18.6: the manifest's embedded claim thumbnail, materialized once —
+  // PickedMedia's preview when this device can't extract a frame from the
+  // sealed container. Referenced-gated; absence stays absence.
+  const [manifestThumbUri, setManifestThumbUri] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setManifestThumbUri(null);
+    const t = parsedManifest?.thumbnails.find(
+      (x) => x.referenced && x.label === 'c2pa.thumbnail.claim.jpeg' && x.bytes.length > 0,
+    );
+    if (!t || !picked) return;
+    const path = `${FileSystem.cacheDirectory}inspect-claim-thumb-${picked.name.replace(/[^A-Za-z0-9._-]/g, '_')}-${t.bytes.length}.jpg`;
+    writeFileBytes(path, t.bytes)
+      .then(() => { if (!cancelled) setManifestThumbUri(path); })
+      .catch(() => { if (!cancelled) setManifestThumbUri(null); });
+    return () => { cancelled = true; };
+  }, [parsedManifest, picked]);
   const forensicKind: 'photo' | 'video' | 'audio' =
     picked?.kind === 'photo' ? 'photo' : picked?.audioHint === true ? 'audio' : 'video';
 
@@ -1072,7 +1215,7 @@ export default function InspectScreen() {
   const editFlag = useMemo(() => {
     if (!editHistory) return null;
     const actions = editHistory.actions?.list ?? [];
-    // The flag exists for declarations that say something — edit
+    // 0.18.1: the flag exists for declarations that say something — edit
     // actions, MULTIPLE sources, or derivation from an earlier file. A
     // straight single-source capture declares nothing of the kind:
     // Source's own manifests carry exactly one componentOf ingredient (the
@@ -1098,7 +1241,7 @@ export default function InspectScreen() {
 
   // Parse the manifest once: the edit history and camera-settings claims
   // derive from it, and the parsed object itself feeds the Advanced group's
-  // raw-manifest reel (the shared ManifestReel — the FULL manifest,).
+  // raw-manifest reel (the shared ManifestReel — the FULL manifest, 0.18.3).
   useEffect(() => {
     setParsedManifest(null);
     setEditHistory(null);
@@ -1239,7 +1382,7 @@ export default function InspectScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* the beta tag belongs on the screen header — the
+        {/* 0.18.2: the beta tag belongs on the screen header (Noah) — the
             same ScreenTitle `tag` pill the Settings screen uses, verbatim. */}
         <ScreenTitle
           title="Inspect"
@@ -1250,7 +1393,7 @@ export default function InspectScreen() {
         <Card>
           {/* Local themed pill, not the shared Button: the shared primary
               tone pairs a `colors.text` fill with a hard-coded dark label —
-              dark-on-dark in light mode (report). The pill is
+              dark-on-dark in light mode (0.18.1 field report). The pill is
               the inverted-ink pair in BOTH schemes: dark pill / paper text
               in light, paper pill / dark text in dark. */}
           <Pressable
@@ -1308,10 +1451,11 @@ export default function InspectScreen() {
                 overlay={overlay}
                 onOverlay={setOverlay}
                 juxta={juxta}
+                fallbackUri={manifestThumbUri}
               />
             ) : null}
 
-            {/* DECLARED EDITS — above Capture claims, only
+            {/* DECLARED EDITS (0.18.3, Noah) — above Capture claims, only
                 when the file actually declares some, and only the C2PA
                 actions themselves: no ingredients ("includes other media"),
                 no disclaimer copy. Hidden entirely when there are none.
@@ -1339,7 +1483,7 @@ export default function InspectScreen() {
               </View>
             ) : null}
 
-            {/* CAPTURE — the same collapsible group card as
+            {/* CAPTURE — 0.18.3 (Noah): the same collapsible group card as
                 the exhibit details page, same time-outline icon. When &
                 where / Device / The seal / Sensors / Camera settings. */}
             {record || hasTimeRows ? (
@@ -1377,11 +1521,16 @@ export default function InspectScreen() {
                           return <LabelRow label="Bitcoin calendar" value={line.text} valueColor={line.color} />;
                         })()
                       ) : null}
+                      {/* 0.18.6 (Noah): "redacted" only for de-identified
+                          copies (the re-seal marker); an anonymous-mode
+                          capture never provided a name — say Not provided. */}
                       {record.identity === 'redacted' ? (
-                        <LabelRow label="Alias" value="Redacted by signer" />
+                        <LabelRow label="Byline" value={record.deidentified ? 'Redacted by signer' : 'Not provided'} />
                       ) : record.identity?.author ? (
-                        <LabelRow label="Alias" value={record.identity.author} />
-                      ) : null}
+                        <LabelRow label="Byline" value={record.identity.author} />
+                      ) : (
+                        <LabelRow label="Byline" value="Not provided" />
+                      )}
                       {(() => {
                         const loc = record.context?.location;
                         if (loc && typeof loc === 'object') {
@@ -1396,6 +1545,7 @@ export default function InspectScreen() {
                                 label="Location"
                                 value={`${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)}`}
                                 valueColor={IDENT_CLAY}
+                                detail="Device-reported."
                               >
                                 <Pressable
                                   style={styles.mapsChip}
@@ -1464,7 +1614,7 @@ export default function InspectScreen() {
                     </View>
                   ) : null}
 
-                  {/* The seal: the manifest lines, merged. What
+                  {/* THE SEAL — the manifest lines, merged (0.18.2). What
                       used to be the Manifest details drawer and the Signature
                       detail section: each fact once, failure copy riding as
                       the row's own detail. */}
@@ -1498,7 +1648,7 @@ export default function InspectScreen() {
                   ) : null}
 
                   {/* Media type + size ride at the bottom of Camera
-                      Settings, under White Balance — the
+                      Settings, under White Balance (0.18.3, Noah) — the
                       standalone Media section is gone. */}
                   {(manifestExif && Object.keys(manifestExif.data).filter((k) => k !== 'note').length > 0) || record ? (
                     <View style={styles.subSection}>
@@ -1528,8 +1678,9 @@ export default function InspectScreen() {
             ) : null}
 
             {/* INTEGRITY — the capture-integrity rows in the exhibit page's
-                Integrity group, with the same lock-closed-outline icon. App Attest is NOT repeated here: it rides
-                in The seal above (one fact, one place). */}
+                Integrity group, with the same lock-closed-outline icon
+                (0.18.3, Noah). App Attest is NOT repeated here: it rides
+                in The seal above (0.18.2 merge — one fact, one place). */}
             {record?.captureIntegrity ? (
               <View>
                 <GroupCard
@@ -1575,7 +1726,7 @@ export default function InspectScreen() {
               <View>
                 <SectionLabel text="Forensic checks" />
                 {/* Lens, motion-trace and environment checks read PICTURE
-                    evidence — hidden on audio captures; the
+                    evidence — hidden on audio captures (0.18.3, Noah); the
                     raw-audio master is the audio-applicable one. */}
                 {forensicKind !== 'audio' ? (
                   <>
@@ -1585,12 +1736,26 @@ export default function InspectScreen() {
                       secondaryFrame={secondary.frame}
                       primaryFrameTimeSeconds={secondary.ptsSeconds}
                       recordError={secondary.recordError}
+                      videoFrames={secondary.videoFrames}
                     />
-                    <MotionTraceCard
-                      ringBufferDir={record?.context?.captureEvidence?.ringBufferDir}
-                      poseTrace={record?.context?.poseTrace}
-                      motion={record?.context?.motion}
-                    />
+                    {forensicKind === 'video' ? (
+                      // 0.18.6 (Noah): a video take's motion trace — the
+                      // committed pair frames (the dropped file carries
+                      // them embedded) against the gyro log when THIS
+                      // device can read it. The gyro lane states its
+                      // absence on a foreign file; the picture lane is
+                      // the file's own committed content.
+                      <VideoMotionCard
+                        videoFrames={secondary.videoFrames}
+                        sensorLogPath={record?.context?.captureEvidence?.sensorLogPath}
+                      />
+                    ) : (
+                      <MotionTraceCard
+                        ringBufferDir={record?.context?.captureEvidence?.ringBufferDir}
+                        poseTrace={record?.context?.poseTrace}
+                        motion={record?.context?.motion}
+                      />
+                    )}
                     <EnvironmentCard
                       lat={juxta?.lat ?? null}
                       lon={juxta?.lon ?? null}
@@ -1623,7 +1788,7 @@ export default function InspectScreen() {
               </View>
             ) : null}
 
-            {/* ADVANCED — the same cog-outline group card as
+            {/* ADVANCED (0.18.3, Noah) — the same cog-outline group card as
                 the exhibit details page, holding the raw C2PA manifest reel:
                 the FULL manifest, exactly as recovered, with copy as the way
                 it leaves the phone. The old Signer section is cut (redundant
@@ -1746,6 +1911,21 @@ const buildStyles = () => StyleSheet.create({
   mediaStill: { width: '100%', height: 260, borderRadius: radii.md, backgroundColor: '#000' },
   mediaPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2, gap: spacing.sm },
   mediaPlaceholderText: { color: colors.textFaint, fontSize: fontSize.xs },
+  // 0.18.6: the tap-to-play badge over a video still (playback is a tap
+  // away, never a dead still — the field report's "videos don't play").
+  playBadge: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    marginTop: -28,
+    marginLeft: -28,
+    backgroundColor: 'rgba(13,13,15,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   mediaName: { color: colors.textDim, fontSize: fontSize.xs, marginTop: spacing.sm, marginHorizontal: spacing.xs },
 
   // --- the label ---
@@ -1761,7 +1941,7 @@ const buildStyles = () => StyleSheet.create({
   verdictHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   verdictText: { fontFamily: type.display, fontSize: fontSize.xl, fontWeight: '700', flex: 1, lineHeight: 28 },
   verdictSubline: { color: colors.textDim, fontSize: fontSize.sm, lineHeight: 20, marginTop: spacing.sm },
-  // These ARE the exhibit page's NlRow styles (buildNl) —
+  // 0.18.2 parity: these ARE the exhibit page's NlRow styles (buildNl) —
   // plain small label left, value right-aligned, 7px row rhythm.
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md, paddingVertical: 7 },
   labelRowLabel: { color: colors.textFaint, fontSize: fontSize.sm, width: 110 },
@@ -1804,7 +1984,7 @@ const buildStyles = () => StyleSheet.create({
   warnTextFlush: { color: colors.danger, fontSize: fontSize.xs, lineHeight: 17, marginBottom: spacing.sm },
 
   // --- the accordion body: sections of the ONE extended card, separated by
-  //     hairlines — never detached squircles ---
+  //     hairlines — never detached squircles (0.15.0 Drop 2) ---
   detailBody: { marginTop: spacing.xs },
   detailSection: {
     borderTopWidth: StyleSheet.hairlineWidth,

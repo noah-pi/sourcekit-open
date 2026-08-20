@@ -95,7 +95,7 @@ export function horizonCard(
     return makeNotRun(
       id, title,
       'the record commits no pose trace: sensors were off, the capture predates 0.10.0, or the trace was stripped on the de-identify path; there is no committed gravity to predict a horizon from',
-      { method: methodBase, audit: 'Audit ▸ SensorContext.poseTrace; absent on older records and every de-identified copy' },
+      { method: methodBase, audit: 'Audit ▸ SensorContext.poseTrace (0.10.0+); absent on older records and every de-identified copy' },
     );
   }
 
@@ -111,13 +111,13 @@ export function horizonCard(
   const prediction =
     `committed gravity at the shutter (roll ${round1(predicted)}°, ±${ATTITUDE_QUANTIZATION_DEG}° quantization ◌ self-reported IMU): the horizon should sit at that tilt in the frame`;
   const audit =
-    'Audit ▸ poseTrace.attitude[3·anchor] → roll; yaw and pitch travel with the trace for the full gravity vector';
+    'Audit ▸ poseTrace.attitude[3·anchor] → roll; yaw/pitch travel with the trace for the full gravity vector in the complete Reader';
 
   if (!observation) {
     return makeInsufficient(
       id, title, prediction,
       'no horizon edge has been measured: pixel analysis is injected by the host (a rasterizer), and none was supplied',
-      'the prediction is exposed for a reviewer to weigh against the photo, but this engine cannot read the pixels itself',
+      'the prediction is shown next to the photo; this engine cannot read the pixels itself',
       {
         gauge: { value: round1(predicted), band: [-HORIZON_BAND_DEG, HORIZON_BAND_DEG], units: '° predicted horizon tilt' },
         method: methodBase, audit,
@@ -148,6 +148,6 @@ export function horizonCard(
     id, title, state: 'diverges', prediction, measurement, method, audit, gauge,
     gap: `${round1(gap)}° OUTSIDE the ±${HORIZON_BAND_DEG}° band`,
     interpretation:
-      'the horizon in the pixels and the gravity the IMU committed disagree; consistent with a manipulated frame, a synthetic feed, or a mis-committed attitude, and a person weighs which',
+      'the horizon in the pixels and the gravity the IMU committed disagree; consistent with a manipulated frame, a synthetic feed, or a mis-committed attitude — the data does not say which',
   });
 }

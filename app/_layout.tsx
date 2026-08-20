@@ -49,7 +49,7 @@ export default function RootLayout() {
       startBarometerFeed();
       // Generate (or load) the device identity at launch so first capture is instant.
       getDeviceKey().catch(() => {});
-      // Hardware attestation is set-and-forget: ensured silently at
+      // Hardware attestation is set-and-forget (0.18.0): ensured silently at
       // every launch — local challenge, no registry contact, retried while
       // absent, never blocks startup. After the enclave key exists the first
       // run typically completes before the first capture.
@@ -131,8 +131,9 @@ export default function RootLayout() {
     }
     // NOTE: an ONBOARDED user may open /onboarding deliberately — the HUD
     // lock badge replays the tour, and the screen handles its own exit
-    // (X-out / Done → router.back). This gate must NOT bounce them back
-    // to '/': the replace races the push and crashes the app.
+    // (X-out / Done → router.back()). This gate must NOT bounce them back
+    // to '/': the replace raced the push and crashed the app (TestFlight
+    // 0.13.0 report, 2026-08-10).
     if (passcodeSet && !unlocked && !inLock && !inSetPasscode) {
       router.replace('/lock');
     }
@@ -160,7 +161,11 @@ export default function RootLayout() {
         <Stack.Screen name="lock" />
         <Stack.Screen name="set-passcode" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="asset/[id]" options={{ animation: 'slide_from_right' }} />
+        {/* 0.18.6 field fix: the screen-edge swipe-back gesture was
+            stealing horizontal drags from the compare sliders on this
+            screen ("dragging horizontally closed the detail view"). The
+            Exhibits back button stays the way out. */}
+        <Stack.Screen name="asset/[id]" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
       </Stack>
     </SafeAreaProvider>
   );

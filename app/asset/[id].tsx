@@ -41,6 +41,7 @@ import { juxtaInputs } from '../../src/components/Juxtapose';
 import {
   MultipleLensCard,
   MotionTraceCard,
+  VideoMotionCard,
   EnvironmentCard,
   RawAudioCard,
   type SecondaryFrameRef,
@@ -89,7 +90,7 @@ import { useStore } from '../../src/store/useStore';
 const W = Dimensions.get('window').width;
 
 /**
- * HUD accents for this screen (the landed palette of the app icon:
+ * HUD accents for this screen (0.18.2 — the landed palette of the app icon:
  * sage, cream, warm neutrals, muted clay). Identity/name and identifying
  * details share the muted warm clay, matching the camera HUD's byline and
  * location chips (app/(tabs)/index.tsx); the pure blue and pure yellow are
@@ -321,7 +322,7 @@ function NlRow({ label, value, valueColor, detail, detailColor, mono }: {
 }
 
 // ---------------------------------------------------------------------------
-// Plan A: the collapsible group card — icon, title, chevron, and a
+// Plan A (0.14.0): the collapsible group card — icon, title, chevron, and a
 // one-line peek that stays visible whether open or closed. Three of these
 // (Capture / Integrity / Advanced) replace the old always-visible nutrition
 // label plus drawer.
@@ -338,7 +339,7 @@ function GroupCard({ icon, title, peek, open, onToggle, children }: {
   const grp = useThemedStyles(buildGrp);
   return (
     <View style={grp.card}>
-      {/* The WHOLE header is the toggle: icon, title, peek
+      {/* The WHOLE header is the toggle (0.18.3, Noah): icon, title, peek
           line and chevron sit inside one Pressable — the old head-row-only
           target was a fingertip-miss machine. */}
       <Pressable style={grp.headBlock} onPress={onToggle} accessibilityLabel={`${title} section`} accessibilityRole="button">
@@ -374,7 +375,10 @@ function SummaryLine({ record, report, signerTrust, placeName }: {
   let signer: string;
   if (record.deidentified) signer = 'A de-identified copy, re-signed on this phone';
   else if (identity && identity !== 'redacted' && identity.author) signer = `Sealed by ${identity.author}`;
-  else if (identity === 'redacted') signer = 'Sealed by a signer who redacted their alias';
+  // 0.18.6 (Noah): de-identified copies are caught above; identity
+  // 'redacted' HERE is an anonymous-mode capture — nothing was redacted,
+  // no byline was ever provided. Say that, not the act.
+  else if (identity === 'redacted') signer = 'Sealed without a byline';
   else if (signerTrust.tier === 'this-device') signer = 'Sealed by this phone';
   else if (signerTrust.tier === 'roster' && signerTrust.roster) signer = `Sealed by ${signerTrust.roster.roster.newsroom}`;
   else if (signerTrust.tier === 'org' && signerTrust.org) signer = `Sealed under ${signerTrust.org.subject}`;
@@ -480,7 +484,7 @@ function fmtAt(iso: string): string {
 }
 
 /**
- * The timestamp row: a standard nutrition-label row — label left,
+ * The timestamp row (0.18.1): a standard nutrition-label row — label left,
  * value right — never a giant heading. The value is the countersigned
  * authority time when a pinned token exists, the device clock otherwise;
  * the countersign state rides as the smaller sub-line in the app's existing
@@ -625,24 +629,37 @@ function formatExifValue(key: string, v: unknown): string {
  * the pair was taken). Hash-committed states are mirrored, never recomputed
  * here — the card decodes the committed bytes.
  */
-function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRef | null; ptsSeconds: number | null; recordError: string | null } {
+function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRef | null; ptsSeconds: number | null; recordError: string | null; videoFrames: import('../../src/components/forensic/MultipleLensCard').VideoPairFrameRef[] | null } {
   if (record.asset.kind === 'photo') {
     const f = record.stereo?.artifacts?.secondaryFrame;
     if (f?.state === 'recorded' && f.dataBase64) {
-      return { frame: { dataBase64: f.dataBase64, mime: f.mime, sha256: f.sha256 }, ptsSeconds: null, recordError: null };
+      return { frame: { dataBase64: f.dataBase64, mime: f.mime, sha256: f.sha256 }, ptsSeconds: null, recordError: null, videoFrames: null };
     }
-    return { frame: null, ptsSeconds: null, recordError: f?.state === 'error' ? f.error ?? 'the native module reported an error' : null };
+    return { frame: null, ptsSeconds: null, recordError: f?.state === 'error' ? f.error ?? 'the native module reported an error' : null, videoFrames: null };
   }
   if (record.asset.kind === 'video') {
-    const pair = record.videoStereo?.pairs?.find(
+    // 0.18.5 post-field: every recorded pair frame — the filmstrip surface.
+    const recordedPairs = (record.videoStereo?.pairs ?? []).filter(
       (p) => p.artifacts?.secondaryFrame?.state === 'recorded' && !!p.artifacts.secondaryFrame.dataBase64,
     );
+    const videoFrames = recordedPairs.map((p) => {
+      const f = p.artifacts.secondaryFrame;
+      return {
+        frame: { dataBase64: f.dataBase64!, mime: f.mime, sha256: f.sha256 },
+        pairIndex: p.pairIndex,
+        // 0.18.6 (Noah): the pair's own primary PTS anchor — a filmstrip
+        // tap re-seeks the blend's primary frame to THAT pair's moment.
+        ptsSeconds: p.anchors.primaryHostSeconds ?? null,
+      };
+    });
+    const pair = recordedPairs[0];
     const f = pair?.artifacts.secondaryFrame;
     if (f?.state === 'recorded' && f.dataBase64) {
       return {
         frame: { dataBase64: f.dataBase64, mime: f.mime, sha256: f.sha256 },
         ptsSeconds: pair?.anchors.primaryHostSeconds ?? null,
         recordError: null,
+        videoFrames: videoFrames.length > 0 ? videoFrames : null,
       };
     }
     // A committed pair whose frame errored is a stated failure; zero pairs
@@ -653,9 +670,10 @@ function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRe
       frame: null,
       ptsSeconds: null,
       recordError: ef?.state === 'error' ? ef.error ?? 'the native module reported an error' : null,
+      videoFrames: null,
     };
   }
-  return { frame: null, ptsSeconds: null, recordError: null };
+  return { frame: null, ptsSeconds: null, recordError: null, videoFrames: null };
 }
 
 /**
@@ -700,7 +718,7 @@ export default function AssetScreen() {
   const [ownFingerprint, setOwnFingerprint] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
-  // Plan A: the nutrition-label drawer is gone — three collapsible
+  // Plan A (0.14.0): the nutrition-label drawer is gone — three collapsible
   // groups carry the same facts (Capture open by default; Integrity and
   // Advanced collapsed behind a one-line peek each).
   const [groupOpen, setGroupOpen] = useState({ capture: true, integrity: false, advanced: false });
@@ -713,7 +731,7 @@ export default function AssetScreen() {
   // rows, and the raw manifest shown open at the bottom of Advanced.
   const [manifest, setManifest] = useState<C2paManifest | null>(null);
   const [legacyVideo, setLegacyVideo] = useState(false);
-  // The export sheet: one bottom sheet with the four bundle
+  // The export sheet (0.15.0 Drop 2): one bottom sheet with the four bundle
   // options — Basic / Full / Proof-Only / Custom — replacing the old two-step
   // share menu + share sheet.
   const [exportOpen, setExportOpen] = useState(false);
@@ -1073,7 +1091,7 @@ export default function AssetScreen() {
    * Export sheet: every media/proof share routes through the one bottom
    * sheet — Basic (private, withheld-fields copy) is the pre-selected
    * default, Full is the honest identifying alternative. No Alert.alert in
-   * the share path. The sheet changes UX only; the freshUri self-heal
+   * the share path. The sheet changes UX only; the freshUri() self-heal
    * plumbing underneath stays.
    */
   const shareMedia = () => {
@@ -1096,12 +1114,12 @@ export default function AssetScreen() {
         const rendered = await context.renderAsync();
         const out = await rendered.saveAsync({ format: SaveFormat.PNG });
         const pngBytes = await readFileBytes(out.uri);
-        const { signedPngBytes } = await deidentifyPhotoToPng({ pngBytes, key, capturedAt: record?.capturedAt });
+        const { signedPngBytes } = await deidentifyPhotoToPng({ pngBytes, key, capturedAt: record?.capturedAt, source: { context: record?.context ?? null, deviceModel: record?.device?.model ?? null } });
         const path = `${FileSystem.cacheDirectory}exhibit-deidentified-${entry.id}.png`;
         await writeFileBytes(path, signedPngBytes);
         if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType: 'image/png' });
       } else {
-        const { signedPhotoBytes } = await deidentifyPhoto({ photoUri: uri, key, capturedAt: record?.capturedAt });
+        const { signedPhotoBytes } = await deidentifyPhoto({ photoUri: uri, key, capturedAt: record?.capturedAt, source: { context: record?.context ?? null, deviceModel: record?.device?.model ?? null } });
         const path = `${FileSystem.cacheDirectory}exhibit-deidentified-${entry.id}.jpg`;
         await writeFileBytes(path, signedPhotoBytes);
         if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType: 'image/jpeg' });
@@ -1113,7 +1131,7 @@ export default function AssetScreen() {
     }
   };
 
-  /** De-identified video/audio share — drops byline/location/sensors and any transcript. */
+  /** De-identified video/audio share — drops byline/location/Wi-Fi/key linkage and any transcript; carries the non-identifying evidence (motion, sensors, second views) verbatim. */
   const shareDeidentifiedBmff = async () => {
     if (!mediaUri || !entry || (entry.kind !== 'video' && entry.kind !== 'audio')) return;
     setBusy('Making a de-identified copy · removing identity & re-signing…');
@@ -1123,7 +1141,7 @@ export default function AssetScreen() {
       if (!uri) throw new Error('Could not decrypt the item. Is the vault locked?');
       const bytes = await readFileBytes(uri);
       const mime = record?.asset.mime ?? (entry.kind === 'audio' ? 'audio/mp4' : 'video/mp4');
-      const { signedBytes } = await deidentifyBmff({ bytes, mime, kind: entry.kind, key, capturedAt: record?.capturedAt });
+      const { signedBytes } = await deidentifyBmff({ bytes, mime, kind: entry.kind, key, capturedAt: record?.capturedAt, source: { context: record?.context ?? null, deviceModel: record?.device?.model ?? null } });
       const ext = mime === 'video/quicktime' ? 'mov' : entry.kind === 'audio' ? 'm4a' : 'mp4';
       const path = `${FileSystem.cacheDirectory}verify-deidentified-${entry.id}.${ext}`;
       await writeFileBytes(path, signedBytes);
@@ -1193,13 +1211,13 @@ export default function AssetScreen() {
     ]);
   };
 
-  // The raw manifest reel is the shared ManifestReel component —
+  // The raw manifest reel is the shared ManifestReel component (0.18.3) —
   // the FULL manifest, uncapped, windowed so a video manifest's telemetry
   // actually renders. See src/components/ManifestReel.tsx.
 
   // Forensic Checks inputs, derived once from the sealed record.
   const secondary = useMemo(
-    () => (record ? secondaryFrameFor(record) : { frame: null, ptsSeconds: null, recordError: null }),
+    () => (record ? secondaryFrameFor(record) : { frame: null, ptsSeconds: null, recordError: null, videoFrames: null }),
     [record],
   );
   const enfAnchor = useMemo(() => (record ? readEnfAnchor(record) : null), [record]);
@@ -1237,6 +1255,9 @@ export default function AssetScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.topBar}>
         <Button small tone="ghost" icon="chevron-back" label="Exhibits" onPress={() => router.back()} />
+        {/* The corner status pill was removed (0.14.0): it duplicated the
+            trust ladder two scrolls down and read as decoration. State lives
+            in the ladder, once. */}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
@@ -1271,16 +1292,16 @@ export default function AssetScreen() {
           <MediaViewer uri={mediaUri} kind={entry.kind} onClose={() => setViewerOpen(false)} />
         ) : null}
 
-        {/* One plain sentence up top: signer, when, where, seal state, time
-            anchor. Compressed, not omitted. */}
+        {/* Plan A (0.14.0): one plain sentence up top — signer, when, where,
+            seal state, time anchor. Compression, never omission. */}
         {record ? (
           <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
             <SummaryLine record={record} report={report} signerTrust={signerTrust} placeName={placeName} />
           </View>
         ) : null}
 
-        {/* Exactly three actions: Share opens the
-            export sheet (Basic / Full / Proof-Only /
+        {/* Exactly three actions (Noah's call, 0.14.0): Share opens the
+            export sheet (0.15.0 Drop 2 — Basic / Full / Proof-Only /
             Custom); Download and Delete are their own buttons. */}
         <View style={styles.actions}>
           <View style={styles.actionCell}>
@@ -1316,7 +1337,7 @@ export default function AssetScreen() {
           </View>
         </View>
 
-        {/* the export-defaults explainer was removed (stated in the
+        {/* 0.18.2: the export-defaults explainer was removed (stated in the
             export sheet itself). The spacer keeps the rhythm the copy
             occupied — two lines at fontSize.xs — so the layout doesn't
             collapse upward. */}
@@ -1338,9 +1359,10 @@ export default function AssetScreen() {
           </View>
         ) : null}
 
-        {/* Three collapsible groups. Capture, open by default, answers
-            "when, where, on what". Device-originated claims sit under heads
-            that carry the device-reported caveat once. */}
+        {/* Plan A (0.14.0): three collapsible groups replace the nutrition
+            label + drawer. Capture (open by default) answers "when, where,
+            on what" — device-originated claims are grouped under heads that
+            carry the device-reported caveat once. */}
         {record ? (
           <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
             <GroupCard
@@ -1352,11 +1374,18 @@ export default function AssetScreen() {
             >
               <Text style={nl.drawerHead}>When &amp; Where</Text>
               <TimestampBlock report={report} otsView={otsView} capturedAt={record.capturedAt} />
+              {/* 0.18.6 (Noah): 'redacted' in an anonymous-mode capture means
+                  no byline was ever provided — the word "redacted" asserts a
+                  removal that never happened. Only a de-identified COPY
+                  (the marker is set by the re-seal) earns "Redacted by
+                  signer"; everything else with no name reads Not provided. */}
               {identity === 'redacted' ? (
-                <NlRow label="Alias" value="Redacted by signer" />
+                <NlRow label="Byline" value={record.deidentified ? 'Redacted by signer' : 'Not provided'} />
               ) : identity?.author ? (
-                <NlRow label="Alias" value={identity.author} valueColor={HUD.identity} />
-              ) : null}
+                <NlRow label="Byline" value={identity.author} valueColor={HUD.identity} />
+              ) : (
+                <NlRow label="Byline" value="Not provided" />
+              )}
               {loc === 'redacted' ? (
                 <NlRow label="Location" value="Redacted by signer" />
               ) : loc === 'unavailable' ? (
@@ -1368,6 +1397,7 @@ export default function AssetScreen() {
                     <Text style={[nl.value, { color: HUD.identifying }]} selectable>
                       {`${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)}`}
                     </Text>
+                    <Text style={nl.detail}>Device-reported.</Text>
                     <Pressable
                       style={nl.mapsButton}
                       hitSlop={6}
@@ -1387,7 +1417,7 @@ export default function AssetScreen() {
                 <NlRow label="Wi-Fi" value="Unavailable at capture" />
               ) : ctx?.wifi ? (
                 <>
-                  {/* the BSSID is the corroboratable claim; the
+                  {/* 0.14.0: the BSSID is the corroboratable claim; the
                       network name is kept off this page (anyone can name
                       a network anything — and it's a privacy leak). */}
                   {ctx.wifi.bssid ? <NlRow label="Wi-Fi BSSID" value={ctx.wifi.bssid} mono /> : (
@@ -1403,8 +1433,9 @@ export default function AssetScreen() {
                   label="Platform"
                   value={record.device.platform === 'ios' ? 'iOS' : record.device.platform}
                 />
-                {/* the capture software is a capture claim like any
-                    other — the sealed claim-generator string ("Source Kit/ (com.verify.camera)"), the record's own app block
+                {/* 0.18.1: the capture software is a capture claim like any
+                    other — the sealed claim-generator string ("Source Kit/
+                    0.18.0 (com.verify.camera)"), the record's own app block
                     as the honest fallback. */}
                 <NlRow
                   label="Capture software"
@@ -1412,7 +1443,8 @@ export default function AssetScreen() {
                 />
                 {/* An absent org credential says nothing — never a warning. */}
                 {orgValue ? <NlRow label="Organization" value={orgValue} /> : null}
-                {/* Alias renders once — in When & Where above (dedupe). */}
+                {/* Byline renders once — in When & Where above (0.14.0
+                    dedupe). */}
               </View>
 
               {/* Sensors sit at the bottom of Capture; the head carries the
@@ -1422,7 +1454,7 @@ export default function AssetScreen() {
                   <Text style={nl.drawerHead}>Sensors (Device-reported)</Text>
                   {ctx?.headingDeg != null ? <NlRow label="Heading" value={`${ctx.headingDeg}°`} /> : null}
                   {ctx?.pressureHPa != null ? <NlRow label="Barometer" value={`${ctx.pressureHPa} hPa`} /> : null}
-                  {/* altitude rides the same sensors block here as on
+                  {/* 0.18.1: altitude rides the same sensors block here as on
                       the Inspect screen — same sealed claim, same row. */}
                   {ctx?.altitudeM != null ? <NlRow label="Altitude (baro.)" value={`${ctx.altitudeM} m`} /> : null}
                   {ctx?.motion ? (
@@ -1430,17 +1462,22 @@ export default function AssetScreen() {
                   ) : null}
                   {/* Sensor timing renders once — under Integrity, where
                       sampler regularity belongs as an integrity signal
-                      (dedupe). */}
+                      (0.14.0 dedupe). */}
                 </View>
               ) : null}
+
+              {/* Mains frequency (0.14.0): removed from this page. It was
+                  region-derived, never measured — decoration, not
+                  evidence. The ENF question moves to the raw-audio
+                  master, where it can be measured for real. */}
 
               {manifest?.exif && Object.keys(manifest.exif.data).filter((k) => k !== 'note').length > 0 ? (
                 <View style={nl.drawerSection}>
                   <Text style={nl.drawerHead}>Camera Settings (Device-reported)</Text>
                   {/* The sealed block's `note` key is provenance boilerplate
                       ("camera-pipeline-reported, signed as self-reported
-                      metadata"), not a camera setting, so it gets no row. The
-                      head already carries the device-reported caveat. */}
+                      metadata"), not a camera setting — never a row (0.18.1).
+                      The head already carries the device-reported caveat. */}
                   {Object.entries(manifest.exif.data).filter(([k]) => k !== 'note').map(([k, v]) => (
                     <NlRow key={k} label={EXIF_LABELS[k] ?? k} value={formatExifValue(k, v)} />
                   ))}
@@ -1523,7 +1560,7 @@ export default function AssetScreen() {
                   true. Each module measures on this device or fetches from a
                   stated source; none of them concludes. Lens, motion-trace
                   and environment checks read PICTURE evidence — they hide on
-                  audio captures; the raw-audio master is the
+                  audio captures (0.18.3, Noah); the raw-audio master is the
                   one audio-applicable check and always renders. */}
               <View style={{ marginBottom: spacing.md }}>
                 <Text style={nl.drawerHead}>Forensic Checks</Text>
@@ -1535,12 +1572,24 @@ export default function AssetScreen() {
                       secondaryFrame={secondary.frame}
                       primaryFrameTimeSeconds={secondary.ptsSeconds}
                       recordError={secondary.recordError}
+                      videoFrames={secondary.videoFrames}
                     />
-                    <MotionTraceCard
-                      ringBufferDir={record.context?.captureEvidence?.ringBufferDir}
-                      poseTrace={record.context?.poseTrace}
-                      motion={record.context?.motion}
-                    />
+                    {entry.kind === 'video' ? (
+                      // 0.18.6 (Noah: "we're not doing pose trace for video
+                      // too!"): a video take has no shutter burst — its
+                      // serial photography is the committed pair frames and
+                      // its pose trace is the sealed sensor JSONL.
+                      <VideoMotionCard
+                        videoFrames={secondary.videoFrames}
+                        sensorLogPath={record.context?.captureEvidence?.sensorLogPath}
+                      />
+                    ) : (
+                      <MotionTraceCard
+                        ringBufferDir={record.context?.captureEvidence?.ringBufferDir}
+                        poseTrace={record.context?.poseTrace}
+                        motion={record.context?.motion}
+                      />
+                    )}
                     <EnvironmentCard
                       lat={juxta?.lat ?? null}
                       lon={juxta?.lon ?? null}
@@ -1644,7 +1693,7 @@ export default function AssetScreen() {
                 <Button small icon="finger-print-outline" label="Hash-only claim" tone="secondary" onPress={() => void shareProofJson('hash-only')} loading={busy === 'Building proof…'} />
               </View>
 
-              {/* the "Full report" drawer (AttestationView) was
+              {/* 0.14.2: the "Full report" drawer (AttestationView) was
                   removed — it re-rendered signature timing, sensor-frame
                   timing, the pose trace and the signer fingerprint, all of
                   which already live once in the Capture / Integrity groups
@@ -1654,7 +1703,7 @@ export default function AssetScreen() {
               {/* The raw C2PA manifest: shown OPEN at the bottom of Advanced
                   — the FULL manifest, windowed, never behind a drawer. Copy
                   is how the manifest leaves the phone; what you see is what
-                  you copy. */}
+                  you copy (0.18.3, Noah: "it needs to be the FULL manifest"). */}
               {manifest ? <ManifestReel manifest={manifest} /> : null}
             </GroupCard>
           </View>
@@ -1667,7 +1716,7 @@ export default function AssetScreen() {
         )}
       </ScrollView>
 
-      {/* The four export bundles (2): Basic (private — withheld
+      {/* The four export bundles (0.15.0 Drop 2): Basic (private — withheld
           fields stated inside the copy), Full (identifying, unchanged),
           Proof-Only (no media), Custom (per-field toggles, one screen down).
           The desk handoff, when configured, rides below the four — transport,
@@ -1818,6 +1867,7 @@ const buildStyles = () => StyleSheet.create({
     marginBottom: spacing.md,
   },
   codeBox: {
+    // Mockup .hash: #101013 inset, radius 8, hairline border.
     backgroundColor: '#101013',
     borderWidth: 1,
     borderColor: colors.border,
@@ -1892,6 +1942,7 @@ const buildNl = () => StyleSheet.create({
     paddingTop: spacing.sm,
   },
   drawerSection: { marginTop: spacing.md },
+  // Mockup .sec h2: 10.5px / 800 / wide tracking / dim ink / uppercase.
   drawerHead: {
     color: colors.textFaint,
     fontSize: 10.5,
@@ -1905,6 +1956,7 @@ const buildNl = () => StyleSheet.create({
 /** Plan A group cards — paper surface, header row, peek, chevron body. */
 const buildGrp = () => StyleSheet.create({
   card: {
+    // Mockup .card: flat surface, 1px hairline border, radius 14.
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1929,6 +1981,7 @@ const buildGrp = () => StyleSheet.create({
  *  where a verdict was genuinely earned (green) or proven (red). */
 const buildSumStyles = () => StyleSheet.create({
   card: {
+    // Mockup .card: flat surface, 1px hairline border, radius 14.
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,

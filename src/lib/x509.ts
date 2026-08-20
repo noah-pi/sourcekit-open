@@ -38,7 +38,7 @@ import { p256 } from '@noble/curves/p256';
 import { p384 } from '@noble/curves/p384';
 import { sha256 } from '@noble/hashes/sha256';
 import { sha384, sha512 } from '@noble/hashes/sha2';
-import { bytesToHex, bytesToUtf8, equalBytes } from './bytes';
+import { bytesToHex, bytesToUtf8, concatBytes, equalBytes, hexToBytes } from './bytes';
 
 // ---------------------------------------------------------------------------
 // TLV reader
@@ -102,6 +102,7 @@ const OID = {
   p256: '2a8648ce3d030107',            // 1.2.840.10045.3.1.7 secp256r1
   p384: '2b81040022',                  // 1.3.132.0.34 secp384r1
   rsaEncryption: '2a864886f70d010101', // 1.2.840.113549.1.1.1
+  rsassaPss: '2a864886f70d01010a',     // 1.2.840.113549.1.1.10 — RSA key typed for PSS (RFC 4056); same RSAPublicKey material
   ecdsaSha256: '2a8648ce3d040302',     // 1.2.840.10045.4.3.2
   ecdsaSha384: '2a8648ce3d040303',     // 1.2.840.10045.4.3.3
   ecdsaSha512: '2a8648ce3d040304',     // 1.2.840.10045.4.3.4
@@ -196,7 +197,11 @@ function parseSpki(spki: Uint8Array): ParsedCert['keyAlg'] {
     }
     return { kind: 'ec', curve, point: keyBytes };
   }
-  if (algHex === OID.rsaEncryption) {
+  // id-RSASSA-PSS as the KEY type (Adobe's C2PA certs) carries the identical
+  // RSAPublicKey (n, e) as rsaEncryption — RFC 4056 §1.2. Any params field
+  // only restricts which PSS variant the key SHOULD be used with; the COSE
+  // alg header governs here, and a mismatch fails the signature check closed.
+  if (algHex === OID.rsaEncryption || algHex === OID.rsassaPss) {
     const seq = readTlv(keyBytes, 0);
     const nTlv = readTlv(seq.content, 0);
     const eTlv = readTlv(seq.content, nTlv.next);
@@ -212,6 +217,34 @@ function parseSpki(spki: Uint8Array): ParsedCert['keyAlg'] {
     return { kind: 'rsa', n, e };
   }
   throw new Error(`unsupported public key algorithm OID ${algHex}`);
+}
+
+/**
+ * Extracts ONLY the SubjectPublicKeyInfo from a DER certificate — no chain
+ * semantics, no critical-extension policy, no validity windows. This is the
+ * right tool when the certificate merely NAMES a key (a COSE x5chain leaf
+ * for signature verification): the signature check itself proves possession,
+ * and a strict parseCertificate would reject certs signed with algorithms
+ * we don't chain-verify (e.g. Adobe's RSASSA-PSS-signed certs) even though
+ * the key inside is perfectly readable. Trust decisions still require the
+ * strict path — this never substitutes for it.
+ */
+export function publicKeyFromCert(der: Uint8Array): ParsedCert['keyAlg'] | null {
+  try {
+    const cert = readTlv(der, 0);
+    if (cert.tag !== 0x30) return null;
+    const tbs = readTlv(cert.content, 0);
+    if (tbs.tag !== 0x30) return null;
+    // TBSCertificate fields in order: [0]-explicit version (optional), then
+    // serialNumber, signature, issuer, validity, subject, subjectPublicKeyInfo.
+    let cur = readTlv(tbs.content, 0);
+    if (cur.tag === 0xa0) cur = readTlv(tbs.content, cur.next); // skip version
+    for (let i = 0; i < 5; i++) cur = readTlv(tbs.content, cur.next); // serial…subject
+    if (cur.tag !== 0x30) return null;
+    return parseSpki(cur.content);
+  } catch {
+    return null;
+  }
 }
 
 /** Parses one DER certificate. Throws on anything malformed or unsupported. */
@@ -373,6 +406,85 @@ export function verifySignatureWithKey(
     if (psLen < 8) return false;
     const expected = '0001' + 'ff'.repeat(psLen) + '00' + tHex;
     return emHex === expected;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RSASSA-PSS (RFC 8017 §9.1.2) — COSE PS256/PS384/PS512, used by foreign C2PA
+// signers (Adobe's 2022-era files are RSA-PSS-4096). Pure BigInt, no WebCrypto.
+// ---------------------------------------------------------------------------
+
+const PSS_DIGEST: Record<string, (m: Uint8Array) => Uint8Array> = {
+  sha256,
+  sha384,
+  sha512,
+};
+
+/** MGF1 (RFC 8017 §B.2.1) over the given hash. */
+function mgf1(seed: Uint8Array, maskLen: number, hashFn: (m: Uint8Array) => Uint8Array): Uint8Array {
+  const hLen = hashFn(new Uint8Array(0)).length;
+  const out = new Uint8Array(maskLen);
+  let done = 0;
+  for (let counter = 0; done < maskLen; counter++) {
+    const c = new Uint8Array(4);
+    new DataView(c.buffer).setUint32(0, counter, false);
+    const h = hashFn(concatBytes(seed, c));
+    out.set(h.subarray(0, Math.min(hLen, maskLen - done)), done);
+    done += hLen;
+  }
+  return out;
+}
+
+/**
+ * RSASSA-PSS verify (EMSA-PSS-VERIFY) with salt-length RECOVERY — the salt
+ * length is read back from the encoding (OpenSSL RSA_PSS_SALTLEN_AUTO
+ * semantics) instead of being assumed. Recovery is sound here because the
+ * final H === H′ comparison binds the recovered salt: a wrong split yields a
+ * wrong H′ and fails. Every structural rejection above that comparison fails
+ * closed — nothing about a guess can make an invalid encoding pass.
+ */
+export function verifyRsaPss(
+  key: { n: bigint; e: bigint },
+  hashName: 'sha256' | 'sha384' | 'sha512',
+  message: Uint8Array,
+  signature: Uint8Array,
+): boolean {
+  try {
+    const hashFn = PSS_DIGEST[hashName];
+    const hLen = hashFn(new Uint8Array(0)).length;
+    const modBits = key.n.toString(2).length;
+    const k = Math.ceil(modBits / 8);
+    if (signature.length !== k) return false;
+    const s = BigInt('0x' + bytesToHex(signature));
+    if (s >= key.n) return false;
+    const m = modpow(s, key.e, key.n);
+    const emBits = modBits - 1;
+    const emLen = Math.ceil(emBits / 8);
+    if (emLen < hLen + 2) return false;
+    const em = hexToBytes(m.toString(16).padStart(k * 2, '0')).subarray(k - emLen); // I2OSP(m, emLen)
+    if (em[emLen - 1] !== 0xbc) return false;
+    const maskedDB = em.subarray(0, emLen - hLen - 1);
+    const H = em.subarray(emLen - hLen - 1, emLen - 1);
+    const unusedBits = 8 * emLen - emBits;
+    if (unusedBits > 0 && (maskedDB[0] & (0xff << (8 - unusedBits))) !== 0) return false;
+    const dbMask = mgf1(H, emLen - hLen - 1, hashFn);
+    const DB = new Uint8Array(maskedDB.length);
+    for (let i = 0; i < DB.length; i++) DB[i] = maskedDB[i] ^ dbMask[i];
+    if (unusedBits > 0) DB[0] &= 0xff >>> unusedBits;
+    // Zero padding, then a single 0x01 separator, then the salt (recovered length).
+    let sep = -1;
+    for (let i = 0; i < DB.length; i++) {
+      if (DB[i] === 0x00) continue;
+      if (DB[i] === 0x01) sep = i;
+      break;
+    }
+    if (sep < 0 || sep + 1 >= DB.length) return false;
+    const salt = DB.subarray(sep + 1);
+    const mHash = hashFn(message);
+    const hPrime = hashFn(concatBytes(new Uint8Array(8), mHash, salt));
+    return equalBytes(hPrime, H);
   } catch {
     return false;
   }

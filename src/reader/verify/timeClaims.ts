@@ -44,7 +44,7 @@ export function captureToSealCard(record: AttestationRecord): EvidenceCard {
     return makeNotRun(
       'time.capture-to-seal', 'Shutter → seal latency',
       'the record carries no capture-integrity commitment, so the camera never stated when it sealed relative to the shutter',
-      { audit: 'Audit ▸ AttestationRecord.captureIntegrity; absent on older records' },
+      { audit: 'Audit ▸ AttestationRecord.captureIntegrity (0.9.3+); absent on older records' },
     );
   }
   const latency = record.captureIntegrity.captureToSignatureMs;
@@ -75,7 +75,7 @@ export function captureToSealCard(record: AttestationRecord): EvidenceCard {
     id: 'time.capture-to-seal', title: 'Shutter → seal latency', state: 'diverges',
     prediction, measurement, method,
     gap: `${(latency / 1000).toFixed(1)} s exceeds the ${SEAL_LATENCY_TOLERANCE_MS / 1000} s tolerance by ${((latency - SEAL_LATENCY_TOLERANCE_MS) / 1000).toFixed(1)} s`,
-    interpretation: 'a long shutter→seal gap leaves room for the bytes to have been altered before signing. The signer committed to this gap; a person weighs why it exists',
+    interpretation: 'a long shutter→seal gap leaves room for the bytes to have been altered before signing. The signer committed to this gap; the data does not say why it exists',
   });
 }
 
@@ -86,7 +86,7 @@ export function beaconOrderCard(record: AttestationRecord): EvidenceCard {
     return makeNotRun(
       'time.beacon-lower-bound', 'Beacon lower bound',
       'the record carries no Bitcoin beacon, so no signed time lower bound was committed (absent, never fabricated, when no tip was cached)',
-      { audit: 'Audit ▸ AttestationRecord.beacon' },
+      { audit: 'Audit ▸ AttestationRecord.beacon (0.10.0, W1.4)' },
     );
   }
   const capturedMs = ms(record.capturedAt);
@@ -183,7 +183,7 @@ export function otsSubmissionCard(record: AttestationRecord): EvidenceCard {
     id: 'time.ots-submission', title: 'Ledger submission timing', state: 'agrees',
     prediction, measurement, method,
     gap: `all ${gaps.length} submission(s) follow the seal within the expected order${anyQueue ? '; a committed queue delay explains the wait (offline at signing, stated by the signer)' : ''}`,
-    interpretation: 'consistent with the payload existing before the calendars witnessed it; the receipts themselves are checked on custody rung 4. This card only weighs their ORDER',
+    interpretation: 'consistent with the payload existing before the calendars witnessed it; the receipts themselves are checked on custody rung 4. This card only checks their ORDER',
   });
 }
 

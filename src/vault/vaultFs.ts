@@ -43,7 +43,7 @@ import type { AttestationRecord } from '../provenance/manifest';
 
 const KEY_STORE = 'verify_vault_key_v1';
 /**
- * When the app lock is set, the vault key moves
+ * 0.9.0 source protection: when the app lock is set, the vault key moves
  * behind the OS keychain's own access control (requireAuthentication →
  * kSecAccessControlUserPresence). iOS itself then demands Face ID / device
  * passcode before ANY process can read the key — enforcement by the OS
@@ -83,7 +83,27 @@ const KEY_OPTIONS: SecureStore.SecureStoreOptions = {
 const ACL_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   requireAuthentication: true,
+  // 0.18.6: a cold-cache ACL read can happen at any moment (a grid
+  // thumbnail decrypt, the background seal pump). Without a message the
+  // system Face ID prompt appeared with no context at all — users ignored
+  // or cancelled it, and the read then wedged or threw mid-seal (field
+  // report: "face ID results in errors if it's on").
+  authenticationPrompt: 'Unlock your Source Kit vault',
 };
+
+/**
+ * The one canonical vault-lock failure (0.18.6). expo-secure-store surfaces
+ * a cancelled/system-cancelled presence prompt as either a null read OR a
+ * rejection, depending on the OS path — both are normalized to this error
+ * at the single read site so callers (the seal pump especially) can match
+ * on one stable signature instead of guessing at keychain error strings.
+ */
+export const VAULT_LOCKED_MESSAGE =
+  'Vault is locked; device authentication is required to read the vault key.';
+
+export function isVaultLockedError(e: unknown): boolean {
+  return e instanceof Error && e.message === VAULT_LOCKED_MESSAGE;
+}
 
 async function aclEnabled(): Promise<boolean> {
   try {
@@ -101,7 +121,7 @@ async function aclEnabled(): Promise<boolean> {
 export async function upgradeVaultKeyAcl(): Promise<void> {
   if (await aclEnabled()) return;
   const existing = await SecureStore.getItemAsync(KEY_STORE, KEY_OPTIONS);
-  if (!existing) return; // no key yet — first creation honors the ACL path via hasPasscode
+  if (!existing) return; // no key yet — first creation honors the ACL path via hasPasscode()
   await SecureStore.setItemAsync(KEY_STORE_ACL, existing, ACL_OPTIONS);
   await SecureStore.deleteItemAsync(KEY_STORE, KEY_OPTIONS);
   await SecureStore.deleteItemAsync(KEY_STORE_ACL, KEY_OPTIONS);
@@ -131,10 +151,10 @@ export interface VaultIndexEntry {
   motionVerdict: string | null;
   hasLocation: boolean;
   /**
-   * Grid badge flags — what's embedded, visible at a glance on
+   * Grid badge flags (0.11.1, §4) — what's embedded, visible at a glance on
    * the exhibits grid. Computed at seal time; legacy entries gain it on
    * first grid read via ensureEntryFlags (backfilled from the record, never
-   * by decrypting media). Optional for data compat with pre-indexes.
+   * by decrypting media). Optional for data compat with pre-0.11.1 indexes.
    *   sealed      — always true for vault items (the lock is the default state)
    *   location    — GPS coordinates embedded
    *   identifying — byline OR sensor log OR transcript OR face-check flag OR wifi claim
@@ -151,7 +171,7 @@ export interface VaultIndexEntry {
   phash: string | null;
 }
 
-/** Grid badge flags — see VaultIndexEntry.flags. */
+/** Grid badge flags (0.11.1, §4) — see VaultIndexEntry.flags. */
 export interface VaultFlags {
   sealed: true;
   location: boolean;
@@ -252,7 +272,7 @@ let keyCache: Uint8Array | null = null;
 /**
  * In-flight seal counter (D2): the cached vault key may be dropped on
  * background/lock ONLY when no seal is mid-write. Otherwise the seal
- * queue's next getVaultKey would need a fresh keychain read — under ACL
+ * queue's next getVaultKey() would need a fresh keychain read — under ACL
  * that is a user-presence prompt — in a background window where no prompt
  * can appear, and work already in progress would fail instead of finish.
  * Incremented/decremented INSIDE the seal entry points (sealVaultJson,
@@ -269,14 +289,46 @@ export function releaseVaultKeyIfIdle(): void {
   if (inFlightSeals === 0) keyCache = null;
 }
 
+/**
+ * Primes keyCache under FRESH user presence (0.18.6 — call it from the
+ * unlock path, where the user just authenticated). Without this, the first
+ * vault read of a session happened wherever it happened — a grid thumbnail
+ * decrypt or a background seal job — and the OS user-presence prompt
+ * appeared at that arbitrary moment. Ignored prompts wedged the seal pump
+ * (cancels only land at checkpoints, so a cancelled-then-stuck job
+ * "reappeared as loading until a timeout"); cancelled prompts threw and
+ * burned seal attempts until jobs failed (field report: "face ID results
+ * in errors if it's on", "the exhibit grid gets stuck on certain images").
+ * Best-effort: a cancelled warm leaves the vault cold and the next real
+ * read prompts again — exactly the pre-0.18.6 behavior, never worse.
+ */
+export async function warmVaultKey(): Promise<boolean> {
+  try {
+    await getVaultKey();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function getVaultKey(): Promise<Uint8Array> {
   if (keyCache) return keyCache;
   if (await aclEnabled()) {
-    const aclExisting = await SecureStore.getItemAsync(KEY_STORE_ACL, ACL_OPTIONS);
+    // 0.18.6: every failure of this read — user cancel, system cancel,
+    // interaction-not-allowed in a background window — is the SAME state
+    // (the key is unreadable right now) and becomes the canonical
+    // VAULT_LOCKED_MESSAGE, so the seal pump can defer without burning a
+    // retry attempt instead of dying on a raw keychain error string.
+    let aclExisting: string | null = null;
+    try {
+      aclExisting = await SecureStore.getItemAsync(KEY_STORE_ACL, ACL_OPTIONS);
+    } catch {
+      aclExisting = null;
+    }
     if (!aclExisting) {
       // Auth cancelled or item unreadable — a HARD LOCK. Never regenerate:
       // regenerating over a locked key would brick the existing vault.
-      throw new Error('Vault is locked; device authentication is required to read the vault key.');
+      throw new Error(VAULT_LOCKED_MESSAGE);
     }
     const key = base64ToBytes(aclExisting);
     keyCache = key;
@@ -367,7 +419,7 @@ export async function ensureVaultDirs(): Promise<void> {
  * path funnels its read-modify-write through readIndex, so this error
  * refuses the write: persisting an empty-looking read over a corrupted
  * index would orphan every record already in the vault. The recovery path
- * is rebuildIndexFromRecords.
+ * is rebuildIndexFromRecords().
  */
 export class VaultIndexCorruptedError extends Error {
   constructor(message: string) {
@@ -406,7 +458,7 @@ async function writeIndex(items: VaultIndexEntry[]): Promise<void> {
 }
 
 /**
- * Brief-notice subscription: fires when the vault repaired itself
+ * Brief-notice subscription (0.18.2): fires when the vault repaired itself
  * — currently the only case is an automatic index rebuild after a
  * VaultIndexCorruptedError. The tab chrome renders it as a short banner.
  */
@@ -425,7 +477,7 @@ export async function listItems(): Promise<VaultIndexEntry[]> {
     items = await readIndex();
   } catch (e) {
     if (!(e instanceof VaultIndexCorruptedError)) throw e;
-    // Self-repair, replacing the manual "Rebuild index" row. A
+    // 0.18.2: self-repair, replacing the manual "Rebuild index" row. A
     // corrupted index fails the vault CLOSED (reads throw, writes refuse),
     // so waiting for a user to find a recovery button in Settings meant a
     // permanently empty-looking collection. Rebuild from the sealed
@@ -448,19 +500,19 @@ export interface SaveItemParams {
   audioUri?: string;
   record: AttestationRecord;
   /**
-   * Seal-time hint for the badge flags: an audio transcript lives
+   * Seal-time hint for the badge flags (0.11.1): an audio transcript lives
    * in the embedded manifest, not the record — the seal queue is the one
    * place that knows it exists. Never re-derived from media later.
    */
   transcriptPresent?: boolean;
   /**
-   * Audio "thumbnail": the first ~140 chars of the on-device
+   * Audio "thumbnail" (0.14.0): the first ~140 chars of the on-device
    * transcript, sealed beside the media so the grid can show words instead
    * of a bare mic icon. Absent when transcription was off — never invented.
    */
   transcriptSnippet?: string;
   /**
-   * D1: the capture-side depth artifact, sealed beside the media
+   * D1 (0.16.0): the capture-side depth artifact, sealed beside the media
    * as `${id}.depth.bin` with the same vault key — the exact privacy
    * contract the media has. Its sha256 is committed pre-signing in the
    * record (context.depth) and in c2pa.hash.collection.data; this is the
@@ -500,7 +552,7 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
     // never fail a save, so this whole block is best-effort.
     let phash: string | null = null;
     if (params.kind === 'video' && uri) {
-      // Video grid thumbnail: a frame ~0.5 s in, resized small,
+      // Video grid thumbnail (0.14.0): a frame ~0.5 s in, resized small,
       // sealed with the same vault key — the exact privacy contract photos
       // already had. The frame extraction reads the still-on-disk draft at
       // seal time; a failure degrades to the placeholder icon, never a
@@ -540,7 +592,7 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
     }
     if (params.kind === 'audio' && params.transcriptSnippet) {
       // The audio "thumbnail" is words, not pixels: the first breath of the
-      // on-device transcript, sealed like the media. Best-effort —
+      // on-device transcript, sealed like the media (0.14.0). Best-effort —
       // the grid falls back to the mic icon.
       try {
         await writeFileBytes(
@@ -571,7 +623,7 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
         // pHash: a 32×32 grayscale reduction → DCT hash → 8
         // bytes in the index. Lossy JPEG at 32×32 is exactly what pHash is
         // robust against. Best-effort like the thumbnail — null, never fatal.
-        // Since (C3) the pHash is ALSO computed pre-signing in the
+        // Since 0.16.0 (C3) the pHash is ALSO computed pre-signing in the
         // attest path (attest.ts photoPhashHex) and committed under the
         // COSE claim as c2pa.soft-binding — this post-embed computation is
         // now at most a cross-check of that signed value plus the vault
@@ -657,7 +709,7 @@ export async function getRecord(id: string): Promise<AttestationRecord | null> {
 
 /**
  * Re-writes an item's encrypted record through `mutate`. Used for data that
- * legitimately arrives after sealing — OTS receipt upgrades, which
+ * legitimately arrives after sealing — OTS receipt upgrades (0.9.1), which
  * are excluded from the signed payload precisely so this can happen without
  * breaking the signature. Returns the updated record, or null if the item
  * is gone. Never throws.
@@ -802,9 +854,9 @@ export async function decryptThumbToCache(id: string, opts?: { fallbackToFull?: 
 }
 
 /**
- * Legacy-video thumbnail backfill. Videos sealed before grid thumbnails
- * existed have no .thumb.bin and would show the bare icon forever. This
- * generates one
+ * Legacy-video thumbnail backfill (0.14.0 — "videos still need
+ * thumbnails"): videos sealed before grid thumbnails existed have no
+ * .thumb.bin and would show the bare icon forever. This generates one
  * lazily, on first grid view: the media decrypts into the plain cache
  * (shredded on lock/background like every plaintext), one frame is grabbed
  * ~0.5 s in, resized, and sealed beside the media — from then on it is a

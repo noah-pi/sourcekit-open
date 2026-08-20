@@ -20,14 +20,16 @@ import CoreMotion
  *     honest rate record; nothing is resampled or interpolated.
  *   - Buffer: a ring hard-capped at 12,000 samples (60 s at the
  *     100 Hz × 2-stream target, ~0.6 MB of value-type structs). Memory never
- *     grows with session length; stop drops the contents — no buffer
+ *     grows with session length; stop() drops the contents — no buffer
  *     retention beyond the ring.
  *   - File format: JSONL, EXACTLY the CaptureKit SensorLogger line format,
  *     so the desk speaks one sensor language for every media kind:
  *       {"t":<bootSec>,"mach":<machTicks>,"kind":"accel","x":..,"y":..,"z":..}
  *       {"t":<bootSec>,"mach":<machTicks>,"kind":"gyro","x":..,"y":..,"z":..}
  *     The FIRST line is the anchor record binding the sensor clock to the
- *     event's wall clock (shutter ms / recording-start ms):
+ *     event's wall clock (shutter ms / recording-start ms) — machAtAnchor /
+ *     bootSecAtAnchor are the EVENT's instant on the sensor clock, so a
+ *     reader can re-zero the window against either domain:
  *       {"kind":"anchor","startedAtMs":..,"machAtAnchor":..,"bootSecAtAnchor":..}
  *     The SECOND line states the flush window honestly — including tail
  *     truncation when a recording outlived the ring span:
@@ -186,12 +188,20 @@ final class ExhibitSensorLogger {
   /// evidence — the module reports 'unavailable'). Throws on I/O failure —
   /// the module reports 'failed' + sensorLogError and never blocks the
   /// capture.
-  func flushWindow(from: Double, to: Double, to url: URL, anchorStartedAtMs: Int64) throws -> Int {
+  ///
+  /// `anchorBootSec` is the EVENT's instant on the sensor clock (the shutter
+  /// PTS / the recording start) — the anchor line exists to bind
+  /// `anchorStartedAtMs` (the event's wall clock) to THAT instant. 0.18.6
+  /// field fix: this used to write now-at-flush, so the line bound the
+  /// event's START wall clock to the take's END boot time — every reader
+  /// that re-zeroes on the anchor (the video motion card) placed the whole
+  /// window at negative offsets and the gyro lane rendered off-card.
+  func flushWindow(from: Double, to: Double, to url: URL, anchorStartedAtMs: Int64, anchorBootSec: Double) throws -> Int {
     let slice = sliceWindow(from: from, to: to)
     guard !slice.isEmpty else { return 0 }
 
-    let anchorTicks = ExhibitMachClock.nowTicks()
-    var text = "{\"kind\":\"anchor\",\"startedAtMs\":\(anchorStartedAtMs),\"machAtAnchor\":\(anchorTicks),\"bootSecAtAnchor\":\(exhibitSensorFixed(ExhibitMachClock.ticksToBootSeconds(anchorTicks), 9))}\n"
+    let anchorTicks = ExhibitMachClock.bootSecondsToTicks(anchorBootSec)
+    var text = "{\"kind\":\"anchor\",\"startedAtMs\":\(anchorStartedAtMs),\"machAtAnchor\":\(anchorTicks),\"bootSecAtAnchor\":\(exhibitSensorFixed(anchorBootSec, 9))}\n"
     // actualStart/actualEnd are the buffer's honest coverage; `truncated`
     // says the ring could not reach back to the requested start (a recording
     // that outlived the 60 s span commits its tail, stated — never implied

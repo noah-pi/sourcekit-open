@@ -1,4 +1,4 @@
-// Not covered by CI. Validated on device.
+// UNBUILT — rides EAS build 2; validated by on-device soak checklist, not CI.
 import ExpoModulesCore
 import AVFoundation
 import CoreMedia
@@ -9,57 +9,167 @@ import UIKit
 import simd
 
 /**
- * ExhibitCamera — the app's single camera session (Spec-Camera-Module-0.13).
+ * ExhibitCamera — the app's ONE camera session (Spec-Camera-Module-0.13).
  *
- * Captures frames, calibration, timestamps and metadata. It records; it does
- * not analyse or decide. When the hardware can't supply something, the payload
- * says so with a reason rather than substituting a value.
+ * The camera commits, it never concludes: this module captures frames,
+ * calibration, timestamps, and metadata. No analysis, no verdicts. Depth
+ * (D1, 0.16.0): a depth map is committed when — and only when — the
+ * hardware honestly delivers one with a photo; otherwise the payload
+ * states depth-not-recorded with the reason. Every committed
+ * artifact is an input the desk can re-derive from; nothing is a computed
+ * answer.
  *
- * Graph:
- *   - One AVCaptureMultiCamSession, always. Single-camera devices run the same
- *     path with one input and one output.
- *   - Primary and secondary AVCaptureVideoDataOutput feed an
- *     AVCaptureDataOutputSynchronizer, which delivers hardware-synced frame
- *     pairs on the serial sessionQueue.
- *   - Audio sits outside the synchronizer, on the same queue. Synchronized
- *     audio/video collections are an unreliable path.
- *   - The preview layer (ExhibitCameraPreviewView) binds to this same session.
- *   - Delivery video uses the CaptureKit AVAssetWriter pattern (H.264 + AAC).
+ * Architecture:
+ *   - ONE AVCaptureMultiCamSession, unconditionally — single-cam devices
+ *     run the same code path with one input/output (spec §1, §7).
+ *   - Primary + secondary AVCaptureVideoDataOutput feed an
+ *     AVCaptureDataOutputSynchronizer delivering hardware-synced frame
+ *     pairs onto the serial sessionQueue (spec §4.1).
+ *   - The native preview layer (ExhibitCameraPreviewView) binds to this
+ *     same session — zero contention by construction.
+ *   - Delivery video uses the CaptureKit AVAssetWriter pattern (H.264 +
+ *     AAC); audio output sits OUTSIDE the synchronizer (synchronized
+ *     audio/video collections are a known-flaky path — forums), on the
+ *     same serial queue.
  *
- * Two multi-cam rules this graph depends on:
- *   - Inputs and outputs are added with addInputWithNoConnections /
- *     addOutputWithNoConnections and wired with an explicit
- *     AVCaptureConnection per port. Implicit connection forming is unreliable
- *     on multi-cam sessions.
- *   - When two cameras run, only formats reporting isMultiCamSupported may be
- *     selected. configureFormat filters on it and falls up to the smallest
- *     multi-cam format rather than failing the attach.
+ * Calibration strategy (REVIEW-CHECK — see spec §4.2 and the companion
+ * report): per-frame intrinsics come from the DOCUMENTED attachment path
+ * (connection.isCameraIntrinsicMatrixDeliveryEnabled → sample-buffer
+ * attachment kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix, iOS 11+).
+ * Full calibration (extrinsics, distortion LUTs) comes from the DOCUMENTED
+ * photo path (AVCapturePhotoSettings.isCameraCalibrationDataDeliveryEnabled
+ * → photo.cameraCalibrationData), captured once per session configuration
+ * via a dual photo capture, and from the RAW photo when opted in.
+ * 0.17.2: that one-shot is OFF BY DEFAULT (ExhibitDebugFlags
+ * .sessionCalibrationPhoto) — the 0.17.1 field flood (primary-half drops
+ * 0, secondary-half 100%, onset ~1 s into the session = the one-shot's
+ * fire time) names its SECONDARY photo capture the primary suspect for
+ * the dead secondary stream. With it off, calibrationSource commits
+ * 'unavailable' — stated, never fabricated; per-frame intrinsics ride the
+ * frame attachments, unaffected. The ≤12 MP maxPhotoDimensions clamp on
+ * the photo outputs is likewise ON by default now (the unclamped 48 MP
+ * photo-stream reservation on a live multi-cam graph was the 0.15.2
+ * structural suspect); both flags were A/B-flippable from
+ * Settings ▸ Diagnostics (the calibration switch and one-shot were later
+ * retired outright in 0.18.6 — see below).
+ * AVCaptureVideoDataOutput.isCameraCalibrationDataDeliveryEnabled is NOT
+ * used: its presence/behavior on the video data output could not be
+ * confirmed from public documentation at draft time. If on-device review
+ * confirms a per-frame full-calibration path exists, it should replace the
+ * session-photo path; the committed JSON's `calibrationSource` field is
+ * designed so the desk can tell which path produced every matrix.
  *
- * Calibration:
- *   - Per-frame intrinsics arrive as a sample-buffer attachment
- *     (kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix), enabled via
- *     connection.isCameraIntrinsicMatrixDeliveryEnabled.
- *   - Full calibration (extrinsics, distortion LUTs) comes from the photo path
- *     (AVCapturePhotoSettings.isCameraCalibrationDataDeliveryEnabled). That
- *     one-shot is off by default, so calibrationSource commits 'unavailable';
- *     per-frame intrinsics are unaffected. Flags live in
- *     ExhibitDebugFlags and are switchable from Settings ▸ Diagnostics.
- *   - The committed JSON's `calibrationSource` records which path produced
- *     each matrix.
+ * 0.17.2 additions:
+ *   - Drop-flood diagnostics split: secondary-ABSENT (the synchronizer
+ *     returned no data object) vs secondary-DROPPED (the platform marked
+ *     the data dropped) vs complete pairs vs stale shutters — the 0.17.1
+ *     flood could not be discriminated past "secondary-half N".
+ *   - Secondary-output RESEAT (rung 2): one remove/re-add of the secondary
+ *     video data output per session at 300 consecutive secondary drops
+ *     (the 150-drop rebind cannot resurrect a parked stream).
+ *   - Shutter-burst sink ("frames around the shutter"): opt-in via
+ *     configureSession(opts.ring); a tiny retained ring (3 pre + 4 post,
+ *     preview mode only, complete frames only) commits to
+ *     evidenceDir/ring-<captureId>/ as ringBufferDir on the capture
+ *     payload. Depth is deliberate — held frames hold pool buffers.
+ *   - Raw-audio-master ENF anchor: rawPcmInfo on the stopVideo payload
+ *     (firstSampleWallClockUtcMs, sampleCount, sampleRate, fileSha256) +
+ *     the tap-alive counter (audioBufferCount) + the previously-silent
+ *     converter-creation hole, now a stated E_SINK.
+ *   - Selectable secondary stack (configureSession opts.secondaryLens /
+ *     setSecondaryLens; 'auto' = the UW↔W/T pairing) and an inert,
+ *     flag-gated, UNTESTED extension point for a third synchronized view
+ *     (capabilities().thirdViewCapable reports the hardware probe).
  *
- * Threading: all mutable session state lives on `sessionQueue`. The
- * synchronizer and the audio output deliver onto that queue, and events are
- * emitted from it. View-scoped events hop to main.
+ * 0.18.5 (iPhone 17 field matrix verdict): the secondary AVCapturePhotoOutput
+ * is GONE — never attached in any configuration. The 2026-08-17 matrix ran
+ * all four 12MP-clamp × session-calibration combinations on the old build:
+ * every session delivered ZERO secondary video frames from frame one with a
+ * green census, pressure 0.69 (< 1.0), hardwareCost 0.5, and a LIVE PiP
+ * (preview layer bound directly to the UW port, bypassing the data output).
+ * Both debug flags, both costs, and the formats are exonerated; the photo
+ * output's attachment was the last shared structural element. The stereo
+ * still now derives from the retained synchronized pair's UW frame
+ * (deriveSecondaryStillFromPair) at stream resolution — stated in the
+ * outcome's flashNote, with no OS EXIF / strobe / depth (all three stated,
+ * never faked). UW session calibration commits 'unavailable' (the one-shot
+ * covers the primary only). If complete-pairs climb from zero on this
+ * build, the photo output's mere attachment was the killer; if not, the
+ * graph is minimal (video data outputs only) and the failure dump
+ * exonerates outputs entirely.
  *
- * Every native await has a 10 s timeout, so a hung call can't freeze the UI.
+ * 0.18.6: the session-calibration one-shot is RETIRED — no call site
+ * remains and the settings switch is gone. With the secondary photo
+ * output detached (above), the one-shot could only ever harvest a
+ * primary-only calibration, and the committed rig extrinsic requires BOTH
+ * lenses' full calibration — so its product was unreachable by any
+ * commitment path while the capture itself remained the 0.17.1 named
+ * suspect. The calibration block commits 'unavailable' (stated, never
+ * fabricated); per-frame intrinsics ride the frame attachments and were
+ * never behind the switch. The 12 MP clamp stays ON by default behind
+ * photoMaxDimensionsPolicy.
  *
- * No network I/O.
+ * 0.18.1 additions (iPhone 17 / iOS 26 field triage):
+ *   - EXPLICIT multi-cam wiring everywhere the graph is built
+ *     (addInputWithNoConnections / addOutputWithNoConnections + manual
+ *     AVCaptureConnection per port — the WWDC19 249/225 pattern; implicit
+ *     connection forming is Apple's documented multi-cam hazard). The
+ *     0.18.0 field signature was a secondary video data output ABSENT for
+ *     the synchronizer's whole life while the explicitly-wired PiP preview
+ *     on the SAME input port streamed fine.
+ *   - Connection census diagnostics: a per-output
+ *     enabled/active/port-device summary rides the configureSession resolve
+ *     payload ("connections"), the onSyncStalled event, and every capture
+ *     failure dump (primaryVideoConn/secondaryVideoConn).
+ *   - Shutter-burst ring retains primary-valid frames even when the
+ *     secondary half is absent (each ring index entry states its own
+ *     completeness) — a secondary flood degrades the burst to primary-only
+ *     frames honestly instead of committing no burst at all.
+ *   - The zero-audio-buffer E_SINK now states the audio connection's
+ *     liveness (audioConn=...) so the field can discriminate "no
+ *     connection" from "connection live, no buffers".
+ *
+ * 0.18.2 additions (iPhone 17 / iOS 26.6 field triage, round 2 — the
+ * 0.18.1 explicit wiring shipped and the signature was UNCHANGED, which
+ * exonerates connection forming and indicts the stream configuration):
+ *   - configureFormat now filters isMultiCamSupported when a second camera
+ *     will run (Apple: on AVCaptureMultiCamSession you may ONLY set
+ *     multi-cam-flagged formats — the rule this module silently violated,
+ *     and the top remaining suspect for the secondary stream never
+ *     activating). Falls UP to the smallest multi-cam format rather than
+ *     failing the attach; every pick/refusal is logged.
+ *   - Every silent failure path in the graph build (wireOutput refusal
+ *     stages, format picks, partner-attach rollback, reseat outcome) now
+ *     writes to the persistent diagnostics log via onCameraDiagnostic.
+ *   - The live connection census (enabled/active/port-device + each
+ *     device's active format summary) rides: the configureSession log
+ *     line, the first-frame log line, both stall-flood rungs, every
+ *     capture payload ("connections"), and session interruption events
+ *     (AVCaptureSessionWasInterrupted / InterruptionEnded / runtimeError
+ *     observers, all logged).
+ *   - Exposure/white-balance/focus parity: both devices are pinned to
+ *     continuousAutoExposure + continuousAutoWhiteBalance at configure
+ *     time, and pro controls (bias, exposure mode, WB mode, focus mode)
+ *     mirror onto the secondary with per-device guards and clamps
+ *     (mirrorProControlsToSecondary).
+ *
+ * Thread confinement: ALL mutable session state lives on `sessionQueue`.
+ * The synchronizer and the audio output deliver onto that same queue.
+ * Events are emitted from that queue (sendEvent is safe from any thread);
+ * view-scoped events hop to main.
+ *
+ * Watchdogs (0.12.1 pattern, spec §6): every native await has a timeout —
+ * first frame 10 s, capture 10 s, stop 10 s. A hung native call must
+ * never freeze the UI.
+ *
+ * No network I/O of any kind.
  */
 
 /**
- * promise.reject(code, description) drops the description on SDK 57. This
- * subclass carries the message in `reason` so errors reach JS intact.
- * Duplicated from CaptureKit because it's a separate pod target.
+ * promise.reject(code, description) silently DROPS the description on
+ * SDK 57 (see CaptureKitModule for the full audit note). This subclass
+ * carries the message in `reason` so actionable errors reach JS.
+ * Own copy — separate pod target.
  */
 final class ExhibitCameraNamedException: Exception {
   private let message: String
@@ -115,18 +225,42 @@ final class ExhibitPhotoHandler: NSObject, AVCapturePhotoCaptureDelegate {
   }
 }
 
-/// The latest valid synchronized pair, retained on sessionQueue. Retaining
-/// the synchronized-data objects retains their sample buffers and pixel
-/// buffers. We hold AT MOST ONE pair and release the previous immediately —
+/// The latest valid synchronized pair, retained on sessionQueue. The pair
+/// holds the sample buffers directly (ARC-managed CF references — see the
+/// 0.18.6 note below). We hold AT MOST ONE pair and release the previous
+/// immediately —
 /// capture pixel buffers come from a finite pool and holding several
 /// starves the pipeline into frame drops (Apple doc note). Intrinsics are
 /// NOT extracted here: the attachment rides the retained sample buffer, so
 /// frameIntrinsics(from:) reads it lazily at commit time and the per-frame
-/// delivery callback stays allocation-free (see
+/// delivery callback stays allocation-free (0.15.0 Drop 2 — see
 /// handleSynchronizedCollection).
+// 0.18.6 ROOT-CAUSE FIX (build-40 field failure — the burst committed ONE
+// image while the phone was deliberately moving): the pre-fix struct stored
+// the synchronizer's WRAPPER objects. Apple's header contract
+// (AVCaptureDataOutputSynchronizer.h) is explicit: "Synchronized sample
+// buffer data is valid for the duration of AVCaptureDataOutputSynchronizer's
+// -dataOutputSynchronizer:didOutputSynchronizedData: delegate callback. To
+// extend the sample buffer data beyond the callback, you must CFRetain it,
+// and later call CFRelease when you're done with it." Retaining the wrapper
+// retains NOTHING of the payload — the sample buffer returns to the output
+// pool after the callback and the pool recycles it, so every ring entry
+// ended up aliasing the NEWEST delivered buffer: identical JPEGs no matter
+// how the scene moved. The 0.18.4 PTS-advance guard could not see this: the
+// PTS was read at append time (inside the callback, where the wrapper is
+// still valid), so the ring filled honestly — it was the commit-time reads
+// (seconds later, on sinkIOQueue) that all landed on the same recycled
+// buffer. The fix holds the CMSampleBuffers THEMSELVES, extracted inside
+// the callback at construction. A Swift CMSampleBuffer is an ARC-managed CF
+// reference: storing it IS the required retain, ring eviction / teardown
+// nil-assignment is the release, and the pool cannot recycle a buffer a
+// live reference still pins. Intrinsics are still NOT extracted here: the
+// attachment rides the retained sample buffer, so frameIntrinsics(from:)
+// reads it lazily at commit time and the per-frame delivery callback stays
+// allocation-free (0.15.0 Drop 2 — see handleSynchronizedCollection).
 private struct RetainedPair {
-  var primary: AVCaptureSynchronizedSampleBufferData
-  var secondary: AVCaptureSynchronizedSampleBufferData? // nil in single-cam mode
+  var primary: CMSampleBuffer
+  var secondary: CMSampleBuffer?    // nil in single-cam mode
   var deltaMs: Double?              // secondary−primary PTS delta; nil single-cam
   var receivedAt: Date
 }
@@ -138,8 +272,8 @@ public class ExhibitCameraModule: Module {
   private let sessionQueue = DispatchQueue(label: "com.exhibit.camera.session")
   /// Serial queue for evidence-sink I/O (JPEG encodes + file writes). Kept
   /// OFF sessionQueue: a >33 ms encode on the frame queue drops synchronized
-  /// pairs and was a stall source. RetainedPair's synchronized-data
-  /// objects retain their sample buffers, so the hop is memory-safe.
+  /// pairs and was a 0.14.1 stall source. RetainedPair holds ARC-retained
+  /// sample buffers, so the hop is memory-safe.
   private let sinkIOQueue = DispatchQueue(label: "com.exhibit.camera.sinkio")
 
   private var session: AVCaptureMultiCamSession?
@@ -161,43 +295,58 @@ public class ExhibitCameraModule: Module {
 
   private var latestPair: RetainedPair?
   private var droppedPairCount = 0
-  // Which half of the pair the platform is dropping. These counts ride the
-  // stall event, the degraded-capture reason and the committed metadata, so
-  // pool starvation on the primary stream is distinguishable from the stereo
-  // half.
+  // Drop-flood diagnostics (0.15.1): WHICH half of the pair the platform is
+  // dropping. A chronic flood is the top suspect whenever stills wedge or
+  // video stereo goes absent; these counts ride the stall event, the
+  // degraded-capture reason, and the committed metadata so the next build's
+  // field data can discriminate pool starvation on the primary stream from
+  // the stereo half.
   private var droppedPrimaryCount = 0
   private var droppedSecondaryHalfCount = 0
-  /// Consecutive secondary-half drops, reset by any complete pair. The stall
-  /// watchdog only watches silence (lastCollectionAt age), and a steady
-  /// secondary-half flood keeps collections arriving, so it won't fire. 150
-  /// consecutive halves (~5 s at 30 fps) triggers one synchronizer rebind.
+  /// Consecutive secondary-half drops, reset by any complete pair. The
+  /// stall watchdog only watches SILENCE (lastCollectionAt age) — a chronic
+  /// secondary-half flood keeps collections arriving, so it never fires
+  /// and stereo quietly goes absent for the whole session (build 24 field
+  /// report: video records, no pairs ever commit). 150 consecutive halves
+  /// (~5 s at 30 fps) kicks ONE synchronizer rebind per streak.
   private var consecutiveSecondaryDrops = 0
-  // These counters split where the secondary half dies:
-  //   secondaryAbsentCount  — the synchronizer returned no data object for
-  //     the secondary output at the master's PTS.
-  //   secondaryDroppedCount — a data object was present but
-  //     sampleBufferWasDropped.
-  //   completePairCount     — pairs retained with both halves.
-  //   staleShutterCount     — shutters that found no fresh pair at fire time.
-  //   secondaryReseatDone   — the output reseat fired this session.
+  // Drop-flood diagnostics extension (0.17.2): the 0.17.1 field signature
+  // was primary-half 0 / secondary-half 100% with fresh retained pairs —
+  // the counters below split WHERE the secondary half dies so the next
+  // field test discriminates the three hypotheses:
+  //   secondaryAbsentCount  — the synchronizer returned NO data object for
+  //     the secondary output at the master's PTS ("output never delivered"
+  //     when completePairCount stays 0).
+  //   secondaryDroppedCount — a data object WAS present but
+  //     sampleBufferWasDropped ("synchronizer/platform dropped it").
+  //   completePairCount     — pairs retained with BOTH halves. 0 while the
+  //     absent/dropped counters climb == the secondary stream never lands.
+  //   staleShutterCount     — shutters that found no FRESH pair at fire
+  //     time ("delivered but rejected as stale" is ruled in/out here).
+  //   secondaryReseatDone   — the rung-2 output reseat fired this session.
   private var secondaryAbsentCount = 0
-  //   virtualGraphActive   — rear stereo rides the dual-wide virtual device
-  //                          (one input, hardware-synced constituent ports)
-  //                          rather than two device inputs. Set
-  //                          legacyMultiInputGraph to use two inputs instead.
+  //   virtualGraphActive   — 0.18.4: rear stereo rides the dual-wide VIRTUAL
+  //                          device (one input, constituent "secret ports",
+  //                          hardware-synced — Apple's AVDualCam architecture,
+  //                          WWDC19-249) instead of two device inputs. The
+  //                          0.18.3 iPhone 17 field log exonerated format,
+  //                          wiring, cost, pressure and the 30 fps billing
+  //                          promise on the multi-input graph while the OS
+  //                          delivered ZERO secondary frames with zero error
+  //                          callbacks — the virtual path is a different OS
+  //                          code path. A/B via legacyMultiInputGraph.
   //   virtualSecondaryPort — the ultra-wide constituent port of the virtual
-  //                          input, requested by name rather than by index
-  //                          into the ports array. Drives the secondary
-  //                          output wiring, the reseat paths and the PiP
-  //                          connection.
+  //                          input (requested by name, never from the ports
+  //                          array). Drives the secondary output wiring, the
+  //                          reseat/re-attach paths, and the PiP connection.
   private var virtualGraphActive = false
   private var virtualSecondaryPort: AVCaptureInput.Port? = nil
-  // isActive settles asynchronously after startRunning, so a one-shot census
-  // reads it too early. KVO observers on both video connections record the
-  // initial state and every transition, timestamped against
-  // sessionStartWallClock. A connection that is never active was rejected at
-  // graph level; one that goes inactive later was evicted after start.
-  // Invalidated in teardownSession.
+  // 0.18.4-R3 (external camera-pipeline review R1, hypothesis H3): isActive
+  // settles ASYNCHRONOUSLY after startRunning, so the one-shot census reads
+  // it too early. KVO observers on both video connections record the full
+  // timeline (initial state + every transition) with ms timestamps relative
+  // to sessionStartWallClock: never-active = graph-level reject; active then
+  // inactive at t=+N s = evicted after start. Invalidated in teardownSession.
   private var connectionActiveObservers: [NSKeyValueObservation] = []
   private var sessionStartWallClock: Date? = nil
   private var secondaryDroppedCount = 0
@@ -235,14 +384,15 @@ public class ExhibitCameraModule: Module {
   private enum Mode { case preview, video }
   private var mode: Mode = .preview
 
-  // Recording state machine. `mode` routes frames, and flips to .preview the
-  // instant stop begins so no buffer is appended after markAsFinished.
-  // `videoState` owns the lifecycle and stays .stopping until the delivery
-  // file's seal settles.
-  //
-  // Stop is async, so both calls have to tolerate arriving mid-stop:
-  // startVideo during .stopping queues behind the seal rather than failing,
-  // stopVideo during .stopping joins the in-flight stop, and the seal's
+  // Explicit recording state machine (0.15.0 Drop 2 — the E_BUSY race fix).
+  // `mode` routes FRAMES (flipped to .preview the instant stop begins so no
+  // buffer is ever appended after markAsFinished); `videoState` owns the
+  // LIFECYCLE and stays .stopping until the delivery file's seal settles.
+  // The 0.15.0 Drop-1 race: stop is async, so a startVideo that arrived
+  // while the previous clip was still sealing hit E_BUSY (or, worse, two
+  // writers overlapped). Now: startVideo during .stopping QUEUES behind the
+  // seal (the user tapped record — don't lose the moment), stopVideo during
+  // .stopping joins the in-flight stop (idempotent), and the seal's
   // completion is the only place the state returns to .idle.
   private enum VideoState { case idle, recording, stopping }
   private var videoState: VideoState = .idle
@@ -269,7 +419,10 @@ public class ExhibitCameraModule: Module {
   private var pcmEnabled = false
   private var pcmWriter: PcmMasterWriter?
   private var pcmConverter: AudioMasterConverter?
-  private var pairIntervalSec: Double = 5.0
+  // 0.18.5 post-field (Noah's video strategy): the default cadence drops
+  // 5 s → 2 s, and start/stop both force a dump (below) — a short clip
+  // must still commit a beginning AND an end, never zero pairs.
+  private var pairIntervalSec: Double = 2.0
   private var lastPairDumpAt: Date = .distantPast
   private var pairIndex = 0
   private var pairsMissed = 0
@@ -302,14 +455,14 @@ public class ExhibitCameraModule: Module {
 
   private var runtimeErrorObserver: NSObjectProtocol?
   private var thermalObserver: NSObjectProtocol?
-  // Interruption boundaries, logged to the persistent diagnostics
+  // 0.18.2: interruption boundaries, logged to the persistent diagnostics
   // log — an interruption that parks the secondary stream must not be
   // invisible in the field.
   private var interruptionObserver: NSObjectProtocol?
   private var interruptionEndedObserver: NSObjectProtocol?
   private var firedErrorCodes = Set<String>()
 
-  // Sync-pipeline health: the preview layer can keep painting
+  // Sync-pipeline health (0.14.0): the preview layer can keep painting
   // while the data-output pipeline is stalled — a live viewfinder with
   // stills rejecting E_STALE_PAIR. lastCollectionAt feeds the watchdog.
   private var lastCollectionAt: Date?
@@ -325,14 +478,14 @@ public class ExhibitCameraModule: Module {
   private weak var pipLayer: AVCaptureVideoPreviewLayer?
   private var pipConnection: AVCaptureConnection?
 
-  // Selectable secondary stack: nil = 'auto' (the UW↔W/T pairing).
+  // Selectable secondary stack (0.17.2): nil = 'auto' (the UW↔W/T pairing).
   // Set from configureSession(opts.secondaryLens) or setSecondaryLens; a
   // live change on a running back session detaches + re-attaches the
   // secondary pipeline. A preference that conflicts with the primary lens
   // or is absent on the hardware falls back to 'auto', stated in payloads.
   private var secondaryLensPreference: ExhibitLens?
 
-  // Shutter-burst sink ("frames around the shutter", — the JS
+  // Shutter-burst sink ("frames around the shutter", 0.17.2 — the JS
   // captureEvidence.ring toggle was a dead control; the native side never
   // existed and the record hardcoded 'never-recorded'). Opt-in via
   // configureSession(opts.ring). While wanted AND in preview mode, the
@@ -350,11 +503,20 @@ public class ExhibitCameraModule: Module {
   private var burstPostTarget = 0        // >0 while collecting post-shutter frames
   private var burstContinuation: (() -> Void)?
   private var burstTimeout: DispatchWorkItem?
-  // Primary PTS of the last retained burst frame — the ring retains
+  // 0.18.4: primary PTS of the last retained burst frame — the ring retains
   // only PTS-ADVANCING frames (see handleSynchronizedCollection).
   private var lastBurstPTS: CMTime? = nil
+  // 0.18.6 (field: the ring filled at full frame rate, so 3 pre + 4 post
+  // spanned ~115 ms total — adjacent frames were sub-pixel identical and
+  // the Motion Trace read "0 px per frame" while the UI advertised a
+  // ±300 ms axis): the ring CADENCE-SAMPLES. A frame is retained only if
+  // at least burstCadenceSeconds has passed since the last retained frame,
+  // so 3 pre + 4 post actually span the stated axis. The PTS-advance guard
+  // above still applies first — duplicates are never retained.
+  private var lastBurstRetainedAt: Date? = nil
+  private let burstCadenceSeconds: TimeInterval = 0.1
 
-  // Audio-tap / PCM-master diagnostics + ENF anchor (the raw
+  // Audio-tap / PCM-master diagnostics + ENF anchor (0.17.2 — the raw
   // audio master never committed in the field and the failure was silent).
   private var audioBufferCount = 0
   private var pcmFirstSampleWallClockUtcMs: Int64?
@@ -440,7 +602,7 @@ public class ExhibitCameraModule: Module {
       }
     }
 
-    /// Selectable secondary stack: 'auto' (default — the UW↔W/T
+    /// Selectable secondary stack (0.17.2): 'auto' (default — the UW↔W/T
     /// pairing) or an explicit rear stack ('ultraWide'|'wide'|'telephoto',
     /// e.g. telephoto as the stereo partner on a triple-lens Pro). Applies
     /// live on a running back session; otherwise stored for the next
@@ -510,7 +672,7 @@ public class ExhibitCameraModule: Module {
 
     // ---- pro controls (spec §14): every setter no-ops safely (never
     // throws into JS) on hardware lacking the capability; availability is
-    // reported by capabilities so the UI can hide what doesn't exist ----
+    // reported by capabilities() so the UI can hide what doesn't exist ----
 
     /// { mode: 'auto'|'locked'|'custom', iso?, durationSeconds? }
     AsyncFunction("setExposureMode") { (opts: [String: Any], promise: Promise) in
@@ -583,9 +745,15 @@ public class ExhibitCameraModule: Module {
       }
     }
 
-    // ---- debug flags (ExhibitDebugFlags). Diagnostics only. Only the
-    // known keys are writable; an unknown key resolves applied:false. See
-    // ExhibitDebugFlags for each key's default. ----
+    // ---- debug flags (ExhibitDebugFlags). 0.17.2 defaults: the W7
+    // photoConnectionRotation key defaults false; photoMaxDimensionsPolicy
+    // defaults TRUE (the 12 MP clamp is the shipped default — the flag is
+    // the escape hatch); the D1 depthCapture key defaults TRUE; the 0.17.2
+    // sessionCalibrationPhoto key defaults FALSE (the one-shot is the
+    // primary suspect for the dead secondary stream); the thirdViewEnabled
+    // key defaults FALSE (UNTESTED extension-point gate). Diagnostics-only;
+    // only the known keys are writable, an unknown key resolves
+    // applied:false, stated ----
 
     AsyncFunction("setDebugFlag") { (key: String, value: Bool, promise: Promise) in
       self.sessionQueue.async {
@@ -642,7 +810,7 @@ public class ExhibitCameraModule: Module {
           self.setZoom(value, promise: nil)
         }
       }
-      // Alt-view PiP (transparency,): the second camera's live feed
+      // Alt-view PiP (transparency, 0.14.0): the second camera's live feed
       // in a corner inset, exactly while it is attached. The view owns the
       // layer; the module owns the AVCaptureConnection to the secondary
       // input's video port.
@@ -658,7 +826,7 @@ public class ExhibitCameraModule: Module {
     }
   }
 
-  /// Main-thread accessor used by the preview view's attach.
+  /// Main-thread accessor used by the preview view's attach().
   func sessionForPreview() -> AVCaptureSession? {
     // Read of a sessionQueue-confined reference from main: acceptable for a
     // bind-only handoff (the layer retains the session); worst case the view
@@ -696,7 +864,7 @@ public class ExhibitCameraModule: Module {
   }
 }
 
-// MARK: - Alt-view PiP + sync-pipeline health
+// MARK: - Alt-view PiP + sync-pipeline health (0.14.0)
 
 extension ExhibitCameraModule {
 
@@ -722,7 +890,7 @@ extension ExhibitCameraModule {
   /// feed — the view simply keeps an empty frame.
   func ensurePipConnection(in session: AVCaptureMultiCamSession) {
     guard pipWanted, pipConnection == nil, let layer = pipLayer else { return }
-    // On the virtual graph the secondary port lives on the ONE
+    // 0.18.4: on the virtual graph the secondary port lives on the ONE
     // (virtual) input, requested by name — there is no secondaryInput.
     let pipPort: AVCaptureInput.Port?
     let pipDevice: AVCaptureDevice?
@@ -730,7 +898,7 @@ extension ExhibitCameraModule {
       pipPort = virtualSecondaryPort
       pipDevice = secondaryDevice
     } else {
-      // The documented selector (AVMultiCamPiP sample form)
+      // 0.18.4-R3 (H4): the documented selector (AVMultiCamPiP sample form)
       // instead of scanning the ports array.
       pipPort = secondaryInput.flatMap { input in
         input.ports(for: .video, sourceDeviceType: input.device.deviceType, sourceDevicePosition: input.device.position).first
@@ -751,7 +919,7 @@ extension ExhibitCameraModule {
     session.commitConfiguration()
     if #available(iOS 17.0, *), let device = pipDevice {
       // Preview-bound connection: the coordinator's PREVIEW angle for the
-      // secondary device, with the PiP layer.
+      // secondary device, with the PiP layer (0.15.1 — never a constant).
       RotationPolicy.apply(to: connection, device: device, previewLayer: layer)
     } else if connection.isVideoOrientationSupported {
       connection.videoOrientation = .portrait
@@ -801,8 +969,8 @@ extension ExhibitCameraModule {
     } else if mode != .video, !stallBounced {
       // Rung 2: bounce the session in place. startRunning blocks, but the
       // pipeline is already dead — this is the documented wedge recovery and
-      // it beats a full JS rebuild (which was the freeze cascade).
-      // NSException-safe + idempotent via the shim: a thrown
+      // it beats a full JS rebuild (which was the 0.14.1 freeze cascade).
+      // NSException-safe + idempotent via the shim (0.15.0 Drop 2): a thrown
       // exception becomes an onSessionError event and the ladder simply
       // climbs to rung 3 on the next tick — never a bridge crash.
       stallBounced = true
@@ -821,13 +989,13 @@ extension ExhibitCameraModule {
         "droppedPairCount": droppedPairCount,
         "droppedPrimaryCount": droppedPrimaryCount,
         "droppedSecondaryHalfCount": droppedSecondaryHalfCount,
-        // See state notes):
+        // 0.17.2 diagnostics extension (additive keys — see state notes):
         "secondaryAbsentCount": secondaryAbsentCount,
         "secondaryDroppedCount": secondaryDroppedCount,
         "completePairCount": completePairCount,
         "staleShutterCount": staleShutterCount,
         "secondaryReseatDone": secondaryReseatDone,
-        // Live connection census at stall.
+        // 0.18.1 diagnostics (additive): live connection census at stall.
         "connections": connectionCensus(),
       ])
     }
@@ -835,15 +1003,31 @@ extension ExhibitCameraModule {
 
   /// The calibration one-shot rides the PHOTO outputs on the live multi-cam
   /// graph; fired on the very first frame it coincided with pipeline stalls
-  /// on hardware (stale-pair rejections at shutter). Deferred 1.0 s
+  /// on 0.14.0 hardware (stale-pair rejections at shutter). Deferred 1.0 s
   /// so the streams reach steady state first; session-id guarded so a stale
   /// timer never fires into a new session.
   ///
-  /// Off by default behind ExhibitDebugFlags.sessionCalibrationPhoto: a
-  /// photo capture under pressure can refuse and leave the output unwilling
-  /// to record afterwards. With the flag off the "full" calibration block
-  /// commits 'unavailable'; per-frame intrinsics arrive on the frame
-  /// attachments regardless.
+  /// 0.17.2: OFF BY DEFAULT behind ExhibitDebugFlags.sessionCalibrationPhoto.
+  /// The 0.17.1 field signature (primary-half drops 0, secondary-half drops
+  /// 100% of pairs, fresh retained pairs rejected E_STALE_PAIR) plus the
+  /// 0.14.0 note that the floods began "~1 s into every session — exactly
+  /// when this one-shot fired" and the build-26 note that a photo capture
+  /// under pressure "can refuse and leave the output unwilling to record
+  /// afterward" name this one-shot — specifically its SECONDARY photo
+  /// capture — as the primary suspect for the dead secondary stream.
+  ///
+  /// 0.18.6: RETIRED — no call site remains. The 0.18.5 graph change
+  /// detached the secondary photo output, so UW session calibration commits
+  /// 'unavailable' no matter what — and convertCalibrationJson requires BOTH
+  /// lenses' full calibration, so the one-shot's primary-only result was
+  /// already unreachable by any commitment path. What it could still do was
+  /// fire the maximum-resource photo capture 1 s into every session on the
+  /// live multi-cam graph — the named suspect above. Per-frame intrinsics
+  /// ride the frame attachments and are unaffected. The "full" calibration
+  /// block commits 'unavailable' (stated, never fabricated). The native
+  /// flag key stays registered (inert) so a stale flipped value in the
+  /// exhibit.debug suite reads as a no-op, not an error; the machinery
+  /// below is kept for the record but is unreachable.
   func scheduleSessionCalibrationCapture() {
     guard ExhibitDebugFlags.sessionCalibrationPhoto else { return }
     let id = sessionId
@@ -878,7 +1062,8 @@ extension ExhibitCameraModule {
     return .available
   }
 
-  /// The stereo partner's device type for a given primary (/// selectable secondary stack). The JS-selected preference wins when it
+  /// The stereo partner's device type for a given primary (0.17.2 —
+  /// selectable secondary stack). The JS-selected preference wins when it
   /// is set, differs from the primary, and exists on this hardware;
   /// otherwise the automatic UW↔W/T pairing. A requested-but-absent stack
   /// degrades to 'auto' here, never to a failed session.
@@ -893,10 +1078,10 @@ extension ExhibitCameraModule {
     return primaryType == .builtInUltraWideCamera ? .builtInWideAngleCamera : .builtInUltraWideCamera
   }
 
-  /// Opportunistic third view — hardware probe only. TRUE when a
+  /// Opportunistic third view — hardware probe only (0.17.2). TRUE when a
   /// supported multi-cam device set with 3+ rear devices exists on this
   /// hardware (e.g. a triple-lens Pro). Reported via
-  /// capabilities.thirdViewCapable; plumbing is gated behind
+  /// capabilities().thirdViewCapable; plumbing is gated behind
   /// ExhibitDebugFlags.thirdViewEnabled (default OFF, UNTESTED).
   private func probeThirdViewSupport() -> Bool {
     guard AVCaptureMultiCamSession.isMultiCamSupported else { return false }
@@ -908,7 +1093,7 @@ extension ExhibitCameraModule {
     return discovery.supportedMultiCamDeviceSets.contains { $0.count >= 3 }
   }
 
-  /// EXTENSION POINT — opportunistic third synchronized view.
+  /// EXTENSION POINT — opportunistic third synchronized view (0.17.2).
   /// UNTESTED ON HARDWARE: the flag is OFF by default and MUST stay off in
   /// shipping builds until an on-device soak validates the path. When
   /// enabled on capable hardware (see probeThirdViewSupport), the intended
@@ -938,7 +1123,7 @@ extension ExhibitCameraModule {
   /// ≥ 30 fps. Multicam does not honor session presets the way single-cam
   /// does; formats are chosen explicitly and committed in metadata.
   ///
-  /// When requireMultiCam is set, only
+  /// 0.18.2 (iPhone 17 field triage): when requireMultiCam is set, only
   /// isMultiCamSupported formats are eligible — Apple documents flatly that
   /// on AVCaptureMultiCamSession "you may only set the device's format to
   /// one in which isMultiCamSupported is true" (AVCaptureDevice.Format
@@ -953,7 +1138,7 @@ extension ExhibitCameraModule {
   ///
   /// Also pins per-device AE/AWB to continuous auto: each physical camera
   /// in a multi-cam graph runs its OWN AE/AWB/AF, and the secondary used
-  /// to sit on factory defaults (the "one lens underexposed" field
+  /// to sit on factory defaults (the 0.18.1 "one lens underexposed" field
   /// report).
   private func configureFormat(device: AVCaptureDevice, maxWidth: Int32, maxHeight: Int32, requireMultiCam: Bool) -> Bool {
     let targetFPS = 30.0
@@ -1006,8 +1191,9 @@ extension ExhibitCameraModule {
         device.whiteBalanceMode = .continuousAutoWhiteBalance
       }
       device.unlockForConfiguration()
-      // Log the top 3 candidates alongside the winner, so the diagnostics
-      // show what the menu was: resolution, max fps, binned, multiCam.
+      // 0.18.3: log the top-3 candidates the pick came from — the field log
+      // needs to show what the menu was (res / max fps / binned / multiCam),
+      // not just the winner.
       let top3 = pool.sorted(by: byArea).suffix(3).reversed().map { self.formatSummary($0) }.joined(separator: " | ")
       logDiagnosticEvent("format chosen: device=\(device.deviceType.rawValue) \(self.formatSummary(best)) requireMultiCam=\(requireMultiCam) fellUp=\(fellUp) inBudget=\(inBudget.count) candidates=[\(top3)]")
       return true
@@ -1025,24 +1211,24 @@ extension ExhibitCameraModule {
     return "\(dims.width)x\(dims.height)@<=\(Int(maxFPS)) binned:\(format.isVideoBinned ? 1 : 0) multiCam:\(format.isMultiCamSupported ? 1 : 0)"
   }
 
-  /// Native → persistent diagnostics log: the JS side forwards
+  /// Native → persistent diagnostics log (0.18.2): the JS side forwards
   /// this event verbatim into the on-disk log the Settings screen shows.
   /// Fire-and-forget; never gates, delays, or fails a capture.
   private func logDiagnosticEvent(_ message: String) {
     sendEvent("onCameraDiagnostic", ["message": message])
   }
 
-  /// With two physical cameras live, each runs its own AE/AWB/AF, and pro
-  /// controls reach the primary only — which leaves the secondary on factory
-  /// defaults and visibly different in exposure. Mirror the primary's
-  /// exposure, white balance and focus onto the secondary, best-effort, with
-  /// per-device capability guards and range clamps. A device that can't take
-  /// a mode keeps its own defaults, and the committed per-capture metadata
-  /// records what each device ran.
+  /// 0.18.2 (field report: "one lens is always underexposed"): with two
+  /// physical cameras live, EACH runs its own AE/AWB/AF — pro controls hit
+  /// the primary only, and the secondary sat on factory defaults. Mirror
+  /// the primary's current exposure/WB/focus state onto the secondary,
+  /// best-effort, with per-device capability guards and per-device range
+  /// clamps; a device that can't take a mode keeps its own defaults, and
+  /// the committed per-capture metadata states what each device ran.
   /// Nothing here can fail a capture: a lock failure leaves the secondary
   /// exactly as it was.
   private func mirrorProControlsToSecondary() {
-    // Skipped on the virtual graph — the virtual device owns
+    // 0.18.4: skipped on the virtual graph — the virtual device owns
     // AE/AWB/AF for BOTH constituents (that unification is the point of the
     // architecture), and configuring a constituent directly while the
     // virtual device streams is not a supported pattern.
@@ -1091,7 +1277,7 @@ extension ExhibitCameraModule {
           secondary.whiteBalanceMode = .continuousAutoWhiteBalance
         }
       case .locked:
-        // Custom-gains support bit, not just mode support (see
+        // 0.18.5: custom-gains support bit, not just mode support (see
         // setWhiteBalanceMode's crash-fix note).
         if secondary.isWhiteBalanceModeSupported(.locked),
            secondary.isLockingWhiteBalanceWithCustomDeviceGainsSupported {
@@ -1115,7 +1301,7 @@ extension ExhibitCameraModule {
           secondary.focusMode = .autoFocus
         }
       case .locked:
-        // Custom-position support bit, not just mode support (see
+        // 0.18.5: custom-position support bit, not just mode support (see
         // setFocusMode's crash-fix note).
         if secondary.isFocusModeSupported(.locked),
            secondary.isLockingFocusWithCustomLensPositionSupported {
@@ -1130,20 +1316,22 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Explicit multi-cam wiring. Apple forbids implicit connection
+  /// Explicit multi-cam wiring (0.18.1). Apple forbids implicit connection
   /// forming on AVCaptureMultiCamSession (WWDC19 sessions 249/225; the
   /// AVMultiCamPiP sample uses addInputWithNoConnections /
   /// addOutputWithNoConnections plus a manually built AVCaptureConnection
   /// per port): with several same-media-type ports live, an implicitly
   /// formed connection can land on the wrong port or never materialize at
   /// all — silently. canAddOutput passes, the output is attached, and it
-  /// simply never delivers: the output is absent for the synchronizer's
-  /// whole life, with no dropped markers, while an explicitly wired preview
-  /// on the same input port streams fine.
-  ///
-  /// Returns the live connection, or nil on any refusal, leaving callers to
-  /// apply their own fallback. Every refusal stage is written to the
-  /// diagnostics log with the caller's label, so nothing unwinds silently.
+  /// simply never delivers. That is the 0.18.0 iPhone 17 field signature:
+  /// the secondary video data output ABSENT for the synchronizer's whole
+  /// life (secondary-absent == dropped-pairs, zero dropped markers) while
+  /// the explicitly-wired PiP preview on the SAME input port streamed fine.
+  /// Returns the live connection, nil on any refusal — callers keep their
+  /// existing honest-degradation policy (single-cam fallback / rejection).
+  /// 0.18.2: every refusal stage is written to the persistent diagnostics
+  /// log with the caller's label — NO silent unwinds anywhere in the graph
+  /// build path.
   @discardableResult
   private func wireOutput(
     _ output: AVCaptureOutput,
@@ -1158,12 +1346,12 @@ extension ExhibitCameraModule {
       return nil
     }
     session.addOutputWithNoConnections(output)
-    // The default path now uses the DOCUMENTED selector —
+    // 0.18.4-R3 (H4): the default path now uses the DOCUMENTED selector —
     // ports(for:sourceDeviceType:sourceDevicePosition:), the AVMultiCamPiP
     // sample form — instead of scanning the ports array by media type. An
     // explicit port still wires a virtual device's constituent by name
-    // The resolved candidate count is logged either way, so an unexpected
-    // multi-port answer shows up in the diagnostics.
+    // (0.18.4). The resolved candidate count is logged either way, so an
+    // unexpected multi-port answer is visible in the field log.
     let resolvedPorts: [AVCaptureInput.Port]
     if let explicitPort = explicitPort {
       resolvedPorts = [explicitPort]
@@ -1189,7 +1377,7 @@ extension ExhibitCameraModule {
     return connection
   }
 
-  /// Live connection census for the diagnostics payloads: per
+  /// Live connection census for the diagnostics payloads (0.18.1): per
   /// pipeline output, whether a connection to its intended input port
   /// exists, is enabled/active, and WHICH device that port belongs to — a
   /// silently absent or cross-wired connection shows up here immediately.
@@ -1211,8 +1399,8 @@ extension ExhibitCameraModule {
       census[label] = connectionSummary(output?.connection(with: .video))
     }
     census["audio"] = connectionSummary(audioOutput?.connection(with: .audio))
-    // The active formats, so the diagnostics show whether both devices are
-    // on multi-cam-supported formats.
+    // 0.18.2: the format facts — the isMultiCamSupported violation theory
+    // is confirmed or killed by these two lines in the field log.
     census["primaryFormat"] = primaryDevice.map { self.formatSummary($0.activeFormat) } ?? "none"
     census["secondaryFormat"] = secondaryDevice.map { self.formatSummary($0.activeFormat) } ?? "none"
     return census
@@ -1224,7 +1412,7 @@ extension ExhibitCameraModule {
     return "enabled=\(connection.isEnabled),active=\(connection.isActive),port=\(portDevice)"
   }
 
-  /// KVO on AVCaptureConnection.isActive with ms timestamps
+  /// 0.18.4-R3 (H3): KVO on AVCaptureConnection.isActive with ms timestamps
   /// relative to startRunning. The census SAMPLES isActive once; this records
   /// the TIMELINE — a connection that never activates was rejected at the
   /// graph level, one that deactivates at t=+N s was evicted after start
@@ -1259,9 +1447,9 @@ extension ExhibitCameraModule {
     let newFacing = ExhibitFacing(jsValue: opts["facing"] as? String)
     let wantStereo = (opts["stereo"] as? Bool) ?? true
     let wantSensorLog = (opts["sensorLog"] as? Bool) ?? false
-    // Selectable secondary stack ('auto' = the UW↔W/T pairing) +
+    // 0.17.2: selectable secondary stack ('auto' = the UW↔W/T pairing) +
     // shutter-burst sink opt-in ('ring'). Unknown lens strings fall back to
-    // 'auto' (stated via capabilities.secondaryLens), never a hard
+    // 'auto' (stated via capabilities().secondaryLens), never a hard
     // failure. An ABSENT key leaves a stored setSecondaryLens preference
     // intact (the photoFlashPreference persistence pattern).
     if let sl = opts["secondaryLens"] as? String {
@@ -1272,22 +1460,23 @@ extension ExhibitCameraModule {
     burstPostFrames.removeAll()
     burstPostTarget = 0
     lastBurstPTS = nil
+    lastBurstRetainedAt = nil
 
     // Device discovery. Primary follows the selected lens; the stereo
     // partner is wide+ultraWide on the back (spec §4.2). Front is always
     // single-cam — stated, never silently degraded.
     //
-    // Rear stereo prefers the dual-wide VIRTUAL device — ONE input
+    // 0.18.4: rear stereo prefers the dual-wide VIRTUAL device — ONE input
     // whose constituent "secret ports" (requested by name, WWDC19-249:
     // "virtual devices have secret ports") stream wide + ultra-wide
     // hardware-synchronized. This is Apple's AVDualCam reference
     // architecture and a different OS code path from the two-device-input
-    // graph. On the two-device-input graph the OS can accept everything —
-    // connections enabled and active, costs in budget — and still deliver no
-    // secondary frames, with no error or drop callbacks. Ports are verified
-    // before the session is touched; any gap falls back to the multi-input
-    // graph with a log line. Switch via
-    // Settings ▸ Diagnostics ▸ legacyMultiInputGraph.
+    // graph, which the 0.18.3 iPhone 17 field log showed the OS accepting
+    // (connections enabled+active, costs in budget, billing promises
+    // applied) while never delivering a single secondary frame, with zero
+    // error or drop callbacks. Ports are verified BEFORE the session is
+    // touched: any gap falls back to the multi-input graph with a log
+    // line. A/B via Settings ▸ Diagnostics ▸ legacyMultiInputGraph.
     var virtualInput: AVCaptureDeviceInput? = nil
     var virtualWidePort: AVCaptureInput.Port? = nil
     var virtualUWPort: AVCaptureInput.Port? = nil
@@ -1320,7 +1509,7 @@ extension ExhibitCameraModule {
 
     var secondary: AVCaptureDevice? = nil
     if virtualInput == nil, newFacing == .back, wantStereo, probeStereoAvailability() == .available {
-      // The partner stack is selectable (opts.secondaryLens /
+      // 0.17.2: the partner stack is selectable (opts.secondaryLens /
       // setSecondaryLens); 'auto' keeps the UW↔W/T pairing. A preference
       // that conflicts with the primary or is absent on this hardware
       // falls back to 'auto' inside partnerDeviceType.
@@ -1341,9 +1530,9 @@ extension ExhibitCameraModule {
       guard session.canAddInput(input) else {
         throw ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Cannot add primary camera input")
       }
-      // Explicit multi-cam wiring — see wireOutput.
+      // Explicit multi-cam wiring (0.18.1) — see wireOutput.
       session.addInputWithNoConnections(input)
-      // Dual-cam experiment (WWDC19-249, "How to Reduce Your
+      // 0.18.3 dual-cam experiment (WWDC19-249, "How to Reduce Your
       // Hardware Cost"): promise no more than 30 fps so the session BILLS
       // this input at 30, not at the format's advertised max — without the
       // override "we must assume the worst case" and a 60-capable multiCam
@@ -1361,12 +1550,12 @@ extension ExhibitCameraModule {
       return
     }
 
-    // Primary stream format: up to 2560×1440 at 30 fps. ran 4K
+    // Primary stream format: up to 2560×1440 at 30 fps. 0.14.1 ran 4K
     // (~1 GB/s of BGRA) plus a 1080p partner through one serial queue and
     // stalled; 1440p keeps the stream honest and smooth. Sealed stills are
     // unaffected — photo outputs capture at full sensor resolution. The
     // committed format is recorded in every capture's metadata.
-    // When a stereo partner will be attached, the primary's format
+    // 0.18.2: when a stereo partner will be attached, the primary's format
     // MUST be multi-cam-flagged (documented requirement) — see
     // configureFormat. Single-cam keeps the legacy pick (proven in field).
     if !configureFormat(device: primary, maxWidth: 2560, maxHeight: 1440, requireMultiCam: secondary != nil || virtualInput != nil) {
@@ -1376,17 +1565,17 @@ extension ExhibitCameraModule {
     }
 
     // Secondary input (stereo), with honest single-cam fallback.
-    // On the virtual graph the pair is inherent — both constituent
+    // 0.18.4: on the virtual graph the pair is inherent — both constituent
     // ports were verified before the session existed, so stereo starts
     // attached and the OUTPUTS wire to the ports below (no second input).
     var stereoAttached = virtualInput != nil
     if let secondary = secondary {
-      // Validate the pair against the DOCUMENTED
+      // 0.18.4-R3 (review fix): validate the pair against the DOCUMENTED
       // supportedMultiCamDeviceSets before any wiring — the combinations the
       // hardware can actually stream together. An unsupported pair degrades
       // to honest single-cam HERE, stated, instead of failing obscurely
       // downstream.
-      // SupportedMultiCamDeviceSets exists ONLY on
+      // 0.18.5 build fix: supportedMultiCamDeviceSets exists ONLY on
       // AVCaptureDevice.DiscoverySession (sets of AVCaptureDevice) — not on
       // AVCaptureMultiCamSession at all. Compare by deviceType; a device is
       // not interchangeable with its type in the Set<AVCaptureDevice>.
@@ -1406,16 +1595,16 @@ extension ExhibitCameraModule {
         let input = try AVCaptureDeviceInput(device: secondary)
         if session.canAddInput(input),
            configureFormat(device: secondary, maxWidth: 1280, maxHeight: 720, requireMultiCam: true) {
-          // Explicit multi-cam wiring — see wireOutput.
+          // Explicit multi-cam wiring (0.18.1) — see wireOutput.
           session.addInputWithNoConnections(input)
-          // The 30 fps billing promise, same as
+          // 0.18.3 dual-cam experiment: the 30 fps billing promise, same as
           // the primary input above. Set AFTER the add (adding resets it).
           input.videoMinFrameDurationOverride = CMTime(value: 1, timescale: 30)
           secondaryInput = input
           stereoAttached = true
         } else {
           // configureFormat logs its own refusal; a canAddInput=false
-          // lands here.
+          // lands here (0.18.2 — no silent single-cam fallbacks).
           logDiagnosticEvent("secondary attach FAILED at configure: canAddInput=\(session.canAddInput(input)) device=\(secondary.deviceType.rawValue) — single-cam fallback")
         }
       } catch {
@@ -1426,7 +1615,7 @@ extension ExhibitCameraModule {
       } }
     }
 
-    // Primary video output. NO forced pixel format: leaving
+    // Primary video output. NO forced pixel format (0.15.0 Drop 2): leaving
     // videoSettings empty delivers buffers in the camera's NATIVE format
     // (420YpCbCr), which is Apple's multi-cam guidance — forcing 32BGRA made
     // the ISP convert every frame of BOTH streams (1440p + 720p @ 30 fps),
@@ -1450,8 +1639,8 @@ extension ExhibitCameraModule {
       // Native format — see the primary output above. Both synced outputs
       // MUST be configured alike or the graph converts one stream only.
       out.alwaysDiscardsLateVideoFrames = true
-      // Virtual graph wires to the UW constituent port on the ONE
-      // input; the multi-input graph wires to the secondary input.
+      // 0.18.4: virtual graph wires to the UW constituent port on the ONE
+      // input; the multi-input graph wires to the secondary input (0.18.1).
       let secondaryWired: Bool
       if let port = virtualUWPort, let vInput = virtualInput {
         secondaryWired = wireOutput(out, to: vInput, port: port, mediaType: .video, in: session, label: "secondary-video") != nil
@@ -1488,7 +1677,7 @@ extension ExhibitCameraModule {
     // watchdog below is the arbiter (spec §6). The outputs are added INSIDE
     // this configuration, before startRunning — never mid-flight.
     let primaryPhoto = AVCapturePhotoOutput()
-    // On the virtual graph the photo output was REFUSED
+    // 0.18.5 field fix: on the virtual graph the photo output was REFUSED
     // (canAddConnection=false) when wired to the explicit WIDE constituent
     // port — a photo output binds the virtual device's own port, not a
     // constituent. Nil port = the documented selector resolves the virtual
@@ -1499,15 +1688,18 @@ extension ExhibitCameraModule {
       primaryPhotoOutput = primaryPhoto
       applyFullResPhotoPolicy(to: primaryPhoto, device: primary)
     }
-    // NO secondary photo output is attached — anywhere, in any
-    // configuration. No secondary photo output is attached: on iPhone 17 a
-    // secondary AVCapturePhotoOutput sharing the port and input with the
-    // secondary video data output coincided with the secondary video stream
-    // delivering nothing, while a preview layer bound directly to the same
-    // ultra-wide port stayed live. The stereo still is derived from the
-    // synchronized video pair instead (see attachFullResStills).
-    //
-    // What that costs, all recorded in the payload:
+    // 0.18.5: NO secondary photo output is attached — anywhere, in any
+    // configuration. The 2026-08-17 field matrix (iPhone 17, four sessions,
+    // all four 12MP-clamp × session-calibration combinations) delivered
+    // ZERO secondary video frames from the first frame of every session
+    // with a green census, exonerated pressure (0.69 < 1.0), hardwareCost
+    // (0.5), formats, and both debug flags — while the PiP (preview layer
+    // bound directly to the UW port, bypassing the data output) stayed
+    // LIVE. The one element present in every dead session was the
+    // secondary AVCapturePhotoOutput wired to the same port/input as the
+    // secondary video data output. Removing it tests the last structural
+    // suspect; the stereo still is now derived from the synchronized
+    // video pair (see attachFullResStills). Consequences, all stated:
     //   - fullResSecondary = the retained pair's UW frame at stream
     //     resolution (1280×720), hashed on disk as before — labeled
     //     'video-stream-derived' in its evidence metadata;
@@ -1518,7 +1710,7 @@ extension ExhibitCameraModule {
     // If complete-pairs climb from zero on this build, the photo output's
     // mere attachment was the killer and the derivation above is
     // permanent. If they don't, the graph is now minimal — video data
-    // outputs only.
+    // outputs only — and the dump exonerates outputs entirely.
     secondaryPhotoOutput = nil
     if stereoAttached {
       logDiagnosticEvent("0.18.5: secondary photo output NOT attached by design — stereo stills derive from the synced video pair; UW session calibration commits 'unavailable'")
@@ -1526,15 +1718,15 @@ extension ExhibitCameraModule {
 
     session.commitConfiguration()
 
-    // After commit, log what the graph was BILLED —
+    // 0.18.3 dual-cam census: after commit, log what the graph was BILLED —
     // hardwareCost and systemPressureCost are only truthful post-commit
     // (WWDC19-249: commit → read → roll back), plus each input's override as
     // applied. NOTE: the 26.5 SDK exposes systemPressureState on
     // AVCaptureSession but NOT on AVCaptureMultiCamSession (compile error if
     // read here) — multi-cam pressure arrives through systemPressureCost, so
     // the cost pair IS the whole pressure story for this session type. The
-    // Frame-duration overrides and cost numbers, logged so a stalled
-    // secondary stream can be checked against them.
+    // 0.18.2 field log proved format+wiring innocent while zero secondary
+    // frames ever arrived; these numbers are the next suspect list.
     do {
       let primaryOverrideText: String
       if let o = primaryInput?.videoMinFrameDurationOverride {
@@ -1568,7 +1760,7 @@ extension ExhibitCameraModule {
       return
     }
 
-    // SystemPressureCost was LOGGED (census above) but never
+    // 0.18.4-R3 (H2): systemPressureCost was LOGGED (census above) but never
     // GATED — an over-budget pressure cost sailed through the hardwareCost
     // watchdog, and the review ties exactly that to the silent
     // stream-shedding signature. Over-budget pressure declines STEREO
@@ -1590,7 +1782,8 @@ extension ExhibitCameraModule {
       stereoAttached = false
     }
 
-    // Rotation + mirroring policy on every video connection (// per-device, NEVER a hardcoded angle): data outputs, photo outputs,
+    // Rotation + mirroring policy on every video connection (0.15.1 —
+    // per-device, NEVER a hardcoded angle): data outputs, photo outputs,
     // and (in the view/PiP) preview connections all ask the
     // AVCaptureDevice.RotationCoordinator for their horizon-level angle.
     // iPhone 17's Center Stage front camera has a PORTRAIT-mounted sensor
@@ -1602,7 +1795,7 @@ extension ExhibitCameraModule {
     // ORIENTATION CONTRACT: on AVCaptureVideoDataOutput connections this
     // rotation is PHYSICAL — the delivered pixel buffers arrive rotated by
     // the connection's videoRotationAngle (CMVideoFormatDescriptionGetDimensions
-    // returns the swapped dims). It is NOT display metadata; the-era
+    // returns the swapped dims). It is NOT display metadata; the 0.13.0-era
     // comment claiming "pixels are untouched" was wrong, and stamping a
     // second rotation into the writer's track transform on top of these
     // physically-upright frames was the sideways-media bug. Every consumer
@@ -1619,7 +1812,7 @@ extension ExhibitCameraModule {
         RotationPolicy.apply(to: connection, device: secondary)
       }
       if let connection = primaryPhotoOutput?.connection(with: .video) {
-        // Off by default; switchable from Settings ▸ Diagnostics.
+        // W7 isolation: default off — wave-5/6 suspect, flip via Settings ▸ Diagnostics when testing
         if ExhibitDebugFlags.photoConnectionRotation {
           RotationPolicy.apply(to: connection, device: primary)
         } else if connection.isVideoOrientationSupported {
@@ -1628,7 +1821,7 @@ extension ExhibitCameraModule {
       }
       if stereoAttached, let secondary = (secondary ?? secondaryConstituent),
          let connection = secondaryPhotoOutput?.connection(with: .video) {
-        // Off by default; switchable from Settings ▸ Diagnostics.
+        // W7 isolation: default off — wave-5/6 suspect, flip via Settings ▸ Diagnostics when testing
         if ExhibitDebugFlags.photoConnectionRotation {
           RotationPolicy.apply(to: connection, device: secondary)
         } else if connection.isVideoOrientationSupported {
@@ -1652,7 +1845,7 @@ extension ExhibitCameraModule {
     sync.setDelegate(syncHandler, queue: sessionQueue)
     synchronizer = sync
 
-    // Opportunistic third view (extension point, UNTESTED on
+    // Opportunistic third view (0.17.2 — extension point, UNTESTED on
     // hardware; inert unless ExhibitDebugFlags.thirdViewEnabled is ON).
     prepareThirdViewIfEnabled(in: session)
 
@@ -1714,10 +1907,10 @@ extension ExhibitCameraModule {
       self?.sendError(ExhibitCameraErrorCode.platform, "Capture session runtime error: \(err?.localizedDescription ?? "unknown")")
     }
 
-    // Interruption boundaries into the persistent log. If the OS
+    // 0.18.2: interruption boundaries into the persistent log. If the OS
     // interrupts (or never fully resumes) the graph, the secondary stream
     // can park while previews keep their last buffers — this is the
-    // so an interruption is visible in the diagnostics.
+    // discriminate-or-exonerate evidence for the field.
     interruptionObserver = NotificationCenter.default.addObserver(
       forName: .AVCaptureSessionWasInterrupted,
       object: session,
@@ -1750,7 +1943,7 @@ extension ExhibitCameraModule {
     self.startPromise = promise
     self.startPromiseDone = false
 
-    // Record the isActive TIMELINE on both video
+    // 0.18.4-R3 (H3): record the isActive TIMELINE on both video
     // connections — isActive settles asynchronously, so the one-shot census
     // reads it too early. Never-active = rejected at the graph level; a
     // transition at t=+N s = evicted after start. The wall clock is set
@@ -1759,7 +1952,7 @@ extension ExhibitCameraModule {
     observeConnectionActivity(primaryVideoOutput?.connection(with: .video), label: "primaryVideo")
     observeConnectionActivity(secondaryVideoOutput?.connection(with: .video), label: "secondaryVideo")
 
-    // NSException-safe start: a thrown ObjC exception from
+    // NSException-safe start (0.15.0 Drop 2): a thrown ObjC exception from
     // startRunning can NEVER reach the bridge as a crash — the shim catches
     // it and we reject + tear down honestly instead.
     if let startError = ExhibitSessionControl.safelyStart(session) {
@@ -1790,12 +1983,12 @@ extension ExhibitCameraModule {
     ensurePipConnection(in: session)
     scheduleStallWatchdog()
 
-    // The post-start census into the persistent log (isActive is
+    // 0.18.2: the post-start census into the persistent log (isActive is
     // only meaningful while running — the first-frame census below is the
     // ground truth; this one catches a graph that never delivers at all).
     logDiagnosticEvent("configureSession started: graph=\(virtualGraphActive ? "virtual-dual-wide" : "multi-input") stereoAttached=\(stereoAttached) census=\(connectionCensus())")
 
-    // The secondary takes the primary's current AE/AWB/AF state
+    // 0.18.2: the secondary takes the primary's current AE/AWB/AF state
     // (fresh devices are already continuous-auto from configureFormat; a
     // re-configured session may carry stored pro controls).
     mirrorProControlsToSecondary()
@@ -1853,7 +2046,7 @@ extension ExhibitCameraModule {
       // its pixel buffers return to the output pools. The old code held the
       // last good pair forever once every frame started dropping, which can
       // turn transient pool pressure into a self-sustaining wedge. Releasing
-      // never fabricates anything: capture simply waits for a fresh pair
+      // never fabricates anything: capture() simply waits for a fresh pair
       // and rejects E_STALE_PAIR if none arrives.
       if let pair = latestPair, Date().timeIntervalSince(pair.receivedAt) >= 0.5 {
         latestPair = nil
@@ -1872,10 +2065,10 @@ extension ExhibitCameraModule {
         droppedPairCount += 1
         droppedSecondaryHalfCount += 1
         consecutiveSecondaryDrops += 1
-        // ABSENT (the synchronizer returned no
+        // 0.17.2 diagnostics split: ABSENT (the synchronizer returned no
         // data object at all — the output produced nothing matchable) vs
         // DROPPED (a data object exists but the platform marked it
-        // dropped). The field flood could not discriminate these.
+        // dropped). The 0.17.1 field flood could not discriminate these.
         if data == nil {
           secondaryAbsentCount += 1
         } else {
@@ -1887,13 +2080,13 @@ extension ExhibitCameraModule {
         // quietly absent for the whole session.
         if consecutiveSecondaryDrops == 150, !stallRecovering {
           stallRecovering = true
-          // The flood rungs into the persistent log WITH the live
+          // 0.18.2: the flood rungs into the persistent log WITH the live
           // census — the field run must show the connection state at the
           // moment the platform starves the secondary.
           logDiagnosticEvent("secondary flood rung 1 (150 consecutive, rebuild synchronizer): census=\(connectionCensus())")
           rebuildSynchronizer()
         } else if consecutiveSecondaryDrops == 300, !secondaryReseatDone {
-          // Rung 2: a rebind cannot resurrect a secondary stream
+          // Rung 2 (0.17.2): a rebind cannot resurrect a secondary stream
           // the platform has parked — remove + re-add the secondary VIDEO
           // DATA OUTPUT once per session for a fresh connection and pool.
           secondaryReseatDone = true
@@ -1917,39 +2110,43 @@ extension ExhibitCameraModule {
     // it does NOTHING but timestamp arithmetic and one struct store — no
     // intrinsics extraction (lazy at commit), no JSON, no allocation-heavy
     // work. Work done here delays the NEXT collection's delivery and is the
-    // classic steady-state dropped-pair source.
+    // classic steady-state dropped-pair source (0.15.0 Drop 2).
     let now = Date()
     lastCollectionAt = now
     if secondaryData != nil {
       consecutiveSecondaryDrops = 0
     }
+    // Extract the sample buffers HERE — inside the callback, the only
+    // window in which the wrappers vend valid payloads (Apple's contract,
+    // quoted on RetainedPair). Storing them in the pair ARC-retains the
+    // buffers themselves; the wrappers are discarded when this scope ends.
     let pair = RetainedPair(
-      primary: primaryData,
-      secondary: secondaryData,
+      primary: primaryData.sampleBuffer,
+      secondary: secondaryData?.sampleBuffer,
       deltaMs: deltaMs,
       receivedAt: now
     )
     latestPair = pair
 
-    // Count pairs with BOTH halves — completePairCount == 0 while
+    // 0.17.2: count pairs with BOTH halves — completePairCount == 0 while
     // the absent/dropped counters climb == the secondary stream never
-    // landed this session (the discriminating counter for the flood).
+    // landed this session (the discriminating counter for the 0.17.1 flood).
     let frameComplete = secondaryData != nil
     if stereoActive, frameComplete {
       completePairCount += 1
     }
 
-    // Shutter-burst ring: preview mode only,
+    // Shutter-burst ring (0.17.2 — see the state notes): preview mode only,
     // sink opt-in only. Appending releases the oldest frame, so the
-    // steady-state held-buffer count stays bounded.: retain
+    // steady-state held-buffer count stays bounded. 0.18.1: retain
     // primary-valid frames even when the secondary half is absent — the
     // per-frame index entry states completeness (secondaryPath null /
     // complete:false), so a secondary flood degrades the burst to
     // primary-only frames honestly instead of producing NO burst at all
-    // (the field failure: completePairCount == 0 forever meant the
+    // (the 0.18.0 field failure: completePairCount == 0 forever meant the
     // ring never filled). Nothing is fabricated: every frame commits
     // exactly the halves it actually has.
-    // A starved pipeline redelivered collections built on
+    // 0.18.4 (field: a starved pipeline redelivered collections built on
     // the SAME primary buffer — the ring filled with identical frames and
     // the burst read as "0 px per frame" while the gyro said the phone was
     // whipping): retain only PTS-ADVANCING frames. Duplicates are not
@@ -1959,8 +2156,13 @@ extension ExhibitCameraModule {
     if burstSinkWanted, mode == .preview {
       let framePTS = CMSampleBufferGetPresentationTimeStamp(primaryData.sampleBuffer)
       let advances = (!framePTS.isValid) || (lastBurstPTS.map { CMTimeCompare(framePTS, $0) > 0 } ?? true)
-      if advances {
+      // 0.18.6: cadence gate — retain at most one frame per
+      // burstCadenceSeconds so the burst spans the advertised ±300 ms
+      // axis instead of ~115 ms of sub-pixel-identical frames.
+      let onCadence = lastBurstRetainedAt.map { pair.receivedAt.timeIntervalSince($0) >= burstCadenceSeconds } ?? true
+      if advances, onCadence {
         if framePTS.isValid { lastBurstPTS = framePTS }
+        lastBurstRetainedAt = pair.receivedAt
         burstRing.append(pair)
         if burstRing.count > burstPreCapacity {
           burstRing.removeFirst()
@@ -1984,21 +2186,22 @@ extension ExhibitCameraModule {
         "sessionId": sessionId,
         "startedAtMs": currentEpochMs(),
         "stereo": stereoActive ? StereoAvailability.available.rawValue : StereoAvailability.unsupported.rawValue,
-        // Which rear-stereo graph this session runs —
+        // 0.18.4 (additive): which rear-stereo graph this session runs —
         // "virtual-dual-wide" (one input, constituent ports) or
-        // "multi-input" (two device inputs, pre-default).
+        // "multi-input" (two device inputs, pre-0.18.4 default).
         "graph": virtualGraphActive ? "virtual-dual-wide" : "multi-input",
         "hardwareCost": session.map { Double($0.hardwareCost) } as Any? ?? NSNull(),
-        // The live connection census at first
+        // 0.18.1 diagnostics (additive): the live connection census at first
         // frame — a silently absent/cross-wired connection is visible here.
         "connections": connectionCensus(),
       ])
-      // The same census into the persistent log at first frame —
+      // 0.18.2: the same census into the persistent log at first frame —
       // isActive is the ground-truth "media is flowing through this
       // connection" signal for the secondary-absence triage.
       logDiagnosticEvent("first frame: census=\(connectionCensus())")
       pushSessionToPreview(readySignal: "first-synchronized-frame")
-      scheduleSessionCalibrationCapture()
+      // 0.18.6: the session-calibration one-shot is RETIRED — no call site
+      // remains (see scheduleSessionCalibrationCapture's doc).
     }
 
     // Video mode: feed the delivery writer + periodic pair cadence (spec §8).
@@ -2052,9 +2255,10 @@ extension ExhibitCameraModule {
       return (output, pair.1)
     }
     guard !targets.isEmpty else { return }
-    // Health gate: a calibration photo on a graph that is already dropping
-    // frames makes it worse, and a photo capture attempted under pressure can
-    // refuse outright and leave the output unwilling to record
+    // 0.15.2 health gate (build 26 field report): a calibration photo on a
+    // graph that is ALREADY dropping frames is gasoline on the flood — and
+    // the build-26 "Cannot Record" failures show a photo capture attempted
+    // under pressure can refuse and leave the output unwilling to record
     // afterward. If the pipeline is unhealthy at fire time, SKIP this
     // session's one-shot: calibrationSource commits 'unavailable', which is
     // honest, and the graph keeps every buffer for actual evidence.
@@ -2077,11 +2281,11 @@ extension ExhibitCameraModule {
       self.rebuildSynchronizer()
     }
 
-    // SEQUENTIAL captures, one photo at a time: the old code
+    // SEQUENTIAL captures, one photo at a time (0.15.0 Drop 2): the old code
     // fired capturePhoto on BOTH photo outputs back-to-back. A photo capture
     // on a live multi-cam graph is the documented maximum-resource moment —
     // the video data outputs drop frames for its duration — and doubling it
-    // is what wedged the sync pipeline on hardware (stale-pair
+    // is what wedged the sync pipeline on 0.14.0 hardware (stale-pair
     // rejections at shutter; dropped-pair floods starting ~1 s into every
     // session — exactly when this one-shot fired). One at a time halves the
     // spike; when the LAST capture returns we rebind the synchronizer once
@@ -2107,9 +2311,12 @@ extension ExhibitCameraModule {
     let (output, label) = targets[index]
     let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
     settings.isCameraCalibrationDataDeliveryEnabled = true
-    // No flash for a calibration frame; we discard the pixels.
-    // Fully qualified (EAS build fix): keeps the .off contextual base.
-    settings.flashMode = AVCaptureDevice.FlashMode.off
+    // No flash for a calibration frame; we discard the pixels. The setter
+    // validates against supportedFlashModes at SET time and throws an
+    // uncatchable NSException on a mismatch — assign only when supported.
+    if output.supportedFlashModes.contains(AVCaptureDevice.FlashMode.off) {
+      settings.flashMode = AVCaptureDevice.FlashMode.off
+    }
     var handlerRef: ExhibitPhotoHandler?
     let handler = ExhibitPhotoHandler { [weak self] photo, _ in
       self?.sessionQueue.async {
@@ -2128,11 +2335,21 @@ extension ExhibitCameraModule {
     // Retain the handler until the delegate fires (CaptureKit pattern:
     // the module holds it, the closure releases it on completion).
     photoHandlers.append(handler)
-    output.capturePhoto(with: settings, delegate: handler)
+    // NSException-safe fire (0.18.5 post-field): settings validation against
+    // the live multi-cam graph can throw — a thrown exception is a stated
+    // skip, never a crash; the sequence continues with the next target.
+    if let captureError = ExhibitSessionControl.safelyCapturePhoto(output: output, settings: settings, delegate: handler) {
+      photoHandlers.removeAll { $0 === handler }
+      sendError(
+        ExhibitCameraErrorCode.platform,
+        "Session calibration capture threw at fire time: \(captureError.localizedDescription) — '\(label)' calibration commits 'unavailable' this session"
+      )
+      fireNextCalibrationCapture(targets: targets, index: index + 1, sessionID: sessionID)
+    }
   }
 }
 
-// MARK: - capture — the commitment contract (spec §4/§5)
+// MARK: - capture() — the commitment contract (spec §4/§5)
 
 extension ExhibitCameraModule {
 
@@ -2159,7 +2376,7 @@ extension ExhibitCameraModule {
     }
     // Freshness: a pair older than 500 ms at shutter time is stale (spec
     // §4.1) — a covered/transitioning camera must not mint old pixels as
-    // "now". lesson (iPhone 17, dual-camera): a configuration hiccup
+    // "now". 0.14.0 lesson (iPhone 17, dual-camera): a configuration hiccup
     // can stall the data pipeline while the preview layer keeps painting,
     // and a hard reject made stills unusable. So a stale/missing pair now
     // waits up to 900 ms for the NEXT fresh pair — old pixels are never
@@ -2169,7 +2386,7 @@ extension ExhibitCameraModule {
     if let pair = latestPair, Date().timeIntervalSince(pair.receivedAt) < 0.5 {
       runCapture(opts: opts, promise: promise, pair: pair)
     } else {
-      // The "delivered but rejected as stale" counter —
+      // 0.17.2 diagnostics: the "delivered but rejected as stale" counter —
       // a shutter that found no fresh pair at fire time.
       staleShutterCount += 1
       awaitFreshPair(opts: opts, promise: promise, deadline: Date().addingTimeInterval(0.9))
@@ -2185,7 +2402,7 @@ extension ExhibitCameraModule {
       return
     }
     if Date() >= deadline {
-      // GRACEFUL DEGRADATION: a starved sync
+      // GRACEFUL DEGRADATION (0.15.1 — approved fallback): a starved sync
       // pipeline must NEVER dead-end the shutter. Under a chronic drop
       // flood the retained pair is RELEASED at staleness (buffers returned
       // to the pools), so no fresh pair may ever arrive — the old hard
@@ -2221,7 +2438,7 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// GRACEFUL DEGRADATION.
+  /// GRACEFUL DEGRADATION (0.15.1 — the approved stereo-off fallback).
   /// Fired from awaitFreshPair's deadline: the sync pipeline produced no
   /// fresh pair within the shutter window, so the photo OUTPUT captures the
   /// delivery still directly — full sensor resolution, the platform's own
@@ -2298,17 +2515,22 @@ extension ExhibitCameraModule {
     let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
     var flashApplied = false
     var flashNote: String? = nil
-    if pref == .off {
-      settings.flashMode = AVCaptureDevice.FlashMode.off
-    } else if photoOutput.supportedFlashModes.contains(pref.avFlashMode) {
+    // The flashMode setter validates against supportedFlashModes at SET time
+    // and raises an uncatchable NSException on a mismatch — assign ONLY
+    // contained values (an unassigned setting defaults to no flash).
+    if pref != .off, photoOutput.supportedFlashModes.contains(pref.avFlashMode) {
       settings.flashMode = pref.avFlashMode
       flashApplied = true
-    } else {
+    } else if photoOutput.supportedFlashModes.contains(AVCaptureDevice.FlashMode.off) {
       settings.flashMode = AVCaptureDevice.FlashMode.off
+      if pref != .off {
+        flashNote = "flash mode '\(pref.rawValue)' is not in this output's supportedFlashModes — captured without the strobe (stated, not faked)"
+      }
+    } else if pref != .off {
       flashNote = "flash mode '\(pref.rawValue)' is not in this output's supportedFlashModes — captured without the strobe (stated, not faked)"
     }
 
-    // This clamp is now ON by default (the flag is the escape
+    // 0.17.2: this clamp is now ON by default (the flag is the escape
     // hatch — see ExhibitDebugFlags.photoMaxDimensionsPolicy).
     if ExhibitDebugFlags.photoMaxDimensionsPolicy, #available(iOS 16.0, *) {
       settings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
@@ -2326,7 +2548,7 @@ extension ExhibitCameraModule {
       self?.sessionQueue.async { [weak self] in
         guard let self = self else { return }
         guard let photo = photo, let data = photo.fileDataRepresentation() else {
-          // One automatic retry after a beat — "Cannot Record" under
+          // 0.15.2: one automatic retry after a beat — "Cannot Record" under
           // transient resource contention can clear; a wedged output fails
           // twice and the message says so. The handler stays retained for
           // the retry; it is released at either settle.
@@ -2337,7 +2559,15 @@ extension ExhibitCameraModule {
               // closure runs; capturing `handler` itself here would be a
               // capture-before-initialization compile error).
               guard let self = self, !settled, let delegateHandler = handlerRef else { return }
-              photoOutput.capturePhoto(with: settings, delegate: delegateHandler)
+              // NSException-safe retry fire (0.18.5 post-field) — a thrown
+              // settings-validation exception settles as a stated failure.
+              if let captureError = ExhibitSessionControl.safelyCapturePhoto(output: photoOutput, settings: settings, delegate: delegateHandler) {
+                self.photoHandlers.removeAll { $0 === delegateHandler }
+                settle(.failure(ExhibitCameraNamedException(
+                  ExhibitCameraErrorCode.platform,
+                  "Single-lens fallback capture retry threw at fire time: \(captureError.localizedDescription)"
+                )))
+              }
             }
             return
           }
@@ -2355,7 +2585,7 @@ extension ExhibitCameraModule {
         }
         do {
           // `try?`: on a fresh delivery path the remove throws "no such
-          // file" (the every-still-fails lesson).
+          // file" (the 0.13.0 every-still-fails lesson).
           try? FileManager.default.removeItem(at: deliveryURL)
           try data.write(to: deliveryURL, options: .atomic)
         } catch {
@@ -2463,11 +2693,11 @@ extension ExhibitCameraModule {
           "fullResSecondary": EvidencePathBuilder.neverRecorded("no-synchronized-pair-at-shutter"),
           "fullResSecondarySha256": NSNull(),
           "fullResSecondaryDimensions": NSNull(),
-          // Shutter burst: not attempted on the degraded path —
+          // Shutter burst (0.17.2): not attempted on the degraded path —
           // stated, consistent with the pair-derived artifacts above.
           "ringBufferDir": EvidencePathBuilder.neverRecorded("no-synchronized-pair-at-shutter"),
           "ringFrameCount": 0,
-          // The live connection census at
+          // 0.18.2 diagnostics (additive): the live connection census at
           // the moment of commit — every capture carries its graph truth.
           "connections": self.connectionCensus(),
         ]
@@ -2491,7 +2721,17 @@ extension ExhibitCameraModule {
     }
     handlerRef = handler
     photoHandlers.append(handler)
-    photoOutput.capturePhoto(with: settings, delegate: handler)
+    // NSException-safe fire (0.18.5 post-field): capturePhoto validates the
+    // settings against the LIVE multi-cam graph and raises an NSException
+    // on a mismatch — Swift cannot catch one, so the fire goes through the
+    // ObjC trampoline and a throw becomes this path's stated failure.
+    if let captureError = ExhibitSessionControl.safelyCapturePhoto(output: photoOutput, settings: settings, delegate: handler) {
+      photoHandlers.removeAll { $0 === handler }
+      settle(.failure(ExhibitCameraNamedException(
+        ExhibitCameraErrorCode.platform,
+        "Single-lens fallback capture threw at fire time: \(captureError.localizedDescription); \(self.photoFailureDump(path: "degraded", settings: settings, output: photoOutput, device: device))"
+      )))
+    }
   }
 
   /// Degraded-path IMU slice: identical window ([-2.0 s, +0.5 s]) and
@@ -2522,6 +2762,9 @@ extension ExhibitCameraModule {
         from: shutterSec - 2.0,
         to: shutterSec + 0.5,
         anchorStartedAtMs: capturedAtMs,
+        // This path has no pair PTS — its shutter estimate IS the event
+        // instant on the boot clock (0.18.6: not the flush instant).
+        anchorBootSec: shutterSec,
         logger: logger
       ))
     }
@@ -2530,7 +2773,7 @@ extension ExhibitCameraModule {
   /// The capture body, run once a fresh pair is in hand (immediately when
   /// the pipeline is healthy, after a short wait when it hiccuped).
   private func runCapture(opts: [String: Any], promise: Promise, pair: RetainedPair) {
-    // opts paths were validated by capture before the wait; re-parse —
+    // opts paths were validated by capture() before the wait; re-parse —
     // a malformed path still rejects, never a crash.
     guard let deliveryPath = opts["deliveryPath"] as? String,
           let evidenceDir = opts["evidenceDir"] as? String,
@@ -2581,7 +2824,7 @@ extension ExhibitCameraModule {
       case .failure(let error):
         settle(.failure(error))
       case .success(let payload):
-        // Shutter-burst sink:
+        // Shutter-burst sink (0.17.2 — "frames around the shutter"):
         // commits the pre-shutter ring + the next few post-shutter frames
         // to evidenceDir/ring-<captureId>/ BEFORE the full-res photo
         // captures fire (a photo capture on the live graph is the
@@ -2639,7 +2882,7 @@ extension ExhibitCameraModule {
     }
   }
 
-  // MARK: - Shutter-burst sink
+  // MARK: - Shutter-burst sink (0.17.2 — "frames around the shutter")
 
   /// Settles the post-shutter collection exactly once (early at the target
   /// count, or at the 1.5 s timeout), always on sessionQueue. A session
@@ -2744,21 +2987,24 @@ extension ExhibitCameraModule {
         var entry: [String: Any] = [
           "frame": i,
           "offsetMsVsShutter": frame.receivedAt.timeIntervalSince(shutterAt) * 1000.0,
-          "primaryHostSeconds": CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(frame.primary.sampleBuffer)),
+          "primaryHostSeconds": CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(frame.primary)),
           "primaryPath": NSNull(),
           "secondaryPath": NSNull(),
-          // The ring may retain primary-only frames during a
+          // 0.18.1: the ring may retain primary-only frames during a
           // secondary flood — each entry states its own completeness.
           "complete": frame.secondary != nil,
         ]
-        if let secondary = frame.secondary, !secondary.sampleBufferWasDropped {
-          let secondaryPTS = CMSampleBufferGetPresentationTimeStamp(secondary.sampleBuffer)
-          let primaryPTS = CMSampleBufferGetPresentationTimeStamp(frame.primary.sampleBuffer)
+        // 0.18.6: a secondary buffer enters the pair ONLY when the delivery
+        // callback confirmed it wasn't a platform drop — no wrapper flag to
+        // re-check at commit time.
+        if let secondary = frame.secondary {
+          let secondaryPTS = CMSampleBufferGetPresentationTimeStamp(secondary)
+          let primaryPTS = CMSampleBufferGetPresentationTimeStamp(frame.primary)
           if primaryPTS.isValid, secondaryPTS.isValid {
             entry["deltaMs"] = (CMTimeGetSeconds(secondaryPTS) - CMTimeGetSeconds(primaryPTS)) * 1000.0
           }
           let secondaryURL = ringDir.appendingPathComponent("ring-\(captureId)-\(String(format: "%02d", i))-secondary.jpg")
-          if let imageBuffer = CMSampleBufferGetImageBuffer(secondary.sampleBuffer),
+          if let imageBuffer = CMSampleBufferGetImageBuffer(secondary),
              let (data, _) = self.downsampledJPEG(from: imageBuffer, targetBytes: 200_000) {
             do {
               try FileManager.default.createDirectory(at: ringDir, withIntermediateDirectories: true)
@@ -2772,18 +3018,26 @@ extension ExhibitCameraModule {
           }
         }
         let primaryURL = ringDir.appendingPathComponent("ring-\(captureId)-\(String(format: "%02d", i))-primary.jpg")
-        if let imageBuffer = CMSampleBufferGetImageBuffer(frame.primary.sampleBuffer),
-           let (data, _) = self.downsampledJPEG(from: imageBuffer, targetBytes: 200_000) {
-          do {
-            try FileManager.default.createDirectory(at: ringDir, withIntermediateDirectories: true)
-            try data.write(to: primaryURL, options: .atomic)
-            entry["primaryPath"] = primaryURL.path
-            committedCount += 1
-          } catch {
-            writeFailure = writeFailure ?? "primary frame \(i): \(error.localizedDescription)"
+        if let imageBuffer = CMSampleBufferGetImageBuffer(frame.primary) {
+          // 0.18.6: the frame's own 8×8 luma dHash rides the index — the
+          // committed distinctness fact (see dHash64's header).
+          if let dh = self.dHash64(from: imageBuffer) {
+            entry["primaryDHash64"] = dh
+          }
+          if let (data, _) = self.downsampledJPEG(from: imageBuffer, targetBytes: 200_000) {
+            do {
+              try FileManager.default.createDirectory(at: ringDir, withIntermediateDirectories: true)
+              try data.write(to: primaryURL, options: .atomic)
+              entry["primaryPath"] = primaryURL.path
+              committedCount += 1
+            } catch {
+              writeFailure = writeFailure ?? "primary frame \(i): \(error.localizedDescription)"
+            }
+          } else {
+            writeFailure = writeFailure ?? "primary frame \(i): JPEG encode returned nil"
           }
         } else {
-          writeFailure = writeFailure ?? "primary frame \(i): JPEG encode returned nil"
+          writeFailure = writeFailure ?? "primary frame \(i): no pixel buffer"
         }
         indexEntries.append(entry)
       }
@@ -2827,7 +3081,7 @@ extension ExhibitCameraModule {
   /// marks it optional).
   private func sensorLogFields(state: String, path: String? = nil, error: String? = nil) -> [String: Any] {
     var fields: [String: Any] = [
-      // Same `as Any? ?? NSNull` idiom as rawPcmPath/hardwareCost above:
+      // Same `as Any? ?? NSNull()` idiom as rawPcmPath/hardwareCost above:
       // mixed String/NSNull literals made the dictionary type ambiguous on
       // a past EAS build; the explicit cast resolves it.
       "sensorLogPath": path as Any? ?? NSNull(),
@@ -2849,10 +3103,11 @@ extension ExhibitCameraModule {
     from: Double,
     to: Double,
     anchorStartedAtMs: Int64,
+    anchorBootSec: Double,
     logger: ExhibitSensorLogger
   ) -> [String: Any] {
     do {
-      let written = try logger.flushWindow(from: from, to: to, to: url, anchorStartedAtMs: anchorStartedAtMs)
+      let written = try logger.flushWindow(from: from, to: to, to: url, anchorStartedAtMs: anchorStartedAtMs, anchorBootSec: anchorBootSec)
       guard written > 0 else {
         return sensorLogFields(state: "unavailable")
       }
@@ -2882,9 +3137,9 @@ extension ExhibitCameraModule {
     }
     // Shutter anchor: the primary frame's PTS is mach-clock-derived — the
     // SAME clock CMLogItem.timestamp rides, so the window needs no clock
-    // conversion. The now fallback (invalid PTS) is stated honestly in
+    // conversion. The now() fallback (invalid PTS) is stated honestly in
     // the file's window line via requestedStart/requestedEnd.
-    let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(pair.primary.sampleBuffer))
+    let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(pair.primary))
     let shutterSec = pts.isFinite ? pts : ExhibitMachClock.ticksToBootSeconds(ExhibitMachClock.nowTicks())
     let windowStart = shutterSec - 2.0
     let windowEnd = shutterSec + 0.5
@@ -2902,6 +3157,9 @@ extension ExhibitCameraModule {
         from: windowStart,
         to: windowEnd,
         anchorStartedAtMs: capturedAtMs,
+        // The anchor binds the SHUTTER's instant (the primary frame's PTS)
+        // to the shutter's wall clock — 0.18.6: not the flush instant.
+        anchorBootSec: shutterSec,
         logger: logger
       ))
     }
@@ -2924,13 +3182,13 @@ extension ExhibitCameraModule {
     let stereoDetachedForThermal: Bool
     let stereoStateString: String
     let droppedPairCount: Int
-    // The drop SPLIT at the commit instant — total alone cannot
+    // 0.16.2: the drop SPLIT at the commit instant — total alone cannot
     // distinguish a primary-side flood (session-wide pressure) from a
     // secondary-half flood (the dual-capture path itself). Field report
     // 8/13 needed exactly this resolution.
     let droppedPrimaryCount: Int
     let droppedSecondaryHalfCount: Int
-    // The absent/dropped/complete split at the commit instant.
+    // 0.17.2: the absent/dropped/complete split at the commit instant.
     let secondaryAbsentCount: Int
     let secondaryDroppedCount: Int
     let completePairCount: Int
@@ -2966,7 +3224,7 @@ extension ExhibitCameraModule {
     let primaryConnectionMirrored: Bool?
   }
 
-  /// Commits the pair artifacts in two phases:
+  /// Commits the pair artifacts in two phases (0.15.0 Drop 2):
   ///   1. sessionQueue: snapshot all module state (cheap dictionary/scalar
   ///      assembly — NO encodes, NO file I/O).
   ///   2. sinkIOQueue: the two JPEG encodes (full-res delivery + quality-
@@ -2974,7 +3232,7 @@ extension ExhibitCameraModule {
   ///      plus up to four downsample attempts plus five writes can exceed
   ///      several frame intervals; run on sessionQueue (the synchronizer's
   ///      delivery queue) that stalls collection delivery and drops pairs —
-  ///      the lesson sinkIOQueue was created for. The retained pair
+  ///      the 0.14.1 lesson sinkIOQueue was created for. The retained pair
   ///      keeps its sample buffers alive across the hop (the same pattern
   ///      the periodic-pair path already uses).
   /// Delivery failures reject via .failure; every evidence artifact degrades
@@ -2993,10 +3251,10 @@ extension ExhibitCameraModule {
     // Sync timestamps JSON: host-clock PTS pair + wall anchor + delta.
     //    The delta is the sync claim (~one frame period @ 30 fps); what it
     //    means is the desk's problem (spec §4.2).
-    let primaryPTS = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(pair.primary.sampleBuffer))
+    let primaryPTS = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(pair.primary))
     var secondaryHostSeconds: Any = NSNull()
-    if let secondaryData = pair.secondary {
-      let s = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(secondaryData.sampleBuffer))
+    if let secondary = pair.secondary {
+      let s = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(secondary))
       if s.isFinite { secondaryHostSeconds = s }
     }
     let timestampsDict: [String: Any] = [
@@ -3092,7 +3350,7 @@ extension ExhibitCameraModule {
   }
 
   /// Phase 2 of the pair commit (sinkIOQueue ONLY — never sessionQueue).
-  /// Identical artifacts, payload, and error strings to the pre-
+  /// Identical artifacts, payload, and error strings to the pre-0.15.0
   /// synchronous commit; only the queue changed.
   private func performPairCommit(
     _ snap: CommitSnapshot
@@ -3109,13 +3367,13 @@ extension ExhibitCameraModule {
     }
 
     // 1. Primary frame — full session resolution JPEG (the delivery still).
-    guard let primaryBuffer = CMSampleBufferGetImageBuffer(pair.primary.sampleBuffer),
+    guard let primaryBuffer = CMSampleBufferGetImageBuffer(pair.primary),
           let primaryJPEG = jpegData(from: primaryBuffer, quality: 0.9) else {
       return .failure(ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Primary frame could not be encoded"))
     }
     do {
       // `try?`: on a fresh delivery path the remove throws "no such file" —
-      // and it did, failing EVERY still capture on TestFlight while
+      // and it did, failing EVERY still capture on TestFlight 0.13.0 while
       // video worked (its writer path already used `try?`).
       try? FileManager.default.removeItem(at: deliveryURL)
       try primaryJPEG.write(to: deliveryURL, options: .atomic)
@@ -3133,8 +3391,8 @@ extension ExhibitCameraModule {
       secondaryEvidence = EvidencePathBuilder.neverRecorded(
         snap.stereoDetachedForThermal ? "stereo-detached-thermal" : "stereo-unsupported"
       )
-    } else if let secondaryData = pair.secondary,
-              let secondaryBuffer = CMSampleBufferGetImageBuffer(secondaryData.sampleBuffer) {
+    } else if let secondary = pair.secondary,
+              let secondaryBuffer = CMSampleBufferGetImageBuffer(secondary) {
       let url = evidenceDirURL.appendingPathComponent("secondary-\(captureId).jpg")
       if let (data, quality) = downsampledJPEG(from: secondaryBuffer, targetBytes: 200_000) {
         do {
@@ -3210,7 +3468,7 @@ extension ExhibitCameraModule {
     metadata["captureId"] = captureId
     metadata["secondaryBytes"] = secondaryBytes as Any? ?? NSNull()
     metadata["secondaryJpegQuality"] = secondaryQuality as Any? ?? NSNull()
-    // WHERE the secondary half dies —
+    // 0.17.2 diagnostics split (additive): WHERE the secondary half dies —
     // absent (no data object from the synchronizer) vs dropped (data
     // object marked dropped) vs complete pairs retained.
     metadata["secondaryAbsentCount"] = snap.secondaryAbsentCount
@@ -3267,11 +3525,11 @@ extension ExhibitCameraModule {
       "physicalDevices": snap.physicalDevices,
       "captureSettings": captureSettingsBlock,
       "frontMirrored": snap.primaryConnectionMirrored as Any? ?? NSNull(),
-      // The live connection census at the
+      // 0.18.2 diagnostics (additive): the live connection census at the
       // moment of commit — every capture carries its own graph truth.
       "connections": connectionCensus(),
     ]
-    // Per-capture stereo evidence state: 'ok' only when a
+    // Per-capture stereo evidence state (0.15.1): 'ok' only when a
     // synchronized secondary frame was actually committed; on a stereo
     // session whose secondary half dropped at shutter, 'unavailable' with
     // the reason stated — the capture succeeds (the primary still is real)
@@ -3294,8 +3552,8 @@ extension ExhibitCameraModule {
     // Per-frame intrinsics are extracted HERE (commit time), not in the
     // delivery callback: the attachment rides the retained sample buffer,
     // so the read is identical — just off the frame-rate hot path.
-    let primaryIntrinsics = frameIntrinsics(from: pair.primary.sampleBuffer)
-    let secondaryIntrinsics = pair.secondary.flatMap { frameIntrinsics(from: $0.sampleBuffer) }
+    let primaryIntrinsics = frameIntrinsics(from: pair.primary)
+    let secondaryIntrinsics = pair.secondary.flatMap { frameIntrinsics(from: $0) }
     return [
       // Per-frame intrinsics: real per-frame data from the documented
       // attachment path. null when the attachment was absent.
@@ -3369,6 +3627,49 @@ extension ExhibitCameraModule {
     return nil
   }
 
+  /// 0.18.6 field adjudication (Noah: "I am 10000% certain you are not
+  /// getting serial burst photography… literally pixel for pixel"): every
+  /// committed ring frame now carries its own 8×8 luma difference hash —
+  /// 64 bits, computed from the SAME pixel buffer the committed JPEG
+  /// encodes, so distinctness is stated from committed data (N frames,
+  /// M unique hashes) instead of argued about. The hash is a fact ABOUT
+  /// the frame, never a verdict on it.
+  private func dHash64(from pixelBuffer: CVPixelBuffer) -> String? {
+    let source = CIImage(cvPixelBuffer: pixelBuffer)
+    let extent = source.extent
+    guard extent.width > 0, extent.height > 0 else { return nil }
+    // 9×8 luma grid (aspect-stretched, the classic dHash geometry): 8 rows
+    // × 8 horizontal neighbor comparisons = 64 bits.
+    let w = 9, h = 8
+    let scaled = source
+      .applyingFilter("CILanczosScaleTransform", parameters: [
+        kCIInputScaleKey: CGFloat(w) / extent.width,
+        kCIInputAspectRatioKey: (CGFloat(h) / extent.height) / (CGFloat(w) / extent.width),
+      ])
+      .cropped(to: CGRect(x: 0, y: 0, width: w, height: h))
+    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+    var pixels = [UInt8](repeating: 0, count: w * h * 4)
+    ciContext.render(
+      scaled,
+      toBitmap: &pixels,
+      rowBytes: w * 4,
+      bounds: CGRect(x: 0, y: 0, width: w, height: h),
+      format: .RGBA8,
+      colorSpace: colorSpace
+    )
+    var hash: UInt64 = 0
+    for y in 0..<h {
+      for x in 0..<(w - 1) {
+        let i0 = (y * w + x) * 4
+        let i1 = (y * w + x + 1) * 4
+        let l0 = (Int(pixels[i0]) * 299 + Int(pixels[i0 + 1]) * 587 + Int(pixels[i0 + 2]) * 114) / 1000
+        let l1 = (Int(pixels[i1]) * 299 + Int(pixels[i1 + 1]) * 587 + Int(pixels[i1 + 2]) * 114) / 1000
+        hash = (hash << 1) | (l0 > l1 ? 1 : 0)
+      }
+    }
+    return String(format: "%016llx", hash)
+  }
+
   // MARK: - True Bayer RAW opt-in (spec §9)
 
   /// Fires a RAW photo capture on the primary photo output. True Bayer RAW
@@ -3398,12 +3699,16 @@ extension ExhibitCameraModule {
     if photoOutput.isCameraCalibrationDataDeliverySupported {
       settings.isCameraCalibrationDataDeliveryEnabled = true
     }
-    settings.flashMode = AVCaptureDevice.FlashMode.off
+    // Setter validates against supportedFlashModes at SET time (uncatchable
+    // NSException on a mismatch) — assign only when contained.
+    if photoOutput.supportedFlashModes.contains(AVCaptureDevice.FlashMode.off) {
+      settings.flashMode = AVCaptureDevice.FlashMode.off
+    }
     let dngURL = evidenceDirURL.appendingPathComponent("primary-\(captureId).dng")
     var handlerRef: ExhibitPhotoHandler?
     let handler = ExhibitPhotoHandler { [weak self] photo, error in
       // The settings requested RAW, so a delivered photo IS the Bayer RAW
-      // capture; fileDataRepresentation is the DNG. (No isRawPhoto
+      // capture; fileDataRepresentation() is the DNG. (No isRawPhoto
       // re-check — the request path is the claim, and it is stated.)
       if let photo = photo, let data = photo.fileDataRepresentation() {
         do {
@@ -3428,7 +3733,15 @@ extension ExhibitCameraModule {
     }
     handlerRef = handler
     photoHandlers.append(handler)
-    photoOutput.capturePhoto(with: settings, delegate: handler)
+    // NSException-safe fire (0.18.5 post-field): a settings-validation throw
+    // becomes the stated RAW error, never a crash.
+    if let captureError = ExhibitSessionControl.safelyCapturePhoto(output: photoOutput, settings: settings, delegate: handler) {
+      photoHandlers.removeAll { $0 === handler }
+      completion(EvidencePathBuilder.error(
+        ExhibitCameraErrorCode.platform,
+        "RAW capture threw at fire time: \(captureError.localizedDescription)"
+      ))
+    }
   }
 }
 
@@ -3472,7 +3785,7 @@ extension ExhibitCameraModule {
   /// sessionQueue (the photo delegate callback hops) so the downstream
   /// RAW/settle chain keeps its single-queue confinement. The outputs are
   /// captured SEQUENTIALLY — back-to-back photo captures on a live
-  /// multi-cam graph are the/pipeline-starvation lesson. A
+  /// multi-cam graph are the 0.14.0/0.15.0 pipeline-starvation lesson. A
   /// full-res failure is a stated EvidencePath, never a capture rejection.
   private func attachFullResStills(
     captureId: String,
@@ -3509,7 +3822,7 @@ extension ExhibitCameraModule {
       var out = payload
       self.mergeFullRes(&out, key: "fullResStill", result: primaryResult)
       if self.stereoActive {
-        // The stereo still derives from the retained SYNCHRONIZED
+        // 0.18.5: the stereo still derives from the retained SYNCHRONIZED
         // pair's UW frame — there is no secondary photo output anymore
         // (see configureSession's note). This still is the same buffer the
         // geometry evidence already commits, at stream resolution, encoded
@@ -3553,13 +3866,18 @@ extension ExhibitCameraModule {
     let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
     var flashApplied = false
     var flashNote: String? = nil
-    if pref == .off {
-      settings.flashMode = AVCaptureDevice.FlashMode.off
-    } else if output.supportedFlashModes.contains(pref.avFlashMode) {
+    // The flashMode setter validates against supportedFlashModes at SET time
+    // and raises an uncatchable NSException on a mismatch — assign ONLY
+    // contained values (an unassigned setting defaults to no flash).
+    if pref != .off, output.supportedFlashModes.contains(pref.avFlashMode) {
       settings.flashMode = pref.avFlashMode
       flashApplied = true
-    } else {
+    } else if output.supportedFlashModes.contains(AVCaptureDevice.FlashMode.off) {
       settings.flashMode = AVCaptureDevice.FlashMode.off
+      if pref != .off {
+        flashNote = "flash mode '\(pref.rawValue)' is not in this output's supportedFlashModes — captured without the strobe (stated, not faked)"
+      }
+    } else if pref != .off {
       flashNote = "flash mode '\(pref.rawValue)' is not in this output's supportedFlashModes — captured without the strobe (stated, not faked)"
     }
 
@@ -3657,10 +3975,29 @@ extension ExhibitCameraModule {
     }
     handlerRef = handler
     photoHandlers.append(handler)
-    output.capturePhoto(with: settings, delegate: handler)
+    // NSException-safe fire (0.18.5 post-field — the build-37 stills crash):
+    // capturePhoto validates settings against the LIVE multi-cam graph and
+    // raises an NSException on any mismatch; Swift cannot catch one, so the
+    // fire goes through the ObjC trampoline and a throw becomes this still's
+    // stated failure outcome (the delivery still already committed — the
+    // full-res block degrades, the capture survives).
+    if let captureError = ExhibitSessionControl.safelyCapturePhoto(output: output, settings: settings, delegate: handler) {
+      photoHandlers.removeAll { $0 === handler }
+      completion(FullResOutcome(
+        evidence: EvidencePathBuilder.error(
+          ExhibitCameraErrorCode.platform,
+          "Full-res photo threw at fire time: \(captureError.localizedDescription); \(self.photoFailureDump(path: "normal", settings: settings, output: output, device: output === self.primaryPhotoOutput ? self.primaryDevice : self.secondaryDevice))"
+        ),
+        sha256: nil, dimensions: nil, photoExif: nil, flashFired: nil,
+        flashRequested: pref.rawValue, flashApplied: flashApplied, flashNote: flashNote,
+        zoomFactor: zoomFactor, colorSpace: nil,
+        depthEvidence: EvidencePathBuilder.neverRecorded(depthNotRequestedReason ?? "photo-capture-threw"),
+        depthSha256: nil, depthMetadata: nil
+      ))
+    }
   }
 
-  /// Stereo still WITHOUT a photo output — encode the retained
+  /// 0.18.5: stereo still WITHOUT a photo output — encode the retained
   /// synchronized pair's secondary (UW) frame at full stream resolution.
   /// The buffer is physically-upright already (the connection's rotation
   /// policy is physical — see configureSession's ORIENTATION CONTRACT).
@@ -3677,9 +4014,8 @@ extension ExhibitCameraModule {
   ) {
     let depthNA = EvidencePathBuilder.neverRecorded("no-photo-output")
     guard let pair = latestPair,
-          let secondaryData = pair.secondary,
-          !secondaryData.sampleBufferWasDropped,
-          let buffer = CMSampleBufferGetImageBuffer(secondaryData.sampleBuffer) else {
+          let secondary = pair.secondary,
+          let buffer = CMSampleBufferGetImageBuffer(secondary) else {
       completion(FullResOutcome(
         evidence: EvidencePathBuilder.error(
           ExhibitCameraErrorCode.stalePair,
@@ -3732,14 +4068,15 @@ extension ExhibitCameraModule {
       // states the derivation.
       photoExif: nil, flashFired: nil,
       flashRequested: photoFlashPreference.rawValue, flashApplied: false,
-      flashNote: "video-stream-derived still (no secondary photo output by design): stream-resolution UW frame from the synchronized pair — no strobe, no OS EXIF, no depth (stated, not faked)",
+      flashNote: "video-stream-derived still (0.18.5: no secondary photo output by design): stream-resolution UW frame from the synchronized pair — no strobe, no OS EXIF, no depth (stated, not faked)",
       zoomFactor: secondaryDevice.map { Double($0.videoZoomFactor) },
       colorSpace: JpegColorSpaceReader.profileName(from: data),
       depthEvidence: depthNA, depthSha256: nil, depthMetadata: nil
     ))
   }
 
-  /// Compact state dump appended to every photo-capture failure message — `key=value` pairs joined by "; ", readable
+  /// W7 isolation: compact verbatim state dump appended to every photo-
+  /// capture failure message — `key=value` pairs joined by "; ", readable
   /// when pasted from a toast. Reads LIVE connection/device state at
   /// failure time (sessionQueue-confined, like its callers); nothing here
   /// is from the module's request log.
@@ -3774,9 +4111,9 @@ extension ExhibitCameraModule {
         parts.append("\(label)PhotoConn(\(state),orientation=\(connection.videoOrientation.rawValue))")
       }
     }
-    // The video connections decide whether the pair pipeline can run at
-    // all, so a silently absent secondary video connection shows up in
-    // every capture failure.
+    // 0.18.1: the VIDEO connections decide whether the pair pipeline can
+    // live at all — a silently absent secondary video connection (the
+    // 0.18.0 iPhone 17 signature) is now visible in every capture failure.
     for (label, videoOutput) in [("primaryVideo", self.primaryVideoOutput), ("secondaryVideo", self.secondaryVideoOutput)] {
       guard let videoOutput = videoOutput, let connection = videoOutput.connection(with: .video) else {
         parts.append("\(label)Conn=none")
@@ -3796,7 +4133,7 @@ extension ExhibitCameraModule {
     } else {
       parts.append("supportedFlashModes=none")
     }
-    // EVERY debug flag, sorted — not a curated pair. A persisted
+    // 0.18.4-R3: EVERY debug flag, sorted — not a curated pair. A persisted
     // non-default flag in the exhibit.debug suite survives TestFlight
     // updates (only app deletion clears it) and silently contaminates field
     // runs; a failure dump must carry the whole flag state so a reviewer can
@@ -3808,7 +4145,7 @@ extension ExhibitCameraModule {
   }
 
   /// D1 gating: request depth delivery with a photo ONLY when it can be
-  /// honest — the escape-hatch flag is ON (default true; depth is a
+  /// honest — the escape-hatch flag is ON (default true; depth is a 0.16.0
   /// feature) AND the LIVE output reports support for the CURRENT
   /// device/format configuration (the only real per-lens answer; there is
   /// no session-free depth-support query). Returns the never-recorded
@@ -3818,7 +4155,13 @@ extension ExhibitCameraModule {
   /// exclusive.
   private func requestDepthIfHonest(settings: AVCapturePhotoSettings, output: AVCapturePhotoOutput) -> String? {
     guard ExhibitDebugFlags.depthCapture else { return "depth-disabled" }
-    guard output.isDepthDataDeliverySupported else { return "depth-unsupported" }
+    // 0.18.6: key on the output-level ENABLEMENT, not mere support — the
+    // settings setter throws (uncatchable) when delivery isn't enabled on
+    // the output (Apple's header). Enablement happens once at addOutput
+    // time (applyFullResPhotoPolicy); an output that got here without it
+    // (unsupported format, flag off at configure) must never see the
+    // per-request flag.
+    guard output.isDepthDataDeliveryEnabled else { return "depth-unsupported" }
     settings.isDepthDataDeliveryEnabled = true
     if output.isCameraCalibrationDataDeliverySupported {
       // D1's committed extrinsics ride the same delivery; under the same
@@ -3925,7 +4268,7 @@ extension ExhibitCameraModule {
       promise.reject(ExhibitCameraNamedException(ExhibitCameraErrorCode.noSession, "configureSession must run before startVideo"))
       return
     }
-    // The explicit state machine owns this decision (the
+    // The explicit state machine owns this decision (0.15.0 Drop 2 — the
     // E_BUSY race). A start that arrives while the previous clip is still
     // sealing QUEUES behind it instead of rejecting: the user tapped record
     // — don't lose the moment. The seal owns a 10 s watchdog, so a queued
@@ -3973,7 +4316,7 @@ extension ExhibitCameraModule {
       guard session.canAddInput(audioInput) else {
         throw ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Cannot add audio input")
       }
-      // Explicit multi-cam wiring — see wireOutput. iOS 26 reworked
+      // Explicit multi-cam wiring (0.18.1) — see wireOutput. iOS 26 reworked
       // the audio data output path (WWDC25 session 251: spatial-audio ADOs);
       // an implicitly formed mic connection on a running multi-cam graph is
       // exactly the class of silent dead-end this removes.
@@ -4038,7 +4381,7 @@ extension ExhibitCameraModule {
         pcmWriter = nil
         pcmConverter = nil
       }
-      // The failable converter init previously failed SILENTLY —
+      // 0.17.2: the failable converter init previously failed SILENTLY —
       // writer live + nil converter meant every tee no-oped, framesWritten
       // stayed 0, and stop reported rawPcmPath:null with no error anywhere.
       // A nil converter now fails the sink exactly like a creation throw
@@ -4048,11 +4391,12 @@ extension ExhibitCameraModule {
         pcmWriter = nil
       }
     }
-    // Per-take audio diagnostics + ENF anchor state.
+    // 0.17.2: per-take audio diagnostics + ENF anchor state.
     audioBufferCount = 0
     pcmFirstSampleWallClockUtcMs = nil
     pcmAnchorSource = ""
-    self.pairIntervalSec = max(2.0, (opts["pairIntervalSec"] as? NSNumber)?.doubleValue ?? 5.0)
+    // 0.18.5 post-field: default cadence 2 s (was 5 s); the floor stays 2 s.
+    self.pairIntervalSec = max(2.0, (opts["pairIntervalSec"] as? NSNumber)?.doubleValue ?? 2.0)
     self.mode = .video
     self.videoState = .recording
     self.writerStarted = false
@@ -4063,7 +4407,9 @@ extension ExhibitCameraModule {
     self.writerAudioFirstPTS = nil
     self.pairIndex = 0
     self.pairsMissed = 0
-    self.lastPairDumpAt = Date() // first pair after one full interval
+    // 0.18.5 post-field: the FIRST video frame dumps a pair immediately —
+    // the record-start anchor is the one moment a reviewer always weighs.
+    self.lastPairDumpAt = .distantPast
     self.videoStartDate = Date()
     // IMU sink (0.15): the recording window starts NOW on the mach/boot
     // clock — the same clock the ring's sample timestamps ride, so stopVideo
@@ -4155,7 +4501,7 @@ extension ExhibitCameraModule {
       if let converted = try pcmConverter?.convert(sampleBuffer) {
         try pcmWriter.append(pcmBuffer: converted)
         if pcmFirstSampleWallClockUtcMs == nil {
-          // ENF anchor: the absolute wall-clock time of the FIRST
+          // ENF anchor (0.17.2): the absolute wall-clock time of the FIRST
           // audio sample written to the master. The source buffer's PTS is
           // mach-clock host seconds — the SAME clock the session's video
           // PTS and the sensor ring ride (ExhibitMachClock) — so the
@@ -4183,11 +4529,69 @@ extension ExhibitCameraModule {
     }
   }
 
+  /// 0.18.6 field diagnostics (the "export WAV doesn't work" report): the
+  /// committed master's CONTAINER facts, read back from the finalized CAF —
+  /// the desc ASBD fields and the frame count the payload itself implies.
+  /// A build-40 field master showed a container frame count exactly 2×
+  /// framesWritten — a divergence no code path here can produce on paper —
+  /// so the container truth is now committed WITH the record as data
+  /// (framesMatchContainer), never guessed at after the fact. Pure
+  /// container walk: no decode, no interpretation, no claims.
+  private func cafContainerFacts(_ url: URL) -> [String: Any]? {
+    guard let data = try? Data(contentsOf: url), data.count >= 12 else { return nil }
+    guard data[0] == 0x63, data[1] == 0x61, data[2] == 0x66, data[3] == 0x66 else { return nil } // 'caff'
+    func be32(_ at: Int) -> UInt32 {
+      (UInt32(data[at]) << 24) | (UInt32(data[at + 1]) << 16) | (UInt32(data[at + 2]) << 8) | UInt32(data[at + 3])
+    }
+    var off = 8
+    var sampleRate: Double = 0
+    var flags: UInt32 = 0
+    var bytesPerFrame: UInt32 = 0
+    var channels: UInt32 = 0
+    var bits: UInt32 = 0
+    var payloadBytes: Int? = nil
+    while off + 12 <= data.count {
+      let t0 = data[off], t1 = data[off + 1], t2 = data[off + 2], t3 = data[off + 3]
+      let hi = be32(off + 4)
+      let lo = be32(off + 8)
+      // A size of -1 (0xFFFFFFFF) means "to end of file" per the CAF spec.
+      let size = (hi == 0 && lo != 0xffffffff) ? Int(lo) : data.count - (off + 12)
+      let body = off + 12
+      if t0 == 0x64, t1 == 0x65, t2 == 0x73, t3 == 0x63, body + 36 <= data.count { // 'desc'
+        var rateBits: UInt64 = 0
+        for i in 0..<8 { rateBits = (rateBits << 8) | UInt64(data[body + i]) }
+        sampleRate = Double(bitPattern: rateBits)
+        flags = be32(body + 12)
+        bytesPerFrame = be32(body + 24)
+        channels = be32(body + 28)
+        bits = be32(body + 32)
+      } else if t0 == 0x64, t1 == 0x61, t2 == 0x74, t3 == 0x61 { // 'data' — 4-byte edit count, then payload
+        payloadBytes = max(0, size - 4)
+      }
+      if size <= 0 { break }
+      off = body + size
+    }
+    guard let payload = payloadBytes, bytesPerFrame > 0 else { return nil }
+    // Non-interleaved CAF stores channel blocks: bytesPerFrame is per-channel,
+    // so a full frame spans bytesPerFrame × channels (mirrors the JS reader).
+    let nonInterleaved = (flags & 32) != 0
+    let frameBytes = nonInterleaved ? Int(bytesPerFrame) * Int(max(1, channels)) : Int(bytesPerFrame)
+    return [
+      "containerSampleRate": sampleRate,
+      "containerFormatFlags": Int(flags),
+      "containerBytesPerFrame": Int(bytesPerFrame),
+      "containerChannels": Int(channels),
+      "containerBitsPerChannel": Int(bits),
+      "containerPayloadBytes": payload,
+      "containerFrames": frameBytes > 0 ? payload / frameBytes : 0,
+    ]
+  }
+
   private func handleAudioSample(_ sampleBuffer: CMSampleBuffer) {
     guard mode == .video else { return }
-    // The tap-alive counter. pcmEnabled && this stays
+    // 0.17.2 diagnostics: the tap-alive counter. pcmEnabled && this stays
     // 0 for a whole take == the audio tap never delivered (audio-session
-    // configuration or permission problem) — stated at stop.
+    // configuration / permission suspect) — stated at stop.
     audioBufferCount += 1
     teeToPcmMaster(sampleBuffer)
     guard let writer = writer, !writerFailed else { return }
@@ -4270,12 +4674,14 @@ extension ExhibitCameraModule {
   /// Periodic stereo pairs, not continuous (spec §8): thermal/power
   /// headroom is real, and a burst of timestamped pairs is enough geometry.
   /// Missed cadence is counted and committed at stop as pairsMissed.
-  private func maybeDumpPeriodicPair() {
+  private func maybeDumpPeriodicPair(force: Bool = false) {
     guard stereoActive, let evidenceDir = evidenceDirURL, let pair = latestPair else { return }
     let interval = ProcessInfo.processInfo.thermalState == .serious
       ? pairIntervalSec * 2.0   // thermal escalation halves cadence (spec §6)
       : pairIntervalSec
-    guard Date().timeIntervalSince(lastPairDumpAt) >= interval else { return }
+    // `force` is the stop-time dump: the record-end anchor commits even when
+    // the last periodic dump landed inside the cadence window.
+    guard force || Date().timeIntervalSince(lastPairDumpAt) >= interval else { return }
     lastPairDumpAt = Date()
 
     guard pair.secondary != nil else {
@@ -4291,11 +4697,11 @@ extension ExhibitCameraModule {
 
     // Encode + write on the sink I/O queue — JPEG encoding a 720p buffer
     // plus two file writes can exceed a frame interval and must never run
-    // on sessionQueue.
+    // on sessionQueue (0.14.1 dropped-pairs source).
     sinkIOQueue.async { [weak self] in
       guard let self = self else { return }
-      guard let secondaryData = pair.secondary,
-            let secondaryBuffer = CMSampleBufferGetImageBuffer(secondaryData.sampleBuffer) else {
+      guard let secondary = pair.secondary,
+            let secondaryBuffer = CMSampleBufferGetImageBuffer(secondary) else {
         self.sessionQueue.async { self.pairsMissed += 1 }
         return
       }
@@ -4324,7 +4730,7 @@ extension ExhibitCameraModule {
         self.sendError(ExhibitCameraErrorCode.sink, "Pair \(index) calibration write failed: \(error.localizedDescription)")
       }
 
-      let primaryPTS = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(pair.primary.sampleBuffer))
+      let primaryPTS = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(pair.primary))
       self.sendEvent("onStereoPairCaptured", [
         "index": index,
         "secondaryPath": secondaryPath as Any? ?? NSNull(),
@@ -4337,7 +4743,7 @@ extension ExhibitCameraModule {
 
   /// Stops video, finalizes the delivery file, returns to preview mode on
   /// the SAME session (audio input/output removed — they were video-only).
-  /// IDEMPOTENT: a second stop while the seal is in flight
+  /// IDEMPOTENT (0.15.0 Drop 2): a second stop while the seal is in flight
   /// joins the in-flight stop and settles with the SAME outcome — it is the
   /// same stop, never a new one. The seal itself is asynchronous and never
   /// blocks the state machine; the 10 s watchdog guarantees settlement.
@@ -4364,6 +4770,10 @@ extension ExhibitCameraModule {
     let durationMs = videoStartDate.map { Int((Date().timeIntervalSince($0) * 1000.0).rounded()) } ?? 0
     let audioTrack = writerAudioInput != nil && writerStarted
     let deliveryPath = deliveryURL?.path ?? ""
+    // 0.18.5 post-field: the record-END anchor — force one final pair dump
+    // before the counts are read (the encode/write rides sinkIOQueue like
+    // every periodic dump; the event reaches the seal alongside the rest).
+    maybeDumpPeriodicPair(force: true)
     let pairs = pairIndex
     let missed = pairsMissed
 
@@ -4373,7 +4783,7 @@ extension ExhibitCameraModule {
     // disabled case never reaches here as a claim: JS owns the toggle and
     // states 'never-recorded' itself.
     var rawPcmPath: String? = nil
-    // ENF anchor + integrity summary: exposed as rawPcmInfo in the
+    // ENF anchor + integrity summary (0.17.2): exposed as rawPcmInfo in the
     // stop payload whenever the master commits — the anchor lets the desk
     // cross-correlate the 50/60 Hz mains trace (EvidencePathBuilder.mainsHz
     // states the region's grid) against a reference ENF series in absolute
@@ -4391,16 +4801,16 @@ extension ExhibitCameraModule {
       pcmWriter.finish()
       if !pcmWriter.failed && pcmWriter.framesWritten > 0 {
         rawPcmPath = pcmWriter.url.path
-        // finish finalized the CAF header (AVAudioFile deinit semantics —
+        // finish() finalized the CAF header (AVAudioFile deinit semantics —
         // the audio-capture module relies on the same behavior), so the
         // bytes hashed here are the committed bytes.
         var sha: String? = nil
         if let bytes = try? Data(contentsOf: pcmWriter.url) {
           sha = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
         }
-        // Explicit locals: the ternary + `as Any? ?? NSNull` idiom parses
+        // Explicit locals: the ternary + `as Any? ?? NSNull()` idiom parses
         // the cast onto the ternary's String? and the compiler rejects
-        // String? ?? NSNull.
+        // String? ?? NSNull (0.18.0 build-36 fix).
         let anchorSource: String? = pcmAnchorSource.isEmpty ? nil : pcmAnchorSource
         rawPcmInfo = [
           "firstSampleWallClockUtcMs": (pcmFirstSampleWallClockUtcMs as Any?) ?? NSNull(),
@@ -4409,13 +4819,21 @@ extension ExhibitCameraModule {
           "sampleRate": Int(PcmMasterWriter.sampleRate),
           "fileSha256": (sha as Any?) ?? NSNull(),
         ]
+        // 0.18.6: commit the container's own readback alongside the writer's
+        // counters — a divergence (like build 40's exact 2×) is then a
+        // committed fact in the sealed record, not a post-hoc riddle.
+        if var info = rawPcmInfo, let facts = cafContainerFacts(pcmWriter.url) {
+          for (key, value) in facts { info[key] = value }
+          info["framesMatchContainer"] = (facts["containerFrames"] as? Int) == Int(pcmWriter.framesWritten)
+          rawPcmInfo = info
+        }
       }
     }
-    // Distinguish WHY the master is absent. The sink
+    // 0.17.2 diagnostics: distinguish WHY the master is absent. The sink
     // was requested but the audio tap delivered nothing all take == an
     // audio-session/tap problem, not a conversion problem — said out loud.
     if pcmEnabled, audioBufferCount == 0 {
-      // State the audio connection's liveness so the field run
+      // 0.18.1: state the audio connection's liveness so the field run
       // discriminates "no connection" from "connection live, no buffers"
       // (the latter points at the audio session, not the graph).
       let audioConnState: String
@@ -4426,7 +4844,7 @@ extension ExhibitCameraModule {
       }
       sendError(
         ExhibitCameraErrorCode.sink,
-        "Raw audio master: the audio tap delivered zero buffers during the take (audioConn=\(audioConnState)) — check the audio-session configuration and mic permission. Master not recorded."
+        "Raw audio master: the audio tap delivered zero buffers during the take (audioConn=\(audioConnState); audio-session configuration or mic permission suspect) — master not recorded"
       )
     }
     pcmWriter = nil
@@ -4448,6 +4866,9 @@ extension ExhibitCameraModule {
         from: videoSensorStartBootSec,
         to: ExhibitMachClock.ticksToBootSeconds(ExhibitMachClock.nowTicks()),
         anchorStartedAtMs: videoStartEpochMs,
+        // The anchor binds the RECORDING START's instant to its wall clock —
+        // 0.18.6: not the flush instant (the video motion card re-zeroes on it).
+        anchorBootSec: videoSensorStartBootSec,
         logger: logger
       )
     }
@@ -4513,7 +4934,7 @@ extension ExhibitCameraModule {
             // enabled but failed (the disabled case is stated
             // 'never-recorded' by JS, which owns the toggle).
             "rawPcmPath": rawPcmPath as Any? ?? NSNull(),
-            // ENF anchor + integrity summary for the
+            // 0.17.2 (additive): ENF anchor + integrity summary for the
             // committed master, and the tap-alive counter for diagnostics.
             "rawPcmInfo": rawPcmInfo as Any? ?? NSNull(),
             "audioBufferCount": self.audioBufferCount,
@@ -4532,7 +4953,7 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// The ONE stop-settlement path: resolves or rejects the
+  /// The ONE stop-settlement path (0.15.0 Drop 2): resolves or rejects the
   /// stop promise AND every joined waiter with the same outcome, tears down
   /// writer state, returns the machine to .idle, and releases a queued
   /// startVideo. sessionQueue only. The identity guard is the race fix: a
@@ -4609,7 +5030,7 @@ extension ExhibitCameraModule {
 extension ExhibitCameraModule {
 
   /// Lens switch on the RUNNING session: swap the primary input, then
-  /// re-derive the stereo partner around it (UW↔W, UW↔T). The bug
+  /// re-derive the stereo partner around it (UW↔W, UW↔T). The 0.14.0 bug
   /// (iPhone 17, dual-camera): the old code asked canAddInput BEFORE
   /// removing anything — and the requested lens was the STEREO PARTNER,
   /// already in the session. A session can never hold two inputs for one
@@ -4624,7 +5045,7 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "no-session-or-front-facing"])
       return
     }
-    // On the virtual graph the primary IS the dual-wide virtual
+    // 0.18.4: on the virtual graph the primary IS the dual-wide virtual
     // device — wide and ultra-wide are both live at once, so a "wide"
     // request is already satisfied and any other primary-lens swap would
     // tear down the working pair. Refused with a stated reason; the
@@ -4673,7 +5094,7 @@ extension ExhibitCameraModule {
         throw ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Cannot add input for lens \(lens.rawValue)")
       }
       session.addInput(newInput)
-      // The 30 fps billing promise follows the new input too —
+      // 0.18.3: the 30 fps billing promise follows the new input too —
       // adding an input resets the override (documented), so a mid-session
       // lens swap would silently return to worst-case billing without it.
       newInput.videoMinFrameDurationOverride = CMTime(value: 1, timescale: 30)
@@ -4709,7 +5130,7 @@ extension ExhibitCameraModule {
       // rotation + mirroring + per-frame intrinsics policies on them.
       if let primaryOut = primaryVideoOutput { applyConnectionPolicies(to: primaryOut, device: newDevice) }
       if #available(iOS 17.0, *), let photoConnection = primaryPhotoOutput?.connection(with: .video) {
-        // Off by default; switchable from Settings ▸ Diagnostics.
+        // W7 isolation: default off — wave-5/6 suspect, flip via Settings ▸ Diagnostics when testing
         if ExhibitDebugFlags.photoConnectionRotation {
           RotationPolicy.apply(to: photoConnection, device: newDevice)
         } else if photoConnection.isVideoOrientationSupported {
@@ -4728,7 +5149,8 @@ extension ExhibitCameraModule {
       // The synchronizer cannot track topology changes — recreate it over
       // the CURRENT outputs after any swap/detach/attach.
       rebuildSynchronizer()
-      scheduleSessionCalibrationCapture()
+      // 0.18.6: no scheduleSessionCalibrationCapture() — the one-shot is
+      // retired (see its doc).
       promise?.resolve([
         "applied": true,
         "lens": lens.rawValue,
@@ -4767,7 +5189,7 @@ extension ExhibitCameraModule {
   private func ensureStereoPartner(excluding primaryType: AVCaptureDevice.DeviceType) -> Bool {
     guard let session = session, facing == .back else { return false }
     if stereoActive, secondaryDevice != nil { return true } // already paired
-    // On the virtual graph the pair is inherent to the one input —
+    // 0.18.4: on the virtual graph the pair is inherent to the one input —
     // there is no partner device to attach. A detached stereo (thermal)
     // re-wires fresh outputs to the UW constituent port. The selectable
     // partner preference doesn't apply: the virtual pair is fixed W+UW.
@@ -4780,10 +5202,10 @@ extension ExhibitCameraModule {
       let constituent = vInput.device.constituentDevices.first(where: { $0.deviceType == .builtInUltraWideCamera })
       session.beginConfiguration()
       let out = AVCaptureVideoDataOutput()
-      // Native format — see configureSession's primary output.
+      // Native format — see configureSession's primary output (0.15.0 Drop 2).
       out.alwaysDiscardsLateVideoFrames = true
       let videoOK = wireOutput(out, to: vInput, port: port, mediaType: .video, in: session, label: "partner-video") != nil
-      // No partner photo output — see configureSession's note.
+      // 0.18.5: no partner photo output — see configureSession's note.
       session.commitConfiguration()
       guard videoOK else {
         logDiagnosticEvent("stereo partner attach FAILED on the virtual graph: UW port would not re-wire (see wire refusal above)")
@@ -4791,7 +5213,7 @@ extension ExhibitCameraModule {
       }
       secondaryDevice = constituent
       secondaryVideoOutput = out
-      secondaryPhotoOutput = nil // — by design, see configureSession
+      secondaryPhotoOutput = nil // 0.18.5 — by design, see configureSession
       stereoActive = true
       if let constituent = constituent {
         applyConnectionPolicies(to: out, device: constituent)
@@ -4800,7 +5222,7 @@ extension ExhibitCameraModule {
       logDiagnosticEvent("stereo partner attached on the virtual graph: UW constituent port census=\(connectionCensus())")
       return true
     }
-    // Honor the selectable secondary stack; 'auto' = UW↔W/T.
+    // 0.17.2: honor the selectable secondary stack; 'auto' = UW↔W/T.
     let partnerType = partnerDeviceType(for: primaryType)
     guard let partner = AVCaptureDevice.default(partnerType, for: .video, position: .back),
           let input = try? AVCaptureDeviceInput(device: partner) else {
@@ -4812,24 +5234,24 @@ extension ExhibitCameraModule {
           configureFormat(device: partner, maxWidth: 1920, maxHeight: 1080, requireMultiCam: true) else {
       session.commitConfiguration()
       // configureFormat logs its own failure; a canAddInput refusal lands
-      // here silently otherwise — stated either way.
+      // here silently otherwise — stated either way (0.18.2).
       logDiagnosticEvent("stereo partner attach FAILED: canAddInput=\(session.canAddInput(input)) (see format log lines)")
       return false
     }
-    // Explicit multi-cam wiring — see wireOutput.
+    // Explicit multi-cam wiring (0.18.1) — see wireOutput.
     session.addInputWithNoConnections(input)
-    // The 30 fps billing promise on the partner too — set AFTER the
+    // 0.18.3: the 30 fps billing promise on the partner too — set AFTER the
     // add, which resets the override (documented).
     input.videoMinFrameDurationOverride = CMTime(value: 1, timescale: 30)
     let out = AVCaptureVideoDataOutput()
-    // Native format — see configureSession's primary output.
+    // Native format — see configureSession's primary output (0.15.0 Drop 2).
     out.alwaysDiscardsLateVideoFrames = true
     guard wireOutput(out, to: input, mediaType: .video, in: session, label: "partner-video") != nil else {
       session.removeInput(input)
       session.commitConfiguration()
       return false
     }
-    // No partner photo output — see configureSession's note.
+    // 0.18.5: no partner photo output — see configureSession's note.
     session.commitConfiguration()
     guard session.hardwareCost <= 1.0 else {
       session.beginConfiguration()
@@ -4842,11 +5264,11 @@ extension ExhibitCameraModule {
     secondaryInput = input
     secondaryDevice = partner
     secondaryVideoOutput = out
-    secondaryPhotoOutput = nil // — by design, see configureSession
+    secondaryPhotoOutput = nil // 0.18.5 — by design, see configureSession
     stereoActive = true
     applyConnectionPolicies(to: out, device: partner)
     ensurePipConnection(in: session)
-    // a mid-session partner takes the primary's current AE/AWB/AF
+    // 0.18.2: a mid-session partner takes the primary's current AE/AWB/AF
     // state instead of factory defaults.
     mirrorProControlsToSecondary()
     logDiagnosticEvent("stereo partner attached: device=\(partner.deviceType.rawValue) census=\(connectionCensus())")
@@ -4881,9 +5303,11 @@ extension ExhibitCameraModule {
     synchronizer = sync
   }
 
-  /// Second escalation for a chronic secondary-half flood. The 150-drop
-  /// rebind can't resurrect a secondary stream the platform has parked, which
-  /// is what a photo capture under pressure can leave behind. Removing and
+  /// Rung 2 for a chronic secondary-half flood (0.17.2): the 150-drop
+  /// rebind cannot resurrect a secondary stream the platform has parked
+  /// (the 0.17.1 field signature: primary-half 0, secondary-half 100% from
+  /// the calibration one-shot onward — a photo capture under pressure can
+  /// leave an output unwilling to deliver, build 26). Removing and
   /// re-adding the SECONDARY VIDEO DATA OUTPUT forces a fresh connection
   /// and buffer pool without touching the input or the photo output. Once
   /// per session, never mid-recording or mid-capture; whether it worked is
@@ -4893,15 +5317,15 @@ extension ExhibitCameraModule {
     guard let session = session, stereoActive, secondaryVideoOutput != nil,
           mode != .video, !captureInFlight, !calibrationCaptureInFlight else { return }
     let newOut = AVCaptureVideoDataOutput()
-    // Native format — see configureSession's primary output.
+    // Native format — see configureSession's primary output (0.15.0 Drop 2).
     newOut.alwaysDiscardsLateVideoFrames = true
     session.beginConfiguration()
     // The old output holds the secondary port's video-data-output slot —
     // it must go BEFORE the new one can connect (same-type fan-out from
-    // one camera is forbidden). Explicit wiring — see wireOutput.
+    // one camera is forbidden). Explicit wiring (0.18.1) — see wireOutput.
     if let oldOut = secondaryVideoOutput { session.removeOutput(oldOut) }
     var rewired = false
-    // The virtual graph re-wires to the UW constituent port on the
+    // 0.18.4: the virtual graph re-wires to the UW constituent port on the
     // ONE input; the multi-input graph re-wires to the secondary input.
     if virtualGraphActive, let port = virtualSecondaryPort, let vInput = primaryInput {
       rewired = wireOutput(newOut, to: vInput, port: port, mediaType: .video, in: session, label: "secondary-video-reseat") != nil
@@ -4930,7 +5354,7 @@ extension ExhibitCameraModule {
     logDiagnosticEvent("secondary reseat OK: census=\(connectionCensus())")
   }
 
-  /// Selectable secondary stack — live apply on a running back
+  /// Selectable secondary stack (0.17.2) — live apply on a running back
   /// session: detach the current secondary pipeline and re-pair around the
   /// CURRENT primary with the new preference. 'auto' (nil preference)
   /// restores the UW↔W/T pairing. Never swaps silently: a preference equal
@@ -4967,7 +5391,8 @@ extension ExhibitCameraModule {
     session.commitConfiguration()
     let attached = ensureStereoPartner(excluding: primaryDevice?.deviceType ?? .builtInWideAngleCamera)
     rebuildSynchronizer()
-    scheduleSessionCalibrationCapture()
+    // 0.18.6: no scheduleSessionCalibrationCapture() — the one-shot is
+    // retired (see its doc).
     promise?.resolve([
       "applied": true,
       "secondaryLens": prefValue,
@@ -5000,11 +5425,12 @@ extension ExhibitCameraModule {
   /// chained max(by:) closure hit the type-checker's time limit (EAS 27).
   private func applyFullResPhotoPolicy(to output: AVCapturePhotoOutput, device: AVCaptureDevice) {
     if #available(iOS 16.0, *) {
-      // The largest format-supported
-      // dimensions (48 MP-class on iPhone 17) are legal on a single-camera
-      // session, but a photo stream that size on a live multi-cam graph
-      // coincides with two failures: chronic video-frame starvation, and
-      // AVCapturePhotoOutput refusing every capture with "Cannot Record".
+      // 0.15.2 CLAMP (build 26 field report): the largest format-supported
+      // dimensions (48 MP-class on iPhone 17) are legal single-cam, but a
+      // photo stream that size attached to a LIVE MULTI-CAM graph was the
+      // structural suspect for BOTH field failures — the chronic video-
+      // frame starvation (356+ dropped pairs, stereo never committing) and
+      // AVCapturePhotoOutput failing every capture with "Cannot Record".
       // The session reserves bandwidth/ISP for the configured photo
       // stream; a 48 MP reservation on a multi-cam graph starves the rest.
       // Cap at 12 MP-class — the classic iPhone still size multi-cam
@@ -5025,14 +5451,34 @@ extension ExhibitCameraModule {
         }
       }
       if let best = best {
-        // On by default. An unclamped 48 MP reservation on a live multi-cam
-        // graph starves the other streams; see ExhibitDebugFlags to disable.
+        // 0.17.2: ON by default — the unclamped 48 MP photo-stream
+        // reservation on a live multi-cam graph was the 0.15.2 structural
+        // suspect for the secondary-stream flood; the flag is now the
+        // escape hatch (see ExhibitDebugFlags).
         if ExhibitDebugFlags.photoMaxDimensionsPolicy {
           output.maxPhotoDimensions = best
         }
       }
       // Nothing under the cap (exotic small format): leave the format
       // default — the committed dimensions say what it is.
+    }
+
+    // 0.18.6 CRASH FIX (field: "front camera sometimes crashes" + the
+    // degraded-path capture crash with depthCapture on): Apple's header
+    // for AVCapturePhotoSettings.isDepthDataDeliveryEnabled is explicit —
+    // the setter THROWS an uncatchable NSException unless the OUTPUT's own
+    // isDepthDataDeliveryEnabled is already YES. The output flag was never
+    // set anywhere, so every path whose format reported depth SUPPORT
+    // (the TrueDepth front camera; the degraded single-lens path's
+    // format) crashed at capture-settings time — the setter ran before
+    // the capture itself, which is why the still never existed. Enable
+    // output-level delivery here, at addOutput time inside the begin/
+    // commit discipline, when the debug flag and the hardware allow;
+    // requestDepthIfHonest now keys on the output-level truth. Depth is
+    // per-photo processing, not a standing stream reservation — no
+    // multi-cam bandwidth cost while idle.
+    if ExhibitDebugFlags.depthCapture, output.isDepthDataDeliverySupported {
+      output.isDepthDataDeliveryEnabled = true
     }
   }
 
@@ -5180,7 +5626,7 @@ extension ExhibitCameraModule {
       let clamped = min(max(bias, device.minExposureTargetBias), device.maxExposureTargetBias)
       device.setExposureTargetBias(clamped, completionHandler: nil)
       device.unlockForConfiguration()
-      // The secondary runs its own AE — mirror the bias (clamped
+      // 0.18.2: the secondary runs its own AE — mirror the bias (clamped
       // to ITS range inside the mirror) so the lenses stay honest peers.
       mirrorProControlsToSecondary()
       promise?.resolve(["applied": true, "exposureBias": Double(clamped), "clamped": clamped != bias])
@@ -5259,7 +5705,7 @@ extension ExhibitCameraModule {
   /// nothing running. In-flight video is finalized first honestly: an
   /// unfinished delivery file is worse than a stated rejection.
   func stopSession(promise: Promise) {
-    // Guard the WHOLE recording state machine: tearing down
+    // Guard the WHOLE recording state machine (0.15.0 Drop 2): tearing down
     // mid-seal orphaned the in-flight stop promise and leaked the writer —
     // the old mode==.video check couldn't see a stop that was still sealing.
     switch videoState {
@@ -5289,7 +5735,7 @@ extension ExhibitCameraModule {
     }
     if let stopError = stopError {
       // The session is torn down either way; the rejection states that the
-      // stop itself threw.
+      // stop itself threw (0.14.2 SIGABRT path — now a promise, not a crash).
       promise.reject(ExhibitCameraNamedException(
         ExhibitCameraErrorCode.platform,
         "Session stop raised an exception: \(stopError.localizedDescription)"
@@ -5300,8 +5746,8 @@ extension ExhibitCameraModule {
   }
 
   /// Releases all session state. Idempotent; sessionQueue only. Returns the
-  /// error from an NSException-safe stopRunning (the
-  /// Nil on a clean stop, so stopSession can reject
+  /// error from an NSException-safe stopRunning (0.15.0 Drop 2 — the
+  /// 0.14.2 SIGABRT path): nil on a clean stop, so stopSession can reject
   /// honestly instead of crashing the bridge. The error is also surfaced as
   /// an onSessionError event (deduped) regardless of caller. Typed (any
   /// Error)? to match the shim's imported return exactly — Swift imports
@@ -5325,7 +5771,7 @@ extension ExhibitCameraModule {
       NotificationCenter.default.removeObserver(observer)
       interruptionEndedObserver = nil
     }
-    // The isActive timeline observers die with the session.
+    // 0.18.4-R3: the isActive timeline observers die with the session.
     connectionActiveObservers.forEach { $0.invalidate() }
     connectionActiveObservers.removeAll()
     sessionStartWallClock = nil
@@ -5334,7 +5780,7 @@ extension ExhibitCameraModule {
     audioOutput?.setSampleBufferDelegate(nil, queue: nil)
     let deadSession = session
     if let deadSession = deadSession { teardownPipConnection(in: deadSession) }
-    // NSException-safe, idempotent stop: never twice in a
+    // NSException-safe, idempotent stop (0.15.0 Drop 2): never twice in a
     // row, never reentrant (sessionQueue is serial and this is the only
     // teardown path), and a thrown ObjC exception comes back as an NSError
     // instead of escaping to the bridge as SIGABRT.
@@ -5376,7 +5822,7 @@ extension ExhibitCameraModule {
     stallEscalated = false
     // pipWanted/pipLayer intentionally survive a rebuild: the RN altPreview
     // prop handler only refires when the value CHANGES, so clearing them here
-    // left the inset permanently black after any session rebuild.
+    // left the inset permanently black after any session rebuild (0.14.1 bug).
     // configureSession's ensurePipConnection reattaches to the same layer.
     pipConnection = nil
     droppedPairCount = 0
@@ -5390,13 +5836,14 @@ extension ExhibitCameraModule {
     secondaryReseatDone = false
     stereoActive = false
     stereoDetachedForThermal = false
-    // Shutter-burst teardown: drop the ring + abandon any
+    // Shutter-burst teardown (0.17.2): drop the ring + abandon any
     // collection. A capture waiting on the burst settles via its own 10 s
     // watchdog — the existing teardown-mid-capture discipline.
     burstSinkWanted = false
     burstRing.removeAll()
     burstPostFrames.removeAll()
     burstPostTarget = 0
+    lastBurstRetainedAt = nil
     burstContinuation = nil
     burstTimeout?.cancel()
     burstTimeout = nil
@@ -5465,7 +5912,7 @@ extension ExhibitCameraModule {
       ))
     }
     stopWaiters.removeAll()
-    // A queued start (E_BUSY race fix, Drop 2) must never dangle
+    // A queued start (E_BUSY race fix, 0.15.0 Drop 2) must never dangle
     // across a teardown: reject it honestly.
     if let pending = pendingStartVideo {
       pendingStartVideo = nil
@@ -5557,7 +6004,7 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "lock-failed: \(error.localizedDescription)"])
       return
     }
-    // Mirror the applied exposure mode onto the secondary.
+    // 0.18.2: mirror the applied exposure mode onto the secondary.
     mirrorProControlsToSecondary()
   }
 
@@ -5616,7 +6063,7 @@ extension ExhibitCameraModule {
         device.focusMode = .locked
         promise?.resolve(["applied": true, "focusMode": "locked"])
       case "manual":
-        // isFocusModeSupported(.locked) is NOT sufficient
+        // 0.18.5 crash fix: isFocusModeSupported(.locked) is NOT sufficient
         // for the custom-lens-position API — the virtual DualWide device
         // reports .locked supported yet setFocusModeLocked(lensPosition:)
         // throws an NSException (the 2026-08-17 field crash). Swift cannot
@@ -5646,7 +6093,7 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "lock-failed: \(error.localizedDescription)"])
       return
     }
-    // Mirror the applied focus mode onto the secondary.
+    // 0.18.2: mirror the applied focus mode onto the secondary.
     mirrorProControlsToSecondary()
   }
 
@@ -5680,7 +6127,7 @@ extension ExhibitCameraModule {
         device.whiteBalanceMode = .locked
         promise?.resolve(["applied": true, "whiteBalanceMode": "locked"])
       case "manual":
-        // Same class as focus — .locked mode support does
+        // 0.18.5 crash fix: same class as focus — .locked mode support does
         // NOT imply custom-gains locking; the virtual device throws an
         // uncatchable NSException. Gate on the custom-gains bit.
         guard device.isWhiteBalanceModeSupported(.locked),
@@ -5725,7 +6172,7 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "lock-failed: \(error.localizedDescription)"])
       return
     }
-    // Mirror the applied white-balance mode onto the secondary.
+    // 0.18.2: mirror the applied white-balance mode onto the secondary.
     mirrorProControlsToSecondary()
   }
 
@@ -6106,7 +6553,7 @@ extension ExhibitCameraModule {
       // this; an absent lens is absent (unreached, never a zero).
       "lensZoomCaps": lensZoomCaps(),
       "zoomQualityNote": "qualityCap values are a conservative app-chosen ceiling for digital-zoom resampling quality — NOT hardware limits; hardwareMax is the device's own maxAvailableVideoZoomFactor",
-      // The selectable secondary stack — every rear
+      // 0.17.2 (additive): the selectable secondary stack — every rear
       // stack present on this hardware, the current preference, and the
       // third-view hardware probe (UNTESTED extension point; the flag is
       // off by default — see ExhibitDebugFlags.thirdViewEnabled).
@@ -6117,7 +6564,7 @@ extension ExhibitCameraModule {
   }
 
   /// The rear stacks present on this hardware, in the bridge's lens
-  /// vocabulary.
+  /// vocabulary (0.17.2 — the selectable secondary stack's option list).
   private func rearStackOptions() -> [String] {
     let specs: [(String, AVCaptureDevice.DeviceType)] = [
       ("ultraWide", .builtInUltraWideCamera),

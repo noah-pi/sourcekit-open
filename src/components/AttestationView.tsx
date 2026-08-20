@@ -56,7 +56,7 @@ export function AttestationView({ record, ownFingerprint }: {
             <Chip label={`Assignment key · ${record.assignment.label}`} tone="neutral" icon="briefcase-outline" />
           ) : null}
         </View>
-        {/* the PQ explainer text and the device-integrity
+        {/* 0.14.0: the PQ explainer text and the device-integrity
             self-report row were removed from this page — footnote-grade
             material that cost more attention than it returned. The ML-DSA
             chip above still says the second signature exists; the signed
@@ -85,8 +85,8 @@ export function AttestationView({ record, ownFingerprint }: {
                 />
                 <Text style={styles.integrityNote}>
                   The signed motion of the device around the shutter: evidence a desk cross-checks
-                  against the footage (near detail should move with the gyro). It is weighed by a
-                  person; the app does not claim an automated verdict from it.
+                  against the footage (near detail should move with the gyro). The app shows it;
+                  it does not claim an automated verdict from it.
                 </Text>
               </>
             ) : null}
@@ -115,11 +115,13 @@ export function AttestationView({ record, ownFingerprint }: {
         <KeyValueRow label="Captured" value={new Date(record.capturedAt).toLocaleString()} />
         <KeyValueRow label="Device clock" value="UTC, device-reported" />
         <Divider />
+        {/* 0.18.6 (Noah): "redacted" only for de-identified copies; an
+            anonymous-mode capture never provided an identity — Not provided. */}
         {identity === 'redacted' ? (
-          <KeyValueRow label="Identity" value="Redacted by signer" />
+          <KeyValueRow label="Identity" value={record.deidentified ? 'Redacted by signer' : 'Not provided'} />
         ) : (
           <>
-            <KeyValueRow label="Author" value={identity.author ?? '—'} />
+            <KeyValueRow label="Author" value={identity.author ?? 'Not provided'} />
             {/* Legacy records can still carry a typed-in org claim; new records never do. */}
             {identity.organization ? <KeyValueRow label="Organization" value={identity.organization} /> : null}
           </>
@@ -204,7 +206,7 @@ export function AttestationView({ record, ownFingerprint }: {
       <Text style={styles.disclaimer}>
         A valid signature shows these bytes are unchanged since signing and were signed by the
         key above. Timestamps, location, Wi-Fi, and sensor readings are claims the device made at
-        capture: evidence to weigh, not facts.
+        capture: claims, not established facts.
         {record.deidentified
           ? ' This copy was deliberately de-identified by the signer: ' + record.deidentified.fields.join(', ') + ' were removed before sharing.'
           : ''}

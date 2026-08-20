@@ -104,7 +104,9 @@ section.block { padding:var(--s-xxl) 0; border-top:1px solid var(--border); scro
 .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-lg); }
 .grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:var(--s-md); }
 .gaps { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-xl) var(--s-xl); margin-top:var(--s-xl); }
-.gap svg { width:100%; height:auto; display:block; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); }
+.gtag { margin:var(--s-md) 0 0; }
+.gtag .chip { font-size:9.5px; letter-spacing:0.6px; text-transform:uppercase; font-weight:800; padding:4px 9px; }
+.gap svg { width:100%; max-width:400px; height:auto; display:block; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); }
 .gap h3 { margin:var(--s-md) 0 6px; font-size:15px; }
 /* parallax calculator */
 .pxlab { border:1px solid var(--border); border-radius:var(--r-md); background:var(--surface); padding:var(--s-md); margin:var(--s-md) 0; }
@@ -286,9 +288,8 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <div class="card">
           <p class="ladder-title">What this file can show</p>
           <div class="rung"><div class="rail-col"><div class="node reached"></div><div class="rail"></div></div><div class="rung-text"><div class="rung-label">Media unchanged since signing</div><div class="rung-detail">Signature valid; media bit-for-bit identical to what was signed.</div></div></div>
-          <div class="rung"><div class="rail-col"><div class="node reached"></div><div class="rail"></div></div><div class="rung-text"><div class="rung-label">Signer identified</div><div class="rung-detail">This device's own key. Recognised from your history.</div></div></div>
+          <div class="rung"><div class="rail-col"><div class="node reached"></div><div class="rail"></div></div><div class="rung-text"><div class="rung-label">Signer identified</div><div class="rung-detail">Nothing outside the file vouches for this key.</div></div></div>
           <div class="rung"><div class="rail-col"><div class="node reached ringed"></div><div class="rail"></div></div><div class="rung-text"><div class="rung-label">Key attested by Apple hardware</div><div class="rung-detail">Apple certifies the key is Enclave-resident on genuine hardware.</div></div></div>
-          <div class="rung"><div class="rail-col"><div class="node"></div><div class="rail"></div></div><div class="rung-text"><div class="rung-label dim">Accessioned by an organization</div><div class="rung-detail">No newsroom roster vouches for this key.</div></div></div>
           <div class="rung"><div class="rail-col"><div class="node"></div></div><div class="rung-text"><div class="rung-label dim">Time bracketed by an independent anchor</div><div class="rung-detail">No timestamp token was attached at signing.</div></div></div>
         </div>
       </div>
@@ -320,25 +321,25 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   </details>
 
   <details class="f">
-    <summary>Organizational credentials<span class="sum">Optional. Lets a newsroom vouch for the key, not the file.</span></summary>
+    <summary>Organizational credentials<span class="sum">Optional. The only thing that can identify a signer.</span></summary>
     <div class="fbody">
-      <p>By default a capture is signed with a self-signed device key, which proves consistency and nothing about who you are. An organization can raise that without the private key ever leaving the Secure Enclave: the device exports its public key, the organization's CA issues a certificate for that key, and the device imports it. From then on the signature chains into the organization instead of into itself.</p>
+      <p>By default a capture is signed with a self-signed device key, which proves consistency and nothing about who you are — and nothing inside the file can fix that. An organization can raise that without the private key ever leaving the Secure Enclave: the device exports its public key, the organization's CA issues a certificate for that key, and the device imports it. From then on the signature chains into the organization instead of into itself.</p>
       <p>There is also a hands-off version. A newsroom publishes a static document at <code>/.well-known/signet-org.json</code> listing member fingerprints and their certificates, and a member enters the domain rather than passing files around.</p>
       <p>Revocation stays where it belongs: the organization's CA publishes OCSP and CRL endpoints, and any verifier can ask. A credential that no longer matches the active device key — after a key rotation, say — is ignored and flagged, never quietly used. The app will not accept a credential that ships a private key. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/orgCert.ts">orgCert.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/orgDirectory.ts">orgDirectory.ts</a></p>
     </div>
   </details>
 
   <details class="f">
-    <summary>A verdict that refuses to be a badge<span class="sum">Five questions, five answers, no checkmark.</span></summary>
+    <summary>A verdict that refuses to be a badge<span class="sum">Four questions, four answers, no checkmark.</span></summary>
     <div class="fbody">
-      <p>A checkmark borrows the authority of a body that supposedly did the checking. No such body exists here. So the result is a ladder of five separate questions, each answered on its own evidence:</p>
+      <p>A checkmark borrows the authority of a body that supposedly did the checking. No such body exists here. So the result is a ladder of four separate questions, each answered on its own evidence:</p>
       <ol class="rungs-list">
         <li><b>Media unchanged since signing.</b> The signature verifies and the bytes match what was signed.</li>
-        <li><b>Signer identified.</b> The key is one this device has seen before.</li>
-        <li><b>Accessioned by an organization.</b> The signature chains into an org credential.</li>
+        <li><b>Signer identified.</b> Something outside the file vouches for the key — a signed newsroom roster or a curated trust list.</li>
         <li><b>Key attested by Apple hardware.</b> Apple certifies the key is Enclave-resident on genuine hardware.</li>
-        <li><b>Time bracketed by an independent anchor.</b> A timestamp token or Bitcoin receipt corroborates when.</li>
+        <li><b>Time bracketed by an independent anchor.</b> A pinned-authority countersignature or a verified Bitcoin anchor.</li>
       </ol>
+      <p>Rung two used to be two rungs — "signer identified" and "accessioned by an organization" — until it became clear they were the same question. Identity is not knowable from the file at all unless something outside it vouches for the key, and an organization that signs its own root names an organization without identifying anyone. Two rungs were pretending at a distinction that does not exist.</p>
       <p>Each rung is <i>reached</i>, <i>not reached</i>, <i>failed</i>, or <i>not applicable</i>, and the unreached ones say why. Unsigned renders neutral grey, never red: the absence of a credential is not evidence of tampering. <i>Verified</i>, <i>authentic</i> and <i>trusted</i> name a conclusion somebody reached, and nothing here reaches conclusions — a test fails the build if one of those words appears in a verdict position. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts">trustLadder.ts</a></p>
     </div>
   </details>
@@ -408,9 +409,8 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <div class="fbody">
       <p>Nearly every flagship smartphone ships a multi-camera array, and almost nothing uses the second one for provenance. Source Kit seals a simultaneous downsampled ultra-wide frame into the same file, as a C2PA ingredient with relationship <code>componentOf</code>. Open the photo in any C2PA reader and the second viewpoint is there.</p>
       <p>An ultra-wide sees far more of the room than the frame you composed. A monitor bezel, the edge of a laptop, the glow off an OLED panel — all of it lands in the second view.</p>
-      <p>Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a scene with real depth differently, and no homography removes the difference. On an iPhone Pro the wide and ultra-wide sit <a href="https://arxiv.org/pdf/2506.06037">about 19.2&nbsp;mm apart</a>. A point at distance <i>Z</i> shifts between the two views by <code>f × B ÷ Z</code> pixels, where <i>B</i> is that baseline and <i>f</i> is the focal length expressed in pixels of whatever width you analyse at.</p>
-      <p>That last term is what decides the range, and it is worth being exact about. The card inside the app decodes both views to 96&nbsp;px wide, which puts <i>f</i> at about 69&nbsp;px and the one-pixel floor at <b>1.3&nbsp;m</b>. The frame sealed into the file is 640&nbsp;px, where <i>f</i> is about 457&nbsp;px and the same floor sits at <b>8.8&nbsp;m</b>. Past those distances the two views agree to within a pixel, and a screen is indistinguishable from a room.</p>
-      <p>This turns out to matter less than it sounds, because rephotography happens close up. A 27-inch monitor filling the frame sits around 60&nbsp;cm from the lens, where the shift is 2.2&nbsp;px in the app's own card and 14.6&nbsp;px in the sealed frame — well clear of the floor either way.</p>
+      <p>Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a scene with real depth differently, and no homography removes the difference. On an iPhone Pro they sit <a href="https://arxiv.org/pdf/2506.06037">about 19.2&nbsp;mm apart</a>, which is enough to measure depth out to roughly nine metres from the sealed frame. That is a lot of room, and rephotography lives at the near end of it: a monitor filling the frame sits about 60&nbsp;cm away, nowhere near the limit.</p>
+
       <div class="pxlab" data-pxlab>
         <p class="pxlab-title">Parallax range calculator</p>
         <div class="pxlab-ctl">
@@ -527,8 +527,6 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <p>Provenance is a word borrowed from the art trade, where it means the paper trail of a painting's owners — the chain of receipts, bills of sale and catalogue entries that says where a canvas has been since it left the studio. It was never a claim about the painting. A perfect provenance on a forgery is a well-documented forgery, and the trade has bought plenty of those. What the paper trail does is make lying laborious, because the liar has to manufacture a history rather than an object.</p>
     <p>The digital version is the same idea with a signature instead of a filing cabinet. Adobe, Arm, the BBC, Intel, Microsoft and Truepic founded the <a href="https://c2pa.org/">Coalition for Content Provenance and Authenticity</a> in February 2021, and the first specification followed a year later. Instead of examining a file for signs of forgery, seal it at the source so any later change reads as a change. A watermark says a machine was involved. A manifest says which device, which moment, and what has happened since.</p>
 
-    <h3 class="lawhed">Two assurance levels grade the signer, and the second one needs hardware</h3>
-    <p>A signature is worth the process that produced it, so C2PA's <a href="https://github.com/c2pa-org/conformance-public">conformance program</a> grades the signer and writes the grade into the certificate. There are two levels, and both cover the same six objectives: certificate enrolment, key confidentiality, protecting the claim generator from misuse, protecting the asset and assertions at generation, protecting traffic between components, and the hosting environment. <b>Level 1</b> can meet them in software — the signing key encrypted at rest, a shared secret to authenticate at enrolment. <b>Level 2</b> adds two things: the key must be generated, stored and used at a higher privilege level than the code asking for the signature, and the device must present a hardware-rooted attestation of the signing binary when it enrols. The <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10 camera</a> is the first to reach it, and for a mobile app it is currently reachable only on Android. Source Kit meets the software tier, holds no certificate, and says so in every manifest.</p>
   </div>
 
 </div></section>
@@ -541,16 +539,20 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <div class="col">
     <p>A digital photograph begins as electrical charge on a grid of sensor wells and ends as a compressed file. Something has to turn one into the other: read the wells, interpolate colour across the filter mosaic, correct the lens, reduce noise, tone-map, encode. That chain runs for tens of milliseconds, and every stage of it is code that could in principle hand the next stage a different picture. So the question that decides what a provenance signature actually proves is not how strong the key is. Everyone keeps the key in hardware. The question is how much of that chain sits between the photons and the signing, and whether any of it can be replaced.</p>
 
-    <p>On the <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10</a>, almost none of it can. Google signs inside the imaging pipeline on the Tensor G5; the claim key is generated and held in Android StrongBox on the Titan M2 security chip; a timestamp authority runs on the device, so a capture made with the radio off still carries trusted time. The frame is never handed to general-purpose code between the sensor and the signature, which means there is no seam at which a different image could be substituted. Photograph something with a Pixel 10 and the file can support a claim almost nothing else can: that these are the photons that struck the sensor.</p>
+    <p>There is a formal answer to that question. C2PA's <a href="https://github.com/c2pa-org/conformance-public">conformance program</a> grades the signer and writes the grade into the certificate, and there are two grades. Both cover the same six objectives: certificate enrolment, key confidentiality, protecting the claim generator from misuse, protecting the asset and assertions at generation, protecting traffic between components, and the hosting environment. <b>Level 1</b> can meet them in software — the signing key encrypted at rest, a shared secret to authenticate at enrolment. <b>Level 2</b> adds two requirements: the key must be generated, stored and used at a higher privilege level than the code asking for the signature, and the device must present a hardware-rooted attestation of the signing binary when it enrols.</p>
 
-    <p>Qualcomm took the same idea to the other end of the Android market, putting a signer inside the Snapdragon trusted execution environment so the pipeline is isolated from the operating system running above it. Apple's Reference Image, visible in the iOS 27 beta, captures sensor signatures and hardware identifiers with the frame — but it sends them to Private Cloud Compute and returns an authenticated copy, and it is not built on C2PA.</p>
+    <p>The <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10</a> is the first phone to reach Level 2, and the way it does so is instructive. Google signs inside the imaging pipeline on the Tensor G5; the claim key lives in Android StrongBox on the Titan M2 security chip; a timestamp authority runs on the device, so a capture made with the radio off still carries trusted time. The frame is never handed to general-purpose code between the sensor and the signature, which means there is no seam at which a different image could be substituted. Photograph something with a Pixel 10 and the file supports a claim almost nothing else can: that these are the photons that struck the sensor.</p>
 
-    <p>Source Kit sits at the far end of that chain. It receives a finished image from the operating system and signs the bytes it was handed, in its own process, with a key in the Secure Enclave. Everything upstream of that hand-off is code it cannot attest to. This is the ceiling for a third-party app on iOS, not a design preference: <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Assurance Level 2 for a mobile app is currently reachable only on Android</a>. What the app can do is commit far more <i>around</i> the frame — a second lens, the motion of the phone, independent time — so that a forger has to keep several signals consistent rather than one.</p>
+    <p>Qualcomm took the same idea to the rest of the Android market, putting a signer inside the Snapdragon trusted execution environment. Apple's Reference Image, visible in the iOS 27 beta, captures sensor signatures and hardware identifiers with the frame — but it sends them to Private Cloud Compute and returns an authenticated copy, and it is not built on C2PA.</p>
 
-    <h3>Cameras got there first, and California is about to make it universal</h3>
-    <p>Phones are the late arrivals. Leica shipped the <a href="https://leica-camera.com/en-US/photography/content-credentials">first camera with Content Credentials</a>, the M11-P, in October 2023, with a signing certificate in the body. Sony added capture-time signing across the Alpha 1 II and Alpha 9 III, Canon launched its <a href="https://c2paviewer.com/articles/canon-authenticity-imaging-system">Authenticity Imaging System</a> for newsrooms in May 2026, and Nikon <a href="https://www.nikonusa.com/press-room/nikon-develops-firmware-that-adds-function-compliant-with-cp2a-standards-to-z6iii">added C2PA to the Z6III</a> in firmware — then withdrew it within a week, when a researcher used the camera's multiple-exposure mode to make it sign a composite it had not photographed. Nikon suspended the service and invalidated every certificate it had issued. The credentials from that window no longer verify, which is the standard working exactly as intended, and a fair measure of how new all of this is.</p>
+    <p>Source Kit sits at the far end of that chain. It receives a finished image from the operating system and signs the bytes it was handed, in its own process, with a key in the Secure Enclave. Everything upstream of that hand-off is code it cannot attest to — the ceiling for a third-party app on iOS, not a design preference, since Level 2 for a mobile app is currently reachable only on Android. What it can do instead is commit far more <i>around</i> the frame, so that a forger has to keep several signals consistent rather than one.</p>
 
-    <p>From 1 January 2028, this stops being a feature. California's <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853">AB 853</a> requires every capture device sold in the state — the statute names "video and still photography cameras, mobile phones with built-in cameras or microphones, and voice recorders" — to offer a latent disclosure carrying the manufacturer, the device, and the time and date of capture, and to embed it <i>by default</i>. Provenance metadata goes from a differentiator on a flagship to a condition of selling a camera in the largest state in the country.</p>
+    <h3>Cameras got there first, and California is about to switch the lights on</h3>
+    <p>Phones are the late arrivals. Leica shipped the <a href="https://leica-camera.com/en-US/photography/content-credentials">first camera with Content Credentials</a>, the M11-P, in October 2023. Sony added capture-time signing across the Alpha 1 II and Alpha 9 III, Canon launched its <a href="https://c2paviewer.com/articles/canon-authenticity-imaging-system">Authenticity Imaging System</a> for newsrooms in May 2026, and Nikon <a href="https://www.nikonusa.com/press-room/nikon-develops-firmware-that-adds-function-compliant-with-cp2a-standards-to-z6iii">added C2PA to the Z6III</a> in firmware — then withdrew it within a week, when a researcher used the camera's multiple-exposure mode to make it sign a composite it had not photographed. Every certificate the programme had issued was invalidated, so credentials from that window no longer verify. That is the standard working as designed, and a fair measure of how new all of this is.</p>
+
+    <p>Then the law arrives, in two dates. From <b>1 January 2028</b>, California's <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853">AB 853</a> requires every capture device sold in the state — the statute names cameras, phones with built-in cameras or microphones, and voice recorders — to embed a latent disclosure of manufacturer, device and capture time, by default.</p>
+
+    <p>The date to watch is the earlier one. From <b>1 January 2027</b>, every platform above two million monthly users must detect provenance data in what its users post and give them an interface to inspect it. Until now Content Credentials have been something you could go and check, if you knew they existed, had a tool, and cared enough to use it. After that date they are something the platform has to show you. Whatever fraction of the internet is carrying a manifest by then becomes visible on a single day — not gradually, and not because anyone went looking. It is the closest thing this field has to switching the lights on in a room nobody has seen properly, and there is no way to know in advance whether the room turns out to be mostly furnished or mostly bare.</p>
   </div>
 </div></section>
 
@@ -591,8 +593,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <path d="M229 48 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/>
         <text x="234" y="72" text-anchor="middle" class="glbl s-ac">VALID</text>
       </svg>
+      <p class="gtag"><span class="chip warn">no viable solution</span></p>
       <h3>The lens can be pointed at a screen</h3>
-      <p>Photograph a good monitor and every guarantee holds, because they are all true: that sensor really did see those photons. No signature, from any device, reaches past the front of the lens.</p>
+      <p>Photograph a good monitor and every guarantee holds, because all of them are true: the sensor did see those photons. No signature reaches past the front of the lens.</p>
     </div>
 
     <div class="gap">
@@ -601,19 +604,20 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <use href="#fy" x="38" y="30" width="26" height="20" class="s-ac"/>
         <path d="M20 68 q16-10 28-3 q12-8 40 2" class="f-none k-line" stroke-width="1.4"/>
         <text x="53" y="94" text-anchor="middle" class="glbl s-ac">REAL SCENE</text>
-        <text x="53" y="108" text-anchor="middle" class="glbl s-faint">SHOT IN LONDON</text>
+        <text x="53" y="108" text-anchor="middle" class="glbl s-warn">ACTUALLY LONDON</text>
         <path d="M104 46 h18" class="f-none k-dim" stroke-width="1.4"/>
         <path d="M119 42 l6 4 -6 4z" class="s-faint"/>
         <rect x="136" y="20" width="112" height="54" rx="4" class="f-soft k-line"/>
         <text x="147" y="37" class="gcap s-dim">time</text>
         <text x="240" y="37" text-anchor="end" class="gcap s-dim">14:06</text>
         <text x="147" y="53" class="gcap s-dim">place</text>
-        <text x="240" y="53" text-anchor="end" class="gcap s-warn" style="font-weight:700">PARIS</text>
+        <text x="240" y="53" text-anchor="end" class="gcap s-txt" style="font-weight:700">PARIS</text>
         <path d="M144 60 h96" class="f-none k-line" stroke-width="1"/>
-        <text x="147" y="70" class="glbl s-warn">SEALED · FALSE</text>
+        <text x="147" y="70" class="glbl s-ac">SIGNATURE VALID</text>
       </svg>
+      <p class="gtag"><span class="chip info">partially addressable</span></p>
       <h3>A signature binds a claim without checking it</h3>
-      <p>Civilian GPS is unauthenticated and spoofers cost less than a phone. The scene can be entirely real while the time and place sealed beside it are not, and the seal makes a forged fix look exactly as solid as a true one.</p>
+      <p>Civilian GPS is unauthenticated and spoofers cost less than a phone. The scene is real, the signature is valid, and the place is wrong — sealed just as faithfully as a true one.</p>
     </div>
 
     <div class="gap">
@@ -633,8 +637,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <circle cx="240" cy="46" r="10" class="f-warnsoft k-warn" stroke-width="1.4"/>
         <path d="M235 46 h10" class="f-none k-warn" stroke-width="2" stroke-linecap="round"/>
       </svg>
+      <p class="gtag"><span class="chip info">fix is known, unbuilt</span></p>
       <h3>Most platforms strip the credential on upload</h3>
-      <p>The manifest disappears at the exact moment a picture starts to travel, and an unsigned file is indistinguishable from one that never had a signature. The industry answer is a fingerprint plus a lookup service. The fingerprint exists here; the lookup does not.</p>
+      <p>The manifest disappears the moment a picture starts to travel, and a stripped file is indistinguishable from one that was never signed. The answer is a fingerprint plus a lookup service. The fingerprint exists here; the lookup does not.</p>
     </div>
 
     <div class="gap">
@@ -655,8 +660,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <circle cx="236" cy="61" r="11" class="f-acsoft k-ac" stroke-width="1.5"/>
         <path d="M231 61 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/>
       </svg>
+      <p class="gtag"><span class="chip good">addressed in new devices</span></p>
       <h3>Below Level 2, a picture can be handed to the signer</h3>
-      <p>If the frame reaches the signing step through code that isn't attested, whatever arrives gets signed correctly. In 2025 a researcher used the Nikon Z6III's multiple-exposure mode to do exactly this; Nikon invalidated every certificate it had issued.</p>
+      <p>If the frame reaches the signer through code nobody attested to, whatever arrives gets signed correctly. A researcher did this to the Nikon Z6III through its multiple-exposure mode; Nikon invalidated every certificate it had issued.</p>
     </div>
 
     <div class="gap">
@@ -679,8 +685,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <path d="M229 47 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/>
         <text x="234" y="72" text-anchor="middle" class="glbl s-ac">ALL TRUE</text>
       </svg>
+      <p class="gtag"><span class="chip warn">no viable solution</span></p>
       <h3>A staged scene is a true photograph of a lie</h3>
-      <p>Everything here would have sealed the Cottingley fairies without complaint. Real camera, real plate, real garden, real light, real distance — two lenses would even measure genuine depth, because there was genuine depth. Every check passes and every one of them is telling the truth.</p>
+      <p>Everything here would have sealed the Cottingley fairies without complaint. Real camera, real garden, real light, real distance — two lenses would measure genuine depth, because there was genuine depth. Every check passes, and every one is telling the truth.</p>
     </div>
 
     <div class="gap">
@@ -699,8 +706,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <circle cx="240" cy="46" r="10" class="f-warnsoft k-warn" stroke-width="1.4"/>
         <path d="M236 42 l8 8 M244 42 l-8 8" class="f-none k-warn" stroke-width="1.9" stroke-linecap="round"/>
       </svg>
+      <p class="gtag"><span class="chip info">partially addressable</span></p>
       <h3>Protecting someone in the frame breaks the proof</h3>
-      <p>Blur a bystander's face, crop a landmark, drop the coordinates, and the signature fails — the file now reads as modified, which is the same verdict a forgery gets. Selective disclosure here covers the metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.</p>
+      <p>Blur a bystander's face or crop a landmark and the signature fails, giving the same verdict a forgery gets. Selective disclosure covers the metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.</p>
     </div>
 
   </div>
@@ -716,8 +724,8 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 
 <!-- ===================== SIGNALS ===================== -->
 <section class="block" id="signals"><div class="wrap">
-  <h2>What gets collected, and what each thing is worth</h2>
-  <p class="dek">Everything is optional and switchable live in the viewfinder, ranked here by the weight a check can carry rather than by how impressive it sounds.</p>
+  <h2>Every field is a choice you make before the shutter</h2>
+  <p class="dek">A provenance record is also a record of you. Each of these is switchable in the viewfinder, because the right answer depends on whether you are proving your work or protecting your source.</p>
 
   <div style="max-width:300px;margin:0 0 var(--s-xl)">
       <div class="phone sm">
@@ -765,8 +773,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 <section class="block" id="close"><div class="wrap">
   <div class="col">
     <p class="pull">Prove your work.</p>
-    <p style="margin-top:var(--s-lg);color:var(--textDim)">One last thing about the fairies. Everything here would have sealed them without complaint. Elsie Wright used a real camera and a real plate. The cut-outs were propped up with hatpins at a real distance, in a real garden, in real light. Two lenses would measure genuine depth, because there was genuine depth. Every rung on the ladder would be reached, and every one of them would be telling the truth.</p>
-    <p style="color:var(--textDim)">That is the edge of what provenance can do. It can tell you a file is what it claims to be. It cannot tell you the world was as the picture says. That was always the reader's job, and the desk's.</p>
+    <p style="margin-top:var(--s-lg);color:var(--textDim)">The art trade solved its version of this problem a century ago, and the solution was paperwork. Not connoisseurship, which turned out to be unreliable, and not chemistry, which came later and only ever settled the easy cases. What made forgery expensive was the expectation that a painting arrive with a history — and the willingness of buyers to treat a gap in that history as a reason to walk away. It did not make forgery impossible. It made it laborious, and it moved the argument from the object to the record, where an argument can actually be had.</p>
+    <p style="color:var(--textDim)">That is the whole ambition here, and it is worth being clear about its ceiling. Everything in this app would have sealed the Cottingley photographs without complaint. Elsie Wright used a real camera and a real plate; the cut-outs stood at a real distance in real light, and two lenses would have measured genuine depth because there was genuine depth to measure. Every rung reached, every check honest, every one of them telling the truth about a photograph of a lie.</p>
+    <p style="color:var(--textDim)">Provenance cannot tell you the world was as the picture says. It was never going to. What it can do is establish that a file is what it claims to be, and hand the remaining question — the interesting one — back to a person. That was always the reader's job.</p>
     <p style="color:var(--textDim)">It doesn't solve misinformation. It gives an honest photographer a way to show their work, and it makes the alternative more expensive.</p>
     <p style="font-weight:600">— Noah Bassetti-Blum</p>
     <div class="cta" style="margin-top:var(--s-lg)">

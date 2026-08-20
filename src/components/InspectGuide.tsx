@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * InspectGuide — the FAQ at the bottom of the Inspect tab.
+ * InspectGuide — the FAQ at the bottom of the Inspect tab (0.17.1, copy v5).
  *
  * Truly an FAQ: every question sits behind its own dropdown, answers are the
  * approved plain declarative facts. No question is answered before it's asked.
@@ -82,7 +82,7 @@ export function InspectGuide() {
         ))}
       </Card>
       <Text style={styles.closing}>
-        Custody, not reality: this app proves the file’s history. What the file shows is for you to weigh.
+        Custody, not reality: this app proves the file’s history. What the file shows is yours to judge.
       </Text>
     </View>
   );

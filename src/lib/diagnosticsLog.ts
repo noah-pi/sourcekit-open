@@ -34,7 +34,10 @@ export interface DiagnosticEvent {
     | 'seal-failed'
     | 'retry'
     | 'discard'
-    // Pure information: native pipeline diagnostics — connection
+    // The vault was locked at seal time (auth window, not a seal fault) —
+    // the job stays pending and seals after the next unlock (0.18.6).
+    | 'seal-deferred'
+    // Pure information (0.18.2): native pipeline diagnostics — connection
     // census, format picks, interruption boundaries. Never a failure.
     | 'info';
   /** The verbatim error/reason string, when one exists. */

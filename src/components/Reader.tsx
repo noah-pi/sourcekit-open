@@ -121,7 +121,7 @@ export function GapGauge({ gauge, state }: { gauge: NonNullable<EvidenceCard['ga
 }
 
 // ---------------------------------------------------------------------------
-// Custody ladder — five rungs, connector line, checkable rows one tap down
+// Custody ladder — connector line, checkable rows one tap down
 // ---------------------------------------------------------------------------
 
 function RungRow({ rung, last }: { rung: RungResult; last: boolean }) {

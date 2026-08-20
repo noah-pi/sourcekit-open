@@ -13,7 +13,7 @@ import * as Haptics from 'expo-haptics';
 import { colors, spacing, radii, fontSize, useThemedStyles, useEffectiveScheme } from '../src/theme';
 import { useStore } from '../src/store/useStore';
 import { verifyPasscode } from '../src/vault/passcode';
-import { upgradeVaultKeyAcl } from '../src/vault/vaultFs';
+import { upgradeVaultKeyAcl, warmVaultKey } from '../src/vault/vaultFs';
 import {
   getLockoutState,
   recordFailure,
@@ -37,10 +37,17 @@ export default function LockScreen() {
   const [lockSecondsLeft, setLockSecondsLeft] = useState(0);
   const isLocked = lockSecondsLeft > 0;
 
-  const unlock = () => {
+  const unlock = async () => {
     // The user just authenticated — move the vault key behind the OS
     // keychain's user-presence access control while that presence is fresh.
-    upgradeVaultKeyAcl().catch(() => {});
+    await upgradeVaultKeyAcl().catch(() => {});
+    // 0.18.6: prime the key HERE, at the moment of presence, so no grid
+    // cell or background seal job ever pops the OS presence prompt at an
+    // arbitrary moment later (an ignored prompt wedged the pump; a
+    // cancelled one threw mid-seal — the "face ID results in errors"
+    // field report). Best-effort: a cancelled warm just leaves the vault
+    // cold, and the next real read prompts with a proper message.
+    await warmVaultKey();
     setUnlocked(true);
     router.replace('/');
   };
@@ -52,7 +59,7 @@ export default function LockScreen() {
         cancelLabel: 'Use passcode',
         disableDeviceFallback: true,
       });
-      if (result.success) unlock();
+      if (result.success) await unlock();
     } catch {
       // User can fall back to the keypad.
     }
@@ -101,7 +108,7 @@ export default function LockScreen() {
       if (ok) {
         await resetLockout();
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        unlock();
+        await unlock();
       } else {
         Vibration.vibrate([0, 60, 80, 60]);
         const { attempts, lockedForMs } = await recordFailure();

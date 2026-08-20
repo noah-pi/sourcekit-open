@@ -52,16 +52,83 @@ async function getWifiClaim(): Promise<WifiClaim | 'unavailable'> {
   return claim ?? 'unavailable';
 }
 
-async function getHeadingDeg(): Promise<number | null> {
+/**
+ * The one-shot compass read. 0.18.6: this is NO LONGER the sealed pointing
+ * direction — Apple defines CLHeading as the azimuth of the TOP EDGE's
+ * horizontal projection, which for the actual shooting stance (phone
+ * upright, top edge at the sky) is a near-degenerate number that flips
+ * 180° with the sign of the tilt (the field report: "check your sun
+ * position map — i'm not sure it's calculated right in the overlay"). The
+ * read still runs, for two things: the DECLINATION (trueHeading −
+ * magHeading — a property of place and time, independent of how the
+ * phone is held), and as the fallback when no pose sample exists.
+ */
+async function getCompassRead(): Promise<{ trueHeading: number; magHeading: number } | null> {
   try {
     const { status } = await Location.getForegroundPermissionsAsync();
     if (status !== 'granted') return null;
     const heading = await Location.getHeadingAsync();
-    if (heading == null || heading.trueHeading < 0) return null;
-    return Math.round(heading.trueHeading);
+    if (heading == null || heading.trueHeading < 0 || heading.magHeading < 0) return null;
+    return heading;
   } catch {
     return null;
   }
+}
+
+const wrap360 = (deg: number): number => ((deg % 360) + 360) % 360;
+const wrap180 = (deg: number): number => ((((deg + 180) % 360) + 360) % 360) - 180;
+
+/**
+ * Camera azimuth from the fused attitude (0.18.6). The camera looks out the
+ * BACK of the phone — the device −Z axis — and the pose buffer already
+ * holds the attitude at 100 Hz, anchored to the shutter instant, so the
+ * pointing direction comes from the sample nearest the shutter instead of
+ * a compass read taken after the capture call returned (by which time the
+ * phone has usually moved). Convention (verified against the canonical
+ * CMDeviceMotion quaternion decomposition): expo DeviceMotion runs
+ * xMagneticNorthZVertical and its Euler angles compose as
+ * R = Rz(yaw)·Ry(roll)·Rx(pitch), device→world, world frame X = magnetic
+ * north, Y = west, Z = up. The result is MAGNETIC-referenced; the caller
+ * adds the declination. Returns null when the aim is within ~10° of
+ * straight up/down — a bearing is undefined there and no number is
+ * invented.
+ */
+export function cameraAzimuthMagneticDeg(rollDeg: number, pitchDeg: number, yawDeg: number): number | null {
+  const RAD = Math.PI / 180;
+  const a = yawDeg * RAD;
+  const b = pitchDeg * RAD;
+  const g = rollDeg * RAD;
+  // Device +Z in world = third column of R; the camera is −Z.
+  const dzx = Math.cos(a) * Math.sin(g) * Math.cos(b) + Math.sin(a) * Math.sin(b);
+  const dzy = Math.sin(a) * Math.sin(g) * Math.cos(b) - Math.cos(a) * Math.sin(b);
+  const cx = -dzx;
+  const cy = -dzy;
+  if (Math.hypot(cx, cy) < 0.17) return null; // sin(10°): aim vertical, bearing undefined
+  // Compass azimuth, clockwise from (magnetic) north: east = −Y, north = X.
+  return wrap360((Math.atan2(-cy, cx) * 180) / Math.PI);
+}
+
+/** The sealed heading: camera azimuth (true north) at the shutter when the
+ *  pose buffer reaches it; the plain compass read when it doesn't. */
+async function getHeadingDeg(poseSamples: PoseSample[] | undefined, capturedAtMs: number): Promise<number | null> {
+  const compass = await getCompassRead();
+  if (poseSamples && poseSamples.length > 0) {
+    let nearest: PoseSample | null = null;
+    for (const s of poseSamples) {
+      if (!nearest || Math.abs(s.t - capturedAtMs) < Math.abs(nearest.t - capturedAtMs)) nearest = s;
+    }
+    if (nearest) {
+      const azMag = cameraAzimuthMagneticDeg(nearest.roll, nearest.pitch, nearest.yaw);
+      if (azMag !== null && compass) {
+        const declination = wrap180(compass.trueHeading - compass.magHeading);
+        return Math.round(wrap360(azMag + declination));
+      }
+      // Degenerate aim or no declination read: fall through to the plain
+      // compass value rather than mix a magnetic azimuth into a
+      // true-north-referenced field.
+    }
+  }
+  return compass ? Math.round(compass.trueHeading) : null;
 }
 
 let lastPressure: number | null = null;
@@ -99,7 +166,7 @@ export async function collectContext(params: {
    */
   includeWifi: boolean;
   motionSamples: MotionSample[];
-  /** Fused DeviceMotion buffer for the signed pose trace. */
+  /** Fused DeviceMotion buffer for the signed pose trace (0.10.0). */
   poseSamples?: PoseSample[];
   /** Shutter moment the pose trace anchors to (default: now). */
   capturedAtMs?: number;
@@ -110,7 +177,13 @@ export async function collectContext(params: {
 
   const location = includeLocation ? await getLocationClaim() : 'redacted';
   const wifi = includeWifi ? await getWifiClaim() : 'redacted';
-  const headingDeg = includeSensors && includeLocation ? await getHeadingDeg() : null;
+  // 0.18.6: heading = camera azimuth AT THE SHUTTER from the pose buffer
+  // (true-north via the compass declination); plain compass read only when
+  // no pose sample exists. See getHeadingDeg.
+  const headingDeg =
+    includeSensors && includeLocation
+      ? await getHeadingDeg(params.poseSamples, params.capturedAtMs ?? Date.now())
+      : null;
   const pressure =
     includeSensors && lastPressure != null ? Math.round(lastPressure * 10) / 10 : null;
   const altitudeM = pressure != null ? altitudeFromPressure(pressure) : null;

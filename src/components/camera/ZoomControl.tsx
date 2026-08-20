@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Zoom control — replaces the "too fast, no
+ * Zoom control (0.15.0 Drop 2, research §5) — replaces the "too fast, no
  * in-between" zoom UI.
  *
  * <ZoomWheel/> — the bottom row: optical pills (.5 / 1 / tele factor, only
@@ -84,6 +84,7 @@ export function ZoomWheel({
   onJump,
   onLive,
   onCommit,
+  hidePills = false,
 }: {
   channel: LiveChannel<LiveZoom>;
   stops: OpticalStop[];
@@ -101,6 +102,14 @@ export function ZoomWheel({
   onLive: (relative: number) => void;
   /** Wheel released: commit this relative factor. */
   onCommit: (relative: number) => void;
+  /** 0.18.6 (Noah: "if multi-lens is on, don't show the 0.5 1 options"):
+   *  while the dual-view graph is live both lenses are already fused, so
+   *  per-lens jump pills are the wrong affordance (a .5/1 tap there is a
+   *  zoom-stop jump, not a lens choice — and read as a dead button in the
+   *  field). Hidden pills, still the wheel: the row stays the zoom
+   *  surface and shows the live factor as its only pill. Pills return the
+   *  moment Multiple lenses is off — real lens switches again. */
+  hidePills?: boolean;
 }) {
   const { factor, active } = useSyncExternalStore(channel.subscribe, channel.get);
   const [wheeling, setWheeling] = useState(false);
@@ -138,7 +147,7 @@ export function ZoomWheel({
         const c = stopsRef.current;
         // Bounds re-derived per move: the lens inventory (and thus the
         // stack floor) can arrive after the responder was created. The
-        // wheel never leaves the current stack.
+        // wheel never leaves the current stack (0.17.1, the Halide model).
         const lo = stackZoomFloor(c, lensRef.current);
         const next = clampZoom(
           Math.pow(2, startLog.current + g.dx / PX_PER_OCTAVE),
@@ -190,21 +199,36 @@ export function ZoomWheel({
 
   return (
     <View style={styles.wheelRow} {...pan.panHandlers}>
-      {stops.map((s) => (
-        <TouchableOpacity
-          key={s.lens}
-          style={[styles.pill, activeStop(s) && styles.pillActive]}
-          onPress={() => cb.current.onJump(s.lens)}
-          accessibilityLabel={`${s.label} lens`}
-        >
-          <Text style={[styles.pillText, activeStop(s) && styles.pillTextActive]}>{s.label}</Text>
-        </TouchableOpacity>
-      ))}
-      {between ? (
-        <View style={[styles.pill, styles.pillLive]} pointerEvents="none">
-          <Text style={[styles.pillText, styles.pillTextActive]}>{formatFactor(factor)}</Text>
-        </View>
-      ) : null}
+      {hidePills ? (
+        // Pills hidden (dual-view graph live): the row is the wheel only.
+        // The live factor appears ONLY while it says something the graph
+        // doesn't already — scrubbing, or parked between stops. Parked
+        // exactly on a stop it read as the old "1" pill (Noah: "the 1
+        // still appears when it's on — it should be hidden").
+        wheeling || active || between ? (
+          <View style={[styles.pill, styles.pillLive]} pointerEvents="none">
+            <Text style={[styles.pillText, styles.pillTextActive]}>{formatFactor(factor)}</Text>
+          </View>
+        ) : null
+      ) : (
+        <>
+          {stops.map((s) => (
+            <TouchableOpacity
+              key={s.lens}
+              style={[styles.pill, activeStop(s) && styles.pillActive]}
+              onPress={() => cb.current.onJump(s.lens)}
+              accessibilityLabel={`${s.label} lens`}
+            >
+              <Text style={[styles.pillText, activeStop(s) && styles.pillTextActive]}>{s.label}</Text>
+            </TouchableOpacity>
+          ))}
+          {between ? (
+            <View style={[styles.pill, styles.pillLive]} pointerEvents="none">
+              <Text style={[styles.pillText, styles.pillTextActive]}>{formatFactor(factor)}</Text>
+            </View>
+          ) : null}
+        </>
+      )}
     </View>
   );
 }
@@ -232,6 +256,8 @@ const styles = StyleSheet.create({
   },
   // Apple's own zoom control language: translucent circles, factor text,
   // the live stop carries the ring. Labels are FOV-derived from hardware.
+  // Mockup .zp: 10.5/700 translucent pills; the active stop is the mockup's
+  // ok-bright green on its 13% wash.
   pill: {
     minWidth: 34,
     height: 34,

@@ -1,6 +1,9 @@
 /**
- * The custody ladder — five rungs, each a projection of checks the
- * verification core already performs. Nothing here computes new cryptography
+ * NOT REACHABLE FROM THE APP: nothing imports this module. The app's own
+ * verdict surface is src/lib/trustLadder.ts, which carries four rungs.
+ *
+ * The custody ladder for proof bundles — five rungs, each a projection of
+ * checks the verification core already performs. Nothing here computes new cryptography
  * and nothing fuses rungs into a score. A rung states what was compared and
  * how it landed, or why it couldn't run. Absence of proof is neutral and said
  * out loud.

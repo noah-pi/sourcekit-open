@@ -60,7 +60,7 @@ const SLIDES: Slide[] = [
   {
     icon: 'albums-outline',
     title: 'It proves the file. Not the scene.',
-    body: 'A seal says these bytes haven\u2019t changed since this phone signed them. What the phone recorded alongside (time, place, motion) is evidence you can weigh.',
+    body: 'A seal says these bytes haven\u2019t changed since this phone signed them. What the phone recorded alongside (time, place, motion) is evidence you can check yourself.',
     caveat: 'One more limit: this is early software. Don\u2019t keep your only copy of anything important here.',
   },
 ];
@@ -68,7 +68,7 @@ const SLIDES: Slide[] = [
 /**
  * The footer's primary action. The shared ui.tsx primary Button pairs its
  * ink fill with a hard-coded near-black label — black-on-black in light
- * mode (the illegibility report). This one is theme-aware by
+ * mode (the 0.18.0 illegibility report). This one is theme-aware by
  * construction: ink fill (colors.text) with the scheme's canvas color
  * (colors.bg) as the label — legible in BOTH light and dark. The styles
  * come from the screen's useThemedStyles, so a scheme flip re-themes it.
@@ -259,6 +259,8 @@ const buildStyles = () => StyleSheet.create({
   introIcon: {
     width: 120,
     height: 120,
+    // The iOS icon treatment: continuous-corner squircle (~22.5% radius)
+    // with a hairline, so the asset reads as the app icon, not a picture.
     borderRadius: 27,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,

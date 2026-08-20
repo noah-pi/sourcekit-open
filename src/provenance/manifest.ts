@@ -252,15 +252,20 @@ export interface CaptureIntegrityAssertion {
 
 export interface SensorContext {
   location: LocationClaim | 'redacted' | 'unavailable';
+  /** Degrees clockwise from true north. 0.18.6+: the CAMERA's azimuth at
+      the shutter instant (device −Z from the sealed pose buffer, plus the
+      compass declination). Older records hold the OS one-shot compass read
+      taken just after capture — same field, coarser semantics. Null = not
+      collected (sensors/location off, or no usable source). */
   headingDeg: number | null;
   pressureHPa: number | null;
   /** Barometric altitude estimate, meters above sea level. */
   altitudeM: number | null;
   motion: MotionSummary | null;
-  /** Signed gyro trace around the shutter — desk evidence, stripped
+  /** Signed gyro trace around the shutter (0.10.0) — desk evidence, stripped
       on de-identify; absent on older records and when sensors are off. */
   poseTrace?: PoseTrace | null;
-  /** Sensor-frame timing regularity in the capture window — a bounded
+  /** Sensor-frame timing regularity in the capture window (0.9.3) — a bounded
       signal (synthetic feeds run too regular or too bursty), never a verdict. */
   sensorTiming?: { samples: number; intervalCv: number } | null;
   /** Wi-Fi the phone reported at capture — a lead, never proof (see WifiClaim).
@@ -271,7 +276,7 @@ export interface SensorContext {
       every 1.0.0 capture; absent only on pre-1.0.0 records. See EvidencePath. */
   captureEvidence?: CaptureEvidencePaths | null;
   /**
-   * Depth-map three-state: when the capture side produced a
+   * Depth-map three-state (0.16.0, D1): when the capture side produced a
    * depth artifact, its claims (container mime, pixel dims, disparity-vs-
    * depth semantics, sha256 of the exact bytes — the same hash committed
    * in the C2PA c2pa.hash.collection.data set); when the depth module ran
@@ -298,8 +303,8 @@ export interface SensorContext {
     | { recorded: false; reason: string }
     | null;
   /**
-   * Power-grid (ENF) anchor for the raw-audio master (native
-   * Present only on video records whose PCM sink committed. The
+   * Power-grid (ENF) anchor for the raw-audio master (0.18.0, native
+   * 0.17.2): present only on video records whose PCM sink committed. The
    * anchor lets a desk cross-correlate the 50/60 Hz mains trace against a
    * reference ENF series in absolute time; fileSha256 binds the analysis
    * to the exact committed bytes. firstSampleAnchor states WHICH clock
@@ -364,23 +369,27 @@ export interface AttestationRecord {
     serialHex: string;
     notAfter: string;
   } | null;
-  /** Present on de-identified re-signs: the signer stripped identity /
-      location / sensor claims before sharing. Media hash unchanged; removed
+  /** Present on de-identified re-signs: the signer stripped the identifying
+      values (identity / organization / location / Wi-Fi / key linkage;
+      + transcript on audio) before sharing. Non-identifying evidence
+      (motion, heading, barometrics, depth, capture-evidence states, device
+      model) is carried verbatim (0.18.6). Media hash unchanged; removed
       context is gone from the copy, not hidden. */
   deidentified?: {
     at: string;
     fields: string[];
-    /**+: signed with a fresh one-time key, breaking fingerprint linkage
+    /** 0.9.0+: signed with a fresh one-time key, breaking fingerprint linkage
         between identified and anonymised copies. The signer is deliberately
         NOT the device key — verifiers must not flag the difference. */
     rekeyed?: boolean;
   } | null;
   /** True when each signature required Face ID/Touch ID (biometric-bound key). */
   biometricBound?: boolean;
-  /** Present when the capture signed with a per-assignment key (protection) instead of the device key. The label is self-asserted; what
+  /** Present when the capture signed with a per-assignment key (0.9.0 source
+      protection) instead of the device key. The label is self-asserted; what
       the signature proves is this key is NOT the device's long-lived key. */
   assignment?: { label: string } | null;
-  /** Device integrity signals committed at capture. SELF-REPORTED —
+  /** Device integrity signals (0.9.0) committed at capture. SELF-REPORTED —
       a compromised device can lie; commitment, not detection. */
   deviceIntegrity?: {
     checkedAt: string;
@@ -392,7 +401,7 @@ export interface AttestationRecord {
     runtimeInstrumentation?: { debuggerAttached: boolean; injectedLibraries: string[] } | null;
     note: 'self-reported';
   } | null;
-  /** Capture-integrity signals — ALL self-reported; commitment under
+  /** Capture-integrity signals (0.9.3) — ALL self-reported; commitment under
       signature, not detection. Bounds and blind spots: docs/INTEGRITY.md. */
   captureIntegrity?: {
     /** Milliseconds from shutter to signature — a long gap means the bytes
@@ -400,21 +409,21 @@ export interface AttestationRecord {
     captureToSignatureMs: number;
     /** Sensor-frame timing regularity (see SensorContext.sensorTiming). */
     sensorTiming: { samples: number; intervalCv: number } | null;
-    /** Face check: written whenever captureIntegrity is. true = the
+    /** Face check (0.11.1): written whenever captureIntegrity is. true = the
         OS reported a match; null = toggle off or unavailable. An EVENT
         RECORD, not an identity — no face geometry, template, or image is
         ever stored anywhere in the app. Never fabricated true. */
     biometricGatePassed?: boolean | null;
     note: 'self-reported';
   } | null;
-  /** OpenTimestamps ledger anchoring. EXCLUDED from the signed
+  /** OpenTimestamps ledger anchoring (0.9.1). EXCLUDED from the signed
       payload — receipts are added/upgraded after signing, and mutating
       signed bytes would break the signature. Each receipt commits to
       SHA-256(canonical signed payload), so it needs no signature of its
       own. Ledger time (Bitcoin) and authority time (TSA, RFC 3161) stay
       separate claims. */
   ots?: OtsAnchorSet | null;
-  /** Stereo-capture artifact section:
+  /** Stereo-capture artifact section (0.13.0, Spec-Camera-Module-0.13 §5):
       the committed three-state artifact entries (secondary frame /
       calibration / timestamps / metadata / raw DNG), built by
       commitStereoArtifacts at seal time. EXCLUDED from the signed payload —
@@ -423,7 +432,7 @@ export interface AttestationRecord {
       this field is the bundle-ready mirror (buildProofBundle's 4th arg).
       Absent on pre-0.13 records and captures where no stereo module ran. */
   stereo?: import('./stereoArtifacts').StereoBundleSection | null;
-  /** VIDEO stereo-pair section: the
+  /** VIDEO stereo-pair section (0.13.0, Spec-Camera-Module-0.13 §8): the
       committed periodic-pair entries (secondary frame + calibration each,
       PTS anchors verbatim) plus the native pairsCommitted / pairsMissed /
       hardwareCost counts. EXCLUDED from the signed payload — persisted

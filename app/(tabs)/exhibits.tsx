@@ -2,7 +2,7 @@
 /**
  * Exhibits — encrypted library of every exhibit this device has sealed.
  * Thumbnails are decrypted on demand into an ephemeral cache (wiped on lock).
- * Each cell carries at most two quiet badges: the
+ * Each cell carries at most two quiet badges (0.17.0 mockup language): the
  * lock — sealed is the default state — and a pin when location OR wifi
  * data is embedded. Small glyphs on translucent dark discs, bottom-left.
  */
@@ -34,7 +34,7 @@ import * as Sharing from 'expo-sharing';
 import { subscribeSeals, subscribeSealJobs, retrySealJob, discardSealJob, cancelSealJob, resumeSealQueue, type SealJobSnapshot } from '../../src/provenance/sealQueue';
 import { ScreenTitle, EmptyState, Chip, Button, Mono } from '../../src/components/ui';
 
-// Grid geometry per the mockup: 3 columns, 9px gutters, 16px page
+// Grid geometry per the 0.17.0 mockup: 3 columns, 9px gutters, 16px page
 // padding, square tiles (.grid{gap:9px;padding:4px 16px 0}).
 const COLS = 3;
 const GAP = 9;
@@ -48,14 +48,14 @@ const JOB_ICON: Record<SealJobSnapshot['kind'], keyof typeof Ionicons.glyphMap> 
 };
 
 /**
- * Seal-failure visibility: vault insertion is the LAST step of
+ * Seal-failure visibility (0.15.1): vault insertion is the LAST step of
  * sealing, so a failed seal used to leave no trace here at all. This row
  * states the failed job plainly — what kind, when it was captured, the
  * verbatim error — and offers a retry (the queue's own failure logic is
  * unchanged; a retry that still fails is marked failed again).
  */
 /**
- * Seal-failure card: the state, stated plainly — what
+ * Seal-failure card (0.17.0 copy v5): the state, stated plainly — what
  * happened, that the capture is safe, two actions, and the verbatim error
  * one drawer down in Full details. Remove discards the queued draft.
  */
@@ -119,7 +119,7 @@ function FailedSealRow({ job }: { job: SealJobSnapshot }) {
 /**
  * A queued or in-flight seal renders IN THE GRID as a loading square —
  * the capture already has a place here; it just isn't sealed yet.
- * a QUEUED job is selectable like any sealed cell — Select
+ * 0.18.3 (Noah): a QUEUED job is selectable like any sealed cell — Select
  * mode can cancel it. An in-flight ('sealing') job is not: the pump has
  * claimed it and a seal in progress never loses work to a stray tap.
  */
@@ -130,7 +130,8 @@ function PendingSealTile({ job, selecting, selected, onToggle }: {
   onToggle: () => void;
 }) {
   const styles = useThemedStyles(buildStyles);
-  // Sealing tiles are selectable too. A mid-seal cancel is honored at the
+  // 0.18.4 (Noah: "allow you to also remove/cancel queued/sealing ones"):
+  // sealing tiles are selectable too — a mid-seal cancel is honored at the
   // pump's pre-write checkpoints (sealQueue.cancelSealJob), never mid-write.
   // The selection dot was also missing here entirely; it now matches the
   // sealed cells exactly.
@@ -183,14 +184,14 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
   // Badge flags: sealed entries carry them in the index;
   // legacy entries are backfilled once from the record — never from media.
   const [flags, setFlags] = useState<VaultFlags | null>(item.flags ?? null);
-  // Pin badge fact #2: wifi embedded. The index flags bundle wifi
+  // Pin badge fact #2 (0.17.0): wifi embedded. The index flags bundle wifi
   // into `identifying`, so the wifi claim itself is read from the sealed
   // record — but only when location alone doesn't already justify the pin.
   const [wifi, setWifi] = useState(false);
   const hasLocation = item.hasLocation || flags?.location === true;
 
   useEffect(() => {
-    // Photos AND videos carry vault-sealed thumbnails (videos were
+    // Photos AND videos carry vault-sealed thumbnails (0.14.0 — videos were
     // bare icons before). Legacy videos without one get a lazy backfill: one
     // frame grabbed from the decrypted media, sealed beside it, then shown.
     // The full-item fallback is photo-only (a video decrypts to an
@@ -280,17 +281,17 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
           {selected ? <Ionicons name="checkmark" size={12} color="#fff" /> : null}
         </View>
       ) : (
-        // Badge row: at most two quiet discs, bottom-left. The lock
+        // Badge row (0.17.0): at most two quiet discs, bottom-left. The lock
         // is always there — sealed is the default state. The pin appears
         // only when location OR wifi data is actually embedded. No identity
         // badge, no bright colors: small dim glyphs on translucent discs.
         <View style={styles.badgeRow}>
           <View style={styles.badge} accessible accessibilityLabel="Sealed">
-            <Ionicons name="lock-closed" size={12} color={colors.text} />
+            <Ionicons name="lock-closed" size={13} color="#FFFFFF" />
           </View>
           {hasLocation || wifi ? (
             <View style={styles.badge} accessible accessibilityLabel="Location or Wi-Fi data embedded">
-              <Ionicons name="location" size={12} color={colors.text} />
+              <Ionicons name="location" size={13} color="#FFFFFF" />
             </View>
           ) : null}
         </View>
@@ -330,7 +331,7 @@ export default function VaultScreen() {
   };
 
   // The selection mixes sealed exhibits (bare ids) and queued captures
-  // ('job:<id>' keys,) — one Select mode, one Remove action; each
+  // ('job:<id>' keys, 0.18.3) — one Select mode, one Remove action; each
   // kind goes through its own discard path.
   const splitSelection = () => {
     const itemIds: string[] = [];
@@ -348,7 +349,7 @@ export default function VaultScreen() {
     const m = jobIds.length;
     if ((n === 0 && m === 0) || deleting) return;
     const sealedCopy = 'These are the only sealed copies. The collection is encrypted on this device and its key never leaves the OS keychain, so no readable copy exists anywhere else. Deleted exhibits cannot be recovered or re-created. Shared/exported copies elsewhere are unaffected.';
-    // Sealing jobs are cancellable too — the copy states the one
+    // 0.18.4: sealing jobs are cancellable too — the copy states the one
     // case a discard can't intercept (a seal already past its final step).
     const queuedCopy = 'Queued or sealing captures are discarded unsealed — their encrypted drafts are deleted. A seal already past its final step completes and lands as a sealed exhibit. This cannot be undone.';
     Alert.alert(
@@ -424,7 +425,7 @@ export default function VaultScreen() {
 
   const exportSelected = () => {
     // Queued captures have no sealed record yet — nothing to export; only
-    // real exhibits count toward the metadata export.
+    // real exhibits count toward the metadata export (0.18.3).
     const n = items.filter((i) => selected.has(i.id)).length;
     if (n === 0 || exporting) return;
     Alert.alert(
@@ -476,15 +477,18 @@ export default function VaultScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        {/* The same ScreenTitle tag prop the Settings header uses, so the
-            word sits on the screen header rather than the tab-bar label. */}
+        {/* BETA tag: the same ScreenTitle tag prop the Settings header uses
+            for "in beta" — same tokens, same styling (0.18.2, Noah: the word
+            belongs on the screen header, not the tab-bar label). */}
         <ScreenTitle title="Exhibits" tag="in beta" subtitle="Manage media. Stored locally." />
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           {items.length > 0 ? (
             <Chip label={`${items.length} exhibit${items.length === 1 ? '' : 's'}`} tone="neutral" icon="albums-outline" />
           ) : null}
-          {/* Select mode covers sealed exhibits, queued captures and sealing
-              jobs, so the toggle stays reachable whenever any of them exist. */}
+          {/* Select mode covers sealed exhibits AND queued captures (0.18.3,
+              Noah) — so it must be reachable when the grid holds only
+              queued work. 0.18.4: sealing jobs are selectable too, so any
+              active job keeps the toggle reachable. */}
           {items.length > 0 || activeJobs.length > 0 ? (
             <TouchableOpacity onPress={selecting ? exitSelect : () => setSelecting(true)}>
               <Text style={styles.selectToggle}>{selecting ? 'Cancel' : 'Select'}</Text>
@@ -544,7 +548,7 @@ export default function VaultScreen() {
       />
 
       {selecting ? (
-        // The pill tab bar
+        // 0.18.4 (Noah: the bar overlapped the tab bar): the pill tab bar
         // is absolutely positioned OVER this screen — the select bar must
         // clear it (the layout's own convention: inset + 64px pill + 10).
         <View style={[styles.selectBar, { marginBottom: Math.max(insets.bottom, 12) + 64 + 10 }]}>
@@ -581,7 +585,7 @@ const buildStyles = () => StyleSheet.create({
   // Each cell carries GAP/2 margin on every side, so the content container
   // insets by the remainder to land the outer edge exactly at PAD.
   gridContent: { paddingHorizontal: PAD - GAP / 2, paddingTop: 4 },
-  // Tile per the mockup: square, 11px radius, 1px hairline border.
+  // Tile per the 0.17.0 mockup: square, 11px radius, 1px hairline border.
   tile: {
     width: CELL,
     aspectRatio: 1,
@@ -674,7 +678,7 @@ const buildStyles = () => StyleSheet.create({
   thumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   thumbSnippet: { padding: spacing.sm, justifyContent: 'flex-start', gap: 5 },
   thumbSnippetText: { color: colors.textDim, fontSize: 10, lineHeight: 13, fontStyle: 'italic' },
-  // Badge row: small translucent dark discs with a
+  // Badge row (0.17.0 mockup language): small translucent dark discs with a
   // hairline light border, dim glyphs, bottom-left, 4px apart. Quiet by
   // design — the lock is the default state, not an alarm.
   badgeRow: {
@@ -685,22 +689,36 @@ const buildStyles = () => StyleSheet.create({
     gap: 4,
   },
   badge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(13,13,15,0.78)',
-    borderWidth: 1,
-    borderColor: 'rgba(232,232,236,0.38)',
+    // 0.18.5 contrast pass (Noah: "even less visible than before — we need
+    // contrast"): a SOLID black disc with a pure-white glyph and a strong
+    // light ring — legible against any photo, bright or busy. Translucency
+    // was the failure mode; gone.
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#0B0B0D',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.85)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   // Kind caption for non-photo tiles — same cap language as the mockup,
   // anchored bottom-right so it never collides with the badge row.
+  // 0.18.5 contrast pass: solid chip, white text (was dim text directly on
+  // the thumbnail — unreadable on busy frames).
   kindCap: {
     position: 'absolute',
     right: 8,
     bottom: 6,
     fontSize: 8.5,
-    color: colors.textDim,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    backgroundColor: '#0B0B0D',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    overflow: 'hidden',
   },
 });

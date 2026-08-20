@@ -140,7 +140,7 @@ export function solarCard(record: AttestationRecord): EvidenceCard {
       measurement: `sun ${round1(pos.elevationDeg)}° BELOW the horizon at the committed place ◌ and time ◌; no shadow grammar applies`,
       gap: 'undecidable: the sun was down; there is no shadow to predict or measure',
       interpretation:
-        'consistent with a night capture; if the photo reads as daylight, that tension is for a person to weigh. This card only places the sun',
+        'consistent with a night capture; if the photo reads as daylight, that disagreement is visible in the committed data. This card only places the sun',
     });
   }
 
@@ -154,7 +154,7 @@ export function solarCard(record: AttestationRecord): EvidenceCard {
       `sun ${Math.round(pos.elevationDeg)}° up, azimuth ${Math.round(pos.azimuthDeg)}°: a 1 m pole throws a ${shadow.poleShadowCm} cm shadow pointing ${shadow.bearingDeg}°; a ${objectCm} cm object throws ${objectShadowCm} cm`,
     gap: 'undecidable: no shadow has been measured in the pixels; shadow reading is image analysis the full Reader runs, not this engine',
     interpretation:
-      'the prediction is exposed for a reviewer to weigh against the photo: shadows in the scene should point ' +
+      'the prediction is shown next to the photo: shadows in the scene should point ' +
       `${shadow.bearingDeg}° and scale with elevation. Agreement is corroboration, disagreement is a question, neither is a conclusion`,
     gauge: { value: round1(pos.elevationDeg), band: [0, 90], units: '° above horizon' },
   });
