@@ -12,7 +12,7 @@ primary_region = "iad"
 
 # Persistent volume so the device registry survives deploys/restarts.
 [mounts]
-  source = "verify_data"
+  source = "sourcekit_data"
   destination = "/data"
 
 [[services]]
