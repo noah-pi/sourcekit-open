@@ -58,7 +58,7 @@ and picture desks, wire services and libel law made the attempt more expensive s
 
 Generative models did not make images forgeable. They made forgery fast and essentially free.
 
-### What the statutes actually demand
+### Every one of these laws leans on one of two technologies
 
 The [National Conference of State Legislatures](https://www.ncsl.org/technology-and-communication/artificial-intelligence-2025-legislation) recorded 1,143 artificial-intelligence
 measures across 53 jurisdictions in 2025, and 2026 is already running ahead of that pace. Sorted
@@ -423,7 +423,7 @@ every one is telling the truth.
 and the signature fails, giving the same verdict a forgery gets. Selective disclosure covers the
 metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.
 
-Most of what this app commits is aimed at the first gap, which stays open however good the
+Most of what Source Kit commits is aimed at the first gap, which stays open however good the
 hardware gets.
 
 ## The danger in a permanent record of everything
