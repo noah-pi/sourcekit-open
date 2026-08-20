@@ -80,7 +80,7 @@ Of those, 319 concern deepfakes, provenance, or transparency. Forty-four have al
 | Housing and rent-setting | 69 | 0 |
 | Energy and data centers | 35 | 3 |
 
-Source: [NCSL, *Artificial Intelligence 2026 Legislation*](https://www.ncsl.org/technology-and-communication/artificial-intelligence-2026-legislation), session to date. Categories
+Source: [NCSL, *Artificial Intelligence 2026 Legislation*](https://www.ncsl.org/technology-and-communication/artificial-intelligence-2026-legislation), as of August 20, 2026. Categories
 collapse NCSL's 24 subject tags; a bill can carry several, so the counts sum past 1,143.
 
 The impulse is not confined to the United States. The [EU AI Act's Article
