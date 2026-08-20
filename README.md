@@ -423,8 +423,8 @@ every one is telling the truth.
 and the signature fails, giving the same verdict a forgery gets. Selective disclosure covers the
 metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.
 
-Most of what Source Kit commits is aimed at the first gap, which stays open however good the
-hardware gets.
+Most of what Source Kit commits is aimed at rephotography, the one failure that stays open
+however good the hardware gets.
 
 ## The danger in a permanent record of everything
 
