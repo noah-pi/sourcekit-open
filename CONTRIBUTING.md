@@ -33,21 +33,6 @@ node tests/stage.mjs                       # then run the suites you touched
 
 The README has more on the lab.
 
-## Something to pick up
-
-**EKU enforcement, in `src/lib/x509.ts`.** The verifier accepts a critical
-`extKeyUsage` extension without checking that it permits what the certificate is
-being used for. A strict list would reject too many real certificates, so right
-now they all pass. The fix is to enforce it where the purpose is known — a
-signing leaf, or a timestamp authority — and fail closed when the EKU excludes
-that use. `tests/test-tsa-eku.mts` already does this for RFC 3161 tokens and
-shows the shape. Start at `RECOGNIZED_CRITICAL_EXTENSIONS`, and update the
-docblock that says "accepted without enforcement" when the behavior changes.
-
-**A file that breaks something.** If you have one, open an issue with the file,
-the suite you ran, and what it printed. That is the most useful thing anyone can
-send.
-
 ## Security
 
 Not in issues, please. See [SECURITY.md](SECURITY.md).
