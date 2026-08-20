@@ -555,7 +555,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <li><b>Key attested by Apple hardware.</b> Apple certifies the key is Enclave-resident on genuine hardware.</li>
         <li><b>Time bracketed by an independent anchor.</b> A pinned-authority countersignature or a verified Bitcoin anchor.</li>
       </ol>
-      <p>Each rung reads <i>reached</i>, <i>not reached</i>, <i>failed</i>, or <i>not applicable</i>, and the unreached ones say why. Unsigned renders neutral grey rather than red, because the absence of a credential is not evidence of tampering. <i>Verified</i>, <i>authentic</i> and <i>trusted</i> all name a conclusion somebody reached, so a test fails the build if any of them turns up in a verdict position. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts">trustLadder.ts</a></p>
+      <p>Each rung reads <i>reached</i>, <i>not reached</i>, <i>failed</i>, or <i>not applicable</i>, and the unreached ones say why. Unsigned renders neutral grey rather than red, because the absence of a credential is not evidence of tampering. <i>Verified</i>, <i>authentic</i> and <i>trusted</i> all name a conclusion somebody reached, so none of them appear in a verdict position anywhere in the app. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts">trustLadder.ts</a></p>
     </div>
   </details>
 

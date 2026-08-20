@@ -210,7 +210,7 @@ rung the file either reaches or does not:
 Each rung reads *reached*, *not reached*, *failed*, or *not applicable*, and the unreached ones
 say why. Unsigned renders neutral grey rather than red, because the absence of a credential is
 not evidence of tampering. *Verified*, *authentic* and *trusted* all name a conclusion somebody
-reached, so a test fails the build if any of them turns up in a verdict position.
+reached, so none of them appear in a verdict position anywhere in the app.
 [trustLadder.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/trustLadder.ts)
 
 - **Media unchanged since signing.** The signature verifies and the bytes match what was signed.
