@@ -309,12 +309,12 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 <!-- ===================== AT A GLANCE ===================== -->
 <section class="block" id="glance-sec" style="border-top:none;padding-top:var(--s-lg)"><div class="wrap">
   <p class="lbl" style="font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--textFaint);margin:0 0 var(--s-md)">What it commits</p>
-  <p class="note" style="margin:0 0 var(--s-lg)">All of it optional, all of it switchable in the viewfinder, all of it readable by any C2PA tool.</p>
+  <p class="note" style="margin:0 0 var(--s-lg)">All of it optional, and all of it switchable in the viewfinder.</p>
 
 <details class="f">
     <summary>Hardware attestation<span class="sum">Proof the key is held somewhere you cannot reach into.</span></summary>
     <div class="fbody">
-      <p>This would be much stronger on a Pixel 10, where the signing key is generated inside the Titan M2, never leaves it, and the phone proves as much to the certificate authority at enrollment. On Apple the best available is App Attest, which certifies that a genuine iPhone is running an unmodified build of this app — and then hands the app no access at all to the key it just attested.</p>
+      <p>This would be much stronger on a Pixel 10, where the signing key is generated inside the Titan M2, never leaves it, and the phone proves as much to the certificate authority at enrollment. On Apple the best available is App Attest, which certifies that a genuine iPhone is running an unmodified build of this app — and then hands the app no access to the key it just attested.</p>
       <p>The two get tied together with a commitment. The attestation's <code>clientDataHash</code> is set to <code>SHA256(challenge ‖ signingPublicKey)</code>, which pins Apple's certificate to this exact key rather than to some key on some genuine device. The binding rides inside every manifest and re-checks offline years later. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts">appAttest.ts</a></p>
     </div>
   </details>
@@ -322,15 +322,15 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <details class="f">
     <summary>Independent timestamping<span class="sum">Time runs one way, which is what makes it provable.</span></summary>
     <div class="fbody">
-      <p>Time is the rare claim that can be proved rather than asserted, because it only moves forward. Nobody can place a digest in a Bitcoin block mined before the file existed, and no timestamp authority will countersign something it has not yet been shown. That one-way property is the whole mechanism.</p>
-      <p>So a capture carries an RFC 3161 countersignature — verified cryptographically on device rather than read off the token — and an OpenTimestamps receipt that lands the record's digest in a block. Newer hardware does this without leaving the phone: the Pixel 10 runs a timestamp authority on the device itself, so a capture made in airplane mode still carries trusted time. Here, offline, the capture signs anyway and names the anchor it is missing. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts">timestamp.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts">ots.ts</a></p>
+      <p>Time is the rare claim that can be proved rather than asserted, because it only moves forward. Nobody can place a digest in a Bitcoin block mined before the file existed, and no timestamp authority will countersign something it has not yet been shown.</p>
+      <p>So a capture carries an RFC 3161 countersignature — verified cryptographically on device rather than read off the token — and an OpenTimestamps receipt that lands the record's digest in a block. Newer hardware does this without leaving the phone: the Pixel 10 runs a timestamp authority on the device itself, so a capture made in airplane mode still carries trusted time. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts">timestamp.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts">ots.ts</a></p>
     </div>
   </details>
 
   <details class="f">
     <summary>Organizational credentials<span class="sum">Optional. The only thing that can attach a name to a key.</span></summary>
     <div class="fbody">
-      <p>A self-signed device key proves consistency and nothing about who you are, and nothing inside the file can fix that. An organization can, by issuing a certificate for the device's public key — which never requires the private key to leave the Secure Enclave. Every signature then chains into the newsroom instead of into itself.</p>
+      <p>A self-signed device key proves consistency and nothing about who you are,. An organization can, by issuing a certificate for the device's public key — which never requires the private key to leave the Secure Enclave. Every signature then chains into the newsroom instead of into itself.</p>
       <p>There is a hands-off version: an organization publishes a static document at <code>/.well-known/sourcekit-org.json</code> listing member fingerprints and their certificates, and a member enters the domain rather than passing files around.</p>
       <p>Revocation stays with the organization's CA, over the OCSP and CRL endpoints in the certificates it issues, so any verifier can ask. A credential that no longer matches the active device key is ignored and flagged. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/orgCert.ts">orgCert.ts</a></p>
     </div>
@@ -339,7 +339,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <details class="f">
     <summary>A verdict that refuses to be a badge<span class="sum">Four questions, four answers, no checkmark.</span></summary>
     <div class="fbody">
-      <p>A checkmark borrows the authority of whoever supposedly did the checking, and there is nobody here to borrow from. So the result is four questions, each answered on its own evidence:</p>
+      <p>A checkmark borrows the authority of whoever did the checking, and there is nobody here to borrow from. So the result is four questions, each answered on its own evidence:</p>
       <ol class="rungs-list">
         <li><b>Media unchanged since signing.</b> The signature verifies and the bytes match what was signed.</li>
         <li><b>Signer identified.</b> Something outside the file vouches for the key — a signed roster or a curated trust list.</li>
@@ -355,7 +355,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <div class="fbody">
       <p>Because the record is sealed at the shutter, it documents where the photographer was standing, when, on which device, and sometimes under what name. For most work that is a credential. For someone photographing a police stop, a picket line or a border crossing, the same file is a piece of evidence about them, carried in voluntarily and impossible to recall once shared.</p>
       <p>So the choosing happens before the shutter, not on export. Every field is committed under its own salt into a signed Merkle tree, which lets a verifier tell three states apart: <b>disclosed</b>, <b>withheld</b> — committed but absent, with no ciphertext to attack — and <b>never-recorded</b>, declared at capture and bound into the root, so a withheld field cannot later be passed off as one that was never collected.</p>
-      <p>Reveal a field later and it still verifies against the original signature. Destroy the seed and the withheld fields become permanently underivable by anyone, including me. What none of it covers is the picture itself: blur a face and the signature breaks. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure">src/disclosure</a></p>
+      <p>Reveal a field later and it still verifies against the original signature. Destroy the seed and the withheld fields become permanently underivable by anyone, including me. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure">src/disclosure</a></p>
     </div>
   </details>
 
@@ -364,7 +364,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <div class="fbody">
       <p>Because the second camera is already there and already running, it costs almost nothing to seal. Source Kit seals a simultaneous downsampled ultra-wide frame into the same file, as a C2PA ingredient with relationship <code>componentOf</code>. Open the photo in any C2PA reader and the second viewpoint is there.</p>
       <p>An ultra-wide sees far more of the room than the frame you composed. A monitor bezel, the edge of a laptop, the glow off an OLED panel — all of it lands in the second view.</p>
-      <p>Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a scene with real depth differently, and no homography removes the difference. On an iPhone Pro they sit <a href="https://arxiv.org/pdf/2506.06037">about 19.2&nbsp;mm apart</a>, which is enough to measure depth out to roughly nine metres from the sealed frame. That is a lot of room, and rephotography lives at the near end of it: a monitor filling the frame sits about 60&nbsp;cm away, nowhere near the limit.</p>
+      <p>Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a scene with real depth differently, and no homography removes the difference. On an iPhone Pro they sit <a href="https://arxiv.org/pdf/2506.06037">about 19.2&nbsp;mm apart</a>, which is enough to measure depth out to roughly nine metres from the sealed frame. Rephotography lives at the near end of that: a monitor filling the frame sits about 60&nbsp;cm away, nowhere near the limit.</p>
 
       <div class="pxlab" data-pxlab>
         <p class="pxlab-title">Parallax range calculator</p>
@@ -405,7 +405,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <p class="pxlab-out" data-out></p>
         <p class="pxlab-note">Disparity = focal length in pixels × baseline ÷ distance, with focal length taken from a 70° horizontal field of view at the analysed width. A patch has to shift by at least one pixel to be measurable, so that is the range floor. Below roughly 9 cm the shift exceeds the ±14 px search window and matching fails outright.</p>
       </div>
-      <p class="note">The card reports the matched-patch count and the median disparity, and leaves the reading to you. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/components/forensic/MultipleLensCard.tsx">MultipleLensCard.tsx</a></p>
+      <p class="note">The card reports the matched-patch count and the median disparity. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/components/forensic/MultipleLensCard.tsx">MultipleLensCard.tsx</a></p>
     </div>
   </details>
 
@@ -413,7 +413,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <summary>The motion of your hand<span class="sum">Nobody holds a phone still, and the wobble is specific.</span></summary>
     <div class="fbody">
       <p>A window of gyroscope and accelerometer samples from around the shutter rides in the record. Not every photograph is handheld — a tripod or a copy stand reads as still, and that is a fine answer. But for the ones that are, hand tremor over a second or two is unglamorous and highly particular, and a generator does not produce it by accident.</p>
-      <p>On a video or a burst — an option in the viewfinder — that trace is drawn against the optical flow of the frames themselves, so the movement the device felt is checked against the movement it saw. Two sensors on two different physical principles, obliged to tell the same story. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts">poseTrace.ts</a></p>
+      <p>On a video or a burst — an option in the viewfinder — that trace is drawn against the optical flow of the frames themselves, so the movement the device felt is checked against the movement it saw. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts">poseTrace.ts</a></p>
     </div>
   </details>
 
@@ -422,7 +422,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <div class="fbody">
       <p>The device knows which way is down from gravity, and roughly where north is from the magnetometer. Together with the fused attitude at the shutter instant, that gives the direction the camera was actually pointing — and each of those predicts something visible in the frame: where the horizon should sit, and, with the signed time and place, which way shadows should fall.</p>
       <p>None of this reads the content of the picture. It looks for agreement between what the sensors claimed and what the frame shows. A recapture of a screen inherits the screen's horizon rather than the phone's.</p>
-      <p>Any one of these values can be spoofed alone. They are useful together: a forgery has to satisfy all of them at once, which is a much harder thing to arrange than any single one. It is a cost rather than a wall, and it is the kind of cost that falls as generative systems get better at physical consistency. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/sensors/context.ts">context.ts</a></p>
+      <p>Any one of these values can be spoofed alone. They are useful together: a forgery has to satisfy all of them at once, which is a much harder thing to arrange than any single one. That is a cost rather than a wall, and the kind of cost that falls as generative systems get better at physical consistency. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/sensors/context.ts">context.ts</a></p>
     </div>
   </details>
 
@@ -431,15 +431,15 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <div class="fbody">
       <p>Because delivery codecs throw away whatever the ear will not miss, they also throw away what forensic work needs. So alongside the compressed track, an uncompressed 16 kHz master is converted from the same native buffers and its hash signed into the record.</p>
       <p>The best-known use is the mains hum. Grids run at 50 or 60 Hz and drift in a pattern that is shared across a whole region and never repeats, so indoor audio carries a rough timestamp nobody can forge without the grid's own history. Matching against a grid database conventionally wants <a href="https://www.sciencedirect.com/science/article/pii/S2352864823000226">ten minutes or more</a> of continuous audio; getting there on shorter clips is an open research problem.</p>
-      <p>The more interesting direction is agreement between channels. The same grid frequency that modulates the hum also modulates the light — fluorescent and LED fixtures flicker at twice the mains rate — so the flicker measured in the picture and the hum measured in the sound are two readings of one physical quantity. A track dubbed in later has no particular reason to agree with the room it is supposed to have been recorded in. That comparison is a live research area rather than a shipped check, and Source Kit does not yet test audio-visual sync itself. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit">capture-kit</a></p>
+      <p>The more interesting direction is agreement between channels. The same grid frequency that modulates the hum also modulates the light — fluorescent and LED fixtures flicker at twice the mains rate — so the flicker measured in the picture and the hum measured in the sound are two readings of one physical quantity. A track dubbed in later has no particular reason to agree with the room it is supposed to have been recorded in. That comparison is a live research area, and Source Kit does not yet check audio-visual sync itself. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit">capture-kit</a></p>
     </div>
   </details>
 
   <details class="f">
     <summary>Forensic checks any person can run<span class="sum">Physics the signed record has to agree with.</span></summary>
     <div class="fbody">
-      <p>A signed timestamp is not only a number. It constrains what the scene is allowed to look like: the sun's elevation and azimuth are deterministic from a time and a place, so a low sun and a noon timestamp do not add up. The card draws where shadows should fall and lets you compare. The committed gyro predicts where level sits in the frame. The motion trace is drawn against the optical flow.</p>
-      <p>Nothing here returns a score. A detector gives a number nobody can audit, and it gets worse exactly as generators improve; this inverts the arrangement, rendering the signed claims against independent physical expectations and leaving the judgment to a person. A check that could not run says so. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/components/forensic">src/components/forensic</a></p>
+      <p>A signed timestamp constrains what the scene is allowed to look like. The sun's elevation and azimuth are deterministic from a time and a place, so a low sun and a noon timestamp do not add up. The card draws where shadows should fall and lets you compare.</p>
+      <p>Nothing here returns a score. Nothing here returns a score. The signed claims are rendered against independent physical expectations, and a check that could not run says so. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/components/forensic">src/components/forensic</a></p>
     </div>
   </details>
 
@@ -483,15 +483,14 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 
     <p>Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team <a href="https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html">carried a dead soldier seventy yards</a> and propped a prop rifle beside him to make a better picture. Soviet censors <a href="https://en.wikipedia.org/wiki/The_Commissar_Vanishes">airbrushed the disgraced out of group portraits</a> for fifty years before Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a skill and an afternoon, and it was picture desks, wire services and libel law that made it all the more expensive to attempt.</p>
 
-    <p>Generative models did not make images forgeable. They made forgery fast and essentially free, which is lighter fluid on an already smouldering sense of reality.</p>
+    <p>Generative models did not make images forgeable. They made forgery fast and essentially free.</p>
 
     <h3 class="lawhed">Legislatures reached for two mechanisms, and both are now law</h3>
-    <p>Forty-nine states have passed <a href="https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/">at least one deepfake statute</a> since 2019 — 244 of them enacted, 58 in 2026 alone — and forty-eight now cover sexually explicit deepfakes, thirty-three political ones. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on 2 August 2026, requiring machine-readable marking of AI output and a visible label on deepfakes. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day, China has required labelling of synthetic media since its deep synthesis rules, and South Korea and Denmark have moved on likeness and consent.</p>
-    <p>The pattern is not American. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on 2 August 2026, requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties up to €15 million or 3% of global turnover. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day. China has required labelling of synthetic text, image, audio and video since its deep synthesis rules, South Korea criminalised sexual deepfakes without an intent-to-distribute test, and Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge; the two technical demands underneath them do not.</p>
+    <p>Forty-nine states have passed <a href="https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/">at least one deepfake statute</a> since 2019 — 244 enacted in all, 58 of them in 2026 — with forty-eight covering sexually explicit deepfakes and thirty-three political ones. The pattern is not American. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on 2 August 2026, requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties up to €15 million or 3% of global turnover. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day, China has required labelling of synthetic media since its deep synthesis rules, South Korea criminalised sexual deepfakes without an intent-to-distribute test, and Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge; the two technical demands underneath them do not.</p>
 
     <h3 class="lawhed">1 / &nbsp;Requiring invisible watermarks on generated media</h3>
     <p>A watermark rides inside what a model generates, and it holds up against ordinary handling. It does not hold up against effort. Regenerating an image through a diffusion model <a href="https://arxiv.org/abs/2408.10446">strips the mark and keeps the picture</a>, one watermark can <a href="https://arxiv.org/abs/2605.16796">overwrite another</a>, and there is <a href="https://github.com/guillaumemeyer/watermarks-remover">tooling for it on GitHub</a>. Open-weight models emit nothing to strip in the first place. Detection has the same shape of problem: a classifier chasing a generator gets worse exactly as the generator improves.</p>
-    <p>The deeper limit is that a watermark can only speak for what a machine made. It says nothing about a photograph, which leaves the person holding real footage with nothing to show. Once everyone knows video can be faked, real video gets dismissed as fake — a move already run in court by <a href="https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/">Tesla's lawyers over recordings of Elon Musk</a> and by <a href="https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/">January 6th defendants over footage from inside the Capitol</a>.</p>
+    <p>A watermark can only speak for what a machine made. It says nothing about a photograph, which leaves the person holding real footage with nothing to show. Once everyone knows video can be faked, real video gets dismissed as fake — a move already run in court by <a href="https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/">Tesla's lawyers over recordings of Elon Musk</a> and by <a href="https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/">January 6th defendants over footage from inside the Capitol</a>.</p>
 
     <h3 class="lawhed">2 / &nbsp;Requiring all media to carry tamper-proof data about its provenance</h3>
     <p>Provenance is a word borrowed from the art trade, where it means the paper trail of a painting's owners — the chain of receipts, bills of sale and catalogue entries that says where a canvas has been since it left the studio. It was never a claim about the painting. A perfect provenance on a forgery is a well-documented forgery, and the trade has bought plenty of those. What the paper trail does is make lying laborious, because the liar has to manufacture a history rather than an object.</p>
@@ -573,7 +572,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <div class="col">
     <p>A photograph starts as charge on a grid of sensor wells and ends as a file. Everything in between — demosaic, lens correction, noise reduction, tone-map, encode — is code that could hand the next stage a different picture. What a signature proves has less to do with the key than with how much of that chain stands between the photons and the signing.</p>
 
-    <p><a href="https://github.com/c2pa-org/conformance-public">C2PA grades signers on two levels</a>: keys protected in software, or keys in hardware with a live attestation from the silicon. The <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10</a> is the first phone to reach the second, signing inside the imaging pipeline with the key in the Titan M2 — the frame never passes through general-purpose code, so there is no seam where another image could be substituted. Qualcomm has the same idea in the Snapdragon secure environment. (Dedicated cameras got here first, starting with Leica in 2023; this is a smartphone story now.)</p>
+    <p><a href="https://github.com/c2pa-org/conformance-public">C2PA grades signers on two levels</a>: keys protected in software, or keys in hardware with a live attestation from the silicon. The <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10</a> is the first phone to reach the second, signing inside the imaging pipeline with the key in the Titan M2 — the frame never passes through general-purpose code, so there is no seam where another image could be substituted. Qualcomm has the same idea in the Snapdragon secure environment. Dedicated cameras got there first, starting with Leica in 2023.</p>
 
     <p>Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in the Secure Enclave, and can attest to nothing upstream of that hand-off. That is the ceiling for a third-party app on iOS, which is why it commits more <i>around</i> the frame rather than claiming more about it.</p>
 
@@ -691,7 +690,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 
   </div>
 
-  <p class="note" style="margin-top:var(--s-xl);max-width:62ch">Everything this app commits is aimed at raising what a forger has to hold consistent at once — geometry, motion, shadows, time — and most of it at the first gap, which stays open however good the hardware gets.</p>
+  <p class="note" style="margin-top:var(--s-xl);max-width:62ch">Most of what this app commits is aimed at the first gap, which stays open however good the hardware gets.</p>
 </div></section>
 
 
@@ -703,7 +702,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 <!-- ===================== SIGNALS ===================== -->
 <section class="block" id="signals"><div class="wrap">
   <h2>The danger in a permanent record of everything</h2>
-  <p class="dek">A file that can prove where it came from can also prove where you were. The tension is real and it does not resolve — it gets decided, capture by capture.</p>
+  <p class="dek">A file that can prove where it came from can also prove where you were.</p>
   <div class="col" style="margin-bottom:var(--s-xl)"><p>A wedding photographer wants every field filled in. A photographer at a protest wants the frame and nothing else: the same GPS fix that corroborates a story for a picture desk will place a named person at a named corner on a named afternoon, and once the file is shared it cannot be recalled. A newsroom byline that vouches for one photograph identifies that photographer in every other one they sign. There is no setting that is correct for both, which is why each of these is switchable in the viewfinder rather than chosen once.</p></div>
 
   <div style="max-width:300px;margin:0 0 var(--s-xl)">
@@ -752,16 +751,15 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 <!-- ===================== YET TO BUILD ===================== -->
 <section class="block" id="next"><div class="wrap">
   <h2>Things I have not built yet</h2>
-  <p class="dek">A short list of what looks worth doing next, and why.</p>
-
+  
   <div class="col">
     <ul class="todo">
-      <li><b>Android.</b> The obvious one. StrongBox gets closer to the sensor than the Secure Enclave allows, and the platform exposes sensors iOS keeps to itself — raw barometric pressure, per-frame camera timestamps, a real multi-camera API. Anything committed there would be stronger than the same claim made here.</li>
-      <li><b>LiDAR.</b> Pro iPhones ship a depth scanner and nothing uses it for provenance. A depth map sealed alongside the frame settles the flat-screen question outright at close range, where parallax is already strongest and rephotography actually happens.</li>
-      <li><b>Optional face blurring that survives the signature.</b> Right now protecting a bystander breaks the seal. A redaction committed at capture — the blur applied before signing, the original never written — would let someone publish a crowd without publishing the crowd's faces.</li>
-      <li><b>More ways to catch rephotography.</b> Moiré from a display's pixel grid, the refresh beat of a panel against a rolling shutter, the polarisation signature of an LCD. Each is a different physical tell, and none needs a model.</li>
-      <li><b>PRNU across several captures.</b> Every sensor has a fixed noise fingerprint. One frame is weak evidence; a set of frames from the same device is much stronger, and it is the kind of check a desk could run over an archive rather than a file.</li>
-      <li><b>Soft binding, and formats that outlive the file.</b> The perceptual fingerprint is already committed; what is missing is somewhere to look it up when a platform strips the manifest. That is the single most valuable unbuilt thing here.</li>
+      <li><b>Android.</b> StrongBox gets closer to the sensor than the Secure Enclave allows, and the platform exposes sensors iOS keeps to itself — raw barometric pressure, per-frame camera timestamps, a real multi-camera API. Anything committed there would be stronger than the same claim made here.</li>
+      <li><b>LiDAR.</b> Pro iPhones ship a depth scanner and nothing uses it for provenance. A sealed depth map answers the flat-screen question directly rather than inferring it from disparity, and it works in the dark.</li>
+      <li><b>Optional face blurring that survives the signature.</b> A redaction committed at capture — the blur applied before signing, the original never written — would let someone publish a crowd without publishing the crowd's faces.</li>
+      <li><b>More ways to catch rephotography.</b> Moiré from a display's pixel grid, the refresh beat of a panel against a rolling shutter, the polarisation signature of an LCD.</li>
+      <li><b>PRNU checks.</b> Every sensor leaves a fixed noise fingerprint. The useful signals are blunt ones: a frame carrying <i>two</i> fingerprints has been composited from two cameras, and a frame carrying <i>none</i> never came off a sensor at all. Neither needs a reference corpus to flag.</li>
+      <li><b>Soft binding, and formats that outlive the file.</b> The perceptual fingerprint is already committed. What is missing is somewhere to look it up.</li>
     </ul>
   </div>
 </div></section>
@@ -770,10 +768,8 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <div class="col">
     <p class="pull">Prove your work.</p>
     <p style="margin-top:var(--s-lg);color:var(--text)">On the first of January, 2027, the lamps come on all over the internet. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853">California</a> will require every platform above two million monthly users to surface provenance data in what its users post, and from 2028 every camera and phone sold in the state must embed it by default. Content Credentials stop being something you can go and check and become something you are shown. Whatever fraction of the internet is carrying a manifest becomes visible in a single day, and nobody knows yet whether the room turns out furnished or bare.</p>
-    <p style="color:var(--textDim)">Most of what is out there will have nothing to show. That is the part worth thinking about before it happens rather than after, because an interface that displays a credential also displays its absence, and absence is the easiest thing in the world to misread. A photograph with no manifest is not a lie. It is a photograph taken on an older phone, or run through an editor that dropped the metadata, or sent by someone with good reasons not to carry a record of where they were standing.</p>
-    <p style="color:var(--textDim)">The art trade has been here before. Its version of the problem was not solved by connoisseurship, which proved unreliable, nor by chemistry, which came later and only ever settled the easy cases. It was solved by paperwork: the expectation that a painting arrive with a history, and the willingness of buyers to treat a gap in that history as a reason to walk away. That never made forgery impossible. It made it laborious, and it moved the argument from the object to the record, where an argument can actually be had.</p>
-    <p style="color:var(--textDim)">The ceiling is low enough to see from here. Everything in this app would have sealed the Cottingley photographs without complaint. Elsie Wright used a real camera and a real plate; the cut-outs stood at a real distance in real light, and two lenses would have measured genuine depth, because there was genuine depth to measure. Every rung reached, every check honest, every one of them telling the truth about a photograph of a lie.</p>
-    <p style="color:var(--textDim)">Provenance cannot tell you the world was as the picture says. What it can do is establish that a file is what it claims to be, and hand the harder question back to a person. That was always the reader's job, and the desk's.</p>
+    <p style="color:var(--textDim)">Most of what is out there will have nothing to show. An interface that displays a credential also displays its absence, and absence is the easiest thing in the world to misread. A photograph with no manifest is not a lie. It is a photograph taken on an older phone, or run through an editor that dropped the metadata, or sent by someone with good reasons not to carry a record of where they were standing.</p>
+    <p style="color:var(--textDim)">Which leaves the question the art dealers never solved either. A file can arrive with a spotless history and still be a picture of cardboard fairies on hatpins, and nothing in the record will say so. Provenance establishes that a file is what it claims to be. The harder question goes back to a person, where it has always been — the reader's, and the desk's.</p>
     <p style="color:var(--textDim)">It does not solve misinformation. It gives an honest photographer a way to show their work, and it makes the alternative more expensive.</p>
     <p style="font-weight:600">— Noah Bassetti-Blum</p>
     <div class="cta" style="margin-top:var(--s-lg)">

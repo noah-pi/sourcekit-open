@@ -289,30 +289,21 @@ fifty years before Photoshop shipped in 1990. Back then a convincing lie took a 
 skill and an afternoon, and it was picture desks, wire services and libel law that made it all
 the more expensive to attempt.
 
-Generative models did not make images forgeable. They made forgery fast and essentially free,
-which is lighter fluid on an already smouldering sense of reality.
+Generative models did not make images forgeable. They made forgery fast and essentially free.
 
 ### Legislatures reached for two mechanisms, and both are now law
 
 Forty-nine states have passed [at least one deepfake
-statute](https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/) since 2019 — 244 of them enacted, 58 in 2026 alone — and forty-eight now cover
-sexually explicit deepfakes, thirty-three political ones. The [EU AI Act's Article
-50](https://artificialintelligenceact.eu/article/50/) became applicable on 2 August 2026,
-requiring machine-readable marking of AI output and a visible label on deepfakes. [California's
-AI Transparency
+statute](https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/) since 2019 — 244 enacted in all, 58 of them in 2026 — with forty-eight covering
+sexually explicit deepfakes and thirty-three political ones. The pattern is not American. The
+[EU AI Act's Article 50](https://artificialintelligenceact.eu/article/50/) became applicable on
+2 August 2026, requiring machine-readable marking of AI output and a visible label on deepfakes,
+with penalties up to €15 million or 3% of global turnover. [California's AI Transparency
 Act](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942) took
 effect the same day, China has required labelling of synthetic media since its deep synthesis
-rules, and South Korea and Denmark have moved on likeness and consent.
-
-The pattern is not American. The [EU AI Act's Article
-50](https://artificialintelligenceact.eu/article/50/) became applicable on 2 August 2026,
-requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties
-up to €15 million or 3% of global turnover. [California's AI Transparency
-Act](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942) took
-effect the same day. China has required labelling of synthetic text, image, audio and video
-since its deep synthesis rules, South Korea criminalised sexual deepfakes without an intent-to-
-distribute test, and Denmark has moved to treat a person's face and voice as their property. The
-mechanisms diverge; the two technical demands underneath them do not.
+rules, South Korea criminalised sexual deepfakes without an intent-to-distribute test, and
+Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge;
+the two technical demands underneath them do not.
 
 ### 1 / Requiring invisible watermarks on generated media
 
@@ -324,12 +315,11 @@ GitHub](https://github.com/guillaumemeyer/watermarks-remover). Open-weight model
 to strip in the first place. Detection has the same shape of problem: a classifier chasing a
 generator gets worse exactly as the generator improves.
 
-The deeper limit is that a watermark can only speak for what a machine made. It says nothing
-about a photograph, which leaves the person holding real footage with nothing to show. Once
-everyone knows video can be faked, real video gets dismissed as fake — a move already run in
-court by [Tesla's lawyers over recordings of Elon Musk](https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/) and by
-[January 6th defendants over footage from inside the
-Capitol](https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/).
+A watermark can only speak for what a machine made. It says nothing about a photograph, which
+leaves the person holding real footage with nothing to show. Once everyone knows video can be
+faked, real video gets dismissed as fake — a move already run in court by [Tesla's lawyers over
+recordings of Elon Musk](https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/) and by [January 6th defendants over
+footage from inside the Capitol](https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/).
 
 ### 2 / Requiring all media to carry tamper-proof data about its provenance
 
@@ -420,14 +410,12 @@ every one is telling the truth.
 and the signature fails, giving the same verdict a forgery gets. Selective disclosure covers the
 metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.
 
-Everything this app commits is aimed at raising what a forger has to hold consistent at once —
-geometry, motion, shadows, time — and most of it at the first gap, which stays open however good
-the hardware gets.
+Most of what this app commits is aimed at the first gap, which stays open however good the
+hardware gets.
 
 ## The danger in a permanent record of everything
 
-A file that can prove where it came from can also prove where you were. The tension is real and
-it does not resolve — it gets decided, capture by capture.
+A file that can prove where it came from can also prove where you were.
 
 A wedding photographer wants every field filled in. A photographer at a protest wants the frame
 and nothing else: the same GPS fix that corroborates a story for a picture desk will place a
@@ -487,27 +475,23 @@ report `SKIP` and are counted separately.
 
 ## Things I have not built yet
 
-A short list of what looks worth doing next, and why.
-
-- **Android.** The obvious one. StrongBox gets closer to the sensor than the Secure Enclave
-allows, and the platform exposes sensors iOS keeps to itself — raw barometric pressure, per-
-frame camera timestamps, a real multi-camera API. Anything committed there would be stronger
-than the same claim made here.
-- **LiDAR.** Pro iPhones ship a depth scanner and nothing uses it for provenance. A depth map
-sealed alongside the frame settles the flat-screen question outright at close range, where
-parallax is already strongest and rephotography actually happens.
-- **Optional face blurring that survives the signature.** Right now protecting a bystander
-breaks the seal. A redaction committed at capture — the blur applied before signing, the
-original never written — would let someone publish a crowd without publishing the crowd's faces.
+- **Android.** StrongBox gets closer to the sensor than the Secure Enclave allows, and the
+platform exposes sensors iOS keeps to itself — raw barometric pressure, per-frame camera
+timestamps, a real multi-camera API. Anything committed there would be stronger than the same
+claim made here.
+- **LiDAR.** Pro iPhones ship a depth scanner and nothing uses it for provenance. A sealed depth
+map answers the flat-screen question directly rather than inferring it from disparity, and it
+works in the dark.
+- **Optional face blurring that survives the signature.** A redaction committed at capture — the
+blur applied before signing, the original never written — would let someone publish a crowd
+without publishing the crowd's faces.
 - **More ways to catch rephotography.** Moiré from a display's pixel grid, the refresh beat of a
-panel against a rolling shutter, the polarisation signature of an LCD. Each is a different
-physical tell, and none needs a model.
-- **PRNU across several captures.** Every sensor has a fixed noise fingerprint. One frame is
-weak evidence; a set of frames from the same device is much stronger, and it is the kind of
-check a desk could run over an archive rather than a file.
+panel against a rolling shutter, the polarisation signature of an LCD.
+- **PRNU checks.** Every sensor leaves a fixed noise fingerprint. The useful signals are blunt
+ones: a frame carrying *two* fingerprints has been composited from two cameras, and a frame
+carrying *none* never came off a sensor at all. Neither needs a reference corpus to flag.
 - **Soft binding, and formats that outlive the file.** The perceptual fingerprint is already
-committed; what is missing is somewhere to look it up when a platform strips the manifest. That
-is the single most valuable unbuilt thing here.
+committed. What is missing is somewhere to look it up.
 
 ## Limits
 
