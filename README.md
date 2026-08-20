@@ -60,13 +60,11 @@ Generative models did not make images forgeable. They made forgery fast and esse
 
 ### Every one of these laws leans on one of two technologies
 
-The [National Conference of State Legislatures](https://www.ncsl.org/technology-and-communication/artificial-intelligence-2025-legislation) recorded 1,143 artificial-intelligence
-measures across 53 jurisdictions in 2025, and 2026 is already running ahead of that pace. Sorted
-by subject, work on deepfakes, provenance and transparency is second by volume. What matters
-more is that it converts: 44 of those bills became law, more than any group except the rules
-states wrote for their own agencies.
+So far in 2026, U.S. state legislatures have introduced 1,143 artificial-intelligence measures.
+Of those, 319 concern deepfakes, provenance, or transparency. Forty-four have already become law
+— more than any other subject except the rules states are writing for their own agencies.
 
-**State AI legislation by subject, 2025**
+**State AI legislation by subject, 2026**
 
 | Subject | Bills introduced | Laws enacted |
 |---|---:|---:|
@@ -82,7 +80,7 @@ states wrote for their own agencies.
 | Housing and rent-setting | 69 | 0 |
 | Energy and data centers | 35 | 3 |
 
-Source: NCSL, *Artificial Intelligence 2025 Legislation*, as of 10 July 2025. Categories
+Source: [NCSL, *Artificial Intelligence 2026 Legislation*](https://www.ncsl.org/technology-and-communication/artificial-intelligence-2026-legislation), session to date. Categories
 collapse NCSL's 24 subject tags; a bill can carry several, so the counts sum past 1,143.
 
 The impulse is not confined to the United States. The [EU AI Act's Article
