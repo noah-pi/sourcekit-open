@@ -84,11 +84,7 @@ states wrote for their own agencies.
 | Energy and data centers | 35 | 3 |
 
 Source: NCSL, *Artificial Intelligence 2025 Legislation*, as of 10 July 2025. Categories
-collapse NCSL's 24 subject tags; a bill can carry several, so the counts sum past 1,143. "Laws
-enacted" excludes 52 adopted resolutions. The deepfakes group is the union of five tags —
-criminal use, child pornography, elections, provenance, notification — and about half the
-notification bills concern chatbot and insurer disclosure rather than synthetic media. Read
-narrowly, the group is 253 introduced and 38 enacted.
+collapse NCSL's 24 subject tags; a bill can carry several, so the counts sum past 1,143.
 
 The contrast underneath those bars is the more interesting finding. Ninety-nine bills on
 algorithmic accountability produced a single statute, and all twenty-five audit mandates died.
