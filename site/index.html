@@ -412,7 +412,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <details class="f">
     <summary>The motion of your hand<span class="sum">Nobody holds a phone still, and the wobble is specific.</span></summary>
     <div class="fbody">
-      <p>A window of gyroscope and accelerometer samples from around the shutter rides in the record. Hand tremor over a second or two is unglamorous and highly particular, and a generator does not produce it by accident.</p>
+      <p>A window of gyroscope and accelerometer samples from around the shutter rides in the record. Not every photograph is handheld — a tripod or a copy stand reads as still, and that is a fine answer. But for the ones that are, hand tremor over a second or two is unglamorous and highly particular, and a generator does not produce it by accident.</p>
       <p>On a video or a burst — an option in the viewfinder — that trace is drawn against the optical flow of the frames themselves, so the movement the device felt is checked against the movement it saw. Two sensors on two different physical principles, obliged to tell the same story. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts">poseTrace.ts</a></p>
     </div>
   </details>
@@ -420,7 +420,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <details class="f">
     <summary>Which way the phone was pointing<span class="sum">Sensor readings the picture itself can contradict.</span></summary>
     <div class="fbody">
-      <p>The device knows which way is down from gravity, and where it was aimed from the fused attitude at the shutter instant. Both predict something visible in the frame: where the horizon should sit, and — with the signed time and place — which way shadows should fall.</p>
+      <p>The device knows which way is down from gravity, and roughly where north is from the magnetometer. Together with the fused attitude at the shutter instant, that gives the direction the camera was actually pointing — and each of those predicts something visible in the frame: where the horizon should sit, and, with the signed time and place, which way shadows should fall.</p>
       <p>None of this reads the content of the picture. It looks for agreement between what the sensors claimed and what the frame shows. A recapture of a screen inherits the screen's horizon rather than the phone's.</p>
       <p>Any one of these values can be spoofed alone. They are useful together: a forgery has to satisfy all of them at once, which is a much harder thing to arrange than any single one. It is a cost rather than a wall, and it is the kind of cost that falls as generative systems get better at physical consistency. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/sensors/context.ts">context.ts</a></p>
     </div>

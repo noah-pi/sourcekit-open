@@ -169,9 +169,10 @@ There is an interactive range calculator for this on the [page](https://noah-pi.
 <details>
 <summary><b>The motion of your hand</b> — nobody holds a phone still, and the wobble is specific</summary>
 
-A window of gyroscope and accelerometer samples from around the shutter rides in the record.
-Hand tremor over a second or two is unglamorous and highly particular, and a generator does not
-produce it by accident.
+A window of gyroscope and accelerometer samples from around the shutter rides in the record. Not
+every photograph is handheld — a tripod or a copy stand reads as still, and that is a fine
+answer. But for the ones that are, hand tremor over a second or two is unglamorous and highly
+particular, and a generator does not produce it by accident.
 
 On a video or a burst — an option in the viewfinder — that trace is drawn against the optical
 flow of the frames themselves, so the movement the device felt is checked against the movement
@@ -183,9 +184,11 @@ it saw. Two sensors on two different physical principles, obliged to tell the sa
 <details>
 <summary><b>Which way the phone was pointing</b> — sensor readings the picture itself can contradict</summary>
 
-The device knows which way is down from gravity, and where it was aimed from the fused attitude
-at the shutter instant. Both predict something visible in the frame: where the horizon should
-sit, and — with the signed time and place — which way shadows should fall.
+The device knows which way is down from gravity, and roughly where north is from the
+magnetometer. Together with the fused attitude at the shutter instant, that gives the direction
+the camera was actually pointing — and each of those predicts something visible in the frame:
+where the horizon should sit, and, with the signed time and place, which way shadows should
+fall.
 
 None of this reads the content of the picture. It looks for agreement between what the sensors
 claimed and what the frame shows. A recapture of a screen inherits the screen's horizon rather
