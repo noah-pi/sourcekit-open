@@ -1,9 +1,13 @@
 # site/assets
 
-Historical images used by the deep-dive page. The binaries aren't committed —
-run `./fetch.sh` to pull them, or let the Pages workflow do it at publish time.
-If a file is absent the page renders that figure as a caption-only block, so
-nothing breaks and no build fails.
+Images used by the deep-dive page.
+
+The `shot-*.jpg` files are screenshots of the app, taken on an iPhone and
+resized to 660px wide. They are committed, because they are ours.
+
+The historical image is not. Run `./fetch.sh` to pull it, or let the Pages
+workflow do it at publish time. If it is absent the page renders that figure
+as a caption-only block, so nothing breaks and no build fails.
 
 | File | Credit | Status |
 |---|---|---|

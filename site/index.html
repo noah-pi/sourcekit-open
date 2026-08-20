@@ -122,6 +122,12 @@ svg .cn.hi { fill:var(--accent); font-weight:700; }
 .shots-frame img.missing { display:none; }
 .shots-fallback { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:var(--s-lg); margin:0; font-size:12.5px; line-height:1.5; color:var(--textFaint); }
 .shots-frame:has(img.on:not(.missing)) .shots-fallback { display:none; }
+.shots-frame { touch-action:pan-y; -webkit-user-select:none; user-select:none; }
+.shots-arrow { position:absolute; top:50%; transform:translateY(-50%); z-index:2; width:34px; height:34px; padding:0; border-radius:50%; border:1px solid var(--border); background:var(--surface); color:var(--textDim); font-size:19px; line-height:1; cursor:pointer; opacity:0; transition:opacity .2s, color .2s; }
+.shots-arrow.prev { left:8px; } .shots-arrow.next { right:8px; }
+.shots:hover .shots-arrow, .shots-arrow:focus-visible { opacity:.92; }
+.shots-arrow:hover { color:var(--text); }
+@media (hover:none) { .shots-arrow { opacity:.85; } }
 .shots-dots { display:flex; gap:6px; justify-content:center; margin-top:var(--s-md); }
 .shots-dots button { width:7px; height:7px; padding:0; border-radius:50%; border:none; cursor:pointer; background:var(--border); transition:background .2s; }
 .shots-dots button[aria-current="true"] { background:var(--accent); }
@@ -318,12 +324,14 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <figure class="shots" data-carousel>
     <div class="shots-frame">
       <img src="assets/shot-viewfinder.jpg" alt="The Source Kit viewfinder: a Sealing on indicator with the signing key fingerprint, Location and Byline toggles, and a live picture-in-picture from the second camera." data-slide class="on" onerror="this.classList.add('missing')">
-      <img src="assets/shot-inspect.jpg" alt="The Inspect screen reading "Unchanged since sealing. Signer unknown." above the photograph with an estimated horizon drawn across it." data-slide onerror="this.classList.add('missing')">
+      <img src="assets/shot-inspect.jpg" alt="The Inspect screen reading &quot;Unchanged since sealing. Signer unknown.&quot; above the photograph with an estimated horizon drawn across it." data-slide onerror="this.classList.add('missing')">
       <img src="assets/shot-ladder.jpg" alt="The four-rung ladder: media unchanged, key attested and time bracketed all reached, signer identified left unreached because local history is not vouching." data-slide onerror="this.classList.add('missing')">
       <img src="assets/shot-integrity.jpg" alt="The Integrity card: App Attest assertion embedded, a 1.9 second shutter-to-signature gap, sensor-frame timing, and the two camera views compared with a slider." data-slide onerror="this.classList.add('missing')">
       <img src="assets/shot-motion.jpg" alt="The Motion trace card: picture drift between frames plotted against the gyroscope, with the estimated horizon below." data-slide onerror="this.classList.add('missing')">
       <img src="assets/shot-shadows.jpg" alt="The Shadows card giving the sun at 56 degrees with shadows running northeast, and a Weather card comparing the sealed time and place against the Open-Meteo archive." data-slide onerror="this.classList.add('missing')">
       <p class="shots-fallback">Screenshots are not bundled.</p>
+      <button class="shots-arrow prev" type="button" data-prev aria-label="Previous screenshot">&#8249;</button>
+      <button class="shots-arrow next" type="button" data-next aria-label="Next screenshot">&#8250;</button>
     </div>
     <div class="shots-dots" data-dots></div>
     <figcaption data-shotcap></figcaption>
@@ -343,10 +351,10 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
       <img class="photo" style="border-radius:6px" src="assets/cottingley.jpg" alt="The 1917 Cottingley Fairies photograph: a young girl resting her chin on her hand, with paper cut-out fairies dancing in front of her."
            onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
       <div class="photo-fallback">
-        <b>Frances Griffiths and the Cottingley Fairies, 1917.</b><br>
         Image not bundled — run <code>site/assets/fetch.sh</code> to pull the public-domain original from Wikimedia Commons.
       </div>
     </div>
+    <figcaption style="font-size:11.5px;line-height:1.55;color:var(--textFaint);margin-top:var(--s-sm)"><b>Frances Griffiths and the Cottingley Fairies, 1917.</b> Photograph by Elsie Wright, first published in <i>The Strand Magazine</i>, December 1920. Public domain in the United States; via <a href="https://commons.wikimedia.org/wiki/File:Cottingley_Fairies_1.jpg">Wikimedia Commons</a>.</figcaption>
   </figure>
 
   <div class="col">
@@ -946,6 +954,47 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
       dots.appendChild(b);
     });
   }
+  var frame = root.querySelector('.shots-frame');
+  var prevBtn = root.querySelector('[data-prev]'), nextBtn = root.querySelector('[data-next]');
+
+  function step(n) { show(i + n); start(); }
+  if (slides.length > 1) {
+    if (prevBtn) prevBtn.addEventListener('click', function () { step(-1); });
+    if (nextBtn) nextBtn.addEventListener('click', function () { step(1); });
+
+    // Swipe, on touch and on a trackpad drag alike.
+    var x0 = null, y0 = null, dragging = false;
+    function down(x, y) { x0 = x; y0 = y; dragging = true; stop(); }
+    function up(x, y) {
+      if (!dragging) return;
+      dragging = false;
+      var dx = x - x0, dy = y - y0;
+      // Ignore a drag that is mostly vertical — that is the page scrolling.
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) step(dx < 0 ? 1 : -1);
+      else start();
+    }
+    frame.addEventListener('touchstart', function (e) {
+      down(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    }, { passive: true });
+    frame.addEventListener('touchend', function (e) {
+      up(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+    }, { passive: true });
+    frame.addEventListener('mousedown', function (e) { down(e.clientX, e.clientY); });
+    window.addEventListener('mouseup', function (e) { up(e.clientX, e.clientY); });
+
+    // Arrow keys, once the carousel has focus.
+    root.setAttribute('tabindex', '0');
+    root.setAttribute('role', 'group');
+    root.setAttribute('aria-label', 'Source Kit screenshots');
+    root.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+    });
+  } else {
+    if (prevBtn) prevBtn.remove();
+    if (nextBtn) nextBtn.remove();
+  }
+
   if (slides.length) { show(0); if (slides.length > 1) start(); }
   root.addEventListener('mouseenter', stop);
   root.addEventListener('mouseleave', function () { if (slides.length > 1) start(); });
