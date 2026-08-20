@@ -317,12 +317,13 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   </div>
   <figure class="shots" data-carousel>
     <div class="shots-frame">
-      <img src="assets/shot-viewfinder.png" alt="The Source Kit viewfinder: a Sealing on indicator with the signing key fingerprint, Location and Byline toggles, and a live picture-in-picture from the second camera." data-slide class="on" onerror="this.classList.add('missing')">
-      <img src="assets/shot-integrity.png" alt="The Integrity card: App Attest assertion embedded, a 1.9 second shutter-to-signature gap, sensor-frame timing, and the two synchronized camera views compared side by side." data-slide onerror="this.classList.add('missing')">
-      <img src="assets/shot-motion.png" alt="The Motion trace card: picture drift between frames plotted against the gyroscope's record of how the phone was twisting at the same moment." data-slide onerror="this.classList.add('missing')">
-      <img src="assets/shot-capture-detail.png" alt="The Capture card: a countersigned timestamp, a pending Bitcoin anchor, location and Wi-Fi both marked redacted by signer, device model and sealed sensor readings." data-slide onerror="this.classList.add('missing')">
-      <img src="assets/shot-share.png" alt="The share sheet offering a re-sealed copy with name, organization and location redacted, or the original file exactly as sealed." data-slide onerror="this.classList.add('missing')">
-      <p class="shots-fallback">Screenshots are not bundled. Drop the five PNGs into <code>site/assets/</code>.</p>
+      <img src="assets/shot-viewfinder.jpg" alt="The Source Kit viewfinder: a Sealing on indicator with the signing key fingerprint, Location and Byline toggles, and a live picture-in-picture from the second camera." data-slide class="on" onerror="this.classList.add('missing')">
+      <img src="assets/shot-inspect.jpg" alt="The Inspect screen reading "Unchanged since sealing. Signer unknown." above the photograph with an estimated horizon drawn across it." data-slide onerror="this.classList.add('missing')">
+      <img src="assets/shot-ladder.jpg" alt="The four-rung ladder: media unchanged, key attested and time bracketed all reached, signer identified left unreached because local history is not vouching." data-slide onerror="this.classList.add('missing')">
+      <img src="assets/shot-integrity.jpg" alt="The Integrity card: App Attest assertion embedded, a 1.9 second shutter-to-signature gap, sensor-frame timing, and the two camera views compared with a slider." data-slide onerror="this.classList.add('missing')">
+      <img src="assets/shot-motion.jpg" alt="The Motion trace card: picture drift between frames plotted against the gyroscope, with the estimated horizon below." data-slide onerror="this.classList.add('missing')">
+      <img src="assets/shot-shadows.jpg" alt="The Shadows card giving the sun at 56 degrees with shadows running northeast, and a Weather card comparing the sealed time and place against the Open-Meteo archive." data-slide onerror="this.classList.add('missing')">
+      <p class="shots-fallback">Screenshots are not bundled.</p>
     </div>
     <div class="shots-dots" data-dots></div>
     <figcaption data-shotcap></figcaption>
@@ -678,7 +679,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <details class="f">
     <summary>Works without a network<span class="sum">Sealing and verifying both, with the radio off.</span></summary>
     <div class="fbody">
-      <p>No accounts, no analytics, no launch-time network calls, and no registry address bundled in the app. Three optional calls exist: a timestamp authority, a Bitcoin anchor, and an organization directory you host. Each is named in the docs, and a capture made offline signs anyway and says which anchors are missing.</p>
+      <p>No accounts, no analytics, no launch-time network calls, and no registry address bundled in the app. Sealing reaches the network only for a timestamp authority and a Bitcoin anchor, and a capture made offline signs anyway and says which anchors are missing. Reading a file can reach further: the weather comparison sends the sealed coordinates to a third party. All eight calls are enumerated in the docs with what each one discloses.</p>
       <p>Apple's Reference Image sends the raw image, sensor signatures and hardware identifiers to Private Cloud Compute and returns an authenticated copy. That is a reasonable trade for most people, and not available to someone who cannot afford to be seen talking to a server. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/NETWORK.md">NETWORK.md</a></p>
     </div>
   </details>
@@ -814,16 +815,16 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 
   <figure class="trip">
     <div>
-      <img src="assets/shot-viewfinder.png" alt="The viewfinder with Location and Byline shown as separate toggles." onerror="this.parentElement.classList.add('empty')">
-      <figcaption><b>At the shutter.</b> Each field is its own switch, and what you leave off is bound into the signature as never-recorded.</figcaption>
+      <img src="assets/shot-settings.jpg" alt="The settings screen splitting what gets recorded into two groups: identifying fields sealed into the file, and evidence about the moment rather than the photographer." onerror="this.parentElement.classList.add('empty')">
+      <figcaption><b>Before the shutter.</b> The list is split in two — what identifies you, and what describes the moment — with the identifying half off by default.</figcaption>
     </div>
     <div>
-      <img src="assets/shot-share.png" alt="The share sheet offering a re-sealed redacted copy or the original." onerror="this.parentElement.classList.add('empty')">
-      <figcaption><b>At export.</b> A second decision, made per recipient: a re-sealed copy with name, organization and location removed, or the file exactly as sealed.</figcaption>
+      <img src="assets/shot-share.jpg" alt="The share sheet offering a re-sealed copy with name, organization and location redacted, or the original file exactly as sealed." onerror="this.parentElement.classList.add('empty')">
+      <figcaption><b>At export.</b> A second decision, per recipient: a re-sealed copy with the identifying fields removed, or the file exactly as sealed.</figcaption>
     </div>
     <div>
-      <img src="assets/shot-capture-detail.png" alt="A recipient's view showing location and Wi-Fi marked redacted by signer." onerror="this.parentElement.classList.add('empty')">
-      <figcaption><b>What a recipient sees.</b> Redacted by signer, stated as such — not a gap they have to interpret.</figcaption>
+      <img src="assets/shot-capture-detail.jpg" alt="A recipient's view of the capture record, showing location and Wi-Fi both marked redacted by signer." onerror="this.parentElement.classList.add('empty')">
+      <figcaption><b>What a recipient sees.</b> Redacted by signer, stated as such rather than left as a gap to interpret.</figcaption>
     </div>
   </figure>
 
@@ -915,11 +916,12 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   if (!root) return;
   var slides = [].slice.call(root.querySelectorAll('[data-slide]'));
   var caps = [
-    'The viewfinder. Every field is a toggle, and the second camera is already running.',
+    'The viewfinder. Sealing is on, the second camera is already running, and every field is a switch.',
+    'The verdict. Unchanged since sealing, signer unknown — two separate findings, neither one a checkmark.',
+    'Four questions, answered on their own evidence. The unreached one says why.',
     'What was checked, and how long the bytes sat unsigned after the shutter.',
     'The picture drifting between frames, against the gyroscope at the same moment.',
-    'A capture record with location and Wi-Fi redacted by the signer.',
-    'Sharing: a re-sealed redacted copy, or the file exactly as sealed.'
+    'Where the sun was, from the sealed time and place, beside what the official record says the weather was.'
   ];
   if (slides.length < 2) { var d = root.querySelector('[data-dots]'); if (d) d.remove(); }
   var dots = root.querySelector('[data-dots]');
