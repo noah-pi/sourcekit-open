@@ -427,6 +427,8 @@ function SummaryLine({ record, report, signerTrust, placeName }: {
 
 /** Device clock vs countersigned time: disagreement beyond this turns red. */
 const DEVICE_CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
+/** De-identified copies re-sign after the fact — a wider, stated tolerance. */
+const DEID_CLOCK_TOLERANCE_MS = 15 * 60 * 1000;
 
 function fmtWhen(iso: string): string {
   const d = new Date(iso);
@@ -497,10 +499,12 @@ function fmtAt(iso: string): string {
  * a strictly separate row below. Same derivation and strings as the
  * Inspect screen's Timestamp row — the two never drift.
  */
-function TimestampBlock({ report, otsView, capturedAt }: {
+function TimestampBlock({ report, otsView, capturedAt, deidentified }: {
   report: VerificationReport | null;
   otsView: OtsView | null;
   capturedAt: string;
+  /** A de-identified copy is re-signed after the fact — its clock/anchor gap gets a wider tolerance. */
+  deidentified?: boolean;
 }) {
   useEffectiveScheme(); // re-render on palette flip — this component reads colors.* inline
   const ts = report?.c2pa?.timestamps ?? null;
@@ -522,9 +526,12 @@ function TimestampBlock({ report, otsView, capturedAt }: {
   // The device clock, red only on a real disagreement with the anchor.
   const disagrees =
     anchorIso !== null && !isNaN(anchorMs) && !isNaN(capturedMs) &&
-    Math.abs(capturedMs - anchorMs) > DEVICE_CLOCK_TOLERANCE_MS;
+    Math.abs(capturedMs - anchorMs) > (deidentified ? DEID_CLOCK_TOLERANCE_MS : DEVICE_CLOCK_TOLERANCE_MS);
 
-  const failed = ts ? ts.present - ts.valid : 0;
+  // Unchecked tokens (parse/coverage gaps in this verifier) are disclosed
+  // on their own neutral row — never folded into the red failure count.
+  const failed = ts ? ts.present - ts.valid - (ts.unchecked ?? 0) : 0;
+  const uncheckedTokens = ts?.unchecked ?? 0;
 
   return (
     <View>
@@ -543,6 +550,12 @@ function TimestampBlock({ report, otsView, capturedAt }: {
           label="Countersignatures"
           value={`${failed} token${failed === 1 ? '' : 's'} FAILED verification`}
           valueColor={colors.danger}
+        />
+      ) : uncheckedTokens > 0 ? (
+        <NlRow
+          label="Countersignatures"
+          value={`${uncheckedTokens} token${uncheckedTokens === 1 ? '' : 's'} not checkable by this build`}
+          detail="A limitation of this verifier — not a finding against the file."
         />
       ) : null}
       {otsView ? (
@@ -1373,7 +1386,7 @@ export default function AssetScreen() {
               onToggle={() => setGroupOpen((g) => ({ ...g, capture: !g.capture }))}
             >
               <Text style={nl.drawerHead}>When &amp; Where</Text>
-              <TimestampBlock report={report} otsView={otsView} capturedAt={record.capturedAt} />
+              <TimestampBlock report={report} otsView={otsView} capturedAt={record.capturedAt} deidentified={!!record.deidentified} />
               {/* 0.18.6 (Noah): 'redacted' in an anonymous-mode capture means
                   no byline was ever provided — the word "redacted" asserts a
                   removal that never happened. Only a de-identified COPY
@@ -1651,7 +1664,7 @@ export default function AssetScreen() {
                     ? 'assignment'
                     : null,
                 timestamps: report.c2pa
-                  ? { present: report.c2pa.timestamps.present, valid: report.c2pa.timestamps.valid, trusted: report.c2pa.timestamps.trusted }
+                  ? { present: report.c2pa.timestamps.present, valid: report.c2pa.timestamps.valid, trusted: report.c2pa.timestamps.trusted, unchecked: report.c2pa.timestamps.unchecked ?? 0 }
                   : { present: 0, valid: 0, trusted: 0 },
                 ots,
               });
@@ -1906,7 +1919,7 @@ const buildNl = () => StyleSheet.create({
     paddingVertical: 7,
     gap: spacing.md,
   },
-  label: { color: colors.textFaint, fontSize: fontSize.sm, width: 110 },
+  label: { color: colors.textFaint, fontSize: fontSize.sm, width: 126, flexShrink: 0 },
   valueWrap: { flex: 1, alignItems: 'flex-end' },
   value: { color: colors.text, fontSize: fontSize.sm, textAlign: 'right' },
   detail: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16, marginTop: 2, textAlign: 'right' },

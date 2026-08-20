@@ -102,12 +102,11 @@ const expected = new Set<number>();
 const addRange = (start: number, end: number) => { for (let j = start; j < end; j++) expected.add(j); };
 const addField = (name: string) => { const f = byName.get(name)!; addRange(f.start, f.end); };
 addField('APP11 En');
-// Z's low three bytes are load-bearing since the chain-hardening
-// (extractC2paStore: a broken/renumbered Z chain is stated absence, never a
-// guess) — flipping them is DETECTED, so they leave the allowlist. Only the
-// high byte stays malleable: app11Envelope ignores payload[4] on read
-// ('payload[4] is always 0 in practice'). docs/INTEGRITY.md matches.
-{ const f = byName.get('APP11 Z')!; addRange(f.start, f.start + 1); }          // ignored high byte only
+// APP11 Z is fully load-bearing as of 0.18.8. The low three bytes were
+// already covered by the chain-hardening in extractC2paStore (a broken or
+// renumbered Z chain is stated absence, never a guess); the high byte used
+// to be ignored on read and is now checked too, so the whole field leaves
+// the allowlist. docs/INTEGRITY.md matches.
 { const f = byName.get('store jumb.length')!; addRange(f.start, f.end - 1); }        // high 3 bytes only
 { const f = byName.get('store jumd.uuid')!; addRange(f.start + 4, f.end); }          // suffix after 'c2pa' prefix
 addField('store jumd.label');
@@ -156,7 +155,7 @@ check('documented allowlist bytes are all malleable (doc ↔ reality)', missing.
   `offsets documented but protected: ${missing.slice(0, 12).join(',')}`);
 check('no malleable byte outside the documented allowlist + length swing bytes (the set cannot silently grow)', unexpected.length === 0,
   `offsets malleable but undocumented: ${unexpected.slice(0, 12).join(',')}`);
-check('allowlist size matches docs/INTEGRITY.md (153 fixed + up to 2 swing)', expected.size === 153, String(expected.size));
+check('allowlist size matches docs/INTEGRITY.md (152 fixed + up to 2 swing)', expected.size === 152, String(expected.size));
 
 // Named protected regions, asserted by name so failures read clearly.
 const protectedField = (name: string) => {

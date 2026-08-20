@@ -53,8 +53,27 @@ public final class ExhibitCameraPreviewView: ExpoView {
     previewLayer.videoGravity = .resizeAspectFill
   }
 
+  /// 0.18.8 crash hardening: nil the PiP layer's session on the module's
+  /// behalf. `setSessionWithNoConnection(_:)` is non-optional in this SDK,
+  /// and a no-connection layer retains its session — clearing it here, on
+  /// main, keeps the session's final release off the Fig workloop queues.
+  func detachPipFromSession() {
+    dispatchPrecondition(condition: .onQueue(.main))
+    pipLayer?.session = nil
+  }
+
   deinit {
-    previewLayer.session = nil
+    // Fabric can deallocate views OFF the main thread. Unbinding the preview
+    // layer here triggered exactly the fielded SIGABRT class: layer dealloc →
+    // session dealloc → detachFromFigCaptureSession assert on a Fig workloop
+    // while a commit was in flight on main. Hop the unbind to main and RETAIN
+    // the layer through the hop, so both release deterministically there.
+    let pl = previewLayer
+    if Thread.isMainThread {
+      pl.session = nil
+    } else {
+      DispatchQueue.main.async { pl.session = nil }
+    }
   }
 
   // MARK: - Module wiring (called from the module's View Prop handlers)
@@ -90,7 +109,7 @@ public final class ExhibitCameraPreviewView: ExpoView {
     onPreviewReady(["signal": signal])
   }
 
-  // MARK: - Alt-view PiP (transparency: the second camera's feed
+  // MARK: - Alt-view PiP (0.14.0 — transparency: the second camera's feed
   // is on screen exactly while it is attached)
 
   /// The PiP layer is a SUBLAYER of the preview layer — display-only; the

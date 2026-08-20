@@ -23,8 +23,10 @@ import { getThumbnailAsync } from 'expo-video-thumbnails';
 
 import * as FileSystem from 'expo-file-system/legacy';
 
+import { sha256 } from '@noble/hashes/sha256';
+
 import { colors, spacing, fontSize, useThemedStyles } from '../../theme';
-import { base64ToBytes } from '../../lib/bytes';
+import { base64ToBytes, bytesToHex } from '../../lib/bytes';
 import { writeFileBytes } from '../../lib/fileHash';
 import { ForensicCard, NotRecorded } from './ForensicCard';
 import { decodeBytesToGray, decodeUriToGray, measureParallax, type ParallaxResult } from './grayMatch';
@@ -61,14 +63,39 @@ function PrimaryView({ kind, uri, atSeconds, style }: {
 
 function VideoPrimary({ uri, atSeconds, style }: { uri: string; atSeconds: number; style: object }) {
   const [thumbUri, setThumbUri] = useState<string | null>(null);
+  const [exhausted, setExhausted] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    getThumbnailAsync(uri, { time: Math.max(0, Math.round(atSeconds * 1000)) })
-      .then((t) => { if (!cancelled) setThumbUri(t.uri); })
-      .catch(() => { if (!cancelled) setThumbUri(null); });
+    setExhausted(false);
+    // 0.18.8 field fix ("fades from the original view to a black box" on
+    // exported videos): ONE seek attempt meant a single bad extract (t=0 on
+    // a moov-last export, a slow content-uri read) left the whole blend box
+    // on its near-black background. Walk the same fallback ladder the
+    // parallax measurement already uses before declaring failure.
+    const anchorMs = Math.max(0, Math.round(atSeconds * 1000));
+    const attempts = [anchorMs, 0, 250, 1000].filter((v, i, a) => a.indexOf(v) === i);
+    (async () => {
+      for (const time of attempts) {
+        try {
+          const t = await getThumbnailAsync(uri, { time });
+          if (!cancelled) setThumbUri(t.uri);
+          return;
+        } catch { /* try the next offset */ }
+      }
+      if (!cancelled) setExhausted(true);
+    })();
     return () => { cancelled = true; };
   }, [uri, atSeconds]);
-  if (!thumbUri) return <View style={style} />;
+  if (!thumbUri) {
+    // Total failure is stated, never a silent black box.
+    return exhausted ? (
+      <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={{ color: colors.textFaint, fontSize: fontSize.xs, textAlign: 'center', paddingHorizontal: 16 }}>
+          The primary frame could not be extracted from this file on this device.
+        </Text>
+      </View>
+    ) : <View style={style} />;
+  }
   return <Image source={{ uri: thumbUri }} style={style} contentFit="cover" />;
 }
 
@@ -159,8 +186,14 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   // the committed frame bytes are materialized to the (plain, shred-on-lock)
   // cache once and shown from there.
   const [secondaryUri, setSecondaryUri] = useState<string | null>(null);
+  // 0.18.8: a materialized frame that expo-image cannot DECODE rendered as
+  // an opaque black layer over the primary — the field's "fades to a black
+  // box". A decode failure is a fact about this device, stated in words,
+  // never pixels.
+  const [secondaryDecodeFailed, setSecondaryDecodeFailed] = useState(false);
   useEffect(() => {
     let cancelled = false;
+    setSecondaryDecodeFailed(false);
     if (!shownFrame) {
       setSecondaryUri(null);
       return;
@@ -175,11 +208,18 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
     // fingerprint is raw base64 — a '/' in it made the cache path traverse
     // a nonexistent directory, the write failed, and the blend view
     // silently disappeared. Strip to a path-safe alphabet.
-    const frameKey = (shownFrame.sha256?.slice(0, 16)
-      ?? `${shownFrame.dataBase64.length}-${shownFrame.dataBase64.slice(0, 24)}`)
+    // 0.18.8: exported-video frames carry no committed sha256, and the old
+    // fallback fingerprint (length + first 24 base64 chars) was effectively
+    // "length + the universal JFIF header" — every real JPEG shares those
+    // 24 characters, so two same-length frames COLLIDED on one cache path
+    // and expo-image's URI-keyed decode cache served the wrong (or a stale,
+    // half-overwritten) image. Hash the decoded bytes: unique per frame,
+    // stable across visits.
+    const frameBytes = base64ToBytes(shownFrame.dataBase64);
+    const frameKey = (shownFrame.sha256?.slice(0, 16) ?? bytesToHex(sha256(frameBytes)).slice(0, 16))
       .replace(/[^A-Za-z0-9-]/g, '');
     const path = `${FileSystem.cacheDirectory}forensic-secondary-view-${frameKey}.jpg`;
-    writeFileBytes(path, base64ToBytes(shownFrame.dataBase64))
+    writeFileBytes(path, frameBytes)
       .then(() => {
         if (!cancelled) setSecondaryUri(path);
       })
@@ -278,7 +318,10 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
       ) : (
         <View>
           <Text style={styles.lead}>Two synchronized views of the same moment</Text>
-          {primaryUri && secondaryUri ? (
+          {secondaryDecodeFailed ? (
+            <Text style={styles.parallaxText}>The committed second-camera frame is on the file, but this device could not decode it for display.</Text>
+          ) : null}
+          {primaryUri && secondaryUri && !secondaryDecodeFailed ? (
             <View>
               <View style={styles.compareBox}>
                 {/* 0.18.6 (Noah): the primary frame follows the SELECTED
@@ -286,7 +329,12 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
                     primary thumbnail to that pair's moment. */}
                 <PrimaryView kind={kind} uri={primaryUri} atSeconds={shownPtsSeconds} style={StyleSheet.absoluteFill} />
                 <View style={[StyleSheet.absoluteFill, { opacity: mix }]}>
-                  <Image source={{ uri: secondaryUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                  <Image
+                    source={{ uri: secondaryUri }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    onError={() => setSecondaryDecodeFailed(true)}
+                  />
                 </View>
                 <View style={[styles.mixTag, { left: 8 }]}>
                   <Text style={styles.mixTagText}>Primary</Text>

@@ -24,7 +24,7 @@
  * Pure module — no React Native dependencies.
  */
 
-import { concatBytes, asciiToBytes } from '../../src/lib/bytes';
+import { concatBytes, asciiToBytes } from '../lib/bytes';
 
 /** The C2PA usertype for uuid boxes, per spec (NOT the JUMBF "c2pa" prefix UUID). */
 export const C2PA_UUID_BYTES = new Uint8Array([

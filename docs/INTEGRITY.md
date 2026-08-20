@@ -190,7 +190,7 @@ re-wrapped and padded without re-signing.
 
 ### The malleable set — JPEG (APP11/JUMBF)
 
-Flipping any of these changes nothing **this** verifier reports: 153 fixed
+Flipping any of these changes nothing **this** verifier reports: 152 fixed
 bytes, plus up to 2 length low-bytes under the swing rule below.
 
 The number comes from measurement, not from reading the spec.
@@ -206,7 +206,6 @@ or another implementation would catch some of these bytes is untested here.
 | Field | Bytes | Why it's outside the hash |
 |---|---|---|
 | APP11 `En` (instance) | 2 | ISO 19566-5 transport framing; multi-segment reassembly metadata |
-| APP11 `Z` high byte | 1 | Ignored on read (`payload[4]`) |
 | store `jumb.length` (high 3 bytes) | 3 | Box lengths are parser scaffolding; see the swing rule |
 | store `jumd.uuid` suffix, after the `c2pa` prefix | 12 | The parser reads the prefix; the suffix is spec-fixed padding |
 | store `jumd.label` (`c2pa`) | 5 | Manifests are located by structure, not by this string |
@@ -216,7 +215,7 @@ or another implementation would catch some of these bytes is untested here.
 | claim `cbor` leaf length (high 3) + type | 7 | The claim is read by box position |
 | assertions `jumd.uuid` (`c2as`) | 16 | Framing around the set; each assertion's content is claim-hashed |
 | signature `jumd.uuid` (`c2cs`) + `jumd.toggle` | 17 | Framing around the COSE block |
-| signature `cbor` leaf length (high 3) + type | 7 | The COSE payload is located by box position |
+| signature `cbor` leaf length (all 4) + type | 8 | The COSE payload is located by box position, so its length is not read |
 
 **Swing rule.** The low byte of `store jumb.length` and of the claim `cbor` leaf
 length is malleable exactly when the flipped value doesn't truncate a box the
@@ -229,10 +228,10 @@ The COSE payload slot used to be in this set. C2PA requires a detached payload
 (CBOR null) and the parser didn't check the slot. It does now — a
 non-conformant embedded payload fails rather than being ignored.
 
-`Z`'s low three bytes carry the packet-sequence number, and reassembly enforces
-it: a chain with a gap, a duplicate or non-contiguous packets is reported as
-absence rather than guessed at. Only the high byte, which the reader ignores,
-stays malleable.
+`Z` carries the packet-sequence number and is now fully load-bearing.
+Reassembly enforces the low three bytes — a chain with a gap, a duplicate or
+non-contiguous packets is reported as absence rather than guessed at — and as
+of 0.18.8 the high byte is checked too, where it used to be ignored on read.
 
 ### Video (BMFF uuid box)
 

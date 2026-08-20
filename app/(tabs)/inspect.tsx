@@ -64,7 +64,7 @@ import {
 import { solarPosition } from '../../src/reader/verify/solar';
 import { getDeviceKey } from '../../src/lib/deviceKey';
 import { resolveSignerTrust, type SignerTrust, type TrustTier } from '../../src/lib/trustProvider';
-import { projectTrustLadder, type LadderInput } from '../../src/lib/trustLadder';
+import { projectTrustLadder, type LadderInput, type TrustLadder } from '../../src/lib/trustLadder';
 import { TrustLadderCard } from '../../src/components/TrustLadder';
 import { listItems } from '../../src/vault/vaultFs';
 import { payloadDigest } from '../../src/lib/sign';
@@ -573,15 +573,24 @@ function SealRows({ report }: { report: VerificationReport }) {
       ? "Apple's device-integrity assertion rides inside the signed file; checkable offline against Apple's root."
       : 'The hardware check failed. A Source Kit attestation can be checked offline against Apple’s root.';
   const chain = c2pa?.certChain;
+  // checked === false means THIS verifier could not evaluate the chain at
+  // all (unsupported structure/algorithm) — a limitation of this build,
+  // disclosed in neutral words, never red. Red is reserved for chains we
+  // fully parsed and cryptographically failed.
+  const chainUnchecked = !!chain && chain.checked === false;
   const chainText = !chain
     ? 'Device key, self-signed · no organization credential'
-    : `${chain.length} certificate${chain.length === 1 ? '' : 's'} · structure ${chain.linksValid ? 'valid' : 'INVALID'}${chain.topSubject ? ` · top: ${chain.topSubject}` : ''}`;
-  const chainFailed = !!chain && chain.length > 1 && !chain.linksValid;
+    : chainUnchecked
+      ? `${chain.length} certificate${chain.length === 1 ? '' : 's'} · structure not checkable by this build${chain.topSubject ? ` · top: ${chain.topSubject}` : ''}`
+      : `${chain.length} certificate${chain.length === 1 ? '' : 's'} · structure ${chain.linksValid ? 'valid' : 'INVALID'}${chain.topSubject ? ` · top: ${chain.topSubject}` : ''}`;
+  const chainFailed = !!chain && chain.length > 1 && !chain.linksValid && !chainUnchecked;
   const chainDetail = !chain || chain.length <= 1
     ? 'Device-issued and self-signed: the seal holds, but who the key belongs to is not shown. External tools read "valid signature, untrusted issuer"; expected for any device certificate.'
-    : chain.linksValid
-      ? 'Structurally valid, ending at a self-asserted root. The certificates link correctly; that the CA vouches for the key can only be checked out of band, against the organization’s published fingerprint.'
-      : `${chain.reason ?? 'The chain failed verification.'} The signer-identity claims cannot be checked.`;
+    : chainUnchecked
+      ? `${chain.reason ?? 'This build cannot parse the chain.'} That is a limitation of this verifier — it is not a finding against the file.`
+      : chain.linksValid
+        ? 'Structurally valid, ending at a self-asserted root. The certificates link correctly; that the CA vouches for the key can only be checked out of band, against the organization’s published fingerprint.'
+        : `${chain.reason ?? 'The chain failed verification.'} The signer-identity claims cannot be checked.`;
   const pq = c2pa?.pq;
   const pqAny = pq?.claim?.present || pq?.record?.present;
   const pqOk = (pq?.claim ? pq.claim.signatureValid && pq.claim.keyFingerprintMatches : true) &&
@@ -634,13 +643,13 @@ type EditHistoryView = {
   ingredients: (IngredientInfo & { referenced: boolean })[];
 };
 
-function VerdictCard({ report, identity }: { report: VerificationReport; identity: SignerTrust }) {
+function VerdictCard({ report, identity, ladder }: { report: VerificationReport; identity: SignerTrust; ladder: TrustLadder | null }) {
   const styles = useThemedStyles(buildStyles);
   // Byline/org live on the seal record's identity block (or 'redacted'),
   // not on the c2pa summary — read them where they're actually sealed.
   const sealedIdentity =
     report.record && report.record.identity !== 'redacted' ? report.record.identity : null;
-  const copy = verdictCopy(report.verdict, {
+  let copy = verdictCopy(report.verdict, {
     tier: identity.tier,
     rosterRedFlag:
       identity.tier === 'roster' &&
@@ -659,6 +668,31 @@ function VerdictCard({ report, identity }: { report: VerificationReport; identit
     orgName: identity.tier === 'org' ? report.c2pa?.certChain?.topSubject ?? sealedIdentity?.organization ?? null : null,
     bindingVoid: report.c2pa?.assetHashFailure === 'void-binding',
   });
+  // ── Headline/rung coherence (0.18.8) ──────────────────────────────────
+  // verdictCopy keys on the verdict code alone; the ladder sees the rungs.
+  // Two rules keep the card from contradicting the ladder beneath it:
+  //   1. A FAILED rung dominates: the headline names the failure and the
+  //      tone goes red, even when the verdict itself is INTACT. (A file can
+  //      be byte-identical AND carry a countersignature that fails — both
+  //      facts, stated.)
+  //   2. "Unchanged"-style headlines require rung 1 to be REACHED. When the
+  //      rung is unreached ("Not fully checked"), the headline says so
+  //      instead of asserting unchanged-ness the checks never established.
+  const failedRung = ladder?.rungs.find((r) => r.state === 'failed') ?? null;
+  const bytesRungUnreached = ladder?.rungs[0]?.state === 'unreached';
+  if (failedRung && copy.tone !== 'bad') {
+    copy = {
+      headline: `A check failed: ${failedRung.label.charAt(0).toLowerCase()}${failedRung.label.slice(1)}`,
+      subline: `${failedRung.detail} The media itself ${report.checks.assetHashMatches === true ? 'still matches the seal' : 'could not be confirmed against the seal'} — the failure is stated, not folded into a verdict.`,
+      tone: 'bad',
+      icon: 'warning-outline',
+    };
+  } else if (bytesRungUnreached && (copy.tone === 'good' || copy.tone === 'warn')) {
+    copy = {
+      ...copy,
+      subline: `${copy.subline} Not every check ran on this file — the rungs below say which.`,
+    };
+  }
   const color = toneColor(copy.tone);
   return (
     <Card style={[styles.labelCard, { borderColor: color }]}>
@@ -1120,7 +1154,7 @@ export default function InspectScreen() {
           ? 'assignment'
           : null,
       timestamps: report.c2pa
-        ? { present: report.c2pa.timestamps.present, valid: report.c2pa.timestamps.valid, trusted: report.c2pa.timestamps.trusted }
+        ? { present: report.c2pa.timestamps.present, valid: report.c2pa.timestamps.valid, trusted: report.c2pa.timestamps.trusted, unchecked: report.c2pa.timestamps.unchecked ?? 0 }
         : { present: 0, valid: 0, trusted: 0 },
       ots,
     });
@@ -1199,11 +1233,19 @@ export default function InspectScreen() {
     : tsInfo && tsInfo.valid > 0
       ? { text: 'Countersigned', color: colors.textDim }
       : { text: 'Not countersigned — device clock only', color: colors.textDim };
-  const tsFailed = tsInfo ? tsInfo.present - tsInfo.valid : 0;
+  // Only tokens we fully parsed and cryptographically FAILED count here —
+  // unchecked tokens (parse/coverage gaps) are disclosed on their own row,
+  // never folded into a red count.
+  const tsFailed = tsInfo ? tsInfo.present - tsInfo.valid - (tsInfo.unchecked ?? 0) : 0;
+  const tsUnchecked = tsInfo?.unchecked ?? 0;
   const tsDisagrees = !!(
     record && tsAnchorIso &&
     Number.isFinite(Date.parse(record.capturedAt)) && Number.isFinite(Date.parse(tsAnchorIso)) &&
-    Math.abs(Date.parse(record.capturedAt) - Date.parse(tsAnchorIso)) > 5 * 60 * 1000
+    // A de-identified copy is a legitimate RE-SIGN: the original device-clock
+    // assertion is re-countersigned later, so its gap is allowed up to 15
+    // minutes. Original seals stay strict at 5.
+    Math.abs(Date.parse(record.capturedAt) - Date.parse(tsAnchorIso)) >
+      (record.deidentified ? 15 : 5) * 60 * 1000
   );
 
   // Declared edits (c2pa.actions / ingredients) get a prominent flag on the
@@ -1431,7 +1473,7 @@ export default function InspectScreen() {
             {/* The integrity outcome comes FIRST — then the checks. Identity,
                 provenance and claims follow; this is a forensic reader, not
                 a trophy case. */}
-            <VerdictCard report={report} identity={identity} />
+            <VerdictCard report={report} identity={identity} ladder={ladder} />
 
             {editFlag ? (
               <Card style={{ borderColor: colors.warn, borderWidth: 1 }}>
@@ -1514,6 +1556,12 @@ export default function InspectScreen() {
                           value={`${tsFailed} token${tsFailed === 1 ? '' : 's'} FAILED verification`}
                           valueColor={colors.danger}
                         />
+                      ) : tsUnchecked > 0 ? (
+                        <LabelRow
+                          label="Countersignatures"
+                          value={`${tsUnchecked} token${tsUnchecked === 1 ? '' : 's'} not checkable by this build`}
+                          detail="A limitation of this verifier — not a finding against the file."
+                        />
                       ) : null}
                       {otsView ? (
                         (() => {
@@ -1588,7 +1636,17 @@ export default function InspectScreen() {
                       {report.c2pa && report.c2pa.timestamps.present > 0 ? (
                         <LabelRow
                           label="Countersignatures"
-                          value={`${report.c2pa.timestamps.present} embedded · authority trust unchecked`}
+                          value={(() => {
+                            const t = report.c2pa.timestamps;
+                            const unchecked = t.unchecked ?? 0;
+                            if (unchecked > 0 && t.valid === 0) return `${t.present} embedded · not checkable by this build`;
+                            return `${t.present} embedded · ${t.valid} verified${unchecked > 0 ? ` · ${unchecked} not checkable by this build` : ''}${t.trusted === 0 && t.valid > 0 ? ' · authority not pinned' : ''}`;
+                          })()}
+                          detail={(report.c2pa.timestamps.unchecked ?? 0) > 0 && report.c2pa.timestamps.valid === 0
+                            ? 'A limitation of this verifier — not a finding against the file.'
+                            : report.c2pa.timestamps.trusted === 0 && report.c2pa.timestamps.valid > 0
+                              ? 'The token is genuine, but the countersigning authority is not on the pinned list.'
+                              : undefined}
                         />
                       ) : null}
                       {otsView ? (
@@ -1944,7 +2002,9 @@ const buildStyles = () => StyleSheet.create({
   // 0.18.2 parity: these ARE the exhibit page's NlRow styles (buildNl) —
   // plain small label left, value right-aligned, 7px row rhythm.
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md, paddingVertical: 7 },
-  labelRowLabel: { color: colors.textFaint, fontSize: fontSize.sm, width: 110 },
+  // 126: "Countersignatures" is the longest label we render; at 110 it
+  // wrapped mid-word ("Countersignature s"). flexShrink: 0 keeps it intact.
+  labelRowLabel: { color: colors.textFaint, fontSize: fontSize.sm, width: 126, flexShrink: 0 },
   labelRowValueWrap: { flex: 1, alignItems: 'flex-end' },
   labelRowValue: { color: colors.text, fontSize: fontSize.sm, textAlign: 'right' },
   labelRowDetail: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16, marginTop: 2, textAlign: 'right' },

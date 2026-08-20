@@ -1140,10 +1140,16 @@ export default function CaptureScreen() {
   // relative factor maps to the device factor 1:1 (the virtual device
   // hands off internally at 1.0). The per-stack divide is the physical
   // -swap model and only applies off the virtual graph.
-  const zoomFloorFor = (c: ReturnType<typeof buildStops>) =>
-    graphRef.current === 'virtual-dual-wide' ? firstOpticalFactor(c) : stackZoomFloor(c, lensRef.current);
-  const deviceFactorFor = (relative: number, c: ReturnType<typeof buildStops>) =>
-    graphRef.current === 'virtual-dual-wide' ? relative : toDeviceFactor(relative, c, lensRef.current);
+  // 0.18.8 (field: "touch 0.5, the camera changes but the button doesn't"):
+  // both helpers take an OPTIONAL explicit lens. selectLens commits the zoom
+  // for the lens it just switched to, but lensRef only updates in a
+  // post-render effect — reading it here clamped 0.5 against the OLD lens's
+  // floor (1), the emit carried factor 1, and the "1" pill stayed lit while
+  // the hardware genuinely jumped. Pass the target lens explicitly.
+  const zoomFloorFor = (c: ReturnType<typeof buildStops>, forLens?: ExhibitLens) =>
+    graphRef.current === 'virtual-dual-wide' ? firstOpticalFactor(c) : stackZoomFloor(c, forLens ?? lensRef.current);
+  const deviceFactorFor = (relative: number, c: ReturnType<typeof buildStops>, forLens?: ExhibitLens) =>
+    graphRef.current === 'virtual-dual-wide' ? relative : toDeviceFactor(relative, c, forLens ?? lensRef.current);
 
   const applyLiveZoom = (relativeIn: number) => {
     const c = stopsRef.current;
@@ -1157,19 +1163,22 @@ export default function CaptureScreen() {
   };
   applyLiveZoomRef.current = applyLiveZoom;
 
-  const commitZoom = (relativeIn: number) => {
+  const commitZoom = (relativeIn: number, forLens?: ExhibitLens) => {
     const c = stopsRef.current;
-    const relative = clampZoom(relativeIn, zoomFloorFor(c), zoomCeiling());
+    const relative = clampZoom(relativeIn, zoomFloorFor(c, forLens), zoomCeiling());
     zoomFactorRef.current = relative;
     // Virtual graph: the pill label tracks the constituent the device is
     // actually showing — a pinch across the 1.0 hand-off crosses cameras
     // without any pill tap, and the label must not claim otherwise.
     if (graphRef.current === 'virtual-dual-wide') setLens(relative < 1 ? 'ultraWide' : 'wide');
+    // An explicit lens switch carries its target synchronously — the state
+    // effect lands post-render, too late for this commit's floor math.
+    if (forLens) lensRef.current = forLens;
     setZoomFactor(relative);
     zoomChannel.emit({ factor: relative, active: false });
     if (sessionActive.current) {
       void setNativeZoom(
-        clampZoom(deviceFactorFor(relative, c), zoomRange.min, Math.min(zoomRange.max, zoomRange.qualityCap ?? MAX_RELATIVE_ZOOM)),
+        clampZoom(deviceFactorFor(relative, c, forLens), zoomRange.min, Math.min(zoomRange.max, zoomRange.qualityCap ?? MAX_RELATIVE_ZOOM)),
       ).catch(() => {});
     }
   };
@@ -1748,7 +1757,7 @@ export default function CaptureScreen() {
       // No live session: nothing native to fail. The session lifecycle
       // effect applies the stored lens when the next session configures.
       setLens(l);
-      commitZoom(factorForLens(stopsRef.current, l));
+      commitZoom(factorForLens(stopsRef.current, l), l);
       return;
     }
     // 0.18.6 (field: "the 0.5 still doesn't work — same error"): on the
@@ -1764,7 +1773,7 @@ export default function CaptureScreen() {
         return;
       }
       setLens(l);
-      commitZoom(factorForLens(stopsRef.current, l));
+      commitZoom(factorForLens(stopsRef.current, l), l);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       return;
     }
@@ -1797,7 +1806,7 @@ export default function CaptureScreen() {
     // A tapped pill parks the zoom at that lens's optical stop — the pill
     // jump is the optical detent, never a carried-over crop.
     setLens(l);
-    commitZoom(factorForLens(stopsRef.current, l));
+    commitZoom(factorForLens(stopsRef.current, l), l);
     // The new device stack has its own active format — refresh the pro
     // ranges and zoom range so they clamp to THIS lens's truth.
     void capabilities()
@@ -2586,8 +2595,11 @@ export default function CaptureScreen() {
                caption, never red; 'unreached' (not probed / no permission)
                renders nothing — absence is stated, never suspicion.
                0.18.6 (Noah): one wording everywhere — "Dual camera not
-               available", no "on this device" tail, no second vocabulary. */
-        stereo === 'unsupported' && facing === 'back' && mode !== 'audio' ? (
+               available", no "on this device" tail, no second vocabulary.
+               0.18.8 (Noah): gated on the Multiple Lenses toggle — with the
+               toggle OFF the dual path is not expected, so its absence is
+               not stated. */
+        stereo === 'unsupported' && facing === 'back' && mode !== 'audio' && settings.captureEvidence.altView ? (
           <Text style={styles.stereoCaption}>Dual camera not available</Text>
         ) : null}
 
@@ -2719,14 +2731,16 @@ export default function CaptureScreen() {
                 color={settings.includeTranscript ? HUD_INK : colors.onDark.dim}
               />
             </TouchableOpacity>
-          ) : proAvailable && !dualLive ? (
+          ) : proAvailable ? (
             // Capture settings: a dials glyph on the shutter row's left
             // slot opens the pro tray. The light (flash / torch) is the
             // tray's FIRST chip, not a HUD button (0.17.1, owner
             // directive). The accent color is the one-glance signal: this
             // capture's optics were chosen by hand, and the record says so.
-            // Hidden while the dual-view graph is live (0.18.6, Noah): the
-            // manual controls only error there — hiding IS the honesty.
+            // 0.18.8 (Noah): the button STAYS while the dual-view graph is
+            // live — the tray itself narrows to the dual-safe controls
+            // (visibleProParams filters to DUAL_SAFE_PARAMS), so honesty is
+            // the reduced set, not a vanished button.
             <TouchableOpacity
               style={styles.sideButton}
               hitSlop={8}

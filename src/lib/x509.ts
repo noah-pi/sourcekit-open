@@ -136,8 +136,14 @@ export interface ParsedCert {
   subjectCN: string | null;
   notBeforeMs: number;
   notAfterMs: number;
-  /** Signature algorithm OID hex (ecdsaSha256/384/512, rsaSha256/384/512). */
+  /** Signature algorithm OID hex (ecdsaSha256/384/512, rsaSha256/384/512, rsassaPss). */
   sigAlgOid: string;
+  /**
+   * When sigAlgOid is RSASSA-PSS: the hash from the AlgorithmIdentifier
+   * parameters (RFC 4055 §3.1). Null otherwise. SHA-1-parameterized PSS is
+   * refused at parse time — this verifier does not evaluate SHA-1.
+   */
+  pssHash: 'sha256' | 'sha384' | 'sha512' | null;
   /** Signature value (BIT STRING payload, unused-bits byte stripped). */
   signature: Uint8Array;
   keyAlg:
@@ -264,9 +270,61 @@ export function parseCertificate(der: Uint8Array): ParsedCert {
   const SUPPORTED: string[] = [
     OID.ecdsaSha256, OID.ecdsaSha384, OID.ecdsaSha512,
     OID.rsaSha256, OID.rsaSha384, OID.rsaSha512,
+    // RSASSA-PSS (1.2.840.113549.1.1.10): Adobe's 2022-era C2PA chains are
+    // signed PSS-4096; c2pa-rs verifies them, so we must too.
+    OID.rsassaPss,
   ];
   if (!SUPPORTED.includes(sigAlgOid)) {
     throw new Error(`unsupported signature algorithm OID ${sigAlgOid}`);
+  }
+
+  // RSASSA-PSS parameters (RFC 4055 §3.1): RSASSA-PSS-params ::= SEQUENCE {
+  //   hashAlgorithm      [0] AlgorithmIdentifier DEFAULT sha1,
+  //   maskGenAlgorithm   [1] AlgorithmIdentifier DEFAULT mgf1SHA1,
+  //   saltLength         [2] INTEGER DEFAULT 20,
+  //   trailerField       [3] INTEGER DEFAULT 1 }
+  // We extract the declared hash (salt length is RECOVERED at verify time —
+  // see verifyRsaPss — and MGF1 is checked to pair with the same hash).
+  // The RFC default is SHA-1, which this verifier does not evaluate: refuse
+  // to parse rather than silently downgrade or guess.
+  let pssHash: ParsedCert['pssHash'] = null;
+  if (sigAlgOid === OID.rsassaPss) {
+    const PSS_HASH: Record<string, 'sha256' | 'sha384' | 'sha512'> = {
+      '608648016503040201': 'sha256',
+      '608648016503040202': 'sha384',
+      '608648016503040203': 'sha512',
+    };
+    const oidAfter = readTlv(outerSigAlg.content, 0).next;
+    if (oidAfter >= outerSigAlg.content.length) {
+      throw new Error('RSASSA-PSS parameters absent (defaults are SHA-1, unsupported here)');
+    }
+    const params = readTlv(outerSigAlg.content, oidAfter);
+    if (params.tag !== 0x30) throw new Error('RSASSA-PSS parameters are not a SEQUENCE');
+    let hashOid: string | null = null;
+    let mgfHashOid: string | null = null;
+    let po = 0;
+    while (po < params.content.length) {
+      const f = readTlv(params.content, po);
+      po = f.next;
+      if (f.tag === 0xa0) {
+        const alg = readTlv(f.content, 0);
+        hashOid = bytesToHex(readTlv(alg.content, 0).content);
+      } else if (f.tag === 0xa1) {
+        const alg = readTlv(f.content, 0);
+        const mgfOid = bytesToHex(readTlv(alg.content, 0).content);
+        if (mgfOid !== '2a864886f70d010108') { // id-mgf1
+          throw new Error(`RSASSA-PSS mask generation function is not MGF1 (${mgfOid})`);
+        }
+        const inner = readTlv(alg.content, readTlv(alg.content, 0).next);
+        if (inner.tag === 0x30) mgfHashOid = bytesToHex(readTlv(inner.content, 0).content);
+      }
+    }
+    if (!hashOid) throw new Error('RSASSA-PSS hashAlgorithm absent (default is SHA-1, unsupported here)');
+    if (mgfHashOid && mgfHashOid !== hashOid) {
+      throw new Error(`RSASSA-PSS MGF1 hash (${mgfHashOid}) differs from the signature hash (${hashOid})`);
+    }
+    pssHash = PSS_HASH[hashOid] ?? null;
+    if (!pssHash) throw new Error(`unsupported RSASSA-PSS hash OID ${hashOid}`);
   }
 
   // TBSCertificate fields, in order.
@@ -330,6 +388,7 @@ export function parseCertificate(der: Uint8Array): ParsedCert {
     notBeforeMs,
     notAfterMs,
     sigAlgOid,
+    pssHash,
     signature: outerSig.content.subarray(1),
     keyAlg: parseSpki(spkiTlv.content),
     extensions,
@@ -375,8 +434,15 @@ export function verifySignatureWithKey(
   sigAlgOid: string,
   message: Uint8Array,
   signature: Uint8Array,
+  pssHash: 'sha256' | 'sha384' | 'sha512' | null = null,
 ): boolean {
   try {
+    // RSASSA-PSS: verified by EMSA-PSS-VERIFY with salt-length recovery;
+    // the hash comes from the certificate's algorithm parameters.
+    if (sigAlgOid === OID.rsassaPss) {
+      if (key.kind !== 'rsa' || !pssHash) return false;
+      return verifyRsaPss(key, pssHash, message, signature);
+    }
     if (key.kind === 'ec') {
       const curve = key.curve === 'p256' ? p256 : p384;
       if (sigAlgOid === OID.ecdsaSha256) {
@@ -492,7 +558,7 @@ export function verifyRsaPss(
 
 /** Verifies that `parent` signed `child`. */
 export function verifyCertSignature(child: ParsedCert, parent: ParsedCert): boolean {
-  return verifySignatureWithKey(parent.keyAlg, child.sigAlgOid, child.tbsFull, child.signature);
+  return verifySignatureWithKey(parent.keyAlg, child.sigAlgOid, child.tbsFull, child.signature, child.pssHash);
 }
 
 /** id-kp-timeStamping (1.3.6.1.5.5.7.3.8) — RFC 3161 §2.3 requires this EKU on TSA certs. */
@@ -626,6 +692,13 @@ export interface ChainResult {
   /** Failure reason in plain English, null when linksValid. */
   reason: string | null;
   linkCount: number;
+  /**
+   * Whether this verifier actually EVALUATED the chain. False when a
+   * certificate could not be parsed or uses an algorithm we do not
+   * implement — a limitation of this verifier, never tamper evidence. UI
+   * must render checked:false failures neutral, never red.
+   */
+  checked: boolean;
 }
 
 function displayName(c: { subjectOrg: string | null; subjectCN: string | null }): string | null {
@@ -683,9 +756,9 @@ export function verifyChain(
   try {
     certs = chainDer.map(parseCertificate);
   } catch (e) {
-    return { linksValid: false, anchored: false, topSubject: null, reason: `certificate failed to parse: ${(e as Error).message}`, linkCount: 0 };
+    return { linksValid: false, anchored: false, topSubject: null, reason: `certificate failed to parse: ${(e as Error).message}`, linkCount: 0, checked: false };
   }
-  if (certs.length === 0) return { linksValid: false, anchored: false, topSubject: null, reason: 'empty chain', linkCount: 0 };
+  if (certs.length === 0) return { linksValid: false, anchored: false, topSubject: null, reason: 'empty chain', linkCount: 0, checked: false };
 
   // Real-world senders sometimes include the same cert twice (e.g. a TSA
   // sending its cert as both signer and chain). Identical bytes carry no
@@ -699,14 +772,14 @@ export function verifyChain(
   {
     const ordered = orderByIssuer(certs);
     if (!ordered) {
-      return { linksValid: false, anchored: false, topSubject: null, reason: 'certificate set could not be ordered by issuer/subject', linkCount: certs.length };
+      return { linksValid: false, anchored: false, topSubject: null, reason: 'certificate set could not be ordered by issuer/subject', linkCount: certs.length, checked: true };
     }
     certs = ordered;
   }
 
   for (let i = 0; i < certs.length; i++) {
     const c = certs[i];
-    const fail = (reason: string): ChainResult => ({ linksValid: false, anchored: false, topSubject: displayName(certs[certs.length - 1]), reason, linkCount: certs.length });
+    const fail = (reason: string): ChainResult => ({ linksValid: false, anchored: false, topSubject: displayName(certs[certs.length - 1]), reason, linkCount: certs.length, checked: true });
     if (atMs !== null && (atMs < c.notBeforeMs || atMs > c.notAfterMs)) {
       return fail(`${displayName(c) ?? 'a certificate'} was not valid at signing time`);
     }
@@ -768,7 +841,7 @@ export function verifyChain(
     }
   }
   if (pinnedRoots.length > 0 && !anchored) {
-    return { linksValid: true, anchored: false, topSubject: displayName(last), reason: 'chain does not reach a trusted root', linkCount: certs.length };
+    return { linksValid: true, anchored: false, topSubject: displayName(last), reason: 'chain does not reach a trusted root', linkCount: certs.length, checked: true };
   }
-  return { linksValid: true, anchored, topSubject: displayName(last), reason: null, linkCount: certs.length };
+  return { linksValid: true, anchored, topSubject: displayName(last), reason: null, linkCount: certs.length, checked: true };
 }

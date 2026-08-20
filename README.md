@@ -545,7 +545,7 @@ app id in `src/lib/appleAttestRoot.ts`.
 ## License
 
 Apache-2.0 ([LICENSE](LICENSE), with [NOTICE](NOTICE) for attribution that travels).
-"Source Kit" is a trademark and isn't licensed for derivative use
+Apache-2.0 covers the code, not the name
 ([TRADEMARK.md](TRADEMARK.md)) — fork it, ship it under your own name.
 
 If you build something with this, or find something I got wrong, I'd really like to hear

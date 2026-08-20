@@ -3,7 +3,7 @@
     "name": "Source Kit",
     "slug": "verify-app",
     "owner": "noah-pi",
-    "version": "0.18.7",
+    "version": "0.18.8",
     "orientation": "portrait",
     "icon": "./assets/icons/icon-light.png",
     "scheme": "verify",

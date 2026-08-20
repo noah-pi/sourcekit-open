@@ -5795,8 +5795,34 @@ extension ExhibitCameraModule {
       }
     }
     session = nil
+    // 0.18.8 FLIP SIGABRT FIX (field log: EXC_CRASH on front/back toggle —
+    // AVCaptureVideoPreviewLayer dealloc → AVCaptureMultiCamSession dealloc →
+    // detachFromFigCaptureSession assert on a Fig workloop, while the main
+    // thread sat INSIDE the same session's _commitConfiguration, entered via
+    // the preview-layer bind's KVO notification). Root cause: the PiP layer
+    // RETAINS its session (setSessionWithNoConnection at ensurePipConnection
+    // time), and nothing cleared that reference at teardown — the old
+    // session's final release could land wherever the pip layer next dropped
+    // it, mid-commit, off-main. Clear the pip layer's session HERE, on
+    // sessionQueue, while `deadSession` is still strongly held and no commit
+    // can be in flight (stop completed synchronously above; the main-thread
+    // unbind below either hasn't run yet or has fully returned).
+    // This SDK's setSessionWithNoConnection(_:) takes a NON-optional session
+    // (EAS build error 5811), so the detach goes through the layer's session
+    // property: assigning nil unbinds without creating a connection, which is
+    // exactly the state we need here. Routed through the view on MAIN — the
+    // layer is view-owned UIKit state, and queue-hopping the detach is the
+    // crash class being fixed.
+    if deadSession != nil {
+      DispatchQueue.main.async { [weak self] in
+        self?.previewView?.detachPipFromSession()
+      }
+    }
     // Unbind the preview layer — a black preview is honest; a frozen last
-    // frame is not (also covers watchdog teardown paths).
+    // frame is not (also covers watchdog teardown paths). The session is
+    // retained through the unbind: its bind-triggered commit completes on
+    // main BEFORE the block releases the last reference — never mid-commit
+    // on a Fig workloop.
     DispatchQueue.main.async { [weak self] in
       self?.previewView?.bind(session: nil)
       _ = deadSession // retain until the unbind lands

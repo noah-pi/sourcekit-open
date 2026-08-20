@@ -1,31 +1,18 @@
-# Trademark policy
+# About the name
 
-**Source Kit** and the Source Kit wordmark are trademarks of Noah Bassetti-Blum.
-They are **not** licensed by this repository's Apache-2.0 grant, which
-covers copyright in the code only.
+Apache-2.0 covers the code. It does not cover names — section 6 of the license
+says so explicitly — so this file is a request rather than a legal notice.
 
-## What you may do
+**Please rename your fork.** Ship it under your own name, and say "built on
+Source Kit" if that is useful to you.
 
-- Refer to this project factually and nominatively: "Source Kit",
-  "built on Source Kit Open", "verified with Source Kit Desk",
-  "compatible with Source Kit exhibits".
-- Fork, modify, and redistribute the code under Apache-2.0 — **under your
-  own name and branding**.
-- Say your software reads or produces Source Kit exhibits, if it factually
-  does.
+The reason is specific to this kind of software. A provenance tool's name is
+part of what it promises: someone checking a file wants to know that the app
+they installed is the one whose claims they read. Two different programs called
+Source Kit, making different guarantees, would blur exactly the line this
+project exists to draw.
 
-## What you may not do
-
-- Ship a derivative under the name "Source Kit" or a confusingly similar
-  name or logo.
-- Imply endorsement, affiliation, or that your build is the official one.
-- Use the name in a way that trades on the verification claims of this
-  project for software that does not implement them.
-
-## Why
-
-A provenance tool's name is part of its security story: users verify the
-software they installed is the software whose claims they read. A fork that
-keeps the name would blur exactly the line this project exists to draw.
-If you fork this core, that is wonderful and intended — rename it, and say
-"built on Source Kit Open" if you like. We mean it.
+Otherwise, go ahead — describe your software as compatible with Source Kit,
+say it reads or writes the same manifests, quote the name to refer to this
+project. All of that is ordinary and fine. The only thing worth avoiding is a
+build that keeps the name while changing what it checks.

@@ -170,7 +170,18 @@ export interface LadderInput {
    */
   hardwareNotApplicable: 'deidentified' | 'assignment' | null;
 
-  timestamps: { present: number; valid: number; trusted: number };
+  timestamps: {
+    present: number;
+    valid: number;
+    trusted: number;
+    /**
+     * Tokens the verifier could not evaluate (parse/coverage gap). Optional
+     * and backward compatible: absent means zero. Unchecked tokens are
+     * disclosed on the rung but NEVER fail it — a parser limitation is not
+     * tamper evidence.
+     */
+    unchecked?: number;
+  };
   ots: LadderOtsState;
   /**
    * The manifest's hash binding is void (declared exclusions exempt the hash
@@ -360,10 +371,16 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   // --- Rung 4: time-bounded --------------------------------------------------
   // Independent anchors only. A FAILED attached token is tamper evidence and
   // fails the rung; unpinned tokens and unchecked bindings are unreached
-  // with their reasons stated.
+  // with their reasons stated. Tokens the verifier could not EVALUATE
+  // (unchecked — parse/coverage gaps) are disclosed but never fail the rung.
   const t = input.timestamps;
+  const uncheckedTokens = t.unchecked ?? 0;
+  const checkedFailures = t.present - t.valid - uncheckedTokens;
+  const uncheckedNote = uncheckedTokens > 0
+    ? ` ${uncheckedTokens} attached token(s) could not be evaluated by this verifier; that is not counted against the file.`
+    : '';
   let time: RungDraft;
-  if (t.present > t.valid || input.ots === 'invalid') {
+  if (checkedFailures > 0 || input.ots === 'invalid') {
     time = {
       id: 'time', label: 'Time bracketed by an independent anchor', state: 'failed',
       detail: input.ots === 'invalid'
@@ -388,22 +405,24 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   } else if (t.valid > 0) {
     time = {
       id: 'time', label: 'Time bracketed by an independent anchor', state: 'unreached',
-      detail: 'The token is genuine, but its authority is not pinned; it does not anchor time.',
+      detail: 'The token is genuine, but its authority is not pinned; it does not anchor time.' + uncheckedNote,
     };
   } else if (input.ots === 'confirmed-unchecked') {
     time = {
       id: 'time', label: 'Time bracketed by an independent anchor', state: 'unreached',
-      detail: 'Bitcoin anchor confirmed on-chain; the block binding was not checked here.',
+      detail: 'Bitcoin anchor confirmed on-chain; the block binding was not checked here.' + uncheckedNote,
     };
   } else if (input.ots === 'pending') {
     time = {
       id: 'time', label: 'Time bracketed by an independent anchor', state: 'unreached',
-      detail: 'Submitted to the Bitcoin calendars, awaiting confirmation. Device clock only for now.',
+      detail: 'Submitted to the Bitcoin calendars, awaiting confirmation. Device clock only for now.' + uncheckedNote,
     };
   } else {
     time = {
       id: 'time', label: 'Time bracketed by an independent anchor', state: 'unreached',
-      detail: 'Device clock only · no independent anchor.',
+      detail: (uncheckedTokens > 0
+        ? `${uncheckedTokens} attached timestamp token(s) could not be evaluated by this verifier; device clock only until an anchor verifies.`
+        : 'Device clock only · no independent anchor.'),
     };
   }
 

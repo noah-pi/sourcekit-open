@@ -11,6 +11,12 @@ export interface SecureStoreOptions {
   keychainAccessible?: string;
   requireAuthentication?: boolean;
   /**
+   * The message iOS shows on the Face ID prompt. The lab never prompts, so
+   * this is accepted and ignored — but the app sets it, so the type has to
+   * carry it or the staged typecheck fails on real code.
+   */
+  authenticationPrompt?: string;
+  /**
    * The app's vaultFs/pinLockout entries set WHEN_UNLOCKED_THIS_DEVICE_ONLY
    * (+ requireAuthentication on the vault key). The lab's in-memory map
    * accepts and ignores both — accessibility policy is keychain behavior,
