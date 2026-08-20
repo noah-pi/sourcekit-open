@@ -260,8 +260,8 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     Source Kit
   </div>
   <div class="navlinks">
-    <a href="#glance-sec">What it commits</a>
     <a href="#history">The story</a>
+    <a href="#glance-sec">What it commits</a>
     <a href="#holes">The gaps</a>
     <a href="#signals">Privacy</a>
     <a href="#next">Next</a>
@@ -309,10 +309,131 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 </div></header>
 
 
+
+
+<!-- ===================== CHASING INSTRUMENTS OF TRUTH ===================== -->
+<section class="block" id="history"><div class="wrap">
+  <h2>A photograph has never been proof</h2>
+  <p class="dek">It has only ever been expensive to fake.</p>
+
+  <figure style="max-width:300px;margin:var(--s-lg) 0">
+    <div class="fig plain">
+      <img class="photo" style="border-radius:6px" src="assets/cottingley.jpg" alt="The 1917 Cottingley Fairies photograph: a young girl resting her chin on her hand, with paper cut-out fairies dancing in front of her."
+           onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+      <div class="photo-fallback">
+        <b>Frances Griffiths and the Cottingley Fairies, 1917.</b><br>
+        Image not bundled — run <code>site/assets/fetch.sh</code> to pull the public-domain original from Wikimedia Commons.
+      </div>
+    </div>
+  </figure>
+
+  <div class="col">
+    <p>In July 1917 two girls in the Yorkshire village of Cottingley photographed some fairies at the bottom of the garden. The images were examined by Arthur Conan Doyle, who found them persuasive, and by Kodak, which declined to certify them but conceded it could not prove them fake. The fairies were cardboard, copied from a children's book and held up with hatpins. What is striking about the Cottingley affair is not that anyone was fooled but that the question was already understood to be a technical one, a matter for Kodak, rather than a question about two girls and a hatpin.</p>
+
+
+    <p>Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team <a href="https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html">moved a dead soldier forty yards</a> into a rocky niche and leaned a rifle beside him — the wrong rifle, as it turned out, of a type no sharpshooter carried. Soviet censors <a href="https://en.wikipedia.org/wiki/The_Commissar_Vanishes">airbrushed the disgraced out of group portraits</a> for fifty years before Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a skill and an afternoon, and picture desks, wire services and libel law made the attempt more expensive still.</p>
+
+    <p>Generative models did not make images forgeable. They made forgery fast and essentially free.</p>
+
+    <h3 class="lawhed">What the statutes actually demand</h3>
+    <p>The <a href="https://www.ncsl.org/technology-and-communication/artificial-intelligence-2026-legislation">National Conference of State Legislatures</a> counts 1,425 artificial-intelligence bills introduced across 49 states so far in 2026. Of those, 312 concern deepfakes or provenance — better than one bill in five, in a field that also covers hiring, healthcare, policing and procurement. The impulse is not confined to the United States. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on August 2, 2026, requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties up to €15 million or 3% of global turnover. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day, China has required labeling of synthetic media since its deep synthesis rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge; the two technical demands underneath them do not.</p>
+
+    <h3 class="lawhed">1 / &nbsp;Requiring invisible watermarks on generated media</h3>
+    <p>A watermark rides inside what a model generates, and it holds up against ordinary handling. It does not hold up against effort. Regenerating an image through a diffusion model <a href="https://arxiv.org/abs/2408.10446">strips the mark and keeps the picture</a>, one watermark can <a href="https://arxiv.org/abs/2605.16796">overwrite another</a>, and the <a href="https://github.com/guillaumemeyer/watermarks-remover">tools to do it are published</a>. Open-weight models emit nothing to strip in the first place. Detection has the same shape of problem: a classifier chasing a generator gets worse exactly as the generator improves.</p>
+    <p>A watermark can only speak for what a machine made. It says nothing about a photograph, which leaves the person holding real footage with nothing to show. Once everyone knows video can be faked, real video gets dismissed as fake, a move already run in court by <a href="https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/">Tesla's lawyers over recordings of Elon Musk</a> and by <a href="https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/">January 6th defendants over footage from inside the Capitol</a>.</p>
+
+    <h3 class="lawhed">2 / &nbsp;Requiring all media to carry tamper-proof data about its provenance</h3>
+    <p>Provenance is a word borrowed from the art trade, where it means the paper trail of a painting's owners — the chain of receipts, bills of sale and catalog entries that says where a canvas has been since it left the studio. It was never a claim about the painting. A perfect provenance on a forgery is a well-documented forgery, and the trade has bought plenty of those. What the paper trail does is make lying laborious, because the liar has to manufacture a history rather than an object.</p>
+    <p>The digital version is the same idea with a cryptographic signature instead of a filing cabinet. Adobe, Arm, the BBC, Intel, Microsoft and Truepic founded the <a href="https://c2pa.org/">Coalition for Content Provenance and Authenticity</a> in February 2021, and the first specification followed a year later. Instead of examining a file for signs of forgery, seal it at the source so any later change reads as a change. A watermark says a machine was involved. A manifest says which device, which moment, and what has happened since.</p>
+
+  </div>
+
+</div></section>
+
+<!-- ===================== FROM BYTES TO PHOTONS ===================== -->
+<section class="block" id="photons"><div class="wrap">
+  <h2>From bytes to photons</h2>
+  <p class="dek">Between the sensor and the signature there is a stretch of code. How long it is decides what the signature is worth.</p>
+
+  <figure class="pipefig">
+    <div class="fig plain">
+      <svg viewBox="0 0 900 236" role="img" aria-label="The path from photons to a rendered file, with approximate durations for each stage and the two places a signature can be applied.">
+        <defs><marker id="pa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L8 4 L0 8 z" class="s-faint"/></marker></defs>
+
+        <text x="16" y="20" class="lbl s-faint">SCENE</text>
+        <text x="150" y="20" class="lbl s-faint">SENSOR</text>
+        <text x="320" y="20" class="lbl s-faint">IMAGE PIPELINE</text>
+        <text x="600" y="20" class="lbl s-faint">FILE</text>
+        <text x="762" y="20" class="lbl s-faint">SCREEN</text>
+
+        <!-- photons -->
+        <g class="k-dim" stroke-width="1">
+          <path d="M20 76 h96" marker-end="url(#pa)"/><path d="M20 96 h96" marker-end="url(#pa)"/><path d="M20 116 h96" marker-end="url(#pa)"/>
+        </g>
+        <text x="20" y="140" class="cap s-dim">light</text>
+
+        <!-- sensor -->
+        <rect x="128" y="60" width="72" height="72" rx="4" class="f-surf k-txt" stroke-width="1.5"/>
+        <g class="k-line" stroke-width="0.8">
+          <path d="M128 84 h72 M128 108 h72 M152 60 v72 M176 60 v72"/>
+        </g>
+        <text x="164" y="150" text-anchor="middle" class="cap s-txt">photons → charge</text>
+        <text x="164" y="166" text-anchor="middle" class="num s-ac">~1/60 s exposure</text>
+
+        <path d="M208 96 h36" class="f-none k-dim" stroke-width="1.2" marker-end="url(#pa)"/>
+
+        <!-- pipeline stages -->
+        <rect x="252" y="60" width="300" height="72" rx="4" class="f-soft k-line"/>
+        <g class="k-line" stroke-width="0.8"><path d="M327 60 v72 M402 60 v72 M477 60 v72"/></g>
+        <text x="289" y="84" text-anchor="middle" class="cap s-dim">read out</text>
+        <text x="364" y="84" text-anchor="middle" class="cap s-dim">demosaic</text>
+        <text x="439" y="84" text-anchor="middle" class="cap s-dim">denoise</text>
+        <text x="514" y="84" text-anchor="middle" class="cap s-dim">tone-map</text>
+        <text x="289" y="104" text-anchor="middle" class="num s-faint">~5 ms</text>
+        <text x="364" y="104" text-anchor="middle" class="num s-faint">~8 ms</text>
+        <text x="439" y="104" text-anchor="middle" class="num s-faint">~12 ms</text>
+        <text x="514" y="104" text-anchor="middle" class="num s-faint">~6 ms</text>
+        <text x="402" y="150" text-anchor="middle" class="cap s-txt">charge → pixels</text>
+        <text x="402" y="166" text-anchor="middle" class="num s-ac">~30 ms, all on-chip</text>
+
+        <path d="M560 96 h36" class="f-none k-dim" stroke-width="1.2" marker-end="url(#pa)"/>
+
+        <!-- encode + file -->
+        <rect x="604" y="60" width="86" height="72" rx="4" class="f-surf k-line"/>
+        <text x="647" y="92" text-anchor="middle" class="cap s-dim">encode</text>
+        <text x="647" y="108" text-anchor="middle" class="num s-faint">~15 ms</text>
+        <text x="647" y="150" text-anchor="middle" class="cap s-txt">pixels → bytes</text>
+
+        <path d="M698 96 h34" class="f-none k-dim" stroke-width="1.2" marker-end="url(#pa)"/>
+        <rect x="740" y="60" width="60" height="72" rx="6" class="f-surf k-txt" stroke-width="1.5"/>
+        <rect x="748" y="68" width="44" height="52" rx="2" class="f-soft k-line"/>
+        <text x="770" y="150" text-anchor="middle" class="cap s-txt">rendered</text>
+
+        <!-- signing points, each on its own row -->
+        <path d="M128 178 v8 h424 v-8" class="f-none k-ac" stroke-width="1.4"/>
+        <text x="340" y="200" text-anchor="middle" class="lbl s-ac">A · SIGNED INSIDE THE PIPELINE</text>
+        <path d="M604 178 v8 h86 v-8" class="f-none k-warn" stroke-width="1.4" stroke-dasharray="4 3"/>
+        <text x="647" y="200" text-anchor="middle" class="lbl s-warn">B · AFTER THE HAND-OFF</text>
+        <text x="450" y="222" text-anchor="middle" class="cap s-dim">Everything left of the hand-off is code a third-party app never sees.</text>
+      </svg>
+    </div>
+    <figcaption>Roughly thirty milliseconds separate the photons from the pixels, and every stage of it runs before any third-party app is handed anything. A Pixel 10 signs at <b>A</b>. Source Kit signs at <b>B</b>.</figcaption>
+  </figure>
+  <div class="col">
+    <p>A photograph starts as charge on a grid of sensor wells and ends as a file. Everything in between — demosaic, lens correction, noise reduction, tone-map, encode — is code that could hand the next stage a different picture. What a signature proves has less to do with the key than with how much of that chain stands between the photons and the signing.</p>
+
+    <p><a href="https://github.com/c2pa-org/conformance-public">C2PA grades signers on two levels</a>: keys protected in software, or keys in hardware with a live attestation from the silicon. The <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10</a> is the first phone to reach the second, signing inside the imaging pipeline with the key in the Titan M2. The frame never passes through general-purpose code, so there is no seam where another image could be substituted. Qualcomm has the same idea in the Snapdragon secure environment. Dedicated cameras got there first, starting with Leica in 2023.</p>
+
+    <p>Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in the Secure Enclave, and can attest to nothing upstream of that hand-off. That is the ceiling for a third-party app on iOS, which is why it commits more <i>around</i> the frame instead of claiming more about it.</p>
+
+
+  </div>
+</div></section>
+
 <!-- ===================== AT A GLANCE ===================== -->
-<section class="block" id="glance-sec" style="border-top:none;padding-top:var(--s-lg)"><div class="wrap">
-  <p class="lbl" style="font-size:10.5px;font-weight:800;letter-spacing:1.9px;text-transform:uppercase;color:var(--textFaint);margin:0 0 var(--s-md)">What it commits</p>
-  <p class="note" style="margin:0 0 var(--s-lg)">All of it optional, and all of it switchable in the viewfinder.</p>
+<section class="block" id="glance-sec"><div class="wrap">
+  <h2>What it commits</h2>
+  <p class="dek">Each of these exists because of a gap named above. All of it optional, and all of it switchable in the viewfinder.</p>
 
 <details class="f">
     <summary>Hardware attestation<span class="sum">Proof the key is held somewhere you cannot reach into.</span></summary>
@@ -462,125 +583,6 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     </div>
   </details>
 
-</div></section>
-
-<!-- ===================== CHASING INSTRUMENTS OF TRUTH ===================== -->
-<section class="block" id="history"><div class="wrap">
-  <h2>A photograph has never been proof</h2>
-  <p class="dek">It has only ever been expensive to fake.</p>
-
-  <figure style="max-width:300px;margin:var(--s-lg) 0">
-    <div class="fig plain">
-      <img class="photo" style="border-radius:6px" src="assets/cottingley.jpg" alt="The 1917 Cottingley Fairies photograph: a young girl resting her chin on her hand, with paper cut-out fairies dancing in front of her."
-           onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-      <div class="photo-fallback">
-        <b>Frances Griffiths and the Cottingley Fairies, 1917.</b><br>
-        Image not bundled — run <code>site/assets/fetch.sh</code> to pull the public-domain original from Wikimedia Commons.
-      </div>
-    </div>
-  </figure>
-
-  <div class="col">
-    <p>In July 1917 two girls in the Yorkshire village of Cottingley photographed some fairies at the bottom of the garden. The images were examined by Arthur Conan Doyle, who found them persuasive, and by Kodak, which declined to certify them but conceded it could not prove them fake. The fairies were cardboard, copied from a children's book and held up with hatpins. What is striking about the Cottingley affair is not that anyone was fooled but that the question was already understood to be a technical one, a matter for Kodak, rather than a question about two girls and a hatpin.</p>
-
-
-    <p>Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team <a href="https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html">moved a dead soldier forty yards</a> into a rocky niche and leaned a rifle beside him — the wrong rifle, as it turned out, of a type no sharpshooter carried. Soviet censors <a href="https://en.wikipedia.org/wiki/The_Commissar_Vanishes">airbrushed the disgraced out of group portraits</a> for fifty years before Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a skill and an afternoon, and picture desks, wire services and libel law made the attempt more expensive still.</p>
-
-    <p>Generative models did not make images forgeable. They made forgery fast and essentially free.</p>
-
-    <h3 class="lawhed">What the statutes actually demand</h3>
-    <p>Deepfake statutes are now close to universal across American states, and the <a href="https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/">count keeps moving</a>. The impulse is not confined to the United States. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on August 2, 2026, requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties up to €15 million or 3% of global turnover. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day, China has required labeling of synthetic media since its deep synthesis rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge; the two technical demands underneath them do not.</p>
-
-    <h3 class="lawhed">1 / &nbsp;Requiring invisible watermarks on generated media</h3>
-    <p>A watermark rides inside what a model generates, and it holds up against ordinary handling. It does not hold up against effort. Regenerating an image through a diffusion model <a href="https://arxiv.org/abs/2408.10446">strips the mark and keeps the picture</a>, one watermark can <a href="https://arxiv.org/abs/2605.16796">overwrite another</a>, and the <a href="https://github.com/guillaumemeyer/watermarks-remover">tools to do it are published</a>. Open-weight models emit nothing to strip in the first place. Detection has the same shape of problem: a classifier chasing a generator gets worse exactly as the generator improves.</p>
-    <p>A watermark can only speak for what a machine made. It says nothing about a photograph, which leaves the person holding real footage with nothing to show. Once everyone knows video can be faked, real video gets dismissed as fake, a move already run in court by <a href="https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/">Tesla's lawyers over recordings of Elon Musk</a> and by <a href="https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/">January 6th defendants over footage from inside the Capitol</a>.</p>
-
-    <h3 class="lawhed">2 / &nbsp;Requiring all media to carry tamper-proof data about its provenance</h3>
-    <p>Provenance is a word borrowed from the art trade, where it means the paper trail of a painting's owners — the chain of receipts, bills of sale and catalog entries that says where a canvas has been since it left the studio. It was never a claim about the painting. A perfect provenance on a forgery is a well-documented forgery, and the trade has bought plenty of those. What the paper trail does is make lying laborious, because the liar has to manufacture a history rather than an object.</p>
-    <p>The digital version is the same idea with a cryptographic signature instead of a filing cabinet. Adobe, Arm, the BBC, Intel, Microsoft and Truepic founded the <a href="https://c2pa.org/">Coalition for Content Provenance and Authenticity</a> in February 2021, and the first specification followed a year later. Instead of examining a file for signs of forgery, seal it at the source so any later change reads as a change. A watermark says a machine was involved. A manifest says which device, which moment, and what has happened since.</p>
-
-  </div>
-
-</div></section>
-
-<!-- ===================== FROM BYTES TO PHOTONS ===================== -->
-<section class="block" id="photons"><div class="wrap">
-  <h2>From bytes to photons</h2>
-  <p class="dek">Between the sensor and the signature there is a stretch of code. How long it is decides what the signature is worth.</p>
-
-  <figure class="pipefig">
-    <div class="fig plain">
-      <svg viewBox="0 0 900 236" role="img" aria-label="The path from photons to a rendered file, with approximate durations for each stage and the two places a signature can be applied.">
-        <defs><marker id="pa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L8 4 L0 8 z" class="s-faint"/></marker></defs>
-
-        <text x="16" y="20" class="lbl s-faint">SCENE</text>
-        <text x="150" y="20" class="lbl s-faint">SENSOR</text>
-        <text x="320" y="20" class="lbl s-faint">IMAGE PIPELINE</text>
-        <text x="600" y="20" class="lbl s-faint">FILE</text>
-        <text x="762" y="20" class="lbl s-faint">SCREEN</text>
-
-        <!-- photons -->
-        <g class="k-dim" stroke-width="1">
-          <path d="M20 76 h96" marker-end="url(#pa)"/><path d="M20 96 h96" marker-end="url(#pa)"/><path d="M20 116 h96" marker-end="url(#pa)"/>
-        </g>
-        <text x="20" y="140" class="cap s-dim">light</text>
-
-        <!-- sensor -->
-        <rect x="128" y="60" width="72" height="72" rx="4" class="f-surf k-txt" stroke-width="1.5"/>
-        <g class="k-line" stroke-width="0.8">
-          <path d="M128 84 h72 M128 108 h72 M152 60 v72 M176 60 v72"/>
-        </g>
-        <text x="164" y="150" text-anchor="middle" class="cap s-txt">photons → charge</text>
-        <text x="164" y="166" text-anchor="middle" class="num s-ac">~1/60 s exposure</text>
-
-        <path d="M208 96 h36" class="f-none k-dim" stroke-width="1.2" marker-end="url(#pa)"/>
-
-        <!-- pipeline stages -->
-        <rect x="252" y="60" width="300" height="72" rx="4" class="f-soft k-line"/>
-        <g class="k-line" stroke-width="0.8"><path d="M327 60 v72 M402 60 v72 M477 60 v72"/></g>
-        <text x="289" y="84" text-anchor="middle" class="cap s-dim">read out</text>
-        <text x="364" y="84" text-anchor="middle" class="cap s-dim">demosaic</text>
-        <text x="439" y="84" text-anchor="middle" class="cap s-dim">denoise</text>
-        <text x="514" y="84" text-anchor="middle" class="cap s-dim">tone-map</text>
-        <text x="289" y="104" text-anchor="middle" class="num s-faint">~5 ms</text>
-        <text x="364" y="104" text-anchor="middle" class="num s-faint">~8 ms</text>
-        <text x="439" y="104" text-anchor="middle" class="num s-faint">~12 ms</text>
-        <text x="514" y="104" text-anchor="middle" class="num s-faint">~6 ms</text>
-        <text x="402" y="150" text-anchor="middle" class="cap s-txt">charge → pixels</text>
-        <text x="402" y="166" text-anchor="middle" class="num s-ac">~30 ms, all on-chip</text>
-
-        <path d="M560 96 h36" class="f-none k-dim" stroke-width="1.2" marker-end="url(#pa)"/>
-
-        <!-- encode + file -->
-        <rect x="604" y="60" width="86" height="72" rx="4" class="f-surf k-line"/>
-        <text x="647" y="92" text-anchor="middle" class="cap s-dim">encode</text>
-        <text x="647" y="108" text-anchor="middle" class="num s-faint">~15 ms</text>
-        <text x="647" y="150" text-anchor="middle" class="cap s-txt">pixels → bytes</text>
-
-        <path d="M698 96 h34" class="f-none k-dim" stroke-width="1.2" marker-end="url(#pa)"/>
-        <rect x="740" y="60" width="60" height="72" rx="6" class="f-surf k-txt" stroke-width="1.5"/>
-        <rect x="748" y="68" width="44" height="52" rx="2" class="f-soft k-line"/>
-        <text x="770" y="150" text-anchor="middle" class="cap s-txt">rendered</text>
-
-        <!-- signing points, each on its own row -->
-        <path d="M128 178 v8 h424 v-8" class="f-none k-ac" stroke-width="1.4"/>
-        <text x="340" y="200" text-anchor="middle" class="lbl s-ac">A · SIGNED INSIDE THE PIPELINE</text>
-        <path d="M604 178 v8 h86 v-8" class="f-none k-warn" stroke-width="1.4" stroke-dasharray="4 3"/>
-        <text x="647" y="200" text-anchor="middle" class="lbl s-warn">B · AFTER THE HAND-OFF</text>
-        <text x="450" y="222" text-anchor="middle" class="cap s-dim">Everything left of the hand-off is code a third-party app never sees.</text>
-      </svg>
-    </div>
-    <figcaption>Roughly thirty milliseconds separate the photons from the pixels, and every stage of it runs before any third-party app is handed anything. A Pixel 10 signs at <b>A</b>. Source Kit signs at <b>B</b>.</figcaption>
-  </figure>
-  <div class="col">
-    <p>A photograph starts as charge on a grid of sensor wells and ends as a file. Everything in between — demosaic, lens correction, noise reduction, tone-map, encode — is code that could hand the next stage a different picture. What a signature proves has less to do with the key than with how much of that chain stands between the photons and the signing.</p>
-
-    <p><a href="https://github.com/c2pa-org/conformance-public">C2PA grades signers on two levels</a>: keys protected in software, or keys in hardware with a live attestation from the silicon. The <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10</a> is the first phone to reach the second, signing inside the imaging pipeline with the key in the Titan M2. The frame never passes through general-purpose code, so there is no seam where another image could be substituted. Qualcomm has the same idea in the Snapdragon secure environment. Dedicated cameras got there first, starting with Leica in 2023.</p>
-
-    <p>Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in the Secure Enclave, and can attest to nothing upstream of that hand-off. That is the ceiling for a third-party app on iOS, which is why it commits more <i>around</i> the frame instead of claiming more about it.</p>
-
-
-  </div>
 </div></section>
 
 <!-- ===================== FOUR GAPS ===================== -->
@@ -770,7 +772,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 <section class="block" id="close"><div class="wrap">
   <div class="col">
     <p class="pull">Prove your work.</p>
-    <p style="margin-top:var(--s-lg);color:var(--text)">On January 1, 2027, the lamps come on all over the internet. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853">California</a> will require every platform with more than two million monthly users in the state to surface provenance data in what its users post, and from 2028 every camera and phone sold in the state must embed it by default. Content Credentials stop being something you can go and check and become something you are shown. Whatever fraction of the internet is carrying a manifest becomes visible in a single day, and nobody knows yet whether the room turns out furnished or bare.</p>
+    <p style="margin-top:var(--s-lg);color:var(--text)">On January 1, 2027, all across the internet, the lights go on. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853">California</a> will require every platform with more than two million monthly users in the state to surface provenance data in what its users post, and from 2028 every camera and phone sold in the state must embed it by default. Content Credentials stop being something you can go and check and become something you are shown. Whatever fraction of the internet is carrying a manifest becomes visible in a single day, and nobody knows yet whether the room turns out furnished or bare.</p>
     <p style="color:var(--textDim)">Most of what is out there will have nothing to show. An interface that displays a credential also displays its absence, and absence is the easiest thing in the world to misread. A photograph with no manifest is not a lie. It is a photograph taken on an older phone, or run through an editor that dropped the metadata, or sent by someone with good reasons not to carry a record of where they were standing.</p>
     <p style="color:var(--textDim)">Which leaves the question the art dealers never solved either. A file can arrive with a spotless history and still be a picture of cardboard fairies on hatpins, and nothing in the record will say so. Provenance establishes that a file is what it claims to be. The harder question goes back to a person, where it has always been — the reader's, and the desk's.</p>
     <p style="color:var(--textDim)">None of this solves misinformation. What it offers is narrower: a way for an honest photographer to show their work, and one more expense for everybody else.</p>
@@ -807,8 +809,8 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     </div>
     <div>
       <p class="fighead">On this page</p>
+      <a href="#history">The story</a>
       <a href="#glance-sec">What it commits</a>
-      <a href="#history">History</a>
       <a href="#holes">The gaps</a>
       <a href="#signals">Privacy</a>
       <a href="#next">Next</a>

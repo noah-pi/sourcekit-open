@@ -37,9 +37,102 @@ rolled C2PA engine against the upstream `c2patool` on the same corpus and fails 
 divergence that is not explicitly whitelisted. The fixtures are in the repo. All 61,000 lines
 are published under Apache-2.0 — camera, cryptography, native modules, interface, test lab.
 
+## A photograph has never been proof
+
+It has only ever been expensive to fake.
+
+In July 1917 two girls in the Yorkshire village of Cottingley photographed some fairies at the
+bottom of the garden. The images were examined by Arthur Conan Doyle, who found them persuasive,
+and by Kodak, which declined to certify them but conceded it could not prove them fake. The
+fairies were cardboard, copied from a children's book and held up with hatpins. What is striking
+about the Cottingley affair is not that anyone was fooled but that the question was already
+understood to be a technical one, a matter for Kodak, rather than a question about two girls and
+a hatpin.
+
+Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team [moved a
+dead soldier forty yards](https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html) into a
+rocky niche and leaned a rifle beside him — the wrong rifle, as it turned out, of a type no
+sharpshooter carried. Soviet censors [airbrushed the disgraced out of group
+portraits](https://en.wikipedia.org/wiki/The_Commissar_Vanishes) for fifty years before
+Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a skill and an afternoon,
+and picture desks, wire services and libel law made the attempt more expensive still.
+
+Generative models did not make images forgeable. They made forgery fast and essentially free.
+
+### What the statutes actually demand
+
+The [National Conference of State Legislatures](https://www.ncsl.org/technology-and-communication/artificial-intelligence-2026-legislation) counts 1,425 artificial-intelligence
+bills introduced across 49 states so far in 2026. Of those, 312 concern deepfakes or provenance
+— better than one bill in five, in a field that also covers hiring, healthcare, policing and
+procurement. The impulse is not confined to the United States. The [EU AI Act's Article
+50](https://artificialintelligenceact.eu/article/50/) became applicable on August 2, 2026,
+requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties
+up to €15 million or 3% of global turnover. [California's AI Transparency
+Act](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942) took
+effect the same day, China has required labeling of synthetic media since its deep synthesis
+rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and
+Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge;
+the two technical demands underneath them do not.
+
+### 1 / Requiring invisible watermarks on generated media
+
+A watermark rides inside what a model generates, and it holds up against ordinary handling. It
+does not hold up against effort. Regenerating an image through a diffusion model [strips the
+mark and keeps the picture](https://arxiv.org/abs/2408.10446), one watermark can [overwrite
+another](https://arxiv.org/abs/2605.16796), and the [tools to do it are
+published](https://github.com/guillaumemeyer/watermarks-remover). Open-weight models emit
+nothing to strip in the first place. Detection has the same shape of problem: a classifier
+chasing a generator gets worse exactly as the generator improves.
+
+A watermark can only speak for what a machine made. It says nothing about a photograph, which
+leaves the person holding real footage with nothing to show. Once everyone knows video can be
+faked, real video gets dismissed as fake, a move already run in court by [Tesla's lawyers over
+recordings of Elon Musk](https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/) and by [January 6th defendants over
+footage from inside the Capitol](https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/).
+
+### 2 / Requiring all media to carry tamper-proof data about its provenance
+
+Provenance is a word borrowed from the art trade, where it means the paper trail of a painting's
+owners — the chain of receipts, bills of sale and catalog entries that says where a canvas has
+been since it left the studio. It was never a claim about the painting. A perfect provenance on
+a forgery is a well-documented forgery, and the trade has bought plenty of those. What the paper
+trail does is make lying laborious, because the liar has to manufacture a history rather than an
+object.
+
+The digital version is the same idea with a cryptographic signature instead of a filing cabinet.
+Adobe, Arm, the BBC, Intel, Microsoft and Truepic founded the [Coalition for Content Provenance
+and Authenticity](https://c2pa.org/) in February 2021, and the first specification followed a
+year later. Instead of examining a file for signs of forgery, seal it at the source so any later
+change reads as a change. A watermark says a machine was involved. A manifest says which device,
+which moment, and what has happened since.
+
+## From bytes to photons
+
+Between the sensor and the signature there is a stretch of code. How long it is decides what the
+signature is worth.
+
+A photograph starts as charge on a grid of sensor wells and ends as a file. Everything in
+between — demosaic, lens correction, noise reduction, tone-map, encode — is code that could hand
+the next stage a different picture. What a signature proves has less to do with the key than
+with how much of that chain stands between the photons and the signing.
+
+[C2PA grades signers on two levels](https://github.com/c2pa-org/conformance-public): keys
+protected in software, or keys in hardware with a live attestation from the silicon. The [Pixel
+10](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/) is the
+first phone to reach the second, signing inside the imaging pipeline with the key in the Titan
+M2. The frame never passes through general-purpose code, so there is no seam where another image
+could be substituted. Qualcomm has the same idea in the Snapdragon secure environment. Dedicated
+cameras got there first, starting with Leica in 2023.
+
+Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in
+the Secure Enclave, and can attest to nothing upstream of that hand-off. That is the ceiling for
+a third-party app on iOS, which is why it commits more *around* the frame instead of claiming
+more about it.
+
 ## What it commits
 
-All of it optional, all of it switchable in the viewfinder, all of it readable by any C2PA tool.
+Each of these exists because of a gap named above. All of it optional, and all of it switchable
+in the viewfinder.
 
 <details>
 <summary><b>Hardware attestation</b> — proof the key is held somewhere you cannot reach into</summary>
@@ -262,96 +355,6 @@ people, and not available to someone who cannot afford to be seen talking to a s
 [NETWORK.md](https://github.com/noah-pi/sourcekit-open/blob/main/docs/NETWORK.md)
 
 </details>
-
-## A photograph has never been proof
-
-It has only ever been expensive to fake.
-
-In July 1917 two girls in the Yorkshire village of Cottingley photographed some fairies at the
-bottom of the garden. The images were examined by Arthur Conan Doyle, who found them persuasive,
-and by Kodak, which declined to certify them but conceded it could not prove them fake. The
-fairies were cardboard, copied from a children's book and held up with hatpins. What is striking
-about the Cottingley affair is not that anyone was fooled but that the question was already
-understood to be a technical one, a matter for Kodak, rather than a question about two girls and
-a hatpin.
-
-Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team [moved a
-dead soldier forty yards](https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html) into a
-rocky niche and leaned a rifle beside him — the wrong rifle, as it turned out, of a type no
-sharpshooter carried. Soviet censors [airbrushed the disgraced out of group
-portraits](https://en.wikipedia.org/wiki/The_Commissar_Vanishes) for fifty years before
-Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a skill and an afternoon,
-and picture desks, wire services and libel law made the attempt more expensive still.
-
-Generative models did not make images forgeable. They made forgery fast and essentially free.
-
-### What the statutes actually demand
-
-Deepfake statutes are now close to universal across American states, and the [count keeps
-moving](https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/). The impulse is not confined to the United States. The [EU AI Act's Article
-50](https://artificialintelligenceact.eu/article/50/) became applicable on August 2, 2026,
-requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties
-up to €15 million or 3% of global turnover. [California's AI Transparency
-Act](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942) took
-effect the same day, China has required labeling of synthetic media since its deep synthesis
-rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and
-Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge;
-the two technical demands underneath them do not.
-
-### 1 / Requiring invisible watermarks on generated media
-
-A watermark rides inside what a model generates, and it holds up against ordinary handling. It
-does not hold up against effort. Regenerating an image through a diffusion model [strips the
-mark and keeps the picture](https://arxiv.org/abs/2408.10446), one watermark can [overwrite
-another](https://arxiv.org/abs/2605.16796), and the [tools to do it are
-published](https://github.com/guillaumemeyer/watermarks-remover). Open-weight models emit
-nothing to strip in the first place. Detection has the same shape of problem: a classifier
-chasing a generator gets worse exactly as the generator improves.
-
-A watermark can only speak for what a machine made. It says nothing about a photograph, which
-leaves the person holding real footage with nothing to show. Once everyone knows video can be
-faked, real video gets dismissed as fake, a move already run in court by [Tesla's lawyers over
-recordings of Elon Musk](https://fortune.com/2023/04/27/elon-musk-lawyers-argue-recordings-of-him-touting-tesla-autopilot-safety-could-be-deepfakes/) and by [January 6th defendants over
-footage from inside the Capitol](https://btlj.org/2025/06/deepfaked-evidence-what-case-law-tells-us-about-how-the-rules-of-authenticity-needs-to-change/).
-
-### 2 / Requiring all media to carry tamper-proof data about its provenance
-
-Provenance is a word borrowed from the art trade, where it means the paper trail of a painting's
-owners — the chain of receipts, bills of sale and catalog entries that says where a canvas has
-been since it left the studio. It was never a claim about the painting. A perfect provenance on
-a forgery is a well-documented forgery, and the trade has bought plenty of those. What the paper
-trail does is make lying laborious, because the liar has to manufacture a history rather than an
-object.
-
-The digital version is the same idea with a cryptographic signature instead of a filing cabinet.
-Adobe, Arm, the BBC, Intel, Microsoft and Truepic founded the [Coalition for Content Provenance
-and Authenticity](https://c2pa.org/) in February 2021, and the first specification followed a
-year later. Instead of examining a file for signs of forgery, seal it at the source so any later
-change reads as a change. A watermark says a machine was involved. A manifest says which device,
-which moment, and what has happened since.
-
-## From bytes to photons
-
-Between the sensor and the signature there is a stretch of code. How long it is decides what the
-signature is worth.
-
-A photograph starts as charge on a grid of sensor wells and ends as a file. Everything in
-between — demosaic, lens correction, noise reduction, tone-map, encode — is code that could hand
-the next stage a different picture. What a signature proves has less to do with the key than
-with how much of that chain stands between the photons and the signing.
-
-[C2PA grades signers on two levels](https://github.com/c2pa-org/conformance-public): keys
-protected in software, or keys in hardware with a live attestation from the silicon. The [Pixel
-10](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/) is the
-first phone to reach the second, signing inside the imaging pipeline with the key in the Titan
-M2. The frame never passes through general-purpose code, so there is no seam where another image
-could be substituted. Qualcomm has the same idea in the Snapdragon secure environment. Dedicated
-cameras got there first, starting with Leica in 2023.
-
-Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in
-the Secure Enclave, and can attest to nothing upstream of that hand-off. That is the ceiling for
-a third-party app on iOS, which is why it commits more *around* the frame instead of claiming
-more about it.
 
 ## Where it still comes up short
 
