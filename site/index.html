@@ -114,6 +114,25 @@ svg .cl.hi { fill:var(--text); font-weight:700; }
 svg .cn { font-size:10px; font-family:var(--mono); fill:var(--textFaint); }
 svg .cn.hi { fill:var(--accent); font-weight:700; }
 .f-soft2 { fill:var(--textFaint); opacity:.42; }
+/* real screenshots */
+.shots { margin:0; }
+.shots-frame { position:relative; border-radius:26px; overflow:hidden; background:var(--surface2); border:1px solid var(--border); aspect-ratio:9/19.5; }
+.shots-frame img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .28s ease; }
+.shots-frame img.on { opacity:1; }
+.shots-frame img.missing { display:none; }
+.shots-fallback { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:var(--s-lg); margin:0; font-size:12.5px; line-height:1.5; color:var(--textFaint); }
+.shots-frame:has(img.on:not(.missing)) .shots-fallback { display:none; }
+.shots-dots { display:flex; gap:6px; justify-content:center; margin-top:var(--s-md); }
+.shots-dots button { width:7px; height:7px; padding:0; border-radius:50%; border:none; cursor:pointer; background:var(--border); transition:background .2s; }
+.shots-dots button[aria-current="true"] { background:var(--accent); }
+.shots figcaption { margin-top:var(--s-sm); font-size:12.5px; line-height:1.5; color:var(--textFaint); text-align:center; min-height:2.6em; }
+
+.trip { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-lg); margin:var(--s-lg) 0 var(--s-xl); }
+.trip > div { min-width:0; }
+.trip img { width:100%; height:auto; display:block; border-radius:12px; border:1px solid var(--border); background:var(--surface2); }
+.trip > div.empty::before { content:"screenshot not bundled"; display:flex; align-items:center; justify-content:center; aspect-ratio:9/19.5; border-radius:12px; border:1px solid var(--border); background:var(--surface2); color:var(--textFaint); font-size:11px; }
+.trip figcaption { margin-top:var(--s-sm); font-size:13px; line-height:1.5; color:var(--textDim); }
+@media (max-width:820px){ .trip { grid-template-columns:1fr; } }
 .gname { margin:8px 0 2px; font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--textFaint); }
 .gtag .chip { font-size:9.5px; letter-spacing:0.6px; text-transform:uppercase; font-weight:800; padding:4px 9px; }
 .gap svg { width:100%; max-width:400px; height:auto; display:block; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); }
@@ -296,22 +315,18 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
       <div class="cta"><a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a></div>
     </div>
   </div>
-  <div class="phone">
-    <div class="screen">
-      <div class="statusbar"><span>9:41</span><span style="display:inline-flex;gap:5px;align-items:center"><svg width="17" height="11" viewBox="0 0 17 11" aria-hidden="true"><rect x="0" y="7" width="3" height="4" rx="1" fill="currentColor"/><rect x="4.5" y="5" width="3" height="6" rx="1" fill="currentColor"/><rect x="9" y="2.5" width="3" height="8.5" rx="1" fill="currentColor"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="currentColor" opacity=".35"/></svg><svg width="24" height="11" viewBox="0 0 24 11" aria-hidden="true"><rect x="0.5" y="0.5" width="20" height="10" rx="3" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="14" height="7" rx="1.6" fill="currentColor"/><rect x="21.6" y="3.6" width="1.6" height="3.8" rx="0.8" fill="currentColor" opacity=".4"/></svg></span></div>
-      <div class="screenpad">
-        <div class="screentitle">Inspect</div>
-        <p class="screensub">exhibit_4831.mov · 12.4 MB</p>
-        <div class="card">
-          <p class="ladder-title">What this file can show</p>
-          <div class="rung"><div class="rail-col"><div class="node reached"></div><div class="rail"></div></div><div class="rung-text"><div class="rung-label">Media unchanged since signing</div><div class="rung-detail">Signature valid; media bit-for-bit identical to what was signed.</div></div></div>
-          <div class="rung"><div class="rail-col"><div class="node reached"></div><div class="rail"></div></div><div class="rung-text"><div class="rung-label">Signer identified</div><div class="rung-detail">Nothing outside the file vouches for this key.</div></div></div>
-          <div class="rung"><div class="rail-col"><div class="node reached ringed"></div><div class="rail"></div></div><div class="rung-text"><div class="rung-label">Key attested by Apple hardware</div><div class="rung-detail">Apple certifies the key is Enclave-resident on genuine hardware.</div></div></div>
-          <div class="rung"><div class="rail-col"><div class="node"></div></div><div class="rung-text"><div class="rung-label dim">Time bracketed by an independent anchor</div><div class="rung-detail">No timestamp token was attached at signing.</div></div></div>
-        </div>
-      </div>
+  <figure class="shots" data-carousel>
+    <div class="shots-frame">
+      <img src="assets/shot-viewfinder.png" alt="The Source Kit viewfinder: a Sealing on indicator with the signing key fingerprint, Location and Byline toggles, and a live picture-in-picture from the second camera." data-slide class="on" onerror="this.classList.add('missing')">
+      <img src="assets/shot-integrity.png" alt="The Integrity card: App Attest assertion embedded, a 1.9 second shutter-to-signature gap, sensor-frame timing, and the two synchronized camera views compared side by side." data-slide onerror="this.classList.add('missing')">
+      <img src="assets/shot-motion.png" alt="The Motion trace card: picture drift between frames plotted against the gyroscope's record of how the phone was twisting at the same moment." data-slide onerror="this.classList.add('missing')">
+      <img src="assets/shot-capture-detail.png" alt="The Capture card: a countersigned timestamp, a pending Bitcoin anchor, location and Wi-Fi both marked redacted by signer, device model and sealed sensor readings." data-slide onerror="this.classList.add('missing')">
+      <img src="assets/shot-share.png" alt="The share sheet offering a re-sealed copy with name, organization and location redacted, or the original file exactly as sealed." data-slide onerror="this.classList.add('missing')">
+      <p class="shots-fallback">Screenshots are not bundled. Drop the five PNGs into <code>site/assets/</code>.</p>
     </div>
-  </div>
+    <div class="shots-dots" data-dots></div>
+    <figcaption data-shotcap></figcaption>
+  </figure>
 </div></header>
 
 
@@ -564,7 +579,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <div class="fbody">
       <p>Because the record is sealed at the shutter, it documents where the photographer was standing, when, on which device, and sometimes under what name. For most work that is a credential. For someone photographing a police stop, a picket line or a border crossing, the same file is a piece of evidence about them, carried in voluntarily and impossible to recall once shared.</p>
       <p>So the choosing happens before the shutter, not on export. Every field is committed under its own salt into a signed Merkle tree, which lets a verifier tell three states apart. <b>Disclosed</b> is what it sounds like. <b>Withheld</b> means committed but absent, with no ciphertext for anyone to attack. <b>Never-recorded</b> is declared at capture and bound into the root, so a field you withheld cannot later be passed off as one you never collected.</p>
-      <p>Reveal a field later and it still verifies against the original signature. Destroy the seed and the withheld fields become permanently underivable by anyone, including me. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure">src/disclosure</a></p>
+      <p>Reveal a field later and it still verifies against the original signature. Destroy the seed and the withheld fields become permanently underivable by anyone. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure">src/disclosure</a></p>
     </div>
   </details>
 
@@ -795,27 +810,22 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <p class="dek">A file that can prove where it came from can also prove where you were.</p>
   <div class="col" style="margin-bottom:var(--s-xl)"><p>A wedding photographer wants every field filled in. A photographer at a protest wants the frame and nothing else, because the GPS fix that corroborates a story for a picture desk also places a named person at a named corner on a named afternoon. There is no setting that is right for both, so the choice gets made twice: once at the shutter, and again at export.</p>
     <p>Both are the same mechanism. Every field is committed under its own salt into a Merkle tree, and the signature covers the root rather than the values — which is what makes three states distinguishable to a verifier instead of a matter of trust. A field can be <b>disclosed</b>, present and checkable. It can be <b>withheld</b>: committed at capture, absent from the file, with no ciphertext for anyone to attack later. Or it can be <b>never-recorded</b>, declared at capture and bound into the root, so the file carries proof that the sensor was off.</p>
-    <p>That last state is the one that matters under pressure. A file with the location redacted invites the question of what was removed and why. A file that never recorded a location can demonstrate as much to anyone who asks, cryptographically, without asking to be believed. And a field withheld today can be revealed years later and still verify against the original signature — or the seed can be destroyed, and it becomes permanently underivable by anyone, including me.</p></div>
+    <p>That last state is the one that matters under pressure. A file with the location redacted invites the question of what was removed and why. A file that never recorded a location can demonstrate as much to anyone who asks, cryptographically, without asking to be believed. And a field withheld today can be revealed years later and still verify against the original signature — or the seed can be destroyed, and it becomes permanently underivable by anyone.</p></div>
 
-  <div style="max-width:300px;margin:0 0 var(--s-xl)">
-      <div class="phone sm">
-        <div class="screen">
-          <div class="vf">
-            <div class="vf-top">
-              <span class="vf-pill on">◉ SEALING</span>
-              <span class="vf-pill on">GPS</span>
-              <span class="vf-pill on">2 LENS</span>
-              <span class="vf-pill">BYLINE</span>
-              <span class="vf-pill">WI-FI</span>
-              <span class="vf-pill on">MOTION</span>
-            </div>
-            <div class="vf-mid"><div class="vf-scene"></div></div>
-            <div class="vf-bot"><span class="vf-lens">0.5×</span><div class="shutter"></div><span class="vf-lens">RAW</span></div>
-          </div>
-        </div>
-      </div>
-      <p class="caption">Anything on is bound into the signature. Anything off is recorded as deliberately absent, a different fact from silently missing.</p>
-  </div>
+  <figure class="trip">
+    <div>
+      <img src="assets/shot-viewfinder.png" alt="The viewfinder with Location and Byline shown as separate toggles." onerror="this.parentElement.classList.add('empty')">
+      <figcaption><b>At the shutter.</b> Each field is its own switch, and what you leave off is bound into the signature as never-recorded.</figcaption>
+    </div>
+    <div>
+      <img src="assets/shot-share.png" alt="The share sheet offering a re-sealed redacted copy or the original." onerror="this.parentElement.classList.add('empty')">
+      <figcaption><b>At export.</b> A second decision, made per recipient: a re-sealed copy with name, organization and location removed, or the file exactly as sealed.</figcaption>
+    </div>
+    <div>
+      <img src="assets/shot-capture-detail.png" alt="A recipient's view showing location and Wi-Fi marked redacted by signer." onerror="this.parentElement.classList.add('empty')">
+      <figcaption><b>What a recipient sees.</b> Redacted by signer, stated as such — not a gap they have to interpret.</figcaption>
+    </div>
+  </figure>
 
   <div class="tw"><table>
     <thead><tr><th>Signal</th><th>What it records</th><th>What it's worth</th></tr></thead>
@@ -899,6 +909,46 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   </div>
   <p class="fine" style="margin-top:var(--s-xl);padding-top:var(--s-md);border-top:1px solid var(--border)">© 2026 Noah Bassetti-Blum · Apache-2.0 · Apache-2.0 covers the code, not the name — fork freely, rename proudly.</p>
 </div></footer>
+<script>
+(function () {
+  var root = document.querySelector('[data-carousel]');
+  if (!root) return;
+  var slides = [].slice.call(root.querySelectorAll('[data-slide]'));
+  var caps = [
+    'The viewfinder. Every field is a toggle, and the second camera is already running.',
+    'What was checked, and how long the bytes sat unsigned after the shutter.',
+    'The picture drifting between frames, against the gyroscope at the same moment.',
+    'A capture record with location and Wi-Fi redacted by the signer.',
+    'Sharing: a re-sealed redacted copy, or the file exactly as sealed.'
+  ];
+  if (slides.length < 2) { var d = root.querySelector('[data-dots]'); if (d) d.remove(); }
+  var dots = root.querySelector('[data-dots]');
+  var cap = root.querySelector('[data-shotcap]');
+  var i = 0, timer;
+
+  function show(n) {
+    i = (n + slides.length) % slides.length;
+    slides.forEach(function (s, k) { s.classList.toggle('on', k === i); });
+    if (cap) cap.textContent = caps[i] || '';
+    if (dots) [].forEach.call(dots.children, function (b, k) { b.setAttribute('aria-current', k === i ? 'true' : 'false'); });
+  }
+  function start() { stop(); timer = setInterval(function () { show(i + 1); }, 5000); }
+  function stop() { if (timer) clearInterval(timer); }
+
+  if (dots && slides.length > 1) {
+    slides.forEach(function (_, k) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Screenshot ' + (k + 1) + ' of ' + slides.length);
+      b.addEventListener('click', function () { show(k); start(); });
+      dots.appendChild(b);
+    });
+  }
+  if (slides.length) { show(0); if (slides.length > 1) start(); }
+  root.addEventListener('mouseenter', stop);
+  root.addEventListener('mouseleave', function () { if (slides.length > 1) start(); });
+})();
+</script>
 <script>
 (function () {
   var root = document.querySelector('[data-pxlab]');
