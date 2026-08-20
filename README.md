@@ -187,7 +187,7 @@ Parallax range calculator
 19.2 mm 0.6 m SUBJECT DISTANCE
 
 Disparity = focal length in pixels × baseline ÷ distance, with focal length taken from a 70°
-horizontal field of view at the analysed width. A patch has to shift by at least one pixel to be
+horizontal field of view at the analyzed width. A patch has to shift by at least one pixel to be
 measurable, so that is the range floor. Below roughly 9 cm the shift exceeds the ±14 px search
 window and matching fails outright.
 
@@ -359,70 +359,30 @@ which moment, and what has happened since.
 Between the sensor and the signature there is a stretch of code. How long it is decides what the
 signature is worth.
 
-A digital photograph begins as electrical charge on a grid of sensor wells and ends as a
-compressed file. Something has to turn one into the other: read the wells, interpolate colour
-across the filter mosaic, correct the lens, reduce noise, tone-map, encode. That chain runs for
-tens of milliseconds, and every stage of it is code that could in principle hand the next stage
-a different picture. So the question that decides what a provenance signature actually proves is
-not how strong the key is. Everyone keeps the key in hardware. The question is how much of that
-chain sits between the photons and the signing, and whether any of it can be replaced.
+A photograph starts as charge on a grid of sensor wells and ends as a file. Everything in
+between — demosaic, lens correction, noise reduction, tone-map, encode — is code that could hand
+the next stage a different picture. What a signature proves has less to do with the key than
+with how much of that chain stands between the photons and the signing.
 
-There is a formal answer to that question. C2PA's [conformance program](https://github.com/c2pa-org/conformance-public) grades the signer and writes the grade into the certificate, and there
-are two grades. Both cover the same six objectives: certificate enrolment, key confidentiality,
-protecting the claim generator from misuse, protecting the asset and assertions at generation,
-protecting traffic between components, and the hosting environment. **Level 1** can meet them in
-software — the signing key encrypted at rest, a shared secret to authenticate at enrolment.
-**Level 2** adds two requirements: the key must be generated, stored and used at a higher
-privilege level than the code asking for the signature, and the device must present a hardware-
-rooted attestation of the signing binary when it enrols.
+[C2PA grades signers on two levels](https://github.com/c2pa-org/conformance-public): keys
+protected in software, or keys in hardware with a live attestation from the silicon. The [Pixel
+10](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/) is the
+first phone to reach the second, signing inside the imaging pipeline with the key in the Titan
+M2 — the frame never passes through general-purpose code, so there is no seam where another
+image could be substituted. Qualcomm has the same idea in the Snapdragon secure environment.
+(Dedicated cameras got here first, starting with Leica in 2023; this is a smartphone story now.)
 
-The [Pixel 10](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/) is the first phone to reach Level 2, and the way it does so is instructive. Google
-signs inside the imaging pipeline on the Tensor G5; the claim key lives in Android StrongBox on
-the Titan M2 security chip; a timestamp authority runs on the device, so a capture made with the
-radio off still carries trusted time. The frame is never handed to general-purpose code between
-the sensor and the signature, which means there is no seam at which a different image could be
-substituted. Photograph something with a Pixel 10 and the file supports a claim almost nothing
-else can: that these are the photons that struck the sensor.
+Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in
+the Secure Enclave, and can attest to nothing upstream of that hand-off. That is the ceiling for
+a third-party app on iOS, which is why it commits more *around* the frame rather than claiming
+more about it.
 
-Qualcomm took the same idea to the rest of the Android market, putting a signer inside the
-Snapdragon trusted execution environment. Apple's Reference Image, visible in the iOS 27 beta,
-captures sensor signatures and hardware identifiers with the frame — but it sends them to
-Private Cloud Compute and returns an authenticated copy, and it is not built on C2PA.
-
-Source Kit sits at the far end of that chain. It receives a finished image from the operating
-system and signs the bytes it was handed, in its own process, with a key in the Secure Enclave.
-Everything upstream of that hand-off is code it cannot attest to — the ceiling for a third-party
-app on iOS, not a design preference, since Level 2 for a mobile app is currently reachable only
-on Android. What it can do instead is commit far more *around* the frame, so that a forger has
-to keep several signals consistent rather than one.
-
-### Cameras got there first, and California is about to switch the lights on
-
-Phones are the late arrivals. Leica shipped the [first camera with Content
-Credentials](https://leica-camera.com/en-US/photography/content-credentials), the M11-P, in
-October 2023. Sony added capture-time signing across the Alpha 1 II and Alpha 9 III, Canon
-launched its [Authenticity Imaging System](https://c2paviewer.com/articles/canon-authenticity-imaging-system) for newsrooms in May 2026, and Nikon [added C2PA to the
-Z6III](https://www.nikonusa.com/press-room/nikon-develops-firmware-that-adds-function-compliant-with-cp2a-standards-to-z6iii) in firmware — then withdrew it within a week, when a researcher
-used the camera's multiple-exposure mode to make it sign a composite it had not photographed.
-Every certificate the programme had issued was invalidated, so credentials from that window no
-longer verify. That is the standard working as designed, and a fair measure of how new all of
-this is.
-
-Then the law arrives, in two dates. From **1 January 2028**, California's [AB
-853](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853)
-requires every capture device sold in the state — the statute names cameras, phones with built-
-in cameras or microphones, and voice recorders — to embed a latent disclosure of manufacturer,
-device and capture time, by default.
-
-The date to watch is the earlier one. From **1 January 2027**, every platform above two million
-monthly users must detect provenance data in what its users post and give them an interface to
-inspect it. Until now Content Credentials have been something you could go and check, if you
-knew they existed, had a tool, and cared enough to use it. After that date they are something
-the platform has to show you. Whatever fraction of the internet is carrying a manifest by then
-becomes visible on a single day — not gradually, and not because anyone went looking. It is the
-closest thing this field has to switching the lights on in a room nobody has seen properly, and
-there is no way to know in advance whether the room turns out to be mostly furnished or mostly
-bare.
+On the first of January, 2027, the lamps come on all over the internet. [California](https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853) will require every
+platform above two million monthly users to surface provenance data in what its users post, and
+from 2028 every camera and phone sold in the state must embed it by default. Content Credentials
+stop being something you can go and check and become something you are shown. Whatever fraction
+of the internet is carrying a manifest becomes visible in a single day, and nobody knows yet
+whether the room turns out furnished or bare.
 
 ## Where it still comes up short
 
