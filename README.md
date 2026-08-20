@@ -387,45 +387,53 @@ whether the room turns out furnished or bare.
 ## Where it still comes up short
 
 Six ways a file can carry a perfect signature and still mislead you. The first independent
-security review of the specification,
-[Golaszewski et al. at UMBC](https://eprint.iacr.org/2026/804), found implementation problems
-on top of these — disagreeing validators, weak revocation, an exclusion range that hides
-edits. Those are fixable. The six below are structural.
+security review of the specification, [Golaszewski et al. at
+UMBC](https://eprint.iacr.org/2026/804), found implementation problems on top of these —
+disagreeing validators, weak revocation, an exclusion range that hides edits. Those are fixable.
+The six below are structural.
+
+`REPHOTOGRAPHY` · *partially addressable*
 
 **The lens can be pointed at a screen.** Photograph a good monitor and every guarantee holds,
-because they are all true: that sensor really did see those photons. No signature, from any
-device, reaches past the front of the lens.
+because all of them are true: the sensor did see those photons. No signature reaches past the
+front of the lens.
 
-**A signature binds a claim without checking it.** Civilian GPS is unauthenticated and
-spoofers cost less than a phone. The scene can be entirely real while the time and place
-sealed beside it are not, and the seal makes a forged fix look exactly as solid as a true one.
+`SENSOR SPOOFING` · *partially addressable*
 
-**Most platforms strip the credential on upload.** The manifest disappears at the exact moment
-a picture starts to travel, and an unsigned file is indistinguishable from one that never had
-a signature. The industry answer is a fingerprint plus a lookup service. The fingerprint
-exists here; the lookup does not.
+**A signature binds a claim without checking it.** Civilian GPS is unauthenticated and spoofers
+cost less than a phone. The scene is real, the signature is valid, and the place is wrong —
+sealed just as faithfully as a true one.
 
-**Below Level 2, a picture can be handed to the signer.** If the frame reaches the signing
-step through code that isn't attested, whatever arrives gets signed correctly. In 2025 a
-researcher used the Nikon Z6III's multiple-exposure mode to do exactly this; Nikon invalidated
-every certificate it had issued.
+`METADATA STRIPPING` · *addressable*
+
+**Most platforms strip the credential on upload.** The manifest disappears the moment a picture
+starts to travel, and a stripped file is indistinguishable from one that was never signed. The
+answer is a fingerprint plus a lookup service. The fingerprint exists here; the lookup does not.
+
+`SOFTWARE INJECTION` · *addressed in new devices*
+
+**Below Level 2, a picture can be handed to the signer.** If the frame reaches the signer
+through code nobody attested to, whatever arrives gets signed correctly. A researcher did this
+to the Nikon Z6III through its multiple-exposure mode; Nikon invalidated every certificate it
+had issued.
+
+`STAGED REALITY` · *no viable solution*
 
 **A staged scene is a true photograph of a lie.** Everything here would have sealed the
-Cottingley fairies without complaint. Real camera, real plate, real garden, real light, real
-distance — two lenses would even measure genuine depth, because there was genuine depth. Every
-check passes and every one of them is telling the truth.
+Cottingley fairies without complaint. Real camera, real garden, real light, real distance — two
+lenses would measure genuine depth, because there was genuine depth. Every check passes, and
+every one is telling the truth.
 
-**Protecting someone in the frame breaks the proof.** Blur a bystander's face, crop a
-landmark, drop the coordinates, and the signature fails — the file now reads as modified,
-which is the same verdict a forgery gets. Selective disclosure here covers the metadata, so
-fields can be withheld and still verify. Nothing yet covers the pixels.
+`REDACTION` · *addressable*
+
+**Protecting someone in the frame breaks the proof.** Blur a bystander's face or crop a landmark
+and the signature fails, giving the same verdict a forgery gets. Selective disclosure covers the
+metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.
 
 None of this is fixed by detection. You cannot out-classify a generator — it improves as the
 classifier does. What you can do is raise what a forger has to keep consistent at once:
-geometry, motion, shadows, time. Everything this app commits is aimed at the first gap, the
-one that stays open however good the hardware gets.
-
-[Diagrams for each of these are on the page.](https://noah-pi.github.io/sourcekit-open/#holes)
+geometry, motion, shadows, time. Everything this app commits is aimed at the first gap, the one
+that stays open however good the hardware gets.
 
 ## The shutter path
 

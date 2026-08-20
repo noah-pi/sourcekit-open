@@ -105,6 +105,7 @@ section.block { padding:var(--s-xxl) 0; border-top:1px solid var(--border); scro
 .grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:var(--s-md); }
 .gaps { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-xl) var(--s-xl); margin-top:var(--s-xl); }
 .gtag { margin:var(--s-md) 0 0; }
+.gname { margin:8px 0 2px; font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--textFaint); }
 .gtag .chip { font-size:9.5px; letter-spacing:0.6px; text-transform:uppercase; font-weight:800; padding:4px 9px; }
 .gap svg { width:100%; max-width:400px; height:auto; display:block; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); }
 .gap h3 { margin:var(--s-md) 0 6px; font-size:15px; }
@@ -566,138 +567,91 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <div class="gaps">
 
     <div class="gap">
-      <svg viewBox="0 0 260 122" role="img" aria-label="A camera photographing a fairy picture displayed on an OLED monitor. The signature verifies.">
-        <rect x="10" y="16" width="92" height="64" rx="4" class="f-soft k-line"/>
-        <rect x="16" y="22" width="80" height="46" rx="2" class="f-surf k-dim"/>
-        <use href="#fy" x="34" y="30" width="28" height="22" class="s-warn"/>
-        <use href="#fy" x="60" y="40" width="20" height="16" class="s-warn"/>
-        <path d="M40 80 h32 M56 80 v6" class="f-none k-line" stroke-width="1.6"/>
-        <text x="56" y="102" text-anchor="middle" class="glbl s-faint">OLED SCREEN</text>
-        <path d="M112 48 h20" class="f-none k-dim" stroke-width="1.4" stroke-dasharray="3 3"/>
-        <path d="M129 44 l6 4 -6 4z" class="s-faint"/>
-        <rect x="146" y="31" width="52" height="34" rx="4" class="f-surf k-txt" stroke-width="1.5"/>
-        <circle cx="172" cy="48" r="9" class="f-none k-txt" stroke-width="1.5"/>
-        <rect x="162" y="24" width="20" height="7" rx="2" class="f-surf k-txt" stroke-width="1.5"/>
-        <text x="172" y="102" text-anchor="middle" class="glbl s-faint">REAL CAMERA</text>
-        <path d="M206 48 h12" class="f-none k-ac" stroke-width="1.4"/>
-        <circle cx="234" cy="48" r="11" class="f-acsoft k-ac" stroke-width="1.5"/>
-        <path d="M229 48 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/>
-        <text x="234" y="72" text-anchor="middle" class="glbl s-ac">VALID</text>
+      <svg viewBox="0 0 260 122" role="img" aria-label="A real camera photographing a picture displayed on a screen. The signature is valid.">
+        <rect x="8" y="16" width="86" height="52" rx="4" class="f-soft k-line"/><rect x="14" y="22" width="74" height="40" rx="2" class="f-surf k-dim"/><use href="#fy" x="28" y="28" width="26" height="20" class="s-warn"/><use href="#fy" x="56" y="38" width="18" height="14" class="s-warn"/><path d="M38 68 h26 M51 68 v5" class="f-none k-line" stroke-width="1.5"/>
+        <text x="51" y="88" text-anchor="middle" class="glbl s-faint">OLED SCREEN</text>
+        <path d="M102 45 h18" class="f-none k-dim" stroke-width="1.4"/><path d="M117 41 l6 4 -6 4z" class="s-faint"/>
+        <rect x="140" y="30" width="50" height="32" rx="4" class="f-surf k-txt" stroke-width="1.5"/><circle cx="165" cy="46" r="8.5" class="f-none k-txt" stroke-width="1.5"/><rect x="156" y="23" width="19" height="7" rx="2" class="f-surf k-txt" stroke-width="1.5"/>
+        <text x="165" y="88" text-anchor="middle" class="glbl s-faint">REAL CAMERA</text>
+        <circle cx="238" cy="45" r="11" class="f-acsoft k-ac" stroke-width="1.5"/><path d="M232 45 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/><text x="238" y="70" text-anchor="middle" class="glbl s-ac">VALID</text>
       </svg>
-      <p class="gtag"><span class="chip warn">no viable solution</span></p>
+      <p class="gtag"><span class="chip info">partially addressable</span></p>
+      <p class="gname">Rephotography</p>
       <h3>The lens can be pointed at a screen</h3>
       <p>Photograph a good monitor and every guarantee holds, because all of them are true: the sensor did see those photons. No signature reaches past the front of the lens.</p>
     </div>
 
     <div class="gap">
-      <svg viewBox="0 0 260 122" role="img" aria-label="A real scene photographed in London, sealed with a location claim reading Paris.">
-        <rect x="10" y="18" width="86" height="58" rx="4" class="f-surf k-line"/>
-        <use href="#fy" x="38" y="30" width="26" height="20" class="s-ac"/>
-        <path d="M20 68 q16-10 28-3 q12-8 40 2" class="f-none k-line" stroke-width="1.4"/>
-        <text x="53" y="94" text-anchor="middle" class="glbl s-ac">REAL SCENE</text>
-        <text x="53" y="108" text-anchor="middle" class="glbl s-warn">ACTUALLY LONDON</text>
-        <path d="M104 46 h18" class="f-none k-dim" stroke-width="1.4"/>
-        <path d="M119 42 l6 4 -6 4z" class="s-faint"/>
-        <rect x="136" y="20" width="112" height="54" rx="4" class="f-soft k-line"/>
-        <text x="147" y="37" class="gcap s-dim">time</text>
-        <text x="240" y="37" text-anchor="end" class="gcap s-dim">14:06</text>
-        <text x="147" y="53" class="gcap s-dim">place</text>
-        <text x="240" y="53" text-anchor="end" class="gcap s-txt" style="font-weight:700">PARIS</text>
-        <path d="M144 60 h96" class="f-none k-line" stroke-width="1"/>
-        <text x="147" y="70" class="glbl s-ac">SIGNATURE VALID</text>
+      <svg viewBox="0 0 260 122" role="img" aria-label="A real scene sealed with a location supplied by a GPS spoofer. The signature is still valid.">
+        <rect x="8" y="16" width="86" height="52" rx="4" class="f-surf k-line"/><use href="#fy" x="38" y="26" width="24" height="18" class="s-ac"/><path d="M16 60 q16-9 28-3 q12-7 42 2" class="f-none k-line" stroke-width="1.3"/>
+        <text x="51" y="88" text-anchor="middle" class="glbl s-faint">REAL SCENE</text>
+        <path d="M102 45 h18" class="f-none k-dim" stroke-width="1.4"/><path d="M117 41 l6 4 -6 4z" class="s-faint"/>
+        <rect x="132" y="18" width="70" height="34" rx="4" class="f-soft k-line"/><text x="167" y="31" text-anchor="middle" class="glbl s-faint">SEALED PLACE</text><text x="167" y="45" text-anchor="middle" class="gcap s-txt" style="font-weight:700">PARIS</text><path d="M167 72 v-8" class="f-none k-warn" stroke-width="1.4"/><path d="M161 74 q6-5 12 0" class="f-none k-warn" stroke-width="1.2"/><path d="M157 79 q10-8 20 0" class="f-none k-warn" stroke-width="1.2"/><path d="M167 64 v-8" class="f-none k-warn" stroke-width="1.2" stroke-dasharray="2 2"/><path d="M164 58 l3-4 3 4z" class="s-warn"/>
+        <text x="167" y="98" text-anchor="middle" class="glbl s-warn">SPOOFED GPS</text>
+        <circle cx="238" cy="45" r="11" class="f-acsoft k-ac" stroke-width="1.5"/><path d="M232 45 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/><text x="238" y="70" text-anchor="middle" class="glbl s-ac">VALID</text>
       </svg>
       <p class="gtag"><span class="chip info">partially addressable</span></p>
+      <p class="gname">Sensor spoofing</p>
       <h3>A signature binds a claim without checking it</h3>
       <p>Civilian GPS is unauthenticated and spoofers cost less than a phone. The scene is real, the signature is valid, and the place is wrong — sealed just as faithfully as a true one.</p>
     </div>
 
     <div class="gap">
-      <svg viewBox="0 0 260 122" role="img" aria-label="A signed image uploaded to a platform arrives with its manifest removed.">
-        <rect x="10" y="20" width="80" height="52" rx="4" class="f-surf k-line"/>
-        <use href="#fy" x="36" y="28" width="26" height="20" class="s-ac"/>
-        <rect x="16" y="57" width="68" height="10" rx="2" class="f-acsoft k-ac" stroke-width="1.1"/>
-        <text x="50" y="64.5" text-anchor="middle" class="glbl s-ac">MANIFEST</text>
-        <text x="50" y="90" text-anchor="middle" class="glbl s-faint">ON DEVICE</text>
-        <path d="M100 46 h28" class="f-none k-dim" stroke-width="1.4"/>
-        <path d="M125 42 l6 4 -6 4z" class="s-faint"/>
-        <text x="114" y="36" text-anchor="middle" class="glbl s-faint">UPLOAD</text>
-        <rect x="142" y="20" width="80" height="52" rx="4" class="f-surf k-line"/>
-        <use href="#fy" x="168" y="28" width="26" height="20" class="s-ac"/>
-        <rect x="148" y="57" width="68" height="10" rx="2" class="f-none k-dim" stroke-width="1.1" stroke-dasharray="3 2"/>
-        <text x="182" y="90" text-anchor="middle" class="glbl s-warn">NO CREDENTIAL</text>
-        <circle cx="240" cy="46" r="10" class="f-warnsoft k-warn" stroke-width="1.4"/>
-        <path d="M235 46 h10" class="f-none k-warn" stroke-width="2" stroke-linecap="round"/>
+      <svg viewBox="0 0 260 122" role="img" aria-label="A signed image uploaded to a platform arrives with its manifest stripped.">
+        <rect x="8" y="16" width="86" height="52" rx="4" class="f-surf k-line"/><use href="#fy" x="38" y="22" width="24" height="18" class="s-ac"/><rect x="14" y="52" width="74" height="10" rx="2" class="f-acsoft k-ac" stroke-width="1.1"/><text x="51" y="59.5" text-anchor="middle" class="glbl s-ac">MANIFEST</text>
+        <text x="51" y="88" text-anchor="middle" class="glbl s-faint">ON DEVICE</text>
+        <path d="M102 45 h18" class="f-none k-dim" stroke-width="1.4"/><path d="M117 41 l6 4 -6 4z" class="s-faint"/>
+        <rect x="130" y="16" width="72" height="52" rx="4" class="f-surf k-line"/><use href="#fy" x="154" y="22" width="24" height="18" class="s-ac"/><rect x="136" y="52" width="60" height="10" rx="2" class="f-none k-dim" stroke-width="1.1" stroke-dasharray="3 2"/>
+        <text x="165" y="88" text-anchor="middle" class="glbl s-faint">AFTER UPLOAD</text>
+        <circle cx="238" cy="45" r="11" class="f-soft k-dim" stroke-width="1.5"/><path d="M232 45 h12" class="f-none k-dim" stroke-width="2" stroke-linecap="round"/><text x="238" y="70" text-anchor="middle" class="glbl s-faint">ABSENT</text>
       </svg>
-      <p class="gtag"><span class="chip info">fix is known, unbuilt</span></p>
+      <p class="gtag"><span class="chip good">addressable</span></p>
+      <p class="gname">Metadata stripping</p>
       <h3>Most platforms strip the credential on upload</h3>
       <p>The manifest disappears the moment a picture starts to travel, and a stripped file is indistinguishable from one that was never signed. The answer is a fingerprint plus a lookup service. The fingerprint exists here; the lookup does not.</p>
     </div>
 
     <div class="gap">
       <svg viewBox="0 0 260 122" role="img" aria-label="A generated image injected into the signing path below Level 2 produces a valid signature.">
-        <rect x="10" y="12" width="74" height="38" rx="4" class="f-warnsoft k-warn" stroke-width="1.2" stroke-dasharray="3 2"/>
-        <use href="#fy" x="34" y="18" width="26" height="20" class="s-warn"/>
-        <text x="47" y="62" text-anchor="middle" class="glbl s-warn">GENERATED</text>
-        <rect x="10" y="76" width="74" height="30" rx="4" class="f-surf k-line"/>
-        <circle cx="47" cy="91" r="8" class="f-none k-dim" stroke-width="1.4"/>
-        <text x="47" y="118" text-anchor="middle" class="glbl s-faint">REAL LENS</text>
-        <path d="M88 31 q20 0 24 20" class="f-none k-warn" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <path d="M109 47 l4 6 2.5-7z" class="s-warn"/>
-        <path d="M88 91 q20 0 24-20" class="f-none k-dim" stroke-width="1.3"/>
-        <rect x="118" y="44" width="82" height="34" rx="4" class="f-surf k-txt" stroke-width="1.5"/>
-        <text x="159" y="65" text-anchor="middle" class="gcap s-txt" style="font-weight:700">SIGNER</text>
-        <text x="159" y="94" text-anchor="middle" class="glbl s-faint">SIGNS WHAT IT GETS</text>
-        <path d="M206 61 h10" class="f-none k-ac" stroke-width="1.4"/>
-        <circle cx="236" cy="61" r="11" class="f-acsoft k-ac" stroke-width="1.5"/>
-        <path d="M231 61 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/>
+        <rect x="8" y="16" width="86" height="34" rx="4" class="f-warnsoft k-warn" stroke-width="1.2" stroke-dasharray="3 2"/><use href="#fy" x="38" y="20" width="24" height="18" class="s-warn"/><rect x="8" y="56" width="86" height="26" rx="4" class="f-surf k-line"/><circle cx="30" cy="69" r="7.5" class="f-none k-dim" stroke-width="1.4"/><text x="62" y="72" text-anchor="middle" class="glbl s-faint">LENS</text><path d="M96 33 q14 0 20 12" class="f-none k-warn" stroke-width="1.4" stroke-dasharray="3 2"/><path d="M112 41 l4 6 2.5-7z" class="s-warn"/>
+        <text x="51" y="88" text-anchor="middle" class="glbl s-faint">GENERATED</text>
+        <path d="M102 45 h18" class="f-none k-dim" stroke-width="1.4"/><path d="M117 41 l6 4 -6 4z" class="s-faint"/>
+        <rect x="130" y="30" width="72" height="30" rx="4" class="f-surf k-txt" stroke-width="1.5"/><text x="166" y="49" text-anchor="middle" class="gcap s-txt" style="font-weight:700">SIGNER</text>
+        <text x="165" y="88" text-anchor="middle" class="glbl s-faint">SIGNS ANYTHING</text>
+        <circle cx="238" cy="45" r="11" class="f-acsoft k-ac" stroke-width="1.5"/><path d="M232 45 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/><text x="238" y="70" text-anchor="middle" class="glbl s-ac">VALID</text>
       </svg>
       <p class="gtag"><span class="chip good">addressed in new devices</span></p>
+      <p class="gname">Software injection</p>
       <h3>Below Level 2, a picture can be handed to the signer</h3>
       <p>If the frame reaches the signer through code nobody attested to, whatever arrives gets signed correctly. A researcher did this to the Nikon Z6III through its multiple-exposure mode; Nikon invalidated every certificate it had issued.</p>
     </div>
 
     <div class="gap">
-      <svg viewBox="0 0 260 122" role="img" aria-label="Cardboard fairies propped on hatpins in a real garden, photographed by a real camera, verifying perfectly.">
-        <rect x="10" y="16" width="92" height="62" rx="4" class="f-surf k-line"/>
-        <use href="#fy" x="28" y="24" width="26" height="20" class="s-txt"/>
-        <path d="M41 44 v22" class="f-none k-dim" stroke-width="1" stroke-dasharray="2 2"/>
-        <use href="#fy" x="62" y="34" width="20" height="16" class="s-txt"/>
-        <path d="M72 50 v16" class="f-none k-dim" stroke-width="1" stroke-dasharray="2 2"/>
-        <path d="M18 68 q16-8 30-2 q14-7 44 2" class="f-none k-line" stroke-width="1.4"/>
-        <text x="56" y="94" text-anchor="middle" class="glbl s-faint">CUT-OUTS ON HATPINS</text>
-        <text x="56" y="108" text-anchor="middle" class="glbl s-faint">IN A REAL GARDEN</text>
-        <path d="M112 47 h20" class="f-none k-dim" stroke-width="1.4"/>
-        <path d="M129 43 l6 4 -6 4z" class="s-faint"/>
-        <rect x="146" y="30" width="52" height="34" rx="4" class="f-surf k-txt" stroke-width="1.5"/>
-        <circle cx="172" cy="47" r="9" class="f-none k-txt" stroke-width="1.5"/>
-        <rect x="162" y="23" width="20" height="7" rx="2" class="f-surf k-txt" stroke-width="1.5"/>
-        <path d="M206 47 h12" class="f-none k-ac" stroke-width="1.4"/>
-        <circle cx="234" cy="47" r="11" class="f-acsoft k-ac" stroke-width="1.5"/>
-        <path d="M229 47 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/>
-        <text x="234" y="72" text-anchor="middle" class="glbl s-ac">ALL TRUE</text>
+      <svg viewBox="0 0 260 122" role="img" aria-label="A staged scene photographed by a real camera. Every check passes.">
+        <rect x="8" y="16" width="86" height="52" rx="4" class="f-surf k-line"/><use href="#fy" x="24" y="22" width="24" height="18" class="s-txt"/><path d="M36 40 v18" class="f-none k-dim" stroke-width="1" stroke-dasharray="2 2"/><use href="#fy" x="56" y="30" width="18" height="14" class="s-txt"/><path d="M65 44 v14" class="f-none k-dim" stroke-width="1" stroke-dasharray="2 2"/><path d="M16 60 q16-8 28-2 q12-6 42 2" class="f-none k-line" stroke-width="1.3"/>
+        <text x="51" y="88" text-anchor="middle" class="glbl s-faint">STAGED SCENE</text>
+        <path d="M102 45 h18" class="f-none k-dim" stroke-width="1.4"/><path d="M117 41 l6 4 -6 4z" class="s-faint"/>
+        <rect x="140" y="30" width="50" height="32" rx="4" class="f-surf k-txt" stroke-width="1.5"/><circle cx="165" cy="46" r="8.5" class="f-none k-txt" stroke-width="1.5"/><rect x="156" y="23" width="19" height="7" rx="2" class="f-surf k-txt" stroke-width="1.5"/>
+        <text x="165" y="88" text-anchor="middle" class="glbl s-faint">REAL CAMERA</text>
+        <circle cx="238" cy="45" r="11" class="f-acsoft k-ac" stroke-width="1.5"/><path d="M232 45 l3.5 3.5 6.5-7" class="f-none k-ac" stroke-width="2" stroke-linecap="round"/><text x="238" y="70" text-anchor="middle" class="glbl s-ac">VALID</text>
       </svg>
       <p class="gtag"><span class="chip warn">no viable solution</span></p>
+      <p class="gname">Staged reality</p>
       <h3>A staged scene is a true photograph of a lie</h3>
       <p>Everything here would have sealed the Cottingley fairies without complaint. Real camera, real garden, real light, real distance — two lenses would measure genuine depth, because there was genuine depth. Every check passes, and every one is telling the truth.</p>
     </div>
 
     <div class="gap">
       <svg viewBox="0 0 260 122" role="img" aria-label="Blurring a bystander's face in a signed photograph breaks the signature.">
-        <rect x="10" y="20" width="80" height="52" rx="4" class="f-surf k-line"/>
-        <circle cx="32" cy="40" r="7" class="f-none k-dim" stroke-width="1.4"/>
-        <use href="#fy" x="52" y="34" width="24" height="19" class="s-ac"/>
-        <text x="50" y="90" text-anchor="middle" class="glbl s-ac">SIGNED</text>
-        <path d="M100 46 h28" class="f-none k-dim" stroke-width="1.4"/>
-        <path d="M125 42 l6 4 -6 4z" class="s-faint"/>
-        <text x="114" y="36" text-anchor="middle" class="glbl s-faint">REDACT</text>
-        <rect x="142" y="20" width="80" height="52" rx="4" class="f-surf k-line"/>
-        <rect x="163" y="33" width="14" height="14" rx="2" class="f-soft k-dim" stroke-width="1.2"/>
-        <use href="#fy" x="184" y="34" width="24" height="19" class="s-ac"/>
-        <text x="182" y="90" text-anchor="middle" class="glbl s-warn">READS AS EDITED</text>
-        <circle cx="240" cy="46" r="10" class="f-warnsoft k-warn" stroke-width="1.4"/>
-        <path d="M236 42 l8 8 M244 42 l-8 8" class="f-none k-warn" stroke-width="1.9" stroke-linecap="round"/>
+        <rect x="8" y="16" width="86" height="52" rx="4" class="f-surf k-line"/><circle cx="32" cy="36" r="7" class="f-none k-dim" stroke-width="1.4"/><use href="#fy" x="52" y="30" width="22" height="17" class="s-ac"/>
+        <text x="51" y="88" text-anchor="middle" class="glbl s-faint">SIGNED</text>
+        <path d="M102 45 h18" class="f-none k-dim" stroke-width="1.4"/><path d="M117 41 l6 4 -6 4z" class="s-faint"/>
+        <rect x="130" y="16" width="72" height="52" rx="4" class="f-surf k-line"/><rect x="150" y="28" width="14" height="14" rx="2" class="f-soft k-dim" stroke-width="1.2"/><use href="#fy" x="172" y="30" width="22" height="17" class="s-ac"/>
+        <text x="165" y="88" text-anchor="middle" class="glbl s-faint">FACE BLURRED</text>
+        <circle cx="238" cy="45" r="11" class="f-warnsoft k-warn" stroke-width="1.5"/><path d="M233 41 l9 9 M242 41 l-9 9" class="f-none k-warn" stroke-width="1.9" stroke-linecap="round"/><text x="238" y="70" text-anchor="middle" class="glbl s-warn">INVALID</text>
       </svg>
-      <p class="gtag"><span class="chip info">partially addressable</span></p>
+      <p class="gtag"><span class="chip good">addressable</span></p>
+      <p class="gname">Redaction</p>
       <h3>Protecting someone in the frame breaks the proof</h3>
       <p>Blur a bystander's face or crop a landmark and the signature fails, giving the same verdict a forgery gets. Selective disclosure covers the metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.</p>
     </div>
