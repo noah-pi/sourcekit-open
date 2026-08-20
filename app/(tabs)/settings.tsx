@@ -281,7 +281,7 @@ export default function SettingsScreen() {
     }
   };
 
-  /** Fetches the org-issued credential from the org's own domain (signet-org/1). */
+  /** Fetches the org-issued credential from the org's own domain (sourcekit-org/1). */
   const doFetchOrgCred = async () => {
     setOrgBusy(true);
     try {
@@ -307,7 +307,7 @@ export default function SettingsScreen() {
     const domain = orgDomainDraft.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
     Alert.alert(
       'Fetch from your organization',
-      `The app downloads ${domain ? `https://${domain}` : 'https://your-org-domain'}/.well-known/signet-org.json over TLS, then checks the credential: it must name this device’s key, be in date, and be signed by your organization’s CA. Anything else is rejected.\n\nEnroll by handing your organization this device’s key (Device ID → Copy key). The private key never leaves this device.`,
+      `The app downloads ${domain ? `https://${domain}` : 'https://your-org-domain'}/.well-known/sourcekit-org.json over TLS, then checks the credential: it must name this device’s key, be in date, and be signed by your organization’s CA. Anything else is rejected.\n\nEnroll by handing your organization this device’s key (Device ID → Copy key). The private key never leaves this device.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Fetch', onPress: () => void doFetchOrgCred() },

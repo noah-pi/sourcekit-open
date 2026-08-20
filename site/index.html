@@ -105,6 +105,9 @@ section.block { padding:var(--s-xxl) 0; border-top:1px solid var(--border); scro
 .grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:var(--s-md); }
 .gaps { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-xl) var(--s-xl); margin-top:var(--s-xl); }
 .gtag { margin:var(--s-md) 0 0; }
+.routes { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:var(--s-lg); margin-top:var(--s-xl); padding-top:var(--s-lg); border-top:1px solid var(--border); }
+.routes p { margin:0; font-size:14.5px; color:var(--textDim); line-height:1.5; }
+.rhead { font-size:10.5px !important; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--textFaint) !important; margin-bottom:6px !important; }
 .gname { margin:8px 0 2px; font-size:10.5px; font-weight:800; letter-spacing:1.6px; text-transform:uppercase; color:var(--textFaint); }
 .gtag .chip { font-size:9.5px; letter-spacing:0.6px; text-transform:uppercase; font-weight:800; padding:4px 9px; }
 .gap svg { width:100%; max-width:400px; height:auto; display:block; background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); }
@@ -282,9 +285,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     </div>
 
     <div style="margin-top:var(--s-xl);max-width:52ch">
-      <h3 style="margin:0 0 6px">An open source proof-of-concept</h3>
-      <p style="color:var(--textDim);margin:0 0 var(--s-md)">All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product designer, not a cryptographer or a career engineer. Everything is here: camera, cryptography, native modules, interface, test suite.</p>
-      <div class="cta"><a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a></div>
+      <h3 style="margin:0 0 6px">How the work is checked</h3>
+      <p style="color:var(--textDim);margin:0 0 var(--s-md)">Every push runs 27 suites and 758 checks, including a differential oracle that runs the hand-rolled C2PA engine against the upstream <code>c2patool</code> on the same corpus and fails on any divergence that is not explicitly whitelisted. The fixtures are in the repo. All 61,000 lines are published under Apache-2.0 — camera, cryptography, native modules, interface, test lab.</p>
+      <div class="cta"><a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a> <a class="btn ghost" href="https://github.com/noah-pi/sourcekit-open/actions">See the checks run</a></div>
     </div>
   </div>
   <div class="phone">
@@ -314,7 +317,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 <details class="f">
     <summary>Hardware attestation<span class="sum">Proof the key is held somewhere you cannot reach into.</span></summary>
     <div class="fbody">
-      <p>Hardware attestation is much stronger on a Pixel 10, where the signing key is generated inside the Titan M2, never leaves it, and the phone proves as much to the certificate authority at enrollment. On Apple the best available is App Attest, which certifies that a genuine iPhone is running an unmodified build of this app, and then hands it no access to the key it just attested.</p>
+      <p>On Apple the strongest available primitive is App Attest, which certifies that a genuine iPhone is running an unmodified build of this app, and then hands it no access to the key it just attested.</p>
       <p>The two get tied together with a commitment. The attestation's <code>clientDataHash</code> is set to <code>SHA256(challenge ‖ signingPublicKey)</code>, which pins Apple's certificate to this exact key rather than to some key on some genuine device. The binding travels inside every manifest, and anyone can recompute it offline years later. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts">appAttest.ts</a></p>
     </div>
   </details>
@@ -323,7 +326,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <summary>Independent timestamping<span class="sum">Time runs one way, which is what makes it provable.</span></summary>
     <div class="fbody">
       <p>Time is the rare claim that can be proved rather than asserted, because it only moves forward. Nobody can place a digest in a Bitcoin block mined before the file existed, and no timestamp authority will countersign something it has not yet been shown.</p>
-      <p>So a capture carries an RFC 3161 countersignature, verified cryptographically on device instead of read off the token, and an OpenTimestamps receipt that lands the record's digest in a block. Newer hardware does this without leaving the phone: the Pixel 10 runs a timestamp authority on the device itself, so a capture made in airplane mode still carries trusted time. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts">timestamp.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts">ots.ts</a></p>
+      <p>So a capture carries an RFC 3161 countersignature, verified cryptographically on device instead of read off the token, and an OpenTimestamps receipt that lands the record's digest in a block. Some newer hardware runs a timestamp authority on the device itself, so a capture made in airplane mode still carries trusted time. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts">timestamp.ts</a> · <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts">ots.ts</a></p>
     </div>
   </details>
 
@@ -331,7 +334,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <summary>Organizational credentials<span class="sum">Optional. The only thing that can attach a name to a key.</span></summary>
     <div class="fbody">
       <p>A self-signed device key proves consistency and nothing about who you are. An organization can supply the missing half by issuing a certificate for the device's public key, which never requires the private key to leave the Secure Enclave. Every signature then chains into the newsroom instead of into itself.</p>
-      <p>There is a hands-off version: an organization publishes a static document at <code>/.well-known/sourcekit-org.json</code> listing member fingerprints and their certificates, and a member enters the domain rather than passing files around.</p>
+      <p>There is a hands-off version: an organization publishes a static document at <code>/.well-known/sourcekit-org.json</code> (the older <code>signet-org.json</code> path is still read) listing member fingerprints and their certificates, and a member enters the domain rather than passing files around.</p>
       <p>Revocation stays with the organization's CA, over the OCSP and CRL endpoints in the certificates it issues, so any verifier can ask. A credential that no longer matches the active device key is ignored and flagged. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/orgCert.ts">orgCert.ts</a></p>
     </div>
   </details>
@@ -364,7 +367,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <div class="fbody">
       <p>Because the second camera is already there and already running, it costs almost nothing to seal. Source Kit seals a simultaneous downsampled ultra-wide frame into the same file, as a C2PA ingredient with relationship <code>componentOf</code>. Open the photo in any C2PA reader and the second viewpoint is there.</p>
       <p>An ultra-wide sees far more of the room than the frame you composed. A monitor bezel, the edge of a laptop, the glow off an OLED panel — all of it lands in the second view.</p>
-      <p>Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a scene with real depth differently, and no homography removes the difference. On an iPhone Pro they sit <a href="https://arxiv.org/pdf/2506.06037">about 19.2&nbsp;mm apart</a>, which is enough to measure depth out to roughly nine meters from the sealed frame. Rephotography sits at the easy end of that range: a monitor filling the frame is about 60&nbsp;cm from the lens, where the disagreement between the two views is large enough to be unmistakable.</p>
+      <p>Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a scene with real depth differently, and no homography removes the difference. On an iPhone Pro they sit <a href="https://arxiv.org/pdf/2506.06037">about 19.2&nbsp;mm apart</a>. How far that reaches depends entirely on the resolution you measure at: the quick card inside the app decodes both views at 96&nbsp;px and runs out around 1.3&nbsp;m, while the 640&nbsp;px frame sealed into the file reaches roughly 9&nbsp;m. Rephotography sits at the easy end of both. A monitor filling the frame is about 60&nbsp;cm from the lens, where the two views disagree by enough to be unmistakable at either resolution.</p>
 
       <div class="pxlab" data-pxlab>
         <p class="pxlab-title">Parallax range calculator</p>
@@ -430,7 +433,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <summary>A raw audio master<span class="sum">Compression discards exactly what makes audio checkable.</span></summary>
     <div class="fbody">
       <p>Because delivery codecs throw away whatever the ear will not miss, they also throw away what forensic work needs. So alongside the compressed track, a PCM master is converted from the same native buffers at 16 kHz: not perceptually coded, and resampled low enough to keep the room and the mains band while discarding everything above 8 kHz and its hash signed into the record.</p>
-      <p>The best-known use is the mains hum. Grids run at 50 or 60 Hz and drift in a pattern shared across an entire synchronous interconnection, and no two stretches of it have ever been observed to match, so indoor audio carries a rough timestamp nobody can forge without the grid's own history. Matching against a grid database conventionally wants <a href="https://www.sciencedirect.com/science/article/pii/S2352864823000226">ten minutes or more</a> of continuous audio; getting there on shorter clips is an open research problem.</p>
+      <p>The best-known use is the mains hum. Grids run at 50 or 60 Hz and drift in a pattern shared across an entire synchronous interconnection, distinctive enough over a long enough window to place a recording in time, so indoor audio carries a rough timestamp nobody can forge without the grid's own history. Matching against a grid database conventionally wants <a href="https://www.sciencedirect.com/science/article/pii/S2352864823000226">ten minutes or more</a> of continuous audio; getting there on shorter clips is an open research problem.</p>
       <p>The more interesting direction is agreement between channels. The same grid frequency that modulates the hum also modulates the light: fluorescent tubes, and LED fixtures with unfiltered drivers, flicker at twice the mains rate, so the flicker measured in the picture and the hum measured in the sound are two readings of one physical quantity. A track dubbed in later has no particular reason to agree with the room it is supposed to have been recorded in. The comparison is still a research problem. Source Kit seals the raw audio; it does not yet check the two channels against each other. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit">capture-kit</a></p>
     </div>
   </details>
@@ -463,8 +466,8 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 
 <!-- ===================== CHASING INSTRUMENTS OF TRUTH ===================== -->
 <section class="block" id="history"><div class="wrap">
-  <h2>Chasing instruments of truth</h2>
-  <p class="dek">A photograph has never been proof. It has only ever been expensive to fake.</p>
+  <h2>A photograph has never been proof</h2>
+  <p class="dek">It has only ever been expensive to fake.</p>
 
   <figure style="max-width:300px;margin:var(--s-lg) 0">
     <div class="fig plain">
@@ -486,7 +489,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <p>Generative models did not make images forgeable. They made forgery fast and essentially free.</p>
 
     <h3 class="lawhed">What the statutes actually demand</h3>
-    <p>Forty-nine states have passed <a href="https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/">at least one deepfake statute</a> since 2019 — 244 statutes in all, 58 of them in 2026 so far — with forty-eight covering sexually explicit deepfakes and thirty-three political ones. The impulse is not confined to the United States. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on August 2, 2026, requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties up to €15 million or 3% of global turnover. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day, China has required labeling of synthetic media since its deep synthesis rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge; the two technical demands underneath them do not.</p>
+    <p>Deepfake statutes are now close to universal across American states, and the <a href="https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/">count keeps moving</a>. The impulse is not confined to the United States. The <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act's Article 50</a> became applicable on August 2, 2026, requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties up to €15 million or 3% of global turnover. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202320240SB942">California's AI Transparency Act</a> took effect the same day, China has required labeling of synthetic media since its deep synthesis rules, South Korea criminalized sexual deepfakes without an intent-to-distribute test, and Denmark has moved to treat a person's face and voice as their property. The mechanisms diverge; the two technical demands underneath them do not.</p>
 
     <h3 class="lawhed">1 / &nbsp;Requiring invisible watermarks on generated media</h3>
     <p>A watermark rides inside what a model generates, and it holds up against ordinary handling. It does not hold up against effort. Regenerating an image through a diffusion model <a href="https://arxiv.org/abs/2408.10446">strips the mark and keeps the picture</a>, one watermark can <a href="https://arxiv.org/abs/2605.16796">overwrite another</a>, and the <a href="https://github.com/guillaumemeyer/watermarks-remover">tools to do it are published</a>. Open-weight models emit nothing to strip in the first place. Detection has the same shape of problem: a classifier chasing a generator gets worse exactly as the generator improves.</p>
@@ -771,7 +774,13 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <p style="color:var(--textDim)">Most of what is out there will have nothing to show. An interface that displays a credential also displays its absence, and absence is the easiest thing in the world to misread. A photograph with no manifest is not a lie. It is a photograph taken on an older phone, or run through an editor that dropped the metadata, or sent by someone with good reasons not to carry a record of where they were standing.</p>
     <p style="color:var(--textDim)">Which leaves the question the art dealers never solved either. A file can arrive with a spotless history and still be a picture of cardboard fairies on hatpins, and nothing in the record will say so. Provenance establishes that a file is what it claims to be. The harder question goes back to a person, where it has always been — the reader's, and the desk's.</p>
     <p style="color:var(--textDim)">None of this solves misinformation. What it offers is narrower: a way for an honest photographer to show their work, and one more expense for everybody else.</p>
-    <p style="font-weight:600">— Noah Bassetti-Blum</p>
+    <p style="font-weight:600;margin-bottom:4px">— Noah Bassetti-Blum</p>
+    <p class="note" style="margin:0 0 var(--s-md)">A journalist turned product designer, not a cryptographer or a career engineer. Which is why everything above is checked by something other than my word for it.</p>
+    <div class="routes">
+      <div><p class="rhead">Photographers</p><p><a href="https://testflight.apple.com/join/cRuRw2MN">Install the TestFlight build</a> and shoot something. Everything is off by default until you switch it on.</p></div>
+      <div><p class="rhead">Newsrooms</p><p><a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/THREAT-MODEL.md">Read the threat model</a> first. It lists 25 scenarios and says which ones this does not cover.</p></div>
+      <div><p class="rhead">Developers</p><p><a href="https://github.com/noah-pi/sourcekit-open">Fork the repo</a>, or lift the C2PA engine on its own — it has no dependency on the app.</p></div>
+    </div>
     <div class="cta" style="margin-top:var(--s-lg)">
       <a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a>
       <a class="btn ghost" href="https://www.filmnoah.com">Personal site</a>

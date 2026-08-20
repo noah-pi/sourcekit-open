@@ -30,11 +30,12 @@ manifest. It works without a network, and it can be checked with any C2PA tool.
 Secure Enclave and App Attest need real hardware. The simulator falls back to a software key
 and says so.
 
-## An open source proof-of-concept
+## How the work is checked
 
-All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product
-designer, not a cryptographer or a career engineer. Everything is here — camera,
-cryptography, native modules, interface, test suite.
+Every push runs 27 suites and 758 checks, including a differential oracle that runs the hand-
+rolled C2PA engine against the upstream `c2patool` on the same corpus and fails on any
+divergence that is not explicitly whitelisted. The fixtures are in the repo. All 61,000 lines
+are published under Apache-2.0 — camera, cryptography, native modules, interface, test lab.
 
 ## What it commits
 
@@ -43,10 +44,8 @@ All of it optional, all of it switchable in the viewfinder, all of it readable b
 <details>
 <summary><b>Hardware attestation</b> — proof the key is held somewhere you cannot reach into</summary>
 
-Hardware attestation is much stronger on a Pixel 10, where the signing key is generated inside
-the Titan M2, never leaves it, and the phone proves as much to the certificate authority at
-enrollment. On Apple the best available is App Attest, which certifies that a genuine iPhone is
-running an unmodified build of this app, and then hands it no access to the key it just
+On Apple the strongest available primitive is App Attest, which certifies that a genuine iPhone
+is running an unmodified build of this app, and then hands it no access to the key it just
 attested.
 
 The two get tied together with a commitment. The attestation's `clientDataHash` is set to
@@ -65,10 +64,8 @@ authority will countersign something it has not yet been shown.
 
 So a capture carries an RFC 3161 countersignature, verified cryptographically on device instead
 of read off the token, and an OpenTimestamps receipt that lands the record's digest in a block.
-Newer hardware does this without leaving the phone: the Pixel 10 runs a timestamp authority on
-the device itself, so a capture made in airplane mode still carries trusted time.
-[timestamp.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts) ·
-[ots.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts)
+Some newer hardware runs a timestamp authority on the device itself, so a capture made in
+airplane mode still carries trusted time. [timestamp.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/timestamp.ts) · [ots.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/ots.ts)
 
 </details>
 
@@ -81,8 +78,9 @@ requires the private key to leave the Secure Enclave. Every signature then chain
 newsroom instead of into itself.
 
 There is a hands-off version: an organization publishes a static document at `/.well-
-known/sourcekit-org.json` listing member fingerprints and their certificates, and a member
-enters the domain rather than passing files around.
+known/sourcekit-org.json` (the older `signet-org.json` path is still read) listing member
+fingerprints and their certificates, and a member enters the domain rather than passing files
+around.
 
 Revocation stays with the organization's CA, over the OCSP and CRL endpoints in the certificates
 it issues, so any verifier can ask. A credential that no longer matches the active device key is
@@ -143,10 +141,11 @@ of a laptop, the glow off an OLED panel — all of it lands in the second view.
 
 Past that, the geometry. Two lenses a known distance apart see a flat plane identically and a
 scene with real depth differently, and no homography removes the difference. On an iPhone Pro
-they sit [about 19.2 mm apart](https://arxiv.org/pdf/2506.06037), which is enough to measure
-depth out to roughly nine meters from the sealed frame. Rephotography sits at the easy end of
-that range: a monitor filling the frame is about 60 cm from the lens, where the disagreement
-between the two views is large enough to be unmistakable.
+they sit [about 19.2 mm apart](https://arxiv.org/pdf/2506.06037). How far that reaches depends
+entirely on the resolution you measure at: the quick card inside the app decodes both views at
+96 px and runs out around 1.3 m, while the 640 px frame sealed into the file reaches roughly 9
+m. Rephotography sits at the easy end of both. A monitor filling the frame is about 60 cm from
+the lens, where the two views disagree by enough to be unmistakable at either resolution.
 
 Parallax range calculator
 
@@ -206,9 +205,9 @@ native buffers at 16 kHz: not perceptually coded, and resampled low enough to ke
 the mains band while discarding everything above 8 kHz and its hash signed into the record.
 
 The best-known use is the mains hum. Grids run at 50 or 60 Hz and drift in a pattern shared
-across an entire synchronous interconnection, and no two stretches of it have ever been observed
-to match, so indoor audio carries a rough timestamp nobody can forge without the grid's own
-history. Matching against a grid database conventionally wants [ten minutes or
+across an entire synchronous interconnection, distinctive enough over a long enough window to
+place a recording in time, so indoor audio carries a rough timestamp nobody can forge without
+the grid's own history. Matching against a grid database conventionally wants [ten minutes or
 more](https://www.sciencedirect.com/science/article/pii/S2352864823000226) of continuous audio;
 getting there on shorter clips is an open research problem.
 
@@ -264,9 +263,9 @@ people, and not available to someone who cannot afford to be seen talking to a s
 
 </details>
 
-## Chasing instruments of truth
+## A photograph has never been proof
 
-A photograph has never been proof. It has only ever been expensive to fake.
+It has only ever been expensive to fake.
 
 In July 1917 two girls in the Yorkshire village of Cottingley photographed some fairies at the
 bottom of the garden. The images were examined by Arthur Conan Doyle, who found them persuasive,
@@ -288,10 +287,8 @@ Generative models did not make images forgeable. They made forgery fast and esse
 
 ### What the statutes actually demand
 
-Forty-nine states have passed [at least one deepfake
-statute](https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/) since 2019 — 244 statutes in all, 58 of them in 2026 so far — with forty-eight
-covering sexually explicit deepfakes and thirty-three political ones. The impulse is not
-confined to the United States. The [EU AI Act's Article
+Deepfake statutes are now close to universal across American states, and the [count keeps
+moving](https://news.ballotpedia.org/2026/07/30/49-states-have-passed-at-least-one-deepfake-law-since-2019/). The impulse is not confined to the United States. The [EU AI Act's Article
 50](https://artificialintelligenceact.eu/article/50/) became applicable on August 2, 2026,
 requiring machine-readable marking of AI output and a visible label on deepfakes, with penalties
 up to €15 million or 3% of global turnover. [California's AI Transparency

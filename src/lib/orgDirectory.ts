@@ -1,15 +1,15 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Org credential over HTTPS — "signet-org/1".
+ * Org credential over HTTPS — "sourcekit-org/1".
  *
  * The SSL integration: instead of hand-importing a credential file, a member
  * enters their organization's domain and the app fetches a STATIC document
  * the org publishes at:
  *
- *   https://<domain>/.well-known/signet-org.json
+ *   https://<domain>/.well-known/sourcekit-org.json
  *
  *   {
- *     "format": "signet-org/1",
+ *     "format": "sourcekit-org/1",
  *     "organization": "Acme News",
  *     "caPem": "-----BEGIN CERTIFICATE----- …",   // the org CA
  *     "members": [
@@ -44,10 +44,17 @@ import { base64ToBytes, bytesToHex } from './bytes';
 import { getDeviceKey } from './deviceKey';
 import { pemOrDerToDer, setOrgCredential, type OrgCredential } from './orgCert';
 
-const WELL_KNOWN_PATH = '/.well-known/signet-org.json';
+/**
+ * The app is Source Kit, so the document it looks for is sourcekit-org.json.
+ * "signet" was an earlier name for this project; the old path and the old
+ * format string are still accepted so that any directory already published
+ * under them keeps working. New documents should use the Source Kit names.
+ */
+const WELL_KNOWN_PATHS = ['/.well-known/sourcekit-org.json', '/.well-known/signet-org.json'] as const;
+const ACCEPTED_FORMATS = ['sourcekit-org/1', 'signet-org/1'] as const;
 const FETCH_TIMEOUT_MS = 10_000;
 
-interface SignetOrgDoc {
+interface OrgDirectoryDoc {
   format?: unknown;
   organization?: unknown;
   caPem?: unknown;
@@ -73,20 +80,27 @@ export async function fetchOrgCredentialFromDomain(domainInput: string): Promise
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-  let doc: SignetOrgDoc;
+  let doc: OrgDirectoryDoc;
   try {
-    const res = await fetch(`https://${domain}${WELL_KNOWN_PATH}`, {
-      headers: { accept: 'application/json' },
-      signal: ctrl.signal,
-    });
-    if (!res.ok) {
+    // Try the current path first, then the legacy one. A 404 on the first is
+    // not an error yet — only a 404 on both means the org has published nothing.
+    let res: Response | null = null;
+    for (const path of WELL_KNOWN_PATHS) {
+      const attempt = await fetch(`https://${domain}${path}`, {
+        headers: { accept: 'application/json' },
+        signal: ctrl.signal,
+      });
+      if (attempt.ok) { res = attempt; break; }
+      if (attempt.status !== 404) {
+        throw new Error(`Fetching ${domain} failed: HTTP ${attempt.status}`);
+      }
+    }
+    if (!res) {
       throw new Error(
-        res.status === 404
-          ? `No Source Kit credential document at ${domain}${WELL_KNOWN_PATH}. Ask your organization to publish it there.`
-          : `Fetching ${domain} failed: HTTP ${res.status}`,
+        `No Source Kit credential document at ${domain}${WELL_KNOWN_PATHS[0]}. Ask your organization to publish it there.`,
       );
     }
-    doc = (await res.json()) as SignetOrgDoc;
+    doc = (await res.json()) as OrgDirectoryDoc;
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') {
       throw new Error(`${domain} did not answer in time. Check the domain and your connection.`);
@@ -96,8 +110,8 @@ export async function fetchOrgCredentialFromDomain(domainInput: string): Promise
     clearTimeout(timer);
   }
 
-  if (doc.format !== 'signet-org/1') {
-    throw new Error(`That document is not a signet-org/1 credential directory (found format: ${String(doc.format ?? 'none')}).`);
+  if (!ACCEPTED_FORMATS.includes(doc.format as (typeof ACCEPTED_FORMATS)[number])) {
+    throw new Error(`That document is not a sourcekit-org/1 credential directory (found format: ${String(doc.format ?? 'none')}).`);
   }
   const caPem = typeof doc.caPem === 'string' ? doc.caPem : null;
   if (!caPem) throw new Error('The document has no CA certificate (caPem).');

@@ -59,7 +59,7 @@ export interface OrgCredential {
   importedAt: string;
   /**
    * How the credential arrived: the domain it was fetched from over TLS
-   * (signet-org/1, src/lib/orgDirectory.ts). Absent for file imports. A
+   * (sourcekit-org/1, src/lib/orgDirectory.ts). Absent for file imports. A
    * LOCAL provenance fact — never embedded in signed claims.
    */
   sourceDomain?: string;
