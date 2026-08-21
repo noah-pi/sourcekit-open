@@ -43,8 +43,14 @@ export function derNormalizeLowS(der: Uint8Array): Uint8Array {
   const { r, s } = derToRS(der);
   const sLow = lowS(s);
   const enc = (v: Uint8Array): Uint8Array => {
-    const needsPad = v[0] & 0x80;
-    const body = needsPad ? prepend(v, 0) : v;
+    // DER INTEGER must be minimal: strip the zero padding derToRS added to
+    // reach 32 bytes, then re-add one zero only if the top bit would make the
+    // value read as negative. Emitting the padded 32 bytes verbatim produces a
+    // non-minimal INTEGER, which strict DER parsers reject outright.
+    let i = 0;
+    while (i < v.length - 1 && v[i] === 0) i++;
+    const trimmed = v.subarray(i);
+    const body = trimmed[0] & 0x80 ? prepend(trimmed, 0) : trimmed;
     const out = new Uint8Array(2 + body.length);
     out[0] = 0x02;
     out[1] = body.length;
