@@ -16,8 +16,15 @@
 import * as fs from 'node:fs';
 import { readTlv, tlvChildren, parseCertificate } from './x509.mts';
 import { derToRS, derNormalizeLowS } from './der.mts';
-import { base64ToBytes } from './bytes.mts';
+import { base64ToBytes, bytesToHex } from './bytes.mts';
+import { p256 } from '@noble/curves/p256';
+import { sha256 } from '@noble/hashes/sha256';
 import { verifyTimestampToken } from './rfc3161.mts';
+
+// Fixed key: the minimality bug is in the ENCODER, so the key needs only to
+// be stable, not secret. A red run here reproduces exactly.
+const FUZZ_PRIV = new Uint8Array(32).fill(0) .map((_, i) => (i * 7 + 3) & 0xff);
+const FUZZ_PUB = p256.getPublicKey(FUZZ_PRIV, false);
 
 let pass = 0, fail = 0;
 const check = (name: string, ok: boolean, detail = '') => {
@@ -63,6 +70,37 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
   check('fuzz: 400 random buffers × 5 DER walkers all terminated', hung === 0);
   check('fuzz: walkers reject the overwhelming majority of garbage',
     threw / (threw + returned) > 0.9, `threw=${threw} returned=${returned}`);
+}
+
+// --- 1b. derNormalizeLowS must emit MINIMAL DER ------------------------------
+// A short r or s (value < 2^248, about 1 signature in 128) used to come back
+// out re-padded to 32 bytes, giving an INTEGER with a needless leading 0x00.
+// The r||s value was intact, so COSE still verified — but any strict DER
+// consumer rejected the signature, and the whole verdict went red at random.
+{
+  let nonMinimal = 0, valueChanged = 0, sampled = 0;
+  for (let i = 0; i < 3000; i++) {
+    const msg = sha256(new Uint8Array([i & 255, (i >> 8) & 255, (i >> 16) & 255]));
+    const raw = p256.sign(msg, FUZZ_PRIV).toDERRawBytes();
+    const norm = derNormalizeLowS(raw);
+    // Walk both INTEGERs and demand minimality.
+    let off = 2;
+    for (let k = 0; k < 2; k++) {
+      const len = norm[off + 1];
+      if (len > 1 && norm[off + 2] === 0x00 && (norm[off + 3] & 0x80) === 0) nonMinimal++;
+      off += 2 + len;
+    }
+    // Whatever the encoding, the value must survive untouched.
+    const a = derToRS(raw), b = derToRS(norm);
+    if (bytesToHex(a.r) !== bytesToHex(b.r)) valueChanged++;
+    // And a strict DER verifier must accept it.
+    if (!p256.verify(norm, msg, FUZZ_PUB, { lowS: false })) sampled++;
+  }
+  check('fuzz: derNormalizeLowS never emits a non-minimal INTEGER',
+    nonMinimal === 0, `${nonMinimal} of 6000 integers carried a needless leading zero`);
+  check('fuzz: derNormalizeLowS preserves r', valueChanged === 0, `${valueChanged} changed`);
+  check('fuzz: a strict DER verifier accepts every normalized signature',
+    sampled === 0, `${sampled} of 3000 rejected`);
 }
 
 // --- 2. length-octet poisons — aimed at the throat -----
