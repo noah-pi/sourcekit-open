@@ -133,6 +133,13 @@ svg .cn.hi { fill:var(--accent); font-weight:700; }
 .shots-dots button[aria-current="true"] { background:var(--accent); }
 .shots figcaption { margin-top:var(--s-sm); font-size:12.5px; line-height:1.5; color:var(--textFaint); text-align:center; min-height:2.6em; }
 
+.uipair { display:grid; grid-template-columns:1fr 1fr; gap:var(--s-lg); margin:var(--s-lg) 0 var(--s-md); }
+.uipair figure { margin:0; min-width:0; }
+.uipair img { width:100%; height:auto; display:block; border-radius:10px; border:1px solid var(--border); background:var(--surface2); }
+.uipair figure.empty img { display:none; }
+.uipair figcaption { margin-top:var(--s-sm); font-size:12.5px; line-height:1.55; color:var(--textFaint); }
+@media (max-width:700px){ .uipair { grid-template-columns:1fr; } }
+
 .trip { display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-lg); margin:var(--s-lg) 0 var(--s-xl); }
 .trip > div { min-width:0; }
 .trip img { width:100%; height:auto; display:block; border-radius:12px; border:1px solid var(--border); background:var(--surface2); }
@@ -565,7 +572,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <summary>Organizational credentials<span class="sum">Optional. The only thing that can attach a name to a key.</span></summary>
     <div class="fbody">
       <p>A self-signed device key proves consistency and nothing about who you are. An organization can supply the missing half by issuing a certificate for the device's public key, which never requires the private key to leave the Secure Enclave. Every signature then chains into the newsroom instead of into itself.</p>
-      <p>There is a hands-off version: an organization publishes a static document at <code>/.well-known/sourcekit-org.json</code> (the older <code>signet-org.json</code> path is still read) listing member fingerprints and their certificates, and a member enters the domain rather than passing files around.</p>
+      <p>There is a hands-off version: an organization publishes a static document at <code>/.well-known/sourcekit-org.json</code> listing member fingerprints and their certificates, and a member enters the domain rather than passing files around.</p>
       <p>Revocation stays with the organization's CA, over the OCSP and CRL endpoints in the certificates it issues, so any verifier can ask. A credential that no longer matches the active device key is ignored and flagged. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/orgCert.ts">orgCert.ts</a></p>
     </div>
   </details>
@@ -654,7 +661,18 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <details class="f">
     <summary>Which way the phone was pointing<span class="sum">Sensor readings the picture itself can contradict.</span></summary>
     <div class="fbody">
-      <p>The device knows which way is down from gravity, and roughly where north is from the magnetometer. Together with the fused attitude at the shutter instant, that gives the direction the camera was actually pointing. Each of those predicts something visible in the frame: where the horizon should sit, and, with the signed time and place, which way shadows should fall.</p>
+      <p>The device knows which way is down from gravity, and roughly where north is from the magnetometer. Read together at the instant of the shutter, they give the direction the camera was pointing. Each of those predicts something visible in the frame: where the horizon should sit, and, with the signed time and place, which way shadows should fall.</p>
+
+      <div class="uipair">
+        <figure>
+          <img src="assets/shot-horizon-card.jpg" alt="The Horizon card: a nearly level green line drawn across a panel, labeled parallel with horizon, under the heading Estimated horizon position, from the sealed accelerometer." onerror="this.closest('figure').classList.add('empty')">
+          <figcaption>Where gravity says level was. The line is drawn from the sealed accelerometer reading, not from the picture, so a frame whose real horizon runs somewhere else disagrees with it visibly.</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/shot-shadow-azimuth.jpg" alt="The Shadows card: a compass rose with north at the top and a short marker showing the shadow running northeast, above the reading Day, sun 56 degrees up, and a 1 meter object casting a 0.68 meter shadow." onerror="this.closest('figure').classList.add('empty')">
+          <figcaption>Where the sun was, computed from the sealed time and place alone. It gives a direction and a length: a meter-tall object should throw a 0.68 m shadow to the northeast. The picture either agrees or it does not.</figcaption>
+        </figure>
+      </div>
       <p>None of this reads the content of the picture. It looks for agreement between what the sensors claimed and what the frame shows. A recapture of a screen inherits the screen's horizon rather than the phone's.</p>
       <p>Any one of these values can be spoofed alone. They are useful together: a forgery has to satisfy all of them at once, which is a much harder thing to arrange than any single one. That is a cost rather than a wall, and the kind of cost that falls as generative systems get better at physical consistency. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/sensors/context.ts">context.ts</a></p>
     </div>
@@ -881,7 +899,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <p class="pull">Prove your work.</p>
     <p style="margin-top:var(--s-lg);color:var(--text)">On January 1, 2027, all across the internet, the lights go on. <a href="https://leginfo.legislature.ca.gov/faces/billTextClient.xhtml?bill_id=202520260AB853">California</a> will require every platform with more than two million monthly users in the state to surface provenance data in what its users post, and from 2028 every camera and phone sold in the state must embed it by default. Content Credentials stop being something you can go and check and become something you are shown. Whatever fraction of the internet is carrying a manifest becomes visible in a single day, and nobody knows yet whether the room turns out furnished or bare.</p>
     <p style="color:var(--textDim)">Most of what is out there will have nothing to show. An interface that displays a credential also displays its absence, and absence is the easiest thing in the world to misread. A photograph with no manifest is not a lie. It is a photograph taken on an older phone, or run through an editor that dropped the metadata, or sent by someone with good reasons not to carry a record of where they were standing.</p>
-    <p style="color:var(--textDim)">Which leaves the question the art dealers never solved either. A file can arrive with a spotless history and still be a picture of cardboard fairies on hatpins, and nothing in the record will say so. Provenance establishes that a file is what it claims to be. The harder question goes back to a person, where it has always been — the reader's, and the desk's.</p>
+    <p style="color:var(--textDim)">Which leaves the question the art dealers never solved either. A file can arrive with a spotless history and still be a picture of cardboard fairies on hatpins, and nothing in the record will say so. Provenance establishes that a file is what it claims to be. The harder question goes back to a person, where it has always been — the jury, the journalist, and the reader.</p>
     <p style="color:var(--textDim)">Source Kit does not solve misinformation. What it offers is narrower: a way for an honest photographer to show their work, and one more expense for everybody else.</p>
     <p style="font-weight:600">— Noah Bassetti-Blum</p>
     <div class="cta" style="margin-top:var(--s-lg)">

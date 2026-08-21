@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "Source Kit – Open Provenance System"
-version: 0.18.4
-date-released: 2026-08-17
+version: 0.18.8
+date-released: 2026-08-21
 license: Apache-2.0
 authors:
   - family-names: Bassetti-Blum
@@ -16,6 +16,10 @@ keywords:
   - provenance
   - C2PA
   - content credentials
+  - content authenticity
   - cryptographic verification
+  - digital forensics
   - App Attest
+  - photojournalism
 repository-code: "https://github.com/noah-pi/sourcekit-open"
+url: "https://noah-pi.github.io/sourcekit-open/"
