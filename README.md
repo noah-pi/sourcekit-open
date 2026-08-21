@@ -454,6 +454,18 @@ claim made here.
 - **LiDAR.** Pro iPhones ship a depth scanner and nothing uses it for provenance. A sealed depth
 map answers the flat-screen question directly rather than inferring it from disparity, and it
 works in the dark.
+- **Altitude against terrain.** Every capture already seals a barometric altitude, and nothing
+  checks it against the ground elevation of the coordinate it claims. A GPS spoofer does not
+  reach the barometer, so the two disagree by however far the lie moved you. Arithmetic rather
+  than image interpretation.
+- **Wi-Fi networks against a public location database.** The network the phone was joined to is
+  already sealed, and access point identifiers are broadly mapped by public wardriving projects.
+  A sealed network four thousand miles from the sealed coordinate is a contradiction in plain
+  sight. Today it is a lead a desk follows by hand.
+- **Authenticated satellite positioning.** Galileo began signing its navigation messages in 2025,
+  making a position something a receiver can check rather than merely believe. Phones do not
+  expose that to apps yet, and iOS hands over a finished coordinate with none of the raw material
+  behind it. Waiting on the platform, not on the idea.
 - **Optional face blurring that survives the signature.** A redaction committed at capture — the
 blur applied before signing, the original never written — would let someone publish a crowd
 without publishing the crowd's faces.
