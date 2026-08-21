@@ -7,7 +7,7 @@ epistemology anyway. So here's what actually holds the code to account.
 
 ## The test lab
 
-27 suites, 769 checks, all runnable offline against the real shipping code.
+27 suites, 761 checks, all runnable offline against the real shipping code.
 Device-service imports are rewired to documented shims; every cryptographic
 operation runs as shipped.
 
