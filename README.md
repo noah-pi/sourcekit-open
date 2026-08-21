@@ -27,6 +27,9 @@ manifest. It works without a network, and it can be checked with any C2PA tool.
 [testflight.apple.com/join/cRuRw2MN](https://testflight.apple.com/join/cRuRw2MN)** ·
 [Deep dive →](https://noah-pi.github.io/sourcekit-open/)
 
+Free. No account. Your photos never leave the phone — see
+[NETWORK.md](docs/NETWORK.md) for every call the app can make.
+
 Secure Enclave and App Attest need real hardware. The simulator falls back to a software key
 and says so.
 
@@ -498,7 +501,8 @@ committed. What is missing is somewhere to look it up.
 ## Building it
 
 If you just want to use it, the beta is on
-[TestFlight](https://testflight.apple.com/join/cRuRw2MN).
+[TestFlight](https://testflight.apple.com/join/cRuRw2MN). Free, no account, and no flow sends
+capture bytes off the device.
 
 To build it yourself:
 [`docs/BUILDING.md`](docs/BUILDING.md). It's an Expo app: `npm install`, then
