@@ -504,11 +504,36 @@ app id in `src/lib/appleAttestRoot.ts`.
 [Decisions](docs/DECISIONS.md) · [Recovery](docs/RECOVERY.md) ·
 [Provenance](docs/PROVENANCE.md)
 
+## Acknowledgements
+
+This was built on other people's work, and in a few cases on other people's example.
+
+- **[ProofMode](https://proofmode.org), by the Guardian Project.** The first tool I saw
+  that treated a phone as an evidence device and shipped it to the people who actually
+  needed it. Source Kit takes a different approach, but the question it is answering is
+  ProofMode's question.
+- **The [C2PA](https://c2pa.org) specification and its conformance test suite.** An open
+  standard meant it was possible to write a camera that anything else can read, and the
+  public test material set the bar for what a verifier has to survive.
+- **Adobe and the Content Authenticity Initiative**, for
+  [c2patool and c2pa-rs](https://github.com/contentauth/c2pa-rs). Every CI run reads this
+  project's output with c2patool, so an independent implementation gets a vote on whether
+  the files are correct. Being able to check yourself against someone else's verifier is
+  worth more than any test I could write alone.
+
+Also [Paul Miller](https://paulmillr.com/noble/), whose @noble libraries do the
+cryptography here.
+
+## Disclaimer
+
+This is a personal project. It is not affiliated with or endorsed by my employer. I work
+at Google Cloud; nothing here represents Google's views, and everything in this
+repository is my own opinion.
+
 ## License
 
 Apache-2.0 ([LICENSE](LICENSE), with [NOTICE](NOTICE) for attribution that travels).
-Apache-2.0 covers the code, not the name
-([TRADEMARK.md](TRADEMARK.md)) — fork it, ship it under your own name.
+Apache-2.0 covers the code, not the name — fork it, ship it under your own name.
 
 If you build something with this, or find something I got wrong, I'd really like to hear
 about it.
