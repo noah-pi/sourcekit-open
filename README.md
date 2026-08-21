@@ -190,9 +190,8 @@ requires the private key to leave the Secure Enclave. Every signature then chain
 newsroom instead of into itself.
 
 There is a hands-off version: an organization publishes a static document at `/.well-
-known/sourcekit-org.json` (the older `signet-org.json` path is still read) listing member
-fingerprints and their certificates, and a member enters the domain rather than passing files
-around.
+known/sourcekit-org.json` listing member fingerprints and their certificates, and a member
+enters the domain rather than passing files around.
 
 Revocation stays with the organization's CA, over the OCSP and CRL endpoints in the certificates
 it issues, so any verifier can ask. A credential that no longer matches the active device key is
@@ -293,7 +292,7 @@ it saw. [poseTrace.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/p
 <summary><b>Which way the phone was pointing</b> — sensor readings the picture itself can contradict</summary>
 
 The device knows which way is down from gravity, and roughly where north is from the
-magnetometer. Together with the fused attitude at the shutter instant, that gives the direction
+magnetometer. Read together at the instant of the shutter, they give the direction
 the camera was actually pointing. Each of those predicts something visible in the frame: where
 the horizon should sit, and, with the signed time and place, which way shadows should fall.
 

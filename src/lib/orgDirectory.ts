@@ -44,14 +44,9 @@ import { base64ToBytes, bytesToHex } from './bytes';
 import { getDeviceKey } from './deviceKey';
 import { pemOrDerToDer, setOrgCredential, type OrgCredential } from './orgCert';
 
-/**
- * The app is Source Kit, so the document it looks for is sourcekit-org.json.
- * "signet" was an earlier name for this project; the old path and the old
- * format string are still accepted so that any directory already published
- * under them keeps working. New documents should use the Source Kit names.
- */
-const WELL_KNOWN_PATHS = ['/.well-known/sourcekit-org.json', '/.well-known/signet-org.json'] as const;
-const ACCEPTED_FORMATS = ['sourcekit-org/1', 'signet-org/1'] as const;
+/** The one path an organization publishes, and the one format string it carries. */
+const WELL_KNOWN_PATHS = ['/.well-known/sourcekit-org.json'] as const;
+const ACCEPTED_FORMATS = ['sourcekit-org/1'] as const;
 const FETCH_TIMEOUT_MS = 10_000;
 
 interface OrgDirectoryDoc {
