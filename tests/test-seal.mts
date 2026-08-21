@@ -85,7 +85,7 @@ const desk = generateDeskKeyPair();
 const otherDesk = generateDeskKeyPair();
 const marker = utf8ToBytes('CONFIDENTIAL: source identity, GPS 37.7749,-122.4194');
 const fakeMedia = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, ...marker, ...randomBytes(2048), 0xff, 0xd9]);
-const proofJson = JSON.stringify({ format: 'exhibit-proof-bundle/1', note: 'proof rides inside the ciphertext' });
+const proofJson = JSON.stringify({ format: 'lab-proof-fixture/1', note: 'proof rides inside the ciphertext' });
 
 const sealed = sealToDeskKey(fakeMedia, proofJson, desk.publicKey);
 
@@ -143,7 +143,7 @@ const key = labSigner();
 const ctx = { location: { lat: 37.7749, lon: -122.4194, accuracyM: 5 }, headingDeg: 90 } as any;
 const photo = await attestPhoto({ photoUri: '/tmp/lab/clean.jpg', context: ctx, identity: { author: 'Seal Test', organization: null }, key });
 const media = photo.signedPhotoBytes!;
-const e2eSealed = sealToDeskKey(media, JSON.stringify({ format: 'exhibit-proof-bundle/1', note: 'proof rides inside the ciphertext' }), desk.publicKey);
+const e2eSealed = sealToDeskKey(media, JSON.stringify({ format: 'lab-proof-fixture/1', note: 'proof rides inside the ciphertext' }), desk.publicKey);
 // The plaintext media must not appear anywhere in the sealed artifact.
 check('a sealed signed photo contains no plaintext media bytes', !contains(e2eSealed, media.subarray(0, 256)));
 const e2eOpened = unsealWithDeskKey(e2eSealed, desk.privateKey);
