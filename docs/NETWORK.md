@@ -42,10 +42,11 @@ trust claim is swappable); the defaults are free, accountless public goods.
 
 ## The capture module makes no calls at all
 
-`modules/capture-kit` — streamed chunk hashing, raw audio master, sensor log,
-stills ring buffer — performs no network I/O. It opens no socket, makes no
-request, and has no endpoint to configure. Capture and the
-`camera.streamedChunks` commitment are computed entirely on-device.
+`modules/exhibit-camera` — the capture session, raw audio master, and sensor
+log — performs no network I/O. It opens no socket, makes no request, and has
+no endpoint to configure. Capture and the `camera.streamedChunks` commitment
+are computed entirely on-device, the latter in TypeScript
+(`src/provenance/trackChunks.ts`) by demuxing what the module wrote.
 
 `camera.streamedChunks` is a project-specific label rather than a `c2pa.*` one,
 and rides as a field inside the signed record's capture-metadata block. See
