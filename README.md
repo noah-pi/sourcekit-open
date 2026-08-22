@@ -1,4 +1,4 @@
-<p align="center">
+w<p align="center">
   <img src=".github/banner.svg" alt="Source Kit — an open cryptographic camera" width="100%">
 </p>
 
@@ -53,8 +53,7 @@ a hatpin.
 
 Retouching is as old as the negative. At Gettysburg in 1863, Alexander Gardner's team [moved a
 dead soldier forty yards](https://www.loc.gov/static/collections/civil-war-glass-negatives/articles-and-essays/does-the-camera-ever-lie/the-case-of-the-moved-body.html) into a
-rocky niche and leaned a rifle beside him — the wrong rifle, as it turned out, of a type no
-sharpshooter carried. Soviet censors [airbrushed the disgraced out of group
+rocky niche and leaned a rifle beside him. Soviet censors [airbrushed the disgraced out of group
 portraits](https://en.wikipedia.org/wiki/The_Commissar_Vanishes) for fifty years before
 Photoshop shipped in 1990. Back then a convincing lie took a darkroom, a skill and an afternoon,
 and picture desks, wire services and libel law made the attempt more expensive still.
@@ -153,7 +152,7 @@ more about it.
 
 ## What it commits
 
-Each of these exists because of a gap named above. All of it optional, and all of it switchable
+Each of these exists because of a gap named below. All of it optional, and all of it switchable
 in the viewfinder.
 
 <details>
@@ -487,9 +486,6 @@ committed. What is missing is somewhere to look it up.
 - **Sensors are claims.** Time, GPS, heading, altitude are what the device reported,
   bound into the signature. The binding is real; whether the device told the truth is a
   separate question.
-- **Stereo capture is unvalidated on iPhone 17 / iOS 26.** The verification side is
-  lab-tested. The capture side moved to Apple's virtual dual-wide device graph and I
-  haven't confirmed it in the field yet.
 - **No conformance certification.** Files carry standard C2PA manifests and `c2patool`
   reads them on every CI run, but nothing here has been through the conformance program.
 - **Beta software, written by one person with AI assistance**, and held to account by the
