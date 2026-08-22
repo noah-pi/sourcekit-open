@@ -368,8 +368,8 @@ async function c2paReport(
     // canonical JSON, which carries asset.sha256 — the digest recomputed from
     // the bytes read above — so the media is covered without a second entry
     // in the COSE header, where a general-purpose C2PA writer could not put
-    // one anyway. A claim entry is still READ and reported when a file has
-    // one; its ABSENCE is not evidence of anything, so it is not flagged.
+    // one. A claim entry is READ and reported when a file carries one; its
+    // ABSENCE is not evidence of anything, so it is not flagged.
     const pqWhere = (claim: PqLayerCheck | null, record: PqLayerCheck | null): string =>
       [claim?.signatureValid ? 'COSE claim' : null, record?.signatureValid ? 'record' : null].filter(Boolean).join(' + ');
     if (claimPq?.signatureValid || recordPq?.signatureValid) {

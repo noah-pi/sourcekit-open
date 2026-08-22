@@ -85,9 +85,8 @@ jailbreak status to apps, so this cannot be reliably detected from inside. On a
 Pixel the equivalent attack means compromising the ISP or the Titan M2 — a
 different order of difficulty.
 
-**This is a real gap and it should be said plainly: in-pipeline hardware signing
-is a genuine achievement, and it is better than what any third-party app on iOS
-can do.** Google shipped signing inside the imaging pipeline with hardware-held
+**In-pipeline hardware signing is a genuine achievement, and it is better than
+what any third-party app on iOS can do.** Google shipped signing inside the imaging pipeline with hardware-held
 keys, per-image certificates and an on-device timestamp authority. Qualcomm put
 a C2PA signer in the TEE. That closes the injection problem properly, in a way
 no application-layer design can.
@@ -213,8 +212,8 @@ including the randomized fuzz over every DER walker).*
 
 **6. Multi-manifest store confusion.** A file carrying several manifests (the
 C2PA update-chain rule says the *last* is active) → Source Kit verifies the
-active one and states that the earlier ones were not evaluated. Two verifiers
-no longer produce two verdicts. *Defended (lab-tested since).*
+active one and states that the earlier ones were not evaluated. Two verifiers do not
+produce two verdicts. *Defended (lab-tested).*
 
 **7. Credential stripping.** Anyone can delete the manifest from a file.
 What remains is an ordinary unsigned file → the neutral card: "No signature
@@ -235,7 +234,7 @@ its certificate chain disagree (org assertion names one org, chain top names
 another, or the telemetry hash doesn't match) → the verifier reports FAILED
 on binding mismatch, or a loud MISMATCH naming both — never silently picks
 one. If the cross-check can't run, the org is reported *unproven*, never
-vouched. *Defended (lab-tested — test-identity, W7.2).*
+vouched. *Defended (lab-tested — test-identity).*
 
 **10. Junk certificate chains.** Random certs stuffed into x5chain → link
 verification fails, the chain state is displayed as broken, and a broken
