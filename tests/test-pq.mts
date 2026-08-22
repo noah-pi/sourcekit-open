@@ -183,6 +183,76 @@ console.log('— strip detection —');
     (r.checksPerformed ?? []).filter((s) => s.includes('STRIPPED')).join(' | '));
 }
 
+// ---------- pqScope: record (what an SDK-built manifest looks like) ----------
+console.log('— pqScope: record —');
+// A general-purpose C2PA writer has nowhere to park a second signature in the
+// COSE unprotected header. Such a manifest declares pqScope: 'record' inside
+// the signed payload, and the claim entry's absence is by design. The media
+// stays post-quantum covered: pqSignature signs the record, the record commits
+// asset.sha256, and the verifier compares that against the bytes it read.
+{
+  const insertOffset = 2;
+  const clean = fs.readFileSync('/tmp/lab/clean.jpg');
+  const scoped = await signRecord(
+    { ...(photo.record as any), pqScope: 'record' },
+    key.signDigest, key.signPayload, { secretKey: kp.secretKey },
+  );
+  const segment = await buildC2paSegment(
+    {
+      appName: 'ExhibitA/0.10.0-lab (com.verify.camera)',
+      mime: 'image/jpeg',
+      title: 'record-only.jpg',
+      instanceId: 'xmp:iid:' + bytesToHex(randomBytes(16)),
+      telemetry: scoped as unknown as Record<string, unknown>,
+      signDigest: key.signDigest,
+      signPayload: key.signPayload,
+      pq: null, // no claim entry — exactly what the SDK would produce
+      certChain: [devCert],
+      cleanFileSha256: new Uint8Array(sha256(clean)),
+    },
+    insertOffset,
+  );
+  const media = concatBytes(clean.subarray(0, insertOffset), segment, clean.subarray(insertOffset));
+  const r = await verifyPhotoBytes(media);
+
+  check('pqScope record: file verifies INTACT', r.verdict === 'INTACT', r.verdict);
+  check('pqScope record: the record PQ layer verifies',
+    r.c2pa?.pq?.record?.signatureValid === true);
+  check('pqScope record: NO false STRIPPED warning',
+    !(r.checksPerformed ?? []).some((x) => x.includes('STRIPPED')),
+    (r.checksPerformed ?? []).filter((x) => x.includes('STRIPPED')).join(' | '));
+  check('pqScope record: the absent claim entry is disclosed, not hidden',
+    (r.checksNotPerformed ?? []).some((x) => x.includes('not carried by design')));
+  check('pqScope record: the media is still bound (asset digest compared)',
+    r.checks.assetHashMatches === true);
+
+  // The declaration must not become a way to silence real stripping: a record
+  // that says claim+record and carries no claim entry still fires.
+  const honest = await signRecord(
+    { ...(photo.record as any), pqScope: 'claim+record' },
+    key.signDigest, key.signPayload, { secretKey: kp.secretKey },
+  );
+  const seg2 = await buildC2paSegment(
+    {
+      appName: 'ExhibitA/0.10.0-lab (com.verify.camera)',
+      mime: 'image/jpeg',
+      title: 'still-stripped.jpg',
+      instanceId: 'xmp:iid:' + bytesToHex(randomBytes(16)),
+      telemetry: honest as unknown as Record<string, unknown>,
+      signDigest: key.signDigest,
+      signPayload: key.signPayload,
+      pq: null,
+      certChain: [devCert],
+      cleanFileSha256: new Uint8Array(sha256(clean)),
+    },
+    insertOffset,
+  );
+  const m2 = concatBytes(clean.subarray(0, insertOffset), seg2, clean.subarray(insertOffset));
+  const r2 = await verifyPhotoBytes(m2);
+  check('pqScope claim+record: a missing claim entry STILL fires STRIPPED',
+    (r2.checksPerformed ?? []).some((x) => x.includes('STRIPPED')));
+}
+
 // ---------- forgery: foreign PQ signature binds to nothing ----------
 console.log('— forgery resistance —');
 {

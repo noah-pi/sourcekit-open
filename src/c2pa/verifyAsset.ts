@@ -364,8 +364,21 @@ async function c2paReport(
       'post-quantum layer — none carried (capture predates 0.10.0, or a de-identified copy: deID omits the PQ layer by design, since the device\'s long-lived PQ key would re-link an anonymised copy)',
     );
   } else {
+    // Where the ML-DSA signature is SUPPOSED to live, read from inside the
+    // signed payload. Absent means 'claim+record' — every capture through
+    // 0.18.9. A manifest written by a general-purpose C2PA writer has nowhere
+    // to put the claim entry, so those declare 'record' and its absence is by
+    // design rather than evidence of stripping. The declaration cannot be
+    // forged to silence the warning: it is covered by the record signature.
+    const pqScope = telemetryRecord?.pqScope ?? 'claim+record';
+    const claimShouldCarryPq = pqScope === 'claim+record';
     const pqWhere = (claim: PqLayerCheck | null, record: PqLayerCheck | null): string =>
       [claim?.signatureValid ? 'COSE claim' : null, record?.signatureValid ? 'record' : null].filter(Boolean).join(' + ');
+    if (!claimShouldCarryPq && recordPq?.signatureValid) {
+      notPerformed.push(
+        'post-quantum layer on the COSE claim — not carried by design (this manifest declares pqScope: record). The media is still covered: the record signature is post-quantum and the record commits the media digest',
+      );
+    }
     if (claimPq?.signatureValid || recordPq?.signatureValid) {
       performed.push(
         `post-quantum layer verified on the ${pqWhere(claimPq, recordPq)} (ML-DSA-65, SOFTWARE key — hedges a future P-256 break; NOT a second hardware anchor; key committed inside the signed payload)`,
@@ -381,7 +394,7 @@ async function c2paReport(
         'post-quantum layer on the inner record FAILED (signature invalid or key fingerprint mismatch) — the classical layer still stands; the PQ layer proves nothing here',
       );
     }
-    const strippedClaim = claimPq && !claimPq.present && claimPq.keyCommitted;
+    const strippedClaim = claimShouldCarryPq && claimPq && !claimPq.present && claimPq.keyCommitted;
     const strippedRecord = recordPq && !recordPq.present && recordPq.keyCommitted;
     if (strippedClaim || strippedRecord) {
       performed.push(

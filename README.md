@@ -400,6 +400,10 @@ expectations, and a check that could not run says so.
 <summary><b>A post-quantum signature</b> — cheap now, and photographs get read decades later</summary>
 
 Every record carries an ML-DSA-65 signature over the same commitment as the ECDSA one.
+Captures through 0.18.9 also put a copy in the COSE unprotected header; the record declares
+which arrangement it used in `pqScope`, inside the signed payload, so a missing claim entry is
+distinguishable from a stripped one. The record is the load-bearing copy either way — it signs
+the record's canonical JSON, which contains the media digest the verifier recomputes.
 
 It is a bank vault door on a garden shed, and worth fitting anyway. The elliptic-curve signature
 is nowhere near the weakest thing here, and anyone with a quantum computer would still find it
