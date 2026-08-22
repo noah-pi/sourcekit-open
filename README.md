@@ -33,6 +33,22 @@ Free. No account. Your photos never leave the phone — see
 Secure Enclave and App Attest need real hardware. The simulator falls back to a software key
 and says so.
 
+## Which C2PA code this actually runs
+
+**Read this before you rely on anything here.** Signing is my own COSE/JUMBF builder, and so is
+verification in the app. I've written the c2pa-swift binding for both — sign and verify,
+including Secure Enclave signing — and haven't wired it into any screen yet
+([`upstreamEngineIos.ts`](src/provenance/engine/upstreamEngineIos.ts)).
+
+The one thing I can't see how to move across is the post-quantum layer: the manifest carries an
+ML-DSA-65 second signature in the COSE unprotected header, and there is no obvious place for
+that in the Builder API. Everything else looks migratable.
+
+What I have in the meantime is a differential oracle in CI: every corpus asset runs through my
+verifier and the official c2pa-rs, and the build fails on any disagreement that isn't
+whitelisted with a written reason. See [`docs/PROVENANCE.md`](docs/PROVENANCE.md) and
+[`tests/test-oracle.mts`](tests/test-oracle.mts).
+
 ## An open source proof-of-concept
 
 All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product
@@ -379,7 +395,7 @@ drivers, flicker at twice the mains rate, so the flicker measured in the picture
 measured in the sound are two readings of one physical quantity. A track dubbed in later has no
 particular reason to agree with the room it is supposed to have been recorded in. The comparison
 is still a research problem. Source Kit seals the raw audio; it does not yet check the two
-channels against each other. [capture-kit](https://github.com/noah-pi/sourcekit-open/tree/main/modules/capture-kit)
+channels against each other. [exhibit-camera](https://github.com/noah-pi/sourcekit-open/tree/main/modules/exhibit-camera)
 
 </details>
 
