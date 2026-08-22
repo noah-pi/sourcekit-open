@@ -150,9 +150,58 @@ the Secure Enclave, and can attest to nothing upstream of that hand-off. That is
 a third-party app on iOS, which is why it commits more *around* the frame instead of claiming
 more about it.
 
+## Where it still comes up short
+
+Six ways a file can carry a perfect signature and still mislead you. The first independent
+security review of the specification, [Golaszewski et al. at
+UMBC](https://eprint.iacr.org/2026/804), found implementation problems on top of these —
+disagreeing validators, weak revocation, an exclusion range that hides edits. Those are fixable.
+The six below are structural.
+
+`REPHOTOGRAPHY` · *partially addressable*
+
+**The lens can be pointed at a screen.** Photograph a good monitor and every guarantee holds,
+because all of them are true: the sensor did see those photons. No signature reaches past the
+front of the lens.
+
+`SENSOR SPOOFING` · *partially addressable*
+
+**A signature binds a claim without checking it.** Civilian GPS is unauthenticated and spoofers
+cost less than a phone. The scene is real, the signature is valid, and the place is wrong —
+sealed just as faithfully as a true one.
+
+`METADATA STRIPPING` · *addressable*
+
+**Most platforms strip the credential on upload.** The manifest disappears the moment a picture
+starts to travel, and a stripped file is indistinguishable from one that was never signed. The
+answer is a fingerprint plus a lookup service. The fingerprint exists here; the lookup does not.
+
+`SOFTWARE INJECTION` · *addressed in new devices*
+
+**Below Level 2, a picture can be handed to the signer.** If the frame reaches the signer
+through code nobody attested to, whatever arrives gets signed correctly. A researcher did this
+to the Nikon Z6III through its multiple-exposure mode; Nikon invalidated every certificate it
+had issued.
+
+`STAGED REALITY` · *no viable solution*
+
+**A staged scene is a true photograph of a lie.** Everything here would have sealed the
+Cottingley fairies without complaint. Real camera, real garden, real light, real distance — two
+lenses would measure genuine depth, because there was genuine depth. Every check passes, and
+every one is telling the truth.
+
+`REDACTION` · *addressable*
+
+**Protecting someone in the frame breaks the proof.** Blur a bystander's face or crop a landmark
+and the signature fails, giving the same verdict a forgery gets. Selective disclosure covers the
+metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.
+
+Most of what Source Kit commits is aimed at rephotography, the one failure that stays open
+however good the hardware gets.
+
 ## What it commits
 
-Each of these exists because of a gap named below. All of it optional, and all of it switchable
+Each of these exists because of a gap named above. All of it optional, and all of it switchable
 in the viewfinder.
 
 <details>
@@ -376,55 +425,6 @@ people, and not available to someone who cannot afford to be seen talking to a s
 
 </details>
 
-## Where it still comes up short
-
-Six ways a file can carry a perfect signature and still mislead you. The first independent
-security review of the specification, [Golaszewski et al. at
-UMBC](https://eprint.iacr.org/2026/804), found implementation problems on top of these —
-disagreeing validators, weak revocation, an exclusion range that hides edits. Those are fixable.
-The six below are structural.
-
-`REPHOTOGRAPHY` · *partially addressable*
-
-**The lens can be pointed at a screen.** Photograph a good monitor and every guarantee holds,
-because all of them are true: the sensor did see those photons. No signature reaches past the
-front of the lens.
-
-`SENSOR SPOOFING` · *partially addressable*
-
-**A signature binds a claim without checking it.** Civilian GPS is unauthenticated and spoofers
-cost less than a phone. The scene is real, the signature is valid, and the place is wrong —
-sealed just as faithfully as a true one.
-
-`METADATA STRIPPING` · *addressable*
-
-**Most platforms strip the credential on upload.** The manifest disappears the moment a picture
-starts to travel, and a stripped file is indistinguishable from one that was never signed. The
-answer is a fingerprint plus a lookup service. The fingerprint exists here; the lookup does not.
-
-`SOFTWARE INJECTION` · *addressed in new devices*
-
-**Below Level 2, a picture can be handed to the signer.** If the frame reaches the signer
-through code nobody attested to, whatever arrives gets signed correctly. A researcher did this
-to the Nikon Z6III through its multiple-exposure mode; Nikon invalidated every certificate it
-had issued.
-
-`STAGED REALITY` · *no viable solution*
-
-**A staged scene is a true photograph of a lie.** Everything here would have sealed the
-Cottingley fairies without complaint. Real camera, real garden, real light, real distance — two
-lenses would measure genuine depth, because there was genuine depth. Every check passes, and
-every one is telling the truth.
-
-`REDACTION` · *addressable*
-
-**Protecting someone in the frame breaks the proof.** Blur a bystander's face or crop a landmark
-and the signature fails, giving the same verdict a forgery gets. Selective disclosure covers the
-metadata, so fields can be withheld and still verify. Nothing yet covers the pixels.
-
-Most of what Source Kit commits is aimed at rephotography, the one failure that stays open
-however good the hardware gets.
-
 ## The danger in a permanent record of everything
 
 A file that can prove where it came from can also prove where you were.
@@ -470,7 +470,13 @@ works in the dark.
   behind it. Waiting on the platform, not on the idea.
 - **Optional face blurring that survives the signature.** A redaction committed at capture — the
 blur applied before signing, the original never written — would let someone publish a crowd
-without publishing the crowd's faces.
+without publishing the crowd's faces. The Guardian Project and WITNESS worked this out years ago
+in [ObscuraCam](https://guardianproject.info/apps/org.witness.sscphase1/), which finds faces
+automatically, lets you obscure them, and strips the metadata on the way out. The concept is
+theirs and it is the right one; what a signature adds is that the obscured version becomes the
+original rather than a copy of it. Their [ProofMode](https://proofmode.org) remains the option to
+reach for on iOS today — fully C2PA-compliant, in the field with the people who need it, and the
+project this one keeps learning from.
 - **More ways to catch rephotography.** Moiré from a display's pixel grid, the refresh beat of a
 panel against a rolling shutter, the polarisation signature of an LCD.
 - **PRNU checks.** Every sensor leaves a fixed noise fingerprint. The useful signals are blunt
@@ -521,7 +527,10 @@ This was built on other people's work, and in a few cases on other people's exam
 
 - **[ProofMode](https://proofmode.org), by the Guardian Project.** The first tool I saw
   that treated a phone as an evidence device and shipped it to the people who actually
-  needed it. Source Kit takes a different approach, but the question it is answering is
+  needed it, and still the one to reach for on iOS today — fully C2PA-compliant and in
+  real use. Their [ObscuraCam](https://guardianproject.info/apps/org.witness.sscphase1/),
+  built with WITNESS, worked out obscuring faces at capture long before I thought about
+  it. Source Kit takes a different approach, but the question it is answering is
   ProofMode's question.
 - **The [C2PA](https://c2pa.org) specification and its conformance test suite.** An open
   standard meant it was possible to write a camera that anything else can read, and the
