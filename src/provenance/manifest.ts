@@ -360,6 +360,22 @@ export interface AttestationRecord {
       long-lived PQ key would re-link an anonymised copy). pqKey present +
       pqSignature absent = stripped layer; verifiers flag it. */
   pqSignature?: string;
+  /** Where this capture's ML-DSA-65 signature lives.
+   *
+   *  'claim+record' (the default when absent, and every capture through
+   *  0.18.9) means the COSE unprotected header carries a `verifyPq` entry as
+   *  well as the record. 'record' means the record carries it alone, which is
+   *  what a manifest built by a general-purpose C2PA writer looks like — there
+   *  is no place in the Builder API to park a second signature.
+   *
+   *  Dropping the claim entry does not drop post-quantum coverage of the
+   *  media: `pqSignature` covers this record's canonical JSON, which contains
+   *  `asset.sha256`, which the verifier compares against the bytes it read.
+   *
+   *  This field lives INSIDE the signed payload on purpose. A stripped claim
+   *  entry is still detectable, because an attacker cannot set this to
+   *  'record' to silence the warning without breaking `signature`. */
+  pqScope?: 'claim+record' | 'record';
   /** Present when the signature chains to an org-issued credential instead of
       the bare self-signed device cert. Verifiable in the C2PA x5chain;
       mirrored here for display. */
