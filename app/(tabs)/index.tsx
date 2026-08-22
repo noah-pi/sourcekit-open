@@ -1177,9 +1177,26 @@ export default function CaptureScreen() {
     setZoomFactor(relative);
     zoomChannel.emit({ factor: relative, active: false });
     if (sessionActive.current) {
-      void setNativeZoom(
-        clampZoom(deviceFactorFor(relative, c, forLens), zoomRange.min, Math.min(zoomRange.max, zoomRange.qualityCap ?? MAX_RELATIVE_ZOOM)),
-      ).catch(() => {});
+      const requested = clampZoom(deviceFactorFor(relative, c, forLens), zoomRange.min, Math.min(zoomRange.max, zoomRange.qualityCap ?? MAX_RELATIVE_ZOOM));
+      void setNativeZoom(requested).then((res) => {
+        // 0.18.9 honesty (field: "zoom number moves, camera doesn't zoom"
+        // with Multiple Lenses on): the committed number rests on what the
+        // DEVICE reports it applied — never the optimistic request. A
+        // zoom-locked multi-cam format (native resolves applied:false,
+        // reason 'format-zoom-locked') snaps the HUD back to the real
+        // factor instead of claiming a sweep that didn't happen.
+        const appliedDevice = typeof res?.zoomFactor === 'number'
+          ? res.zoomFactor
+          : (!res?.applied && typeof res?.maxZoom === 'number' ? res.maxZoom : null);
+        if (appliedDevice === null) return;
+        const stop = factorForLens(stopsRef.current, lensRef.current) || 1;
+        const appliedRelative = graphRef.current === 'virtual-dual-wide' ? appliedDevice : appliedDevice * stop;
+        if (Number.isFinite(appliedRelative) && Math.abs(appliedRelative - zoomFactorRef.current) > 0.001) {
+          zoomFactorRef.current = appliedRelative;
+          setZoomFactor(appliedRelative);
+          zoomChannel.emit({ factor: appliedRelative, active: false });
+        }
+      }).catch(() => {});
     }
   };
   commitZoomRef.current = commitZoom;

@@ -37,6 +37,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// Returns nil on success; the caught exception as NSError on failure.
 + (nullable NSError *)safelyStopSession:(AVCaptureSession *)session NS_SWIFT_NAME(safelyStop(_:));
 
+/// Fires -[AVCapturePhotoOutput capturePhotoWithSettings:delegate:] inside
+/// an ObjC @try/@catch (0.18.5 post-field: the first LIVE photo capture on
+/// the virtual dual-wide graph crashed the app with an uncaught NSException
+/// — settings validation against a running multi-cam graph can throw, and
+/// Swift cannot catch it). Returns nil when the capture was accepted; the
+/// caught exception as NSError otherwise (the Swift side then settles the
+/// capture through its normal stated-failure path — never a crash).
++ (nullable NSError *)safelyCapturePhotoWithOutput:(AVCapturePhotoOutput *)output
+                                          settings:(AVCapturePhotoSettings *)settings
+                                          delegate:(id<AVCapturePhotoCaptureDelegate>)delegate
+    NS_SWIFT_NAME(safelyCapturePhoto(output:settings:delegate:));
+
 @end
 
 NS_ASSUME_NONNULL_END

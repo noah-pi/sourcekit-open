@@ -40,4 +40,15 @@ static NSError *ExhibitSessionLifecycleError(NSString *operation, NSException *e
   }
 }
 
++ (nullable NSError *)safelyCapturePhotoWithOutput:(AVCapturePhotoOutput *)output
+                                          settings:(AVCapturePhotoSettings *)settings
+                                          delegate:(id<AVCapturePhotoCaptureDelegate>)delegate {
+  @try {
+    [output capturePhotoWithSettings:settings delegate:delegate];
+    return nil;
+  } @catch (NSException *exception) {
+    return ExhibitSessionLifecycleError(@"capturePhotoWithSettings", exception);
+  }
+}
+
 @end

@@ -826,20 +826,30 @@ public class ExhibitCameraModule: Module {
     }
   }
 
-  /// Main-thread accessor used by the preview view's attach().
-  func sessionForPreview() -> AVCaptureSession? {
-    // Read of a sessionQueue-confined reference from main: acceptable for a
-    // bind-only handoff (the layer retains the session); worst case the view
-    // binds nil and the post-start push fixes it. Never mutated here.
-    return session
+  /// View attach (prop handler, main) → sessionQueue. 0.18.9: ALL preview-
+  /// layer session binds/unbinds run on sessionQueue, serialized with
+  /// configure/start/stop by construction — never on main, where setSession:
+  /// can synchronously commit the capture graph and stall into the
+  /// scene-update watchdog (field log 6545F417), and never via a fire-and-
+  /// forget main hop that let a bound layer outlive its session on a Fig
+  /// workloop (field logs 3F5D846E / A07A0CA3).
+  func attachViewOnSessionQueue(_ view: ExhibitCameraPreviewView) {
+    sessionQueue.async { [weak self, weak view] in
+      guard let self = self, let view = view else { return }
+      self.previewView = view
+      if let session = self.session {
+        view.bind(session: session)
+      }
+    }
   }
 
-  /// Push the running session to the preview view (called on sessionQueue,
-  /// hops to main). Also delivers first-frame readiness.
+  /// Push the running session to the preview view. 0.18.9: enqueues the
+  /// bind on sessionQueue (callers include the synchronizer's capture
+  /// queue), so the bind is serialized with configure/start/stop — never a
+  /// main-hop. Also delivers first-frame readiness.
   private func pushSessionToPreview(readySignal: String? = nil) {
-    guard let session = session else { return }
-    DispatchQueue.main.async { [weak self] in
-      guard let view = self?.previewView else { return }
+    sessionQueue.async { [weak self] in
+      guard let self = self, let session = self.session, let view = self.previewView else { return }
       view.bind(session: session)
       if let signal = readySignal {
         view.reportReady(session: session, signal: signal)
@@ -873,6 +883,7 @@ extension ExhibitCameraModule {
   /// input's video port (the documented multi-cam PiP pattern), so the inset
   /// shows exactly what the evidence pipeline sees. Called on sessionQueue.
   func setPipWanted(_ wanted: Bool, layer: AVCaptureVideoPreviewLayer?) {
+    let oldLayer = pipLayer
     pipWanted = wanted
     pipLayer = wanted ? layer : nil
     guard let session = session else { return }
@@ -882,6 +893,11 @@ extension ExhibitCameraModule {
       session.beginConfiguration()
       teardownPipConnection(in: session)
       session.commitConfiguration()
+      // 0.18.9: a no-connection PiP layer RETAINS its session; clear the
+      // reference here, ordered after the commit on this serial queue, so
+      // the discarded inset layer can never carry the session into a
+      // workloop dealloc (the 3F5D846E / A07A0CA3 SIGABRT class).
+      oldLayer?.session = nil
     }
   }
 
@@ -1161,6 +1177,13 @@ extension ExhibitCameraModule {
         pool = multiCamInBudget
       }
     }
+    // 0.18.9 (field: "zoom number moves, camera doesn't zoom" with Multiple
+    // Lenses on): some multi-cam formats report maxAvailableVideoZoomFactor
+    // == min — zoom pinned at 1.0 while the UI sweeps. When the pool offers
+    // ANY zoom-capable format, drop the pinned ones: a smaller resolution
+    // with a real sweep beats a larger one that silently locks at 1x.
+    let zoomable = pool.filter { $0.maxAvailableVideoZoomFactor > $0.minAvailableVideoZoomFactor + 0.01 }
+    if !zoomable.isEmpty { pool = zoomable }
     let byArea: (AVCaptureDevice.Format, AVCaptureDevice.Format) -> Bool = { a, b in
       let da = CMVideoFormatDescriptionGetDimensions(a.formatDescription)
       let db = CMVideoFormatDescriptionGetDimensions(b.formatDescription)
@@ -1204,11 +1227,12 @@ extension ExhibitCameraModule {
   }
 
   /// Compact one-line format description for the diagnostics log, e.g.
-  /// "1920x1440@<=60 binned:1 multiCam:1". String only — bridge-stable.
+  /// "1920x1440@<=60 binned:1 multiCam:1 zoomMax:4.00". String only —
+  /// bridge-stable.
   private func formatSummary(_ format: AVCaptureDevice.Format) -> String {
     let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
     let maxFPS = format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? 0
-    return "\(dims.width)x\(dims.height)@<=\(Int(maxFPS)) binned:\(format.isVideoBinned ? 1 : 0) multiCam:\(format.isMultiCamSupported ? 1 : 0)"
+    return "\(dims.width)x\(dims.height)@<=\(Int(maxFPS)) binned:\(format.isVideoBinned ? 1 : 0) multiCam:\(format.isMultiCamSupported ? 1 : 0) zoomMax:\(String(format: "%.2f", Double(format.maxAvailableVideoZoomFactor)))"
   }
 
   /// Native → persistent diagnostics log (0.18.2): the JS side forwards
@@ -5492,6 +5516,17 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "no-session"])
       return
     }
+    // 0.18.9 honesty: the ACTIVE format can pin zoom (multi-cam formats
+    // whose max == min). Resolve applied:false with the real ceiling —
+    // the UI number must never claim a factor the hardware didn't apply.
+    if device.maxAvailableVideoZoomFactor <= device.minAvailableVideoZoomFactor + 0.001 {
+      promise?.resolve([
+        "applied": false,
+        "reason": "format-zoom-locked",
+        "maxZoom": Double(device.maxAvailableVideoZoomFactor),
+      ])
+      return
+    }
     do {
       try device.lockForConfiguration()
       let clamped = min(max(CGFloat(factor), device.minAvailableVideoZoomFactor), device.maxAvailableVideoZoomFactor)
@@ -5514,6 +5549,15 @@ extension ExhibitCameraModule {
   func setZoomSmooth(_ factor: Double, rate: Double, promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
+      return
+    }
+    // 0.18.9 honesty: same zoom-locked-format guard as setZoom.
+    if device.maxAvailableVideoZoomFactor <= device.minAvailableVideoZoomFactor + 0.001 {
+      promise?.resolve([
+        "applied": false,
+        "reason": "format-zoom-locked",
+        "maxZoom": Double(device.maxAvailableVideoZoomFactor),
+      ])
       return
     }
     do {
@@ -5729,10 +5773,9 @@ extension ExhibitCameraModule {
       return
     }
     rejectStart(ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Session stopped before the first frame"))
+    // teardownSession unbinds both preview layers synchronously on this
+    // queue before releasing the session (0.18.9) — no separate hop here.
     let stopError = teardownSession()
-    DispatchQueue.main.async { [weak self] in
-      self?.previewView?.bind(session: nil)
-    }
     if let stopError = stopError {
       // The session is torn down either way; the rejection states that the
       // stop itself threw (0.14.2 SIGABRT path — now a promise, not a crash).
@@ -5795,37 +5838,34 @@ extension ExhibitCameraModule {
       }
     }
     session = nil
-    // 0.18.8 FLIP SIGABRT FIX (field log: EXC_CRASH on front/back toggle —
-    // AVCaptureVideoPreviewLayer dealloc → AVCaptureMultiCamSession dealloc →
-    // detachFromFigCaptureSession assert on a Fig workloop, while the main
-    // thread sat INSIDE the same session's _commitConfiguration, entered via
-    // the preview-layer bind's KVO notification). Root cause: the PiP layer
-    // RETAINS its session (setSessionWithNoConnection at ensurePipConnection
-    // time), and nothing cleared that reference at teardown — the old
-    // session's final release could land wherever the pip layer next dropped
-    // it, mid-commit, off-main. Clear the pip layer's session HERE, on
-    // sessionQueue, while `deadSession` is still strongly held and no commit
-    // can be in flight (stop completed synchronously above; the main-thread
-    // unbind below either hasn't run yet or has fully returned).
-    // This SDK's setSessionWithNoConnection(_:) takes a NON-optional session
-    // (EAS build error 5811), so the detach goes through the layer's session
-    // property: assigning nil unbinds without creating a connection, which is
-    // exactly the state we need here. Routed through the view on MAIN — the
-    // layer is view-owned UIKit state, and queue-hopping the detach is the
-    // crash class being fixed.
+    // 0.18.9 TEARDOWN CRASH FIX (field logs 6545F417 watchdog + 3F5D846E /
+    // A07A0CA3 SIGABRT, all 0.18.8 (47)): unbind BOTH preview layers HERE,
+    // synchronously, on sessionQueue, while `deadSession` still strongly
+    // holds the session — so no layer is attached when the last reference
+    // drops at the end of this function.
+    //   • The 0.18.8 main.async hops left every layer attached until the
+    //     main queue drained; the layer (which RETAINS its session) could
+    //     then die with the session on a Fig workloop, where the session's
+    //     dealloc re-entered detachFromFigCaptureSession on its own sync
+    //     queue → assert/SIGABRT.
+    //   • The same hops put setSession: on MAIN, where it can synchronously
+    //     commit the capture graph (_commitConfiguration → _buildAndRunGraph
+    //     → AVRunLoopCondition wait) and block past the 8 s scene-update
+    //     watchdog while sessionQueue was mid-configuration → SIGKILL.
+    // AVCaptureVideoPreviewLayer serializes session attachment internally on
+    // its Fig sync queue, so the setter is safe from any OTHER queue; from
+    // sessionQueue it is trivially ordered against stopRunning above and
+    // against any begin/commit on this serial queue. After these two calls
+    // no layer retains the session, so its final release happens right here
+    // with nothing attached.
     if deadSession != nil {
-      DispatchQueue.main.async { [weak self] in
-        self?.previewView?.detachPipFromSession()
+      // Module-held PiP ref first (survives a view swap); the view's own
+      // pipLayer is normally the same object — detach is idempotent.
+      pipLayer?.session = nil
+      if let view = previewView {
+        view.detachPipFromSession()
+        view.bind(session: nil)
       }
-    }
-    // Unbind the preview layer — a black preview is honest; a frozen last
-    // frame is not (also covers watchdog teardown paths). The session is
-    // retained through the unbind: its bind-triggered commit completes on
-    // main BEFORE the block releases the last reference — never mid-commit
-    // on a Fig workloop.
-    DispatchQueue.main.async { [weak self] in
-      self?.previewView?.bind(session: nil)
-      _ = deadSession // retain until the unbind lands
     }
     sessionId = ""
     primaryDevice = nil

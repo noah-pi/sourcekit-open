@@ -53,26 +53,31 @@ public final class ExhibitCameraPreviewView: ExpoView {
     previewLayer.videoGravity = .resizeAspectFill
   }
 
-  /// 0.18.8 crash hardening: nil the PiP layer's session on the module's
-  /// behalf. `setSessionWithNoConnection(_:)` is non-optional in this SDK,
-  /// and a no-connection layer retains its session — clearing it here, on
-  /// main, keeps the session's final release off the Fig workloop queues.
+  /// 0.18.9 crash hardening: nil the PiP layer's session on the module's
+  /// behalf. Called on the module's sessionQueue — AVCaptureVideoPreviewLayer
+  /// serializes session attachment internally (its Fig sync queue), so the
+  /// setter is safe from any queue EXCEPT that queue itself; sessionQueue
+  /// gives us total ordering with the session's begin/commit/stop, which is
+  /// exactly what the 0.18.8 field crashes lacked (main-thread setSession:
+  /// blocked inside a synchronous graph commit → 0x8BADF00D; async-hop
+  /// detach let a bound layer+session die on a Fig workloop → SIGABRT).
   func detachPipFromSession() {
-    dispatchPrecondition(condition: .onQueue(.main))
     pipLayer?.session = nil
   }
 
   deinit {
     // Fabric can deallocate views OFF the main thread. Unbinding the preview
-    // layer here triggered exactly the fielded SIGABRT class: layer dealloc →
-    // session dealloc → detachFromFigCaptureSession assert on a Fig workloop
-    // while a commit was in flight on main. Hop the unbind to main and RETAIN
-    // the layer through the hop, so both release deterministically there.
+    // layer inline triggered the fielded SIGABRT class: layer dealloc →
+    // session dealloc → detachFromFigCaptureSession assert on a Fig workloop.
+    // Hop the unbind to a GLOBAL queue (never the Fig sync queue, so no
+    // reentrant detach assert) and RETAIN both layers through the hop, so
+    // they release deterministically there — after the module's ordered
+    // teardown has already unbound them in the normal case.
     let pl = previewLayer
-    if Thread.isMainThread {
+    let pip = pipLayer
+    DispatchQueue.global(qos: .userInitiated).async {
       pl.session = nil
-    } else {
-      DispatchQueue.main.async { pl.session = nil }
+      pip?.session = nil
     }
   }
 
@@ -81,17 +86,19 @@ public final class ExhibitCameraPreviewView: ExpoView {
   func attach(module: ExhibitCameraModule) {
     moduleRef = module
     // Pull the current session if one is already running (view mounted
-    // after configureSession — e.g. re-attach on navigation).
-    if let session = module.sessionForPreview() {
-      bind(session: session)
-    }
+    // after configureSession — e.g. re-attach on navigation). The bind
+    // itself runs on the module's sessionQueue (0.18.9: never on main).
+    module.attachViewOnSessionQueue(self)
   }
 
-  /// Called by the module (main-thread hop) when a session starts or stops.
-  /// nil unbinds — a black preview is honest; a frozen last frame is not,
-  /// so on unbind we clear the layer's connection by dropping the session.
+  /// Called by the module ON ITS sessionQueue when a session starts or
+  /// stops. nil unbinds — a black preview is honest; a frozen last frame is
+  /// not, so on unbind we clear the layer's connection by dropping the
+  /// session. Off-main by design: on main this setter can synchronously
+  /// commit the capture graph and stall long enough for the scene-update
+  /// watchdog to kill the app (0.18.8 field log 6545F417); from sessionQueue
+  /// the same call is ordered against begin/commit/stop by the serial queue.
   func bind(session: AVCaptureSession?) {
-    dispatchPrecondition(condition: .onQueue(.main))
     if previewLayer.session !== session {
       previewLayer.session = session
       reportedReadyForSession = nil
@@ -99,10 +106,10 @@ public final class ExhibitCameraPreviewView: ExpoView {
     applyRotation()
   }
 
-  /// Called by the module when the first synchronized frame lands.
-  /// `signal` states which readiness signal fired (spec §2).
+  /// Called by the module (sessionQueue) when the first synchronized frame
+  /// lands. `signal` states which readiness signal fired (spec §2).
+  /// EventDispatcher hops to JS itself.
   func reportReady(session: AVCaptureSession, signal: String) {
-    dispatchPrecondition(condition: .onQueue(.main))
     let id = ObjectIdentifier(session)
     guard reportedReadyForSession != id else { return }
     reportedReadyForSession = id
@@ -165,6 +172,10 @@ public final class ExhibitCameraPreviewView: ExpoView {
   /// front preview sideways there. The device is discovered from the bound
   /// session's video input; pre-bind (no session) there is no connection
   /// and nothing to rotate. Legacy: videoOrientation.
+  /// Queue note (0.18.9): runs on the module's sessionQueue (from bind) and
+  /// on main (from layoutSubviews). It mutates only AVFoundation state —
+  /// connection angle, coordinator — never the view hierarchy; both are
+  /// internally synchronized.
   func applyRotation() {
     guard let connection = previewLayer.connection else { return }
     if #available(iOS 17.0, *) {
