@@ -1,4 +1,4 @@
-w<p align="center">
+<p align="center">
   <img src=".github/banner.svg" alt="Source Kit — an open cryptographic camera" width="100%">
 </p>
 
@@ -199,7 +199,7 @@ metadata, so fields can be withheld and still verify. Nothing yet covers the pix
 Most of what Source Kit commits is aimed at rephotography, the one failure that stays open
 however good the hardware gets.
 
-## What it commits
+## What Source Kit commits
 
 Each of these exists because of a gap named above. All of it optional, and all of it switchable
 in the viewfinder.
