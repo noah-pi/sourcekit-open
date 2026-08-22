@@ -138,107 +138,39 @@ const photo = await attestPhoto({
 const media = photo.signedPhotoBytes!;
 const report = await verifyPhotoBytes(media);
 check('dual-signed JPEG verifies INTACT', report.verdict === 'INTACT', report.verdict);
-check('report carries BOTH PQ layers valid (claim + record)',
-  report.c2pa?.pq?.claim?.signatureValid === true && report.c2pa?.pq?.record?.signatureValid === true,
+check('report carries the record PQ layer valid, and no claim entry',
+  report.c2pa?.pq?.record?.signatureValid === true && report.c2pa?.pq?.claim?.present !== true,
   JSON.stringify(report.c2pa?.pq ?? null).slice(0, 120));
 check('the performed list labels the custody (SOFTWARE key, not a hardware anchor)',
   (report.checksPerformed ?? []).some((s) => s.includes('ML-DSA-65') && s.includes('SOFTWARE')),
   (report.checksPerformed ?? []).filter((s) => s.includes('post-quantum')).join(' | '));
 const store = extractC2paStore(media);
 const manifest = store ? parseManifest(store.payload) : null;
-check('manifest carries the verifyPq entry bound to the committed key',
-  manifest?.pq?.fingerprint === kp.fingerprint && manifest.pq.signature.length === PQ_SIZES.signature);
+check('the manifest carries no verifyPq entry — the signature is on the record',
+  !manifest?.pq);
+check('the record signature is a full ML-DSA-65 signature bound to the committed key',
+  !!photo.record.pqSignature
+  && base64ToBytes(photo.record.pqSignature).length === PQ_SIZES.signature
+  && pqPublicBlockFrom((photo.record.context as any)?.pqKey ?? (photo.record as any).pqKey)?.fingerprint === kp.fingerprint);
 
-// ---------- strip detection (builder seam) ----------
+// ---------- strip detection (record layer) ----------
 console.log('— strip detection —');
-// A "stripped" file, synthesized honestly at the builder seam: the SAME signed
-// record (committing the PQ key inside its payload) embedded in a fresh
-// manifest whose COSE layer lacks verifyPq — exactly the state a stripper
-// leaves behind. The classical layer still verifies; the gap is visible.
+// A "stripped" file: the record still commits a PQ key inside its signed
+// payload, but pqSignature is gone. That is exactly what a stripper leaves
+// behind, and the commitment cannot be removed without breaking the classical
+// signature — so the gap is visible. The classical layer still verifies.
 {
   const insertOffset = 2;
   const clean = fs.readFileSync('/tmp/lab/clean.jpg');
+  const { pqSignature: _dropped, ...withoutPq } = photo.record as any;
+  const strippedRecord = await signRecord(withoutPq, key.signDigest, key.signPayload); // no pq arg
   const segment = await buildC2paSegment(
     {
       appName: 'ExhibitA/0.10.0-lab (com.verify.camera)',
       mime: 'image/jpeg',
       title: 'stripped.jpg',
       instanceId: 'xmp:iid:' + bytesToHex(randomBytes(16)),
-      telemetry: photo.record as unknown as Record<string, unknown>,
-      signDigest: key.signDigest,
-      signPayload: key.signPayload,
-      pq: null, // ← the strip
-      certChain: [devCert],
-      cleanFileSha256: new Uint8Array(sha256(clean)),
-    },
-    insertOffset,
-  );
-  const strippedMedia = concatBytes(clean.subarray(0, insertOffset), segment, clean.subarray(insertOffset));
-  const r = await verifyPhotoBytes(strippedMedia);
-  check('stripped file still verifies INTACT classically (PQ absence never convicts)', r.verdict === 'INTACT', r.verdict);
-  check('strip detected at the claim layer (key committed, signature absent)',
-    r.c2pa?.pq?.claim?.present === false && r.c2pa?.pq?.claim?.keyCommitted === true);
-  check('the STRIPPED warning line is loud and says what happened',
-    (r.checksPerformed ?? []).some((s) => s.includes('STRIPPED') && s.includes('altered after signing')),
-    (r.checksPerformed ?? []).filter((s) => s.includes('STRIPPED')).join(' | '));
-}
-
-// ---------- pqScope: record (what an SDK-built manifest looks like) ----------
-console.log('— pqScope: record —');
-// A general-purpose C2PA writer has nowhere to park a second signature in the
-// COSE unprotected header. Such a manifest declares pqScope: 'record' inside
-// the signed payload, and the claim entry's absence is by design. The media
-// stays post-quantum covered: pqSignature signs the record, the record commits
-// asset.sha256, and the verifier compares that against the bytes it read.
-{
-  const insertOffset = 2;
-  const clean = fs.readFileSync('/tmp/lab/clean.jpg');
-  const scoped = await signRecord(
-    { ...(photo.record as any), pqScope: 'record' },
-    key.signDigest, key.signPayload, { secretKey: kp.secretKey },
-  );
-  const segment = await buildC2paSegment(
-    {
-      appName: 'ExhibitA/0.10.0-lab (com.verify.camera)',
-      mime: 'image/jpeg',
-      title: 'record-only.jpg',
-      instanceId: 'xmp:iid:' + bytesToHex(randomBytes(16)),
-      telemetry: scoped as unknown as Record<string, unknown>,
-      signDigest: key.signDigest,
-      signPayload: key.signPayload,
-      pq: null, // no claim entry — exactly what the SDK would produce
-      certChain: [devCert],
-      cleanFileSha256: new Uint8Array(sha256(clean)),
-    },
-    insertOffset,
-  );
-  const media = concatBytes(clean.subarray(0, insertOffset), segment, clean.subarray(insertOffset));
-  const r = await verifyPhotoBytes(media);
-
-  check('pqScope record: file verifies INTACT', r.verdict === 'INTACT', r.verdict);
-  check('pqScope record: the record PQ layer verifies',
-    r.c2pa?.pq?.record?.signatureValid === true);
-  check('pqScope record: NO false STRIPPED warning',
-    !(r.checksPerformed ?? []).some((x) => x.includes('STRIPPED')),
-    (r.checksPerformed ?? []).filter((x) => x.includes('STRIPPED')).join(' | '));
-  check('pqScope record: the absent claim entry is disclosed, not hidden',
-    (r.checksNotPerformed ?? []).some((x) => x.includes('not carried by design')));
-  check('pqScope record: the media is still bound (asset digest compared)',
-    r.checks.assetHashMatches === true);
-
-  // The declaration must not become a way to silence real stripping: a record
-  // that says claim+record and carries no claim entry still fires.
-  const honest = await signRecord(
-    { ...(photo.record as any), pqScope: 'claim+record' },
-    key.signDigest, key.signPayload, { secretKey: kp.secretKey },
-  );
-  const seg2 = await buildC2paSegment(
-    {
-      appName: 'ExhibitA/0.10.0-lab (com.verify.camera)',
-      mime: 'image/jpeg',
-      title: 'still-stripped.jpg',
-      instanceId: 'xmp:iid:' + bytesToHex(randomBytes(16)),
-      telemetry: honest as unknown as Record<string, unknown>,
+      telemetry: strippedRecord as unknown as Record<string, unknown>,
       signDigest: key.signDigest,
       signPayload: key.signPayload,
       pq: null,
@@ -247,10 +179,55 @@ console.log('— pqScope: record —');
     },
     insertOffset,
   );
-  const m2 = concatBytes(clean.subarray(0, insertOffset), seg2, clean.subarray(insertOffset));
-  const r2 = await verifyPhotoBytes(m2);
-  check('pqScope claim+record: a missing claim entry STILL fires STRIPPED',
-    (r2.checksPerformed ?? []).some((x) => x.includes('STRIPPED')));
+  const strippedMedia = concatBytes(clean.subarray(0, insertOffset), segment, clean.subarray(insertOffset));
+  const r = await verifyPhotoBytes(strippedMedia);
+  check('stripped file still verifies INTACT classically (PQ absence never convicts)', r.verdict === 'INTACT', r.verdict);
+  check('strip detected at the record layer (key committed, signature absent)',
+    r.c2pa?.pq?.record?.present === false && r.c2pa?.pq?.record?.keyCommitted === true,
+    JSON.stringify(r.c2pa?.pq?.record));
+  check('the STRIPPED warning line is loud and says what happened',
+    (r.checksPerformed ?? []).some((x) => x.includes('STRIPPED') && x.includes('altered after signing')),
+    (r.checksPerformed ?? []).filter((x) => x.includes('STRIPPED')).join(' | '));
+}
+
+// ---------- the PQ signature lives in the record ----------
+console.log('— record-carried PQ layer —');
+// Captures carry no verifyPq entry in the COSE header: a general-purpose C2PA
+// writer has nowhere to put one, so the record carries the signature alone.
+// The media stays covered — pqSignature signs the record, the record commits
+// asset.sha256, and the verifier compares that against the bytes it read.
+{
+  const insertOffset = 2;
+  const clean = fs.readFileSync('/tmp/lab/clean.jpg');
+  const segment = await buildC2paSegment(
+    {
+      appName: 'ExhibitA/0.10.0-lab (com.verify.camera)',
+      mime: 'image/jpeg',
+      title: 'record-only.jpg',
+      instanceId: 'xmp:iid:' + bytesToHex(randomBytes(16)),
+      telemetry: photo.record as unknown as Record<string, unknown>,
+      signDigest: key.signDigest,
+      signPayload: key.signPayload,
+      pq: null, // as every capture is built
+      certChain: [devCert],
+      cleanFileSha256: new Uint8Array(sha256(clean)),
+    },
+    insertOffset,
+  );
+  const media = concatBytes(clean.subarray(0, insertOffset), segment, clean.subarray(insertOffset));
+  const r = await verifyPhotoBytes(media);
+
+  check('record-only: file verifies INTACT', r.verdict === 'INTACT', r.verdict);
+  check('record-only: the record PQ layer verifies',
+    r.c2pa?.pq?.record?.signatureValid === true);
+  check('record-only: no claim entry is emitted', r.c2pa?.pq?.claim?.present !== true);
+  check('record-only: an absent claim entry is NOT reported as stripping',
+    !(r.checksPerformed ?? []).some((x) => x.includes('STRIPPED')),
+    (r.checksPerformed ?? []).filter((x) => x.includes('STRIPPED')).join(' | '));
+  check('record-only: the media is still bound (asset digest compared)',
+    r.checks.assetHashMatches === true);
+  check('record-only: the PQ layer is reported as carried on the record',
+    (r.checksPerformed ?? []).some((x) => x.includes('post-quantum layer verified on the record')));
 }
 
 // ---------- forgery: foreign PQ signature binds to nothing ----------
@@ -370,13 +347,13 @@ const cleanPng = fs.readFileSync('/tmp/lab/clean.png');
 const png = await attestPng({ pngBytes: cleanPng, context: ctx, identity: { author: 'PQ Test', organization: null }, key, pq: pqCapture });
 const pngReport = await verifyPhotoBytes(png.signedPngBytes);
 check('dual-signed PNG verifies INTACT with the PQ layer',
-  pngReport.verdict === 'INTACT' && pngReport.c2pa?.pq?.claim?.signatureValid === true && pngReport.c2pa?.pq?.record?.signatureValid === true,
+  pngReport.verdict === 'INTACT' && pngReport.c2pa?.pq?.record?.signatureValid === true,
   `${pngReport.verdict} ${JSON.stringify(pngReport.c2pa?.pq ?? null).slice(0, 100)}`);
 
 const video = await attestVideo({ videoUri: '/tmp/lab/clean.mp4', context: ctx, identity: { author: 'PQ Test', organization: null }, key, pq: pqCapture });
 const videoReport = await verifyVideoBytes(video.signedVideoBytes!);
 check('dual-signed MP4 verifies INTACT with the PQ layer',
-  videoReport.verdict === 'INTACT' && videoReport.c2pa?.pq?.claim?.signatureValid === true && videoReport.c2pa?.pq?.record?.signatureValid === true,
+  videoReport.verdict === 'INTACT' && videoReport.c2pa?.pq?.record?.signatureValid === true,
   `${videoReport.verdict} ${JSON.stringify(videoReport.c2pa?.pq ?? null).slice(0, 100)}`);
 
 // ---------- block shape ----------

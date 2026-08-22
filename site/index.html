@@ -818,7 +818,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <details class="f">
     <summary>A post-quantum signature<span class="sum">Cheap now, and photographs get read decades later.</span></summary>
     <div class="fbody">
-      <p>Every record carries an ML-DSA-65 signature over the same commitment as the ECDSA one.</p>
+      <p>Every record carries an ML-DSA-65 signature over the same commitment as the ECDSA one. It signs the record's canonical JSON, which contains the digest of the media, so a future break of P-256 still leaves a signature nobody can forge standing between the file and the bytes it claims to be.</p>
       <p>It is a bank vault door on a garden shed, and worth fitting anyway. The elliptic-curve signature is nowhere near the weakest thing here, and anyone with a quantum computer would still find it easier to point a camera at a screen. But the cost is a few kilobytes and a library that already exists, and a photograph taken this week might be read in a hearing or an archive in twenty years — by which time the signature protecting it could be the one part that has quietly stopped meaning anything. Nobody gets to re-sign the archive later. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/pq.ts">pq.ts</a></p>
     </div>
   </details>

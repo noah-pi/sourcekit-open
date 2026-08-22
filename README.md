@@ -40,9 +40,11 @@ verification in the app. I've written the c2pa-swift binding for both — sign a
 including Secure Enclave signing — and haven't wired it into any screen yet
 ([`upstreamEngineIos.ts`](src/provenance/engine/upstreamEngineIos.ts)).
 
-The one thing I can't see how to move across is the post-quantum layer: the manifest carries an
-ML-DSA-65 second signature in the COSE unprotected header, and there is no obvious place for
-that in the Builder API. Everything else looks migratable.
+The post-quantum layer used to look like a blocker — a general-purpose C2PA writer owns the COSE
+structure, and there is nowhere in the Builder API to park a second signature. It isn't. The
+ML-DSA-65 signature lives in the record instead, and the record commits the media digest, so the
+media is covered without needing a second entry in the header. Nothing about the manifest now
+depends on writing the COSE structure by hand.
 
 What I have in the meantime is a differential oracle in CI: every corpus asset runs through my
 verifier and the official c2pa-rs, and the build fails on any disagreement that isn't
@@ -415,11 +417,11 @@ expectations, and a check that could not run says so.
 <details>
 <summary><b>A post-quantum signature</b> — cheap now, and photographs get read decades later</summary>
 
-Every record carries an ML-DSA-65 signature over the same commitment as the ECDSA one.
-Captures through 0.18.9 also put a copy in the COSE unprotected header; the record declares
-which arrangement it used in `pqScope`, inside the signed payload, so a missing claim entry is
-distinguishable from a stripped one. The record is the load-bearing copy either way — it signs
-the record's canonical JSON, which contains the media digest the verifier recomputes.
+Every record carries an ML-DSA-65 signature over the same commitment as the ECDSA one. It signs
+the record's canonical JSON, which contains the digest of the media — so a future break of P-256
+still leaves a signature nobody can forge standing between the file and the bytes it claims to
+be. The key is committed inside that same signed payload, which is what makes a stripped layer
+visible: the commitment cannot be removed without breaking the classical signature.
 
 It is a bank vault door on a garden shed, and worth fitting anyway. The elliptic-curve signature
 is nowhere near the weakest thing here, and anyone with a quantum computer would still find it

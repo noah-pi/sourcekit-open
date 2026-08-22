@@ -49,7 +49,7 @@ import { buildC2paSegment, buildC2paStoreBmff, buildC2paStorePng, bmffHashAssert
 import { C2PA_UUID_BYTES, embedUuidStore, stripC2paFromBmff, extractC2paStoreBmff } from '../c2pa/bmff';
 import { embedCaBx, iendOffset, stripCaBx } from '../c2pa/png';
 import { signRecord, sha256Hex } from '../lib/sign';
-import { pqClaimSigner, pqPublicBlock, type PqCaptureKey } from '../lib/pq';
+import { pqPublicBlock, type PqCaptureKey } from '../lib/pq';
 import { getDeviceCertChain, type DeviceSigner } from '../lib/deviceKey';
 import { buildSelfSignedCert } from '../lib/cert';
 import type { DeviceIntegritySignals } from '../lib/integrity';
@@ -670,7 +670,11 @@ async function embedC2paInJpeg(stripped: Uint8Array, signedRecord: AttestationRe
       telemetry: signedRecord as unknown as Record<string, unknown>,
       signDigest: key.signDigest,
       signPayload: key.signPayload,
-      pq: pq ? pqClaimSigner(pq) : null,
+      // The post-quantum signature lives in the record, not here. The record
+      // signs its own canonical JSON, which carries asset.sha256, so the media
+      // is covered — and a general-purpose C2PA writer has nowhere to put a
+      // second signature, so this is the shape that stays portable.
+      pq: null,
       certChain: chain,
       cleanFileSha256: sha256(stripped),
       fetchTimestamp: fetchTimestampTokensBounded,
@@ -724,7 +728,11 @@ async function embedC2paInPng(stripped: Uint8Array, signedRecord: AttestationRec
       telemetry: signedRecord as unknown as Record<string, unknown>,
       signDigest: key.signDigest,
       signPayload: key.signPayload,
-      pq: pq ? pqClaimSigner(pq) : null,
+      // The post-quantum signature lives in the record, not here. The record
+      // signs its own canonical JSON, which carries asset.sha256, so the media
+      // is covered — and a general-purpose C2PA writer has nowhere to put a
+      // second signature, so this is the shape that stays portable.
+      pq: null,
       certChain: chain,
       cleanFileSha256: sha256(stripped),
       fetchTimestamp: fetchTimestampTokensBounded,
@@ -1089,7 +1097,11 @@ async function embedC2paInBmff(
     telemetry: signedRecord as unknown as Record<string, unknown>,
     signDigest: key.signDigest,
     signPayload: key.signPayload,
-    pq: pq ? pqClaimSigner(pq) : null,
+    // The post-quantum signature lives in the record, not here. The record
+    // signs its own canonical JSON, which carries asset.sha256, so the media
+    // is covered — and a general-purpose C2PA writer has nowhere to put a
+    // second signature, so this is the shape that stays portable.
+    pq: null,
     certChain: chain,
     cleanFileSha256: sha256(stripped), // unused by the BMFF builder — the v2 hash replaces it
     fetchTimestamp,

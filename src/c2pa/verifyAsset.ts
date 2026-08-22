@@ -364,21 +364,14 @@ async function c2paReport(
       'post-quantum layer — none carried (capture predates 0.10.0, or a de-identified copy: deID omits the PQ layer by design, since the device\'s long-lived PQ key would re-link an anonymised copy)',
     );
   } else {
-    // Where the ML-DSA signature is SUPPOSED to live, read from inside the
-    // signed payload. Absent means 'claim+record' — every capture through
-    // 0.18.9. A manifest written by a general-purpose C2PA writer has nowhere
-    // to put the claim entry, so those declare 'record' and its absence is by
-    // design rather than evidence of stripping. The declaration cannot be
-    // forged to silence the warning: it is covered by the record signature.
-    const pqScope = telemetryRecord?.pqScope ?? 'claim+record';
-    const claimShouldCarryPq = pqScope === 'claim+record';
+    // The post-quantum signature lives in the record. It signs the record's
+    // canonical JSON, which carries asset.sha256 — the digest recomputed from
+    // the bytes read above — so the media is covered without a second entry
+    // in the COSE header, where a general-purpose C2PA writer could not put
+    // one anyway. A claim entry is still READ and reported when a file has
+    // one; its ABSENCE is not evidence of anything, so it is not flagged.
     const pqWhere = (claim: PqLayerCheck | null, record: PqLayerCheck | null): string =>
       [claim?.signatureValid ? 'COSE claim' : null, record?.signatureValid ? 'record' : null].filter(Boolean).join(' + ');
-    if (!claimShouldCarryPq && recordPq?.signatureValid) {
-      notPerformed.push(
-        'post-quantum layer on the COSE claim — not carried by design (this manifest declares pqScope: record). The media is still covered: the record signature is post-quantum and the record commits the media digest',
-      );
-    }
     if (claimPq?.signatureValid || recordPq?.signatureValid) {
       performed.push(
         `post-quantum layer verified on the ${pqWhere(claimPq, recordPq)} (ML-DSA-65, SOFTWARE key — hedges a future P-256 break; NOT a second hardware anchor; key committed inside the signed payload)`,
@@ -394,11 +387,13 @@ async function c2paReport(
         'post-quantum layer on the inner record FAILED (signature invalid or key fingerprint mismatch) — the classical layer still stands; the PQ layer proves nothing here',
       );
     }
-    const strippedClaim = claimShouldCarryPq && claimPq && !claimPq.present && claimPq.keyCommitted;
-    const strippedRecord = recordPq && !recordPq.present && recordPq.keyCommitted;
-    if (strippedClaim || strippedRecord) {
+    // Strip detection lives on the record, which is where the signature is.
+    // The key is committed INSIDE the signed payload, so it cannot be removed
+    // without breaking the classical signature — a committed key with no
+    // signature beside it means the layer was taken out after signing.
+    if (recordPq && !recordPq.present && recordPq.keyCommitted) {
       performed.push(
-        `post-quantum layer STRIPPED (${[strippedClaim ? 'COSE claim' : null, strippedRecord ? 'record' : null].filter(Boolean).join(' + ')}): a PQ key is committed inside the signed payload but the PQ signature is missing — the commitment cannot be removed without breaking the classical signature, so this file was altered after signing`,
+        'post-quantum layer STRIPPED (record): a PQ key is committed inside the signed payload but the PQ signature is missing — the commitment cannot be removed without breaking the classical signature, so this file was altered after signing',
       );
     }
   }
