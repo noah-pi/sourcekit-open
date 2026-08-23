@@ -313,15 +313,26 @@ const DRAFT_MAGIC = new Uint8Array([0x56, 0x51, 0x31]); // 'VQ1'
 const ARMOR_SYNC_MAX = 64 * 1024 * 1024;
 
 async function armorDraft(draftUri: string, sync: boolean): Promise<void> {
+  const tmp = `${draftUri}.sealing`;
+  const held = `${draftUri}.plain`;
   const work = async () => {
     try {
       const sealed = await sealVaultBytes(await readFileBytes(draftUri));
-      const tmp = `${draftUri}.sealing`;
       await writeFileBytes(tmp, concatBytes(DRAFT_MAGIC, sealed));
-      await FileSystem.deleteAsync(draftUri, { idempotent: true }).catch(() => {});
-      await FileSystem.moveAsync({ from: tmp, to: draftUri });
+      // The capture exists at exactly one path at every step. Deleting the
+      // draft before the move loses it outright if the move fails or the
+      // process dies between the two.
+      await FileSystem.moveAsync({ from: draftUri, to: held });
+      try {
+        await FileSystem.moveAsync({ from: tmp, to: draftUri });
+      } catch (moveError) {
+        await FileSystem.moveAsync({ from: held, to: draftUri }).catch(() => {});
+        throw moveError;
+      }
+      await FileSystem.deleteAsync(held, { idempotent: true }).catch(() => {});
     } catch {
       // Best-effort: the pump's plaintext fallback still seals the job.
+      await FileSystem.deleteAsync(tmp, { idempotent: true }).catch(() => {});
     }
   };
   if (sync) await work();
@@ -862,7 +873,17 @@ async function pump(): Promise<void> {
         {
           // A draft still missing after rebasing cannot seal; fail with a
           // sentence the user can act on.
-          const draftInfo = await FileSystem.getInfoAsync(job.draftUri);
+          let draftInfo = await FileSystem.getInfoAsync(job.draftUri);
+          if (!draftInfo.exists) {
+            // armorDraft holds the plaintext at .plain across the swap. A
+            // crash in that window leaves the capture there and nothing else
+            // reads it, so restore it before calling the draft lost.
+            const held = `${job.draftUri}.plain`;
+            if ((await FileSystem.getInfoAsync(held)).exists) {
+              await FileSystem.moveAsync({ from: held, to: job.draftUri }).catch(() => {});
+              draftInfo = await FileSystem.getInfoAsync(job.draftUri);
+            }
+          }
           if (!draftInfo.exists) {
             throw new Error(
               'the capture file is no longer on this device — the app was reinstalled after this capture and the draft did not migrate; this exhibit cannot be sealed, remove it'

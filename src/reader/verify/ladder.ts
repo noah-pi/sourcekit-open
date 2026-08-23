@@ -51,7 +51,6 @@ export interface CustodyInput {
   blockHeaders?: Record<number, Uint8Array>;
 }
 
-const HEX64 = /^[0-9a-f]{64}$/;
 const short = (hex: string): string => `${hex.slice(0, 12)}…${hex.slice(-8)}`;
 
 function rung(rung: number, title: string, state: CheckState, detail: string,
@@ -294,7 +293,22 @@ function rungTime(bundle: ProofBundle, input: CustodyInput): RungResult {
       rows);
   }
 
-  const expected = hexDigestBytes(record.ots!.digestHex);
+  // Receipts must commit to the digest the signature covers, not to the one
+  // the record declares. signedPayload strips `ots` before signing, so
+  // ots.digestHex is outside the signature: a forged record can carry any
+  // valid receipt and name that receipt's digest here. Anchoring against
+  // payloadDigest ties the receipt to the bytes rung 1 verified.
+  const expected = payloadDigest(record);
+  const declared = record.ots!.digestHex;
+  if (declared !== bytesToHex(expected)) {
+    rows.push({
+      label: 'ledger receipts',
+      value: 'the record names a digest that is not this payload\'s; receipts attached here attest to other bytes',
+    });
+    return rung(4, 'Countersigned time', 'diverges',
+      'the anchored digest is not the digest this record\'s signature covers, so no attached receipt bounds this payload\'s signing moment',
+      rows);
+  }
 
   let sawInvalid = false;
   let sawConfirmedUnchecked = false;
@@ -355,13 +369,6 @@ function rungTime(bundle: ProofBundle, input: CustodyInput): RungResult {
       rows);
   }
   return rung(4, 'Countersigned time', 'insufficient', 'no usable ledger receipt · device clock only', rows);
-}
-
-function hexDigestBytes(hex: string): Uint8Array {
-  if (!HEX64.test(hex)) return new Uint8Array(0);
-  const out = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return out;
 }
 
 // ---------------------------------------------------------------------------
