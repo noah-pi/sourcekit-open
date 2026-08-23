@@ -2317,10 +2317,9 @@ extension ExhibitCameraModule {
           "note": flashNote as Any? ?? NSNull(),
         ] as [String: Any]
 
-        // D1 depth export: runs only AFTER the delivery still is safely on
-        // disk — any depth failure degrades to a stated never-recorded or
-        // error, NEVER to a failed capture (the photo is the artifact that
-        // matters; depth failure must not regress sealing).
+        // D1 depth export: runs only after the delivery still is safely on
+        // disk. Any depth failure degrades to a stated never-recorded or error
+        // rather than failing the capture, so it cannot regress sealing.
         let depth: (evidence: [String: Any], sha256: String?, metadata: [String: Any]?)
         if let reason = depthNotRequestedReason {
           depth = (EvidencePathBuilder.neverRecorded(reason), nil, nil)
@@ -5237,10 +5236,10 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Removes the secondary input/output and rebuilds the synchronizer over
-  /// the primary output alone. The session keeps running single-cam;
-  /// subsequent captures report secondary as E_THERMAL errors (attempted
-  /// path, stated) — distinct from unsupported hardware.
+  /// Removes the secondary input and output and rebuilds the synchronizer over
+  /// the primary output alone. The session keeps running single-cam; subsequent
+  /// captures report secondary as E_THERMAL, distinct from unsupported
+  /// hardware.
   private func detachSecondaryForThermal() {
     guard let session = session else { return }
     session.beginConfiguration()
