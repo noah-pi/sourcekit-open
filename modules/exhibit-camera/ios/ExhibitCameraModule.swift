@@ -2257,9 +2257,14 @@ extension ExhibitCameraModule {
               // Retry through handlerRef; capturing `handler` here would be a
               // capture-before-initialization compile error.
               guard let self = self, !settled, let delegateHandler = handlerRef else { return }
+              // A settings object is single-use: its uniqueID is spent by the
+              // first fire, and refiring the same instance raises. The copy
+              // initializer carries every configured value across under a
+              // fresh uniqueID.
+              let retrySettings = AVCapturePhotoSettings(from: settings)
               // NSException-safe retry fire: a thrown settings-validation
               // exception settles as a stated failure.
-              if let captureError = ExhibitSessionControl.safelyCapturePhoto(output: photoOutput, settings: settings, delegate: delegateHandler) {
+              if let captureError = ExhibitSessionControl.safelyCapturePhoto(output: photoOutput, settings: retrySettings, delegate: delegateHandler) {
                 self.photoHandlers.removeAll { $0 === delegateHandler }
                 settle(.failure(ExhibitCameraNamedException(
                   ExhibitCameraErrorCode.platform,

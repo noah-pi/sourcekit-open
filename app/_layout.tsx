@@ -21,6 +21,7 @@ import { ensureAttestation } from '../src/lib/appAttest';
 import { drainOtsQueue } from '../src/provenance/otsQueue';
 import { refreshBeacon, nextRefreshDelayMs, setBeaconEndpoint } from '../src/lib/beacon';
 import { colors, useEffectiveScheme } from '../src/theme';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
 
 export default function RootLayout() {
   const { settingsLoaded, onboarded, unlocked, passcodeSet, loadSettings, setPasscodeSet, setUnlocked } =
@@ -137,22 +138,26 @@ export default function RootLayout() {
     <SafeAreaProvider key={scheme}>
       {/* Status-bar ink follows the effective scheme, not the OS alone. */}
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.bg },
-          animation: 'fade',
-        }}
-      >
-        <Stack.Screen name="onboarding" />
-        <Stack.Screen name="lock" />
-        <Stack.Screen name="set-passcode" options={{ animation: 'slide_from_bottom' }} />
-        <Stack.Screen name="(tabs)" />
-        {/* Swipe-back off: the screen-edge gesture steals horizontal drags
-            from the compare sliders. The Exhibits back button is the way
-            out. */}
-        <Stack.Screen name="asset/[id]" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
-      </Stack>
+      {/* A render throw anywhere below shows a recoverable screen rather than
+          a blank one. Outside the Stack so the boundary survives the throw. */}
+      <ErrorBoundary>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.bg },
+            animation: 'fade',
+          }}
+        >
+          <Stack.Screen name="onboarding" />
+          <Stack.Screen name="lock" />
+          <Stack.Screen name="set-passcode" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="(tabs)" />
+          {/* Swipe-back off: the screen-edge gesture steals horizontal drags
+              from the compare sliders. The Exhibits back button is the way
+              out. */}
+          <Stack.Screen name="asset/[id]" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        </Stack>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

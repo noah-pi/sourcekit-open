@@ -7,13 +7,18 @@ epistemology anyway. So here's what actually holds the code to account.
 
 ## The test lab
 
-28 suites, 774 checks, all runnable offline against the real shipping code.
+29 suites, 791 checks, all runnable offline against the real shipping code.
 Device-service imports are rewired to documented shims; every cryptographic
 operation runs as shipped.
 
 The suites include regression tests for real attacks: a self-issued "O=Reuters"
 certificate, forged App Attest assertions, tampered RFC 3161 tokens, manifest
 transplants, truncations. See README ▸ Run the lab.
+
+`tests/corpus/foreign/` holds media this app did not produce — signed by
+c2patool, the C2PA reference implementation, with its own chain and its own
+claim generator. Everything else in the lab verifies media this code signed,
+which cannot show that the reader handles a stranger's output.
 
 ## An independent verifier
 
