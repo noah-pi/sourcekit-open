@@ -8,3 +8,5 @@ server/registry.json
 # Historical images the page fetches at build time — not ours to redistribute.
 site/assets/cottingley.jpg
 site/assets/*.png
+# The C2PA Rust core, fetched by scripts/fetch-c2pa-framework.sh.
+modules/c2pa-ios/ios/Frameworks/C2PAC.xcframework/

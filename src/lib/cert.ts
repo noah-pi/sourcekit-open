@@ -126,24 +126,3 @@ export async function buildSelfSignedCert(
   return seq(tbs, algIdEcdsa(), bitString(sigDer));
 }
 
-/**
- * Extracts the 65-byte uncompressed P-256 public key from an EC certificate's
- * SPKI. Locates the prime256v1 OID and reads the BIT STRING that follows it.
- * Returns null for non-EC / non-P-256 certificates.
- */
-export function ecPublicKeyFromCert(certDer: Uint8Array): Uint8Array | null {
-  const curveOid = tlv(0x06, new Uint8Array(OID.prime256v1));
-  outer: for (let i = 0; i + curveOid.length + 4 < certDer.length; i++) {
-    for (let j = 0; j < curveOid.length; j++) {
-      if (certDer[i + j] !== curveOid[j]) continue outer;
-    }
-    // BIT STRING follows within a few bytes (curve OID is the last SPKI alg item)
-    for (let k = i + curveOid.length; k + 4 < certDer.length && k < i + curveOid.length + 8; k++) {
-      if (certDer[k] === 0x03 && certDer[k + 1] === 0x42 && certDer[k + 2] === 0x00 && certDer[k + 3] === 0x04) {
-        return certDer.subarray(k + 3, k + 3 + 65);
-      }
-    }
-    return null;
-  }
-  return null;
-}

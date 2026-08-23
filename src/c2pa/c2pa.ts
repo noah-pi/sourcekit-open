@@ -27,7 +27,6 @@ import { sha256 } from '@noble/hashes/sha256';
 import { Encoder, decode } from 'cbor-x';
 import { asciiToBytes, bytesToHex, concatBytes, utf8ToBytes, bytesToUtf8, hexToBytes, bytesToBase64, base64ToBytes } from '../lib/bytes';
 import { derToP1363LowS } from '../lib/der';
-import { ecPublicKeyFromCert } from '../lib/cert';
 import { PQ_ALG, PQ_CUSTODY, PQ_SIZES, pqFingerprint, pqPublicBlockFrom, pqVerify, type PqLayerCheck } from '../lib/pq';
 import { parseCertificate, publicKeyFromCert, verifyRsaPss } from '../lib/x509';
 import { parseRootBoxes, type RootBox } from './bmff';
@@ -1996,7 +1995,13 @@ export function verifyManifest(
     alg = COSE_ALG_NAMES[algId as number] ?? String(algId ?? 'unknown');
     if (algId === -7) {
       // ES256: our own files, plus Leica/Truepic-era foreign files.
-      const pub = ecPublicKeyFromCert(m.certDer);
+      // The SAME positional SPKI walk that verifyAsset.ts derives
+      // signerFingerprint from. A byte scan for the curve OID would return
+      // whichever P-256 point appears first in the DER, which need not be the
+      // certificate's actual subject key — the signature would then be checked
+      // against one key while the identity reported another.
+      const certKey = publicKeyFromCert(m.certDer);
+      const pub = certKey?.kind === 'ec' ? certKey.point : null;
       if (pub) {
         // lowS: false — COSE has no low-S rule, and real signers ship high-S
         // signatures (truepic-20230212-library.jpg in the c2pa-org

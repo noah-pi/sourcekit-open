@@ -54,7 +54,7 @@
     "ios": "expo start --ios",
     "android": "expo start --android",
     "lab": "node tests/stage.mjs && npm --prefix tests/.staged install",
-    "test": "node tests/stage.mjs && npm --prefix tests/.staged install && cd tests/.staged && ./node_modules/.bin/tsx test-verification.mts",
+    "test": "node tests/stage.mjs && npm --prefix tests/.staged install && node tests/run-all.mjs",
     "typecheck": "tsc --noEmit"
   },
   "description": "Source Kit \u2014 the open core of a camera that cryptographically seals every capture at the shutter.",

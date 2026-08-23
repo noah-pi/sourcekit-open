@@ -8,7 +8,8 @@
  * is fixed, so a red run reproduces exactly.
  */
 import * as fs from 'node:fs';
-import { readTlv, tlvChildren, parseCertificate } from './x509.mts';
+import { readTlv, tlvChildren, parseCertificate, publicKeyFromCert } from './x509.mts';
+import { buildSelfSignedCert } from './cert.mts';
 import { derToRS, derNormalizeLowS } from './der.mts';
 import { base64ToBytes, bytesToHex } from './bytes.mts';
 import { p256 } from '@noble/curves/p256';
@@ -197,6 +198,69 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
   }
   check('fuzz: garbage base64 throws (never decodes to noise)', threw === 300,
     `${300 - threw} silently decoded`);
+}
+
+// ---------------------------------------------------------------------------
+// Signing-key confusion: the key a signature is verified against must be the
+// key the certificate actually binds. A decoy P-256 point planted earlier in
+// the DER (here inside the serialNumber) must not be selectable.
+// ---------------------------------------------------------------------------
+{
+  const lenBytes = (n: number): number[] => {
+    if (n < 0x80) return [n];
+    const out: number[] = [];
+    for (let v = n; v > 0; v >>= 8) out.unshift(v & 0xff);
+    return [0x80 | out.length, ...out];
+  };
+  const tlvAt = (b: Uint8Array, o: number) => {
+    let i = o + 1;
+    let len = b[i++];
+    if (len & 0x80) {
+      const n = len & 0x7f;
+      len = 0;
+      for (let k = 0; k < n; k++) len = len * 256 + b[i++];
+    }
+    return { start: i, end: i + len, next: i + len };
+  };
+  const wrap = (tag: number, c: Uint8Array) => Uint8Array.from([tag, ...lenBytes(c.length), ...c]);
+
+  const victimPriv = p256.utils.randomPrivateKey();
+  const victimPub = p256.getPublicKey(victimPriv, false);
+  const decoyPub = p256.getPublicKey(p256.utils.randomPrivateKey(), false);
+
+  const cert = await buildSelfSignedCert(
+    victimPub,
+    async (d: Uint8Array) => p256.sign(d, victimPriv).toDERRawBytes(),
+    new Date(),
+  );
+
+  const outer = tlvAt(cert, 0);
+  const tbs = tlvAt(cert, outer.start);
+  const version = tlvAt(cert, tbs.start);
+  const serial = tlvAt(cert, version.next);
+
+  const P256_OID = [0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07];
+  const decoySerial = wrap(0x02, Uint8Array.from([0x00, ...P256_OID, 0x03, 0x42, 0x00, ...decoyPub]));
+  const doctored = wrap(0x30, new Uint8Array([
+    ...wrap(0x30, new Uint8Array([
+      ...cert.subarray(tbs.start, version.next),
+      ...decoySerial,
+      ...cert.subarray(serial.next, tbs.end),
+    ])),
+    ...cert.subarray(tbs.next, outer.end),
+  ]));
+
+  const key = publicKeyFromCert(doctored);
+  const got = key?.kind === 'ec' ? key.point : null;
+  check(
+    'cert: a decoy P-256 point in the serialNumber is not selectable as the signing key',
+    got !== null && bytesToHex(got) === bytesToHex(victimPub),
+    got ? `got ${bytesToHex(got).slice(0, 16)}, want ${bytesToHex(victimPub).slice(0, 16)}` : 'null',
+  );
+  check(
+    'cert: the decoy point is never returned',
+    got === null || bytesToHex(got) !== bytesToHex(decoyPub),
+  );
 }
 
 console.log(`\n=== ${pass} passed, ${fail} failed (seed ${SEED.toString(16)}) ===`);

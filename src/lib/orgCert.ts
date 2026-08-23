@@ -16,8 +16,7 @@
  */
 
 import * as SecureStore from 'expo-secure-store';
-import { ecPublicKeyFromCert } from './cert';
-import { verifyChain } from './x509';
+import { verifyChain, publicKeyFromCert } from './x509';
 import { base64ToBytes, bytesToBase64, bytesToHex, equalBytes, utf8ToBytes, bytesToUtf8 } from './bytes';
 
 const STORE_KEY = 'verify_org_credential_v1';
@@ -133,7 +132,11 @@ export function parseCertInfo(certDer: Uint8Array): CertInfo {
   const subjectTlv = readTlv(tbs.content, o);
   const subject = readName(subjectTlv.content);
 
-  const publicKey = ecPublicKeyFromCert(certDer);
+  // Positional SPKI walk, not a byte scan: the point of this check is that
+  // the credential names THIS device's key, so it has to read the key the
+  // certificate actually binds.
+  const certKey = publicKeyFromCert(certDer);
+  const publicKey = certKey?.kind === 'ec' ? certKey.point : null;
   if (!publicKey) throw new Error('Not a P-256 ECDSA certificate (no supported public key found)');
 
   return {

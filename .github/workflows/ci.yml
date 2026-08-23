@@ -45,113 +45,11 @@ jobs:
         run: npm install --package-lock-only --no-audit --no-fund && npm ci --no-audit --no-fund
         working-directory: tests/.staged
 
-      - name: Verification + forgery-regression suite
-        run: ./node_modules/.bin/tsx test-verification.mts
-        working-directory: tests/.staged
-
-      - name: Builder/verifier round trip
-        run: ./node_modules/.bin/tsx test-roundtrip.mts
-        working-directory: tests/.staged
-
-      - name: Reference corpus + two-verifier conformance
-        run: ./node_modules/.bin/tsx test-corpus.mts
-        working-directory: tests/.staged
-
-      - name: Offline chain
-        run: ./node_modules/.bin/tsx test-offline.mts
-        working-directory: tests/.staged
-
-      - name: Independent-verifier suite (c2patool)
-        run: ./node_modules/.bin/tsx test-070-final.mts
-        working-directory: tests/.staged
-
-      - name: BMFF de-identification suite
-        run: ./node_modules/.bin/tsx test-bmff-deid.mts
-        working-directory: tests/.staged
-
-      - name: Seal-to-desk + Shamir custody suite
-        run: ./node_modules/.bin/tsx test-seal.mts
-        working-directory: tests/.staged
-
-      - name: Detached-manifest custody suite
-        run: ./node_modules/.bin/tsx test-detached.mts
-        working-directory: tests/.staged
-
-      - name: PQ dual-signature suite
-        run: ./node_modules/.bin/tsx test-pq.mts
-        working-directory: tests/.staged
-
-      - name: Wi-Fi claim suite
-        run: ./node_modules/.bin/tsx test-wifi.mts
-        working-directory: tests/.staged
-
-      - name: Org identity assertion suite
-        run: ./node_modules/.bin/tsx test-identity.mts
-        working-directory: tests/.staged
-
-      - name: Trust ladder projection suite
-        run: ./node_modules/.bin/tsx test-ladder.mts
-        working-directory: tests/.staged
-
-      - name: Known hand local-history suite
-        run: ./node_modules/.bin/tsx test-known-hand.mts
-        working-directory: tests/.staged
-
-      - name: Parser mutation-fuzz suite
-        run: ./node_modules/.bin/tsx test-fuzz.mts
-        working-directory: tests/.staged
-
-      - name: Trust axis data-model suite
-        run: ./node_modules/.bin/tsx test-trust-axis.mts
-        working-directory: tests/.staged
-
-      - name: Malleable-bytes pinning suite
-        run: ./node_modules/.bin/tsx test-malleability.mts
-        working-directory: tests/.staged
-
-      - name: TSA EKU enforcement suite
-        run: ./node_modules/.bin/tsx test-tsa-eku.mts
-        working-directory: tests/.staged
-
-      - name: Signed-claim binding guard suite
-        run: ./node_modules/.bin/tsx test-binding-guard.mts
-        working-directory: tests/.staged
-
-      - name: Policy-layer verdict-mapping unit suite
-        run: ./node_modules/.bin/tsx test-policy-layer.mts
-        working-directory: tests/.staged
-
-      - name: Differential oracle — hand-rolled vs upstream C2PA engine
-        run: ./node_modules/.bin/tsx test-oracle.mts
-        working-directory: tests/.staged
-
-      - name: Selective-disclosure core suite
-        run: ./node_modules/.bin/tsx test-disclosure.mts
-        working-directory: tests/.staged
-
-      - name: JUMBF layout parity suite
-        run: ./node_modules/.bin/tsx test-jumbf-parity.mts
-        working-directory: tests/.staged
-
-      - name: Streamed-chunks v2 per-track binding suite
-        run: ./node_modules/.bin/tsx test-streamed-chunks-v2.mts
-        working-directory: tests/.staged
-
-      - name: Commit-at-capture disclosure suite
-        run: ./node_modules/.bin/tsx test-commit-at-capture.mts
-        working-directory: tests/.staged
-
-      - name: Signed pose-trace suite
-        run: ./node_modules/.bin/tsx test-posetrace.mts
-        working-directory: tests/.staged
-
-      - name: Real FreeTSA token regression suite (stored fixture, no network)
-        run: ./node_modules/.bin/tsx test-tsa-real-network.mts
-        working-directory: tests/.staged
-
-      - name: Vault disclosure-hygiene suite
-        run: ./node_modules/.bin/tsx test-vault-hygiene.mts
-        working-directory: tests/.staged
+      - name: Every suite
+        # tests/run-all.mjs discovers test-*.mts in the staged lab, so a new
+        # suite runs with nothing to add here. It prints one tally and exits
+        # non-zero if any suite does.
+        run: node tests/run-all.mjs
 
   app-typecheck:
     runs-on: ubuntu-latest
@@ -188,6 +86,43 @@ jobs:
             --allowImportingTsExtensions --resolveJsonModule \
             $(ls *.mts | grep -v -E '^(test|tool|build)-')
         working-directory: tests/.staged
+
+  ios-build:
+    # Nothing else in this file compiles Swift: the other jobs run on Linux,
+    # so ~7,900 lines of camera module reach a device build unchecked. This
+    # job is compile-only — no signing, no archive, no simulator run.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Install app dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Fetch the C2PA framework
+        run: ./scripts/fetch-c2pa-framework.sh
+
+      - name: Generate the Xcode project
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Install pods
+        run: pod install
+        working-directory: ios
+
+      - name: Compile
+        # -destination generic/platform=iOS builds for device without asking
+        # for a signing identity; CODE_SIGNING_ALLOWED=NO keeps it that way.
+        run: |
+          xcodebuild build \
+            -workspace ios/*.xcworkspace \
+            -scheme "$(basename ios/*.xcodeproj .xcodeproj)" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || exit "${PIPESTATUS[0]}"
 
   supply-chain:
     runs-on: ubuntu-latest
