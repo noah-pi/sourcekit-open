@@ -224,14 +224,14 @@ shorter amputates the store and fails. Which way a given byte falls depends on
 the manifest's length that run, so the test pins the high 3 bytes as always
 malleable and the low byte as allowed.
 
-The COSE payload slot used to be in this set. C2PA requires a detached payload
-(CBOR null) and the parser didn't check the slot. It does now — a
-non-conformant embedded payload fails rather than being ignored.
+The COSE payload slot is not in this set. C2PA requires a detached payload
+(CBOR null), and a non-conformant embedded payload fails rather than being
+ignored.
 
-`Z` carries the packet-sequence number and is now fully load-bearing.
-Reassembly enforces the low three bytes — a chain with a gap, a duplicate or
-non-contiguous packets is reported as absence rather than guessed at — and as
-of 0.18.8 the high byte is checked too, where it used to be ignored on read.
+`Z` carries the packet-sequence number and is fully load-bearing. Reassembly
+enforces the low three bytes — a chain with a gap, a duplicate or
+non-contiguous packets is reported as absence rather than guessed at — and the
+high byte is checked on read.
 
 ### Video (BMFF uuid box)
 
