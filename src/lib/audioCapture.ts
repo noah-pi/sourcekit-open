@@ -48,7 +48,7 @@ export interface AudioStopResult {
   fileError?: string | null;
   /**
    * Gyro JSONL covering exactly the recorded window (CaptureKit SensorLogger
-   * line format; WS2 Phase 2 §3 media parity) — the source of the exhibit's
+   * line format; media parity) — the source of the exhibit's
    * signed com.verify.poseTrace. Present only when sensorLogState is
    * 'recorded'. ABSENT (undefined) on pre-parity native builds.
    */

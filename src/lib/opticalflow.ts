@@ -130,8 +130,8 @@ export interface BlockMatch {
 }
 
 /**
- * Single-block SAD match (1.0.0, WS4 — extracted for the parallax tracker so
- * feature tracks and the global fit share ONE matcher). Finds the best
+ * Single-block SAD match — feature tracks and the global fit share ONE
+ * matcher. Finds the best
  * 9x9-style block match for (ax, ay) in plane A inside plane B within
  * `searchRadius`, with the same flat-block and ambiguity gates as the global
  * estimator. Returns null when the block is flat, ambiguous, or out of

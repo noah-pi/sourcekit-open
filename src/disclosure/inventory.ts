@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 1: context-claim inventory (docs/INTEGRITY.md — selective disclosure).
+ * Context-claim inventory (docs/INTEGRITY.md — selective disclosure).
  *
  * Every capture carries the FULL expected claim set — all rungs of all
  * fixed ladders (ladder.ts) plus any free-form `context.*` claims. Each
@@ -16,7 +16,7 @@
  *   (withheld)      — not an inventory state: a committed claim that a
  *                     given disclosure bundle simply does not open.
  *                     Withheld means ABSENT from the bundle, never
- *                     encrypted (SPEC §0.2).
+ *                     encrypted.
  *
  * This module commits context claims; it never concludes anything about
  * them. No verdicts.
@@ -58,11 +58,10 @@ export interface InventoryEntry {
 }
 
 /**
- * The assertion shape destined for the manifest at Phase 2 integration,
- * under the project-specific custom label `camera.contextTree` (SPEC §0.5:
- * custom `camera.*` labels only; verdict codes and the policy layer are
- * untouched). Phase 1 produces the shape; nothing wires it into a
- * manifest yet.
+ * The assertion shape destined for the manifest, under the project-specific
+ * custom label `camera.contextTree`: custom `camera.*` labels only; verdict
+ * codes and the policy layer are untouched. Nothing wires it into a manifest
+ * yet.
  */
 export interface InventoryAssertion {
   label: 'camera.contextTree';
@@ -80,13 +79,12 @@ const CLAIM_ID = /^(location|time|identity|sensor|context)\.[a-z0-9][a-z0-9-]*$/
 const CLAIM_KEYS = new Set(['claimId', 'family', 'rung', 'value']);
 
 /**
- * The inventory meta-leaf: the never-recorded
- * declaration was previously asserted but NOT committed — the root covered
- * only the committed claims' leaf digests, so a bundle maker holding the
- * seed could retroactively reclassify a withheld claim as never-recorded.
- * The fix binds the whole inventory into the root: the entries (sorted by
- * claimId) are canonicalized and hashed under their own domain, and the
- * digest rides in the tree as a distinguished meta-leaf at index 0.
+ * The inventory meta-leaf binds the whole inventory into the root. Were the
+ * root to cover only the committed claims' leaf digests, a bundle maker
+ * holding the seed could reclassify a withheld claim as never-recorded. So
+ * the entries (sorted by claimId) are canonicalized and hashed under their
+ * own domain, and the digest rides in the tree as a distinguished meta-leaf
+ * at index 0.
  */
 export const INVENTORY_DIGEST_DOMAIN = 'inventory-v1';
 export const INVENTORY_META_CLAIM_ID = '\x00inventory';
@@ -159,7 +157,7 @@ export function validateClaim(claim: ContextClaim): void {
  * Pure and deterministic: same inputs → same leaves, same entries,
  * same order (sorted by claimId).
  *
- * Fixed-leaf schema (SPEC §1.1): every expected claimId (all rungs of all
+ * Fixed-leaf schema: every expected claimId (all rungs of all
  * ladders) must be accounted for — present in `claims` with a value, or
  * listed in `neverRecordedIds`. Anything else throws with the gap named:
  * a capture that cannot say which state a claim is in must not commit.

@@ -322,7 +322,7 @@ function NlRow({ label, value, valueColor, detail, detailColor, mono }: {
 }
 
 // ---------------------------------------------------------------------------
-// Plan A (0.14.0): the collapsible group card — icon, title, chevron, and a
+// Plan A: the collapsible group card — icon, title, chevron, and a
 // one-line peek that stays visible whether open or closed. Three of these
 // (Capture / Integrity / Advanced) replace the old always-visible nutrition
 // label plus drawer.
@@ -339,7 +339,7 @@ function GroupCard({ icon, title, peek, open, onToggle, children }: {
   const grp = useThemedStyles(buildGrp);
   return (
     <View style={grp.card}>
-      {/* The WHOLE header is the toggle (0.18.3, Noah): icon, title, peek
+      {/* The WHOLE header is the toggle: icon, title, peek
           line and chevron sit inside one Pressable — the old head-row-only
           target was a fingertip-miss machine. */}
       <Pressable style={grp.headBlock} onPress={onToggle} accessibilityLabel={`${title} section`} accessibilityRole="button">
@@ -375,7 +375,7 @@ function SummaryLine({ record, report, signerTrust, placeName }: {
   let signer: string;
   if (record.deidentified) signer = 'A de-identified copy, re-signed on this phone';
   else if (identity && identity !== 'redacted' && identity.author) signer = `Sealed by ${identity.author}`;
-  // 0.18.6 (Noah): de-identified copies are caught above; identity
+ // De-identified copies are caught above; identity
   // 'redacted' HERE is an anonymous-mode capture — nothing was redacted,
   // no byline was ever provided. Say that, not the act.
   else if (identity === 'redacted') signer = 'Sealed without a byline';
@@ -486,7 +486,7 @@ function fmtAt(iso: string): string {
 }
 
 /**
- * The timestamp row (0.18.1): a standard nutrition-label row — label left,
+ * The timestamp row: a standard nutrition-label row — label left,
  * value right — never a giant heading. The value is the countersigned
  * authority time when a pinned token exists, the device clock otherwise;
  * the countersign state rides as the smaller sub-line in the app's existing
@@ -651,7 +651,7 @@ function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRe
     return { frame: null, ptsSeconds: null, recordError: f?.state === 'error' ? f.error ?? 'the native module reported an error' : null, videoFrames: null };
   }
   if (record.asset.kind === 'video') {
-    // 0.18.5 post-field: every recorded pair frame — the filmstrip surface.
+    // Every recorded pair frame — the filmstrip surface.
     const recordedPairs = (record.videoStereo?.pairs ?? []).filter(
       (p) => p.artifacts?.secondaryFrame?.state === 'recorded' && !!p.artifacts.secondaryFrame.dataBase64,
     );
@@ -660,7 +660,7 @@ function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRe
       return {
         frame: { dataBase64: f.dataBase64!, mime: f.mime, sha256: f.sha256 },
         pairIndex: p.pairIndex,
-        // 0.18.6 (Noah): the pair's own primary PTS anchor — a filmstrip
+ // The pair's own primary PTS anchor — a filmstrip
         // tap re-seeks the blend's primary frame to THAT pair's moment.
         ptsSeconds: p.anchors.primaryHostSeconds ?? null,
       };
@@ -731,7 +731,7 @@ export default function AssetScreen() {
   const [ownFingerprint, setOwnFingerprint] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
-  // Plan A (0.14.0): the nutrition-label drawer is gone — three collapsible
+ // Plan A: the nutrition-label drawer is gone — three collapsible
   // groups carry the same facts (Capture open by default; Integrity and
   // Advanced collapsed behind a one-line peek each).
   const [groupOpen, setGroupOpen] = useState({ capture: true, integrity: false, advanced: false });
@@ -744,7 +744,7 @@ export default function AssetScreen() {
   // rows, and the raw manifest shown open at the bottom of Advanced.
   const [manifest, setManifest] = useState<C2paManifest | null>(null);
   const [legacyVideo, setLegacyVideo] = useState(false);
-  // The export sheet (0.15.0 Drop 2): one bottom sheet with the four bundle
+  // The export sheet: one bottom sheet with the four bundle
   // options — Basic / Full / Proof-Only / Custom — replacing the old two-step
   // share menu + share sheet.
   const [exportOpen, setExportOpen] = useState(false);
@@ -1224,7 +1224,7 @@ export default function AssetScreen() {
     ]);
   };
 
-  // The raw manifest reel is the shared ManifestReel component (0.18.3) —
+ // The raw manifest reel is the shared ManifestReel component —
   // the FULL manifest, uncapped, windowed so a video manifest's telemetry
   // actually renders. See src/components/ManifestReel.tsx.
 
@@ -1268,7 +1268,7 @@ export default function AssetScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.topBar}>
         <Button small tone="ghost" icon="chevron-back" label="Exhibits" onPress={() => router.back()} />
-        {/* The corner status pill was removed (0.14.0): it duplicated the
+        {/* The corner status pill was removed: it duplicated the
             trust ladder two scrolls down and read as decoration. State lives
             in the ladder, once. */}
       </View>
@@ -1305,7 +1305,7 @@ export default function AssetScreen() {
           <MediaViewer uri={mediaUri} kind={entry.kind} onClose={() => setViewerOpen(false)} />
         ) : null}
 
-        {/* Plan A (0.14.0): one plain sentence up top — signer, when, where,
+        {/* Plan A: one plain sentence up top — signer, when, where,
             seal state, time anchor. Compression, never omission. */}
         {record ? (
           <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
@@ -1350,10 +1350,9 @@ export default function AssetScreen() {
           </View>
         </View>
 
-        {/* 0.18.2: the export-defaults explainer was removed (stated in the
-            export sheet itself). The spacer keeps the rhythm the copy
-            occupied — two lines at fontSize.xs — so the layout doesn't
-            collapse upward. */}
+        {/* Export defaults are stated in the export sheet itself. This
+            spacer holds the rhythm that copy would occupy — two lines at
+            fontSize.xs — so the layout doesn't collapse upward. */}
         <View style={styles.sharePrivacySpacer} />
 
         {transcript ? (
@@ -1372,7 +1371,7 @@ export default function AssetScreen() {
           </View>
         ) : null}
 
-        {/* Plan A (0.14.0): three collapsible groups replace the nutrition
+        {/* Plan A: three collapsible groups replace the nutrition
             label + drawer. Capture (open by default) answers "when, where,
             on what" — device-originated claims are grouped under heads that
             carry the device-reported caveat once. */}
@@ -1430,7 +1429,7 @@ export default function AssetScreen() {
                 <NlRow label="Wi-Fi" value="Unavailable at capture" />
               ) : ctx?.wifi ? (
                 <>
-                  {/* 0.14.0: the BSSID is the corroboratable claim; the
+                  {/* The BSSID is the corroboratable claim; the
                       network name is kept off this page (anyone can name
                       a network anything — and it's a privacy leak). */}
                   {ctx.wifi.bssid ? <NlRow label="Wi-Fi BSSID" value={ctx.wifi.bssid} mono /> : (
@@ -1446,7 +1445,7 @@ export default function AssetScreen() {
                   label="Platform"
                   value={record.device.platform === 'ios' ? 'iOS' : record.device.platform}
                 />
-                {/* 0.18.1: the capture software is a capture claim like any
+                {/* The capture software is a capture claim like any
                     other — the sealed claim-generator string ("Source Kit/
                     0.18.0 (com.verify.camera)"), the record's own app block
                     as the honest fallback. */}
@@ -1467,7 +1466,7 @@ export default function AssetScreen() {
                   <Text style={nl.drawerHead}>Sensors (Device-reported)</Text>
                   {ctx?.headingDeg != null ? <NlRow label="Heading" value={`${ctx.headingDeg}°`} /> : null}
                   {ctx?.pressureHPa != null ? <NlRow label="Barometer" value={`${ctx.pressureHPa} hPa`} /> : null}
-                  {/* 0.18.1: altitude rides the same sensors block here as on
+                  {/* Altitude rides the same sensors block here as on
                       the Inspect screen — same sealed claim, same row. */}
                   {ctx?.altitudeM != null ? <NlRow label="Altitude (baro.)" value={`${ctx.altitudeM} m`} /> : null}
                   {ctx?.motion ? (
@@ -1479,7 +1478,7 @@ export default function AssetScreen() {
                 </View>
               ) : null}
 
-              {/* Mains frequency (0.14.0): removed from this page. It was
+              {/* Mains frequency: removed from this page. It was
                   region-derived, never measured — decoration, not
                   evidence. The ENF question moves to the raw-audio
                   master, where it can be measured for real. */}
@@ -1706,7 +1705,7 @@ export default function AssetScreen() {
                 <Button small icon="finger-print-outline" label="Hash-only claim" tone="secondary" onPress={() => void shareProofJson('hash-only')} loading={busy === 'Building proof…'} />
               </View>
 
-              {/* 0.14.2: the "Full report" drawer (AttestationView) was
+              {/* The "Full report" drawer (AttestationView) was
                   removed — it re-rendered signature timing, sensor-frame
                   timing, the pose trace and the signer fingerprint, all of
                   which already live once in the Capture / Integrity groups
@@ -1729,7 +1728,7 @@ export default function AssetScreen() {
         )}
       </ScrollView>
 
-      {/* The four export bundles (0.15.0 Drop 2): Basic (private — withheld
+      {/* The four export bundles: Basic (private — withheld
           fields stated inside the copy), Full (identifying, unchanged),
           Proof-Only (no media), Custom (per-field toggles, one screen down).
           The desk handoff, when configured, rides below the four — transport,

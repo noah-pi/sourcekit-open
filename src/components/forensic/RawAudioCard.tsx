@@ -60,7 +60,7 @@ interface CafPcm {
   /** The audio payload bytes (after the data chunk's edit count). */
   pcm: Uint8Array;
   frames: number;
-  /** Stated anomalies the reader repaired or worked around (0.18.6) —
+ /** Stated anomalies the reader repaired or worked around —
    *  rendered in the meta line; never silent corrections. */
   notes?: string[];
 }
@@ -195,7 +195,7 @@ export function parseCaf(
       notes.push("the container's description chunk is a non-standard 32 bytes; read as the compacted layout");
     }
     const d = chosen.d;
-    // 0.18.6: a CAF may leave mBitsPerChannel 0 ("use the slot width") —
+    // A CAF may leave mBitsPerChannel 0 ("use the slot width") —
     // derive it from bytesPerFrame when that divides cleanly, so the
     // decoder below keys off real numbers, never a zero.
     let bits = d.bitsPerChannel;
@@ -372,7 +372,7 @@ export function describeCafLayout(caf: CafPcm): string {
 
 /** Per-bar peak amplitude (0..1) over channel 0 of the PCM. Null when the
  *  container's layout is incoherent — the card then says so instead of
- *  drawing a dotted zero band (0.18.6). Exported for tests. */
+ * drawing a dotted zero band. Exported for tests. */
 export function waveformBars(caf: CafPcm, bars: number): number[] | null {
   const read = makeSampleReader(caf);
   if (!read) return null;
@@ -410,7 +410,7 @@ export function waveformBars(caf: CafPcm, bars: number): number[] | null {
 export function wavBytesFromCaf(caf: CafPcm): Uint8Array | null {
   const { channels, frames, sampleRate } = caf;
   if (frames <= 0 || channels <= 0) return null;
-  // 0.18.6: the shared universal reader — every LPCM layout the container
+  // The shared universal reader — every LPCM layout the container
   // can honestly describe converts; an incoherent container or a short
   // payload (NaN) fails the export, and the card states the layout.
   const read = makeSampleReader(caf);
@@ -473,7 +473,7 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
       try {
         const bytes = await readFileBytes(toFileUri(rawPcmPath as string));
         // The sealed ENF anchor arbitrates between container
-        // interpretations (0.18.6 — see parseCaf).
+        // interpretations (see parseCaf).
         const caf = parseCaf(bytes, enfAnchor
           ? { sampleRate: enfAnchor.sampleRate, sampleCount: enfAnchor.sampleCount }
           : undefined);
@@ -520,7 +520,7 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
       }
       const wav = wavBytesFromCaf(audio.caf);
       if (!wav) {
-        // 0.18.6: self-describing — the master states its own layout, the
+        // Self-describing — the master states its own layout, the
         // reader states what it cannot do with it. No guessing, no generic
         // "unsupported".
         setExportError(`This master is ${describeCafLayout(audio.caf)} — a layout the WAV converter does not support.`);

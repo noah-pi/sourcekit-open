@@ -61,7 +61,7 @@ around. Byte equality of the finished file is checked separately at verify time
 by the exclusions-based hard binding (`c2pa.hash.bmff.v2`). The streamed
 commitment is additive to that binding, not a replacement for it.
 
-**One limitation worth stating up front.** The Merkle leaves are ordered by the
+**One limitation.** The Merkle leaves are ordered by the
 global completion order of the video and audio tracks, interleaved in real
 time, and nothing in the record captures that interleaving. So the root can't
 be recomputed from the delivery file alone — you can't re-chunk and compare.
@@ -199,7 +199,7 @@ time, re-verifies each mutated file, and records which ones still report
 INTACT. It then checks both directions — every documented byte must be
 malleable, and no undocumented byte may be — so the set can't silently grow.
 
-Two limits worth stating. The measurement covers the manifest region, not the
+Two limits. The measurement covers the manifest region, not the
 whole file. And it is measured against this verifier only: whether `c2patool`
 or another implementation would catch some of these bytes is untested here.
 

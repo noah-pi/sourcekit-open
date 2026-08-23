@@ -115,7 +115,7 @@ import {
 } from '../../src/components/camera/zoomModel';
 
 /**
- * Signed-EXIF assembly (W2.4): the standard-tag subset of the capture's
+ * Signed-EXIF assembly: the standard-tag subset of the capture's
  * committed settings, destined for the com.verify.exif assertion via the
  * seal job. Source discipline (never synthesized):
  *  - the full-res photo's OWN OS-written EXIF numbers win verbatim;
@@ -173,7 +173,7 @@ const AnimatedBlur = Animated.createAnimatedComponent(BlurView);
 type Mode = 'audio' | 'picture' | 'video';
 
 // ---------------------------------------------------------------------------
-// The single pro-param model (0.18.2). Every capsule in the tray and every
+// The single pro-param model. Every capsule in the tray and every
 // precision-bar session is described by this ONE uniform shape — no
 // special-cased dials, no per-param control types. 'ladder' params (FLASH/
 // FOCUS/WB) ride the bar as integer rung indices with a detent per rung;
@@ -300,7 +300,7 @@ function computeLensLabels(fmts: ListFormatsResult): Partial<Record<ExhibitLens,
 }
 
 // ---------------------------------------------------------------------------
-// PRO param ladders (0.18.2 — the single param model). Ladder params ride
+// PRO param ladders (the single param model). Ladder params ride
 // the precision bar as integer rung indices (rung 0 = AUTO where the
 // hardware has one); continuous params scrub their native range. The
 // bridge clamps to the ACTIVE FORMAT's range (not the device-global range)
@@ -418,14 +418,14 @@ export default function CaptureScreen() {
   const [mode, setMode] = useState<Mode>('picture');
   const modeRef = useRef<Mode>('picture');
   const [facing, setFacing] = useState<'back' | 'front'>('back');
-  // The light is PER MODE (0.15.0 Drop 2; W2.2): PHOTO keeps a flash
+  // The light is PER MODE: PHOTO keeps a flash
   // preference (auto/on/off — the photo output's real strobe flashMode via
   // setPhotoFlashMode, since Native Wave 2), VIDEO keeps a torch on/off.
   // `torch` is the CONTINUOUS light actually applied to the session right
   // now; it is always off in photo mode (the strobe does the lighting) and
   // re-derived from the incoming mode's preference on every mode switch.
   const [torch, setTorch] = useState(false);
-  // Zoom (0.15.0 Drop 2): tracked as the factor RELATIVE to the wide lens's
+  // Zoom: tracked as the factor RELATIVE to the wide lens's
   // 1x — the number on the pills. `zoomFactor` is the COMMITTED value
   // (gesture end / lens switch); live gesture values ride zoomChannel so a
   // pinch or wheel scrub never re-renders the viewfinder tree.
@@ -435,8 +435,8 @@ export default function CaptureScreen() {
   // Device-reported zoom range of the ACTIVE lens (capabilities());
   // {1,1} until known — mapping onto an unknown range would be a guess.
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number; qualityCap?: number }>({ min: 1, max: 1 });
-  // W2.3: per-constituent-device quality caps from capabilities(). null
-  // until fetched / on pre-W2 builds — maxRelativeZoom then falls back to
+  // Per-constituent-device quality caps from capabilities(). null
+ // until fetched / on older builds — maxRelativeZoom then falls back to
   // MAX_RELATIVE_ZOOM.
   const [lensCaps, setLensCaps] = useState<LensZoomCap[] | null>(null);
   const lensCapsRef = useRef<LensZoomCap[] | null>(null);
@@ -468,13 +468,13 @@ export default function CaptureScreen() {
   const activeStops = facing === 'back' && stops.length > 0 ? stops : FRONT_STOPS;
   const stopsRef = useRef(activeStops);
   stopsRef.current = activeStops;
-  // W2.3 sweep ceiling: the native per-device quality-cap ceiling when the
+  // The native per-device quality-cap ceiling when the
   // caps have reported (a quality choice, honestly exposed by the bridge),
   // else the MAX_RELATIVE_ZOOM fallback — never a guessed-tight cap.
   // 0.17.1 (the Halide model): the sweep's ceiling is per-stack — the
   // current lens's stop × its quality cap. Crossing into another stack is
   // an explicit pill tap, never an automatic mid-gesture hand-off.
-  // 0.18.6: on the virtual dual-wide graph the sweep runs on the virtual
+  // On the virtual dual-wide graph the sweep runs on the virtual
   // device whose upscale headroom is the WIDE stack's — keying the cap to
   // the ultra-wide (whose own cap is small) would clamp the sweep at ~1x.
   const zoomCeiling = () =>
@@ -569,7 +569,7 @@ export default function CaptureScreen() {
   // mode, flip, light buttons) are untouched. Zoom is a factor relative to
   // wide 1x driving the camera's own optical+digital zoom — it never touches
   // the pixels-after-the-fact, so the signing pipeline is unaffected.
-  // Gesture arbitration (0.14.0): two-finger pinch zooms; a single-finger
+ // Gesture arbitration: two-finger pinch zooms; a single-finger
   // HORIZONTAL swipe switches capture mode (the Apple Camera pattern —
   // TestFlight 0.13.0 had tap-only mode switching). The responder claims a
   // gesture only once intent is clear (24 px of dominant horizontal travel),
@@ -581,11 +581,10 @@ export default function CaptureScreen() {
   const gestureKind = useRef<'pinch' | 'swipe' | null>(null);
   const swipeFired = useRef(false);
   const modeSwipeRef = useRef<(dir: 1 | -1) => void>(() => {});
-  // Mode-swipe exclusion zones (0.18.1): a horizontal drag that STARTS on
+ // Mode-swipe exclusion zones: a horizontal drag that STARTS on
   // the pro tray or the docked precision bar is a dial adjustment, never a
-  // mode switch — the root responder used to claim those drags mid-dial
-  // ("adjusting the dials gets interpreted as slide between modes"). The
-  // zones are window-Y spans measured off the wrappers at render; each is
+  // mode switch. The zones are window-Y spans measured off the wrappers at
+  // render; each is
   // consulted only while its control is actually open.
   const trayZone = useRef<{ y0: number; y1: number } | null>(null);
   const ribbonZone = useRef<{ y0: number; y1: number } | null>(null);
@@ -750,19 +749,19 @@ export default function CaptureScreen() {
   useEffect(() => { torchRef.current = torch; }, [torch]);
   useEffect(() => { recordingRef.current = recording; }, [recording]);
 
-  // 0.14.2: photo and video ride ONE native session (startVideo/stopVideo
+  // Photo and video ride ONE native session (startVideo/stopVideo
   // reconfigure it in place); only audio mode needs the camera torn down.
   const needsCamera = mode !== 'audio';
 
   /**
-   * Session lifecycle (0.13.0): ONE native session, configured when the
+ * Session lifecycle: ONE native session, configured when the
    * screen is focused in photo/video mode, stopped on blur and whenever
    * audio mode owns the microphone. Chrome state (torch, zoom) is
    * re-applied after each configure — a fresh session starts at defaults.
    * The 10 s watchdog is the 0.12.x lesson: a wedged native start must
    * surface as an honest card, never a frozen screen.
    *
-   * 0.14.2: the effect keys on `needsCamera`, not `mode` — photo↔video hops
+   * The effect keys on `needsCamera`, not `mode` — photo↔video hops
    * ride the SAME running native session (startVideo/stopVideo reconfigure
    * in place), so rebuilding per hop was pure churn: blocking startRunning,
    * a calibration one-shot, and PiP death on every switch, i.e. the
@@ -778,7 +777,7 @@ export default function CaptureScreen() {
           return;
         }
         const doConfigure = () => withTimeout(
-          // Alternate view (0.14.0 toggle): OFF means DO NOT COLLECT — the
+          // Alternate view: OFF means DO NOT COLLECT — the
           // secondary camera is never attached, and the record's stereo
           // sections commit their honest never-recorded states. Applies
           // from the next session configure (screen re-enter), like lens.
@@ -788,9 +787,9 @@ export default function CaptureScreen() {
           // (applies from this configure; older native builds ignore it and
           // report nothing, which commits 'never-recorded' by absence).
           configureSession({
-            // 0.18.6: on the virtual dual-wide graph (stereo on) the
+            // On the virtual dual-wide graph (stereo on) the
             // ultra-wide "lens" is a zoom stop, not an input — the graph
-            // only forms from a wide anchor (native 0.18.4: lens == .wide
+            // only forms from a wide anchor (native: lens == .wide
             // gate). Reconfiguring with ultraWide here would tear the
             // pair down to the multi-input graph on every blur/refocus.
             // The parked 0.5 zoom is re-applied after start, unchanged.
@@ -815,7 +814,7 @@ export default function CaptureScreen() {
           try {
             start = await doConfigure();
           } catch (e) {
-            // 0.14.1 wedge: a session orphaned by an interrupted teardown
+            // A session orphaned by an interrupted teardown
             // rejects E_BUSY "already running", after which every capture
             // and mode tap dead-loops until an app restart. Force-stop the
             // orphan and retry ONCE; if the retry fails, the honest error
@@ -838,7 +837,7 @@ export default function CaptureScreen() {
           setStereo(start.stereo);
           graphRef.current = start.graph ?? null;
           void setTorchLevel(torchRef.current ? 1.0 : null);
-          // W2.2: the persisted photo-strobe preference rides the photo
+          // The persisted photo-strobe preference rides the photo
           // output (real flashMode), never the torch. A fresh session
           // inherits the stored native preference; re-apply to be explicit.
           void setPhotoFlashMode(settings.photoFlash).catch(() => {});
@@ -857,7 +856,7 @@ export default function CaptureScreen() {
           // (same rule as torch/zoom: the new session starts at defaults).
           // Pro choices are per-shoot — they survive a flip or a photo↔video
           // hop; only the trip to audio resets them (see switchMode).
-          // 0.18.6: skipped while the dual-view graph is armed — manual
+          // Skipped while the dual-view graph is armed — manual
           // per-device controls aren't offered there (the strip hides), so
           // nothing is re-applied onto the virtual device either.
           const p = proStateRef.current;
@@ -882,8 +881,8 @@ export default function CaptureScreen() {
           const caps = await capabilities().catch(() => null);
           if (cancelled) return;
           if (caps?.zoomRange) setZoomRange(caps.zoomRange);
-          // W2.3: per-device quality caps drive the sweep ceiling
-          // (maxRelativeZoom); absent on pre-W2 builds → fallback constant.
+          // Per-device quality caps drive the sweep ceiling
+ // (maxRelativeZoom); absent on older builds → fallback constant.
           setLensCaps(caps?.lensZoomCaps ?? null);
           // Pro-strip capability inventory: the strip hides any control the
           // hardware doesn't report (and the PRO button itself when nothing
@@ -924,8 +923,8 @@ export default function CaptureScreen() {
         }
       };
       // needsCamera collapses photo+video into one session lifetime —
-      // photo↔video hops no longer rebuild the native session (0.14.2).
-      // 0.18.6 (Noah): altView IS a dep — without it, toggling Multiple
+ // photo↔video hops no longer rebuild the native session.
+ // AltView IS a dep — without it, toggling Multiple
       // lenses left the old graph running: dual-off kept the virtual graph
       // (lens pills became zoom-stop jumps that switch nothing — "the lens
       // switch doesn't work even when dual lens is off"), dual-on never
@@ -974,7 +973,7 @@ export default function CaptureScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Stall escalation (0.14.0): the native watchdog already tried one cheap
+ // Stall escalation: the native watchdog already tried one cheap
   // synchronizer rebind; still stalled → rebuild the session by bumping the
   // epoch. Skipped mid-recording: a rebuild would kill the take, and
   // recording failures surface through their own error path.
@@ -985,7 +984,7 @@ export default function CaptureScreen() {
     });
   }, []);
 
-  // Native pipeline diagnostics (0.18.2): graph wiring outcomes, format
+ // Native pipeline diagnostics: graph wiring outcomes, format
   // picks, the live connection census, interruption boundaries — forwarded
   // verbatim into the persistent log so a field screenshot self-explains.
   useEffect(() => {
@@ -1029,7 +1028,7 @@ export default function CaptureScreen() {
   // pose trace. A null component skips
   // the sample rather than fabricating zeros.
   //
-  // RATE AUDIT (0.14.3): this is the COMMITTED path — poseBuffer feeds
+ // RATE AUDIT: this is the COMMITTED path — poseBuffer feeds
   // collectContext's signed pose trace on every capture — so it stays at
   // the full 100 Hz and keeps the full BUFFER_LIMIT window. Slowing it
   // would thin the evidence. There is no display-only IMU subscription in
@@ -1051,7 +1050,7 @@ export default function CaptureScreen() {
           // CoreMotion's axis names: alpha = z (yaw), beta = y (pitch),
           // gamma = x (roll). Mapped to device axes here so the signed
           // trace's rx/ry/rz are what a desk expects.
-          // UNITS (0.18.4-R5): expo's native module converts rotationRate to
+          // UNITS: expo's native module converts rotationRate to
           // DEGREES per second (radiansToDegrees, DeviceMotionModule.swift)
           // before JS sees it; PoseSample.rx/ry/rz are documented rad/s and
           // every consumer (motion.ts quantization, the Motion Trace card,
@@ -1096,10 +1095,10 @@ export default function CaptureScreen() {
   };
 
   // ------------------------------------------------------------------
-  // Zoom engine (0.15.0 Drop 2; W2.3). ONE path for pinch and wheel:
+  // Zoom engine. ONE path for pinch and wheel:
   //   applyLiveZoom(relative) — clamps to the current stack, emits the
   //     live channel, applies natively RAMPED (setZoomSmooth) throttled,
-  //     trailing. Never switches lenses (0.17.1, the Halide model).
+  //     trailing. Never switches lenses.
   //   commitZoom(relative)    — gesture end: final INSTANT native apply
   //     (setZoom) + the committed React state.
   // The relative ceiling is the current stack's native per-device
@@ -1240,7 +1239,7 @@ export default function CaptureScreen() {
       capturedAtMs,
     });
 
-  // Burst intent queue (0.16.2, field report 8/13): rapid shutter taps used
+  // Burst intent queue: rapid shutter taps used
   // to be silently dropped while a capture was in flight — burst felt
   // broken. Now a tap during an in-flight capture enqueues an intent (cap
   // 5) with a haptic ack; each queued shot fires sequentially as the
@@ -1268,17 +1267,17 @@ export default function CaptureScreen() {
       // Face check at capture start — before any bytes exist.
       faceGateFlag.current = await runFaceGate();
 
-      // ExhibitCamera stills path (0.13.0 — the ONE camera session): the
+      // ExhibitCamera stills path (the ONE camera session): the
       // delivery still plus the synchronized stereo partner, committed
       // calibration, timestamps, and per-device metadata, each a three-state
-      // EvidencePath. W2.1 adds full-sensor stills (own hash) and W2.4 the
+      // EvidencePath. adds full-sensor stills (own hash) and the
       // committed capture-settings block + photo EXIF. The full
       // CaptureResult rides the seal job; the pump stores the artifact
       // files under the sealed record's evidence dir.
       const stamp = Date.now();
       const evidenceDir = `${FileSystem.documentDirectory}capture/evidence-${stamp}/`;
       await FileSystem.makeDirectoryAsync(evidenceDir, { intermediates: true }).catch(() => {});
-      // 0.14.2: a stalled pipeline now kicks its own synchronizer rebind at
+      // A stalled pipeline now kicks its own synchronizer rebind at
       // the freshness deadline, so one quiet retry after a beat usually lands
       // on a live frame. Only genuinely fresh pairs ever commit — the retry
       // changes WHEN we ask, never which pixels get sealed.
@@ -1312,7 +1311,7 @@ export default function CaptureScreen() {
         photoUri: toFileUri(result.deliveryPath),
         context,
         identity,
-        // W2.4: the standard-EXIF subset of the committed capture settings
+        // The standard-EXIF subset of the committed capture settings
         // (the full-res photo's own OS-written EXIF first, device
         // read-backs filling gaps; nothing synthesized — a field with no
         // real value is absent). Signed as com.verify.exif by attestPhoto.
@@ -1335,7 +1334,7 @@ export default function CaptureScreen() {
       });
       showToast(
         result.stereoStatus === 'unavailable'
-          // 0.15.1 degraded fallback: the still LANDED (single-lens,
+          // The still LANDED (single-lens,
           // full-sensor photo) — the toast states the degradation, it
           // never pretends stereo happened.
           ? 'Captured · single-lens; stereo unavailable at shutter'
@@ -1401,7 +1400,7 @@ export default function CaptureScreen() {
           maxSamples: 240,
         },
       });
-      // ENF anchor (0.18.0, native 0.17.2): when the PCM master committed,
+      // ENF anchor: when the PCM master committed,
       // its first-sample wall-clock anchor + integrity summary ride the
       // sealed context so the details screen (and a desk with a reference
       // ENF series) can place the mains trace in absolute time. Absent when
@@ -1414,7 +1413,7 @@ export default function CaptureScreen() {
         context,
         identity,
         // Three-state honesty per sink: the raw-audio master is REAL as of
-        // 0.14.0 — the native stop payload reports the recorded path or
+        // The native stop payload reports the recorded path or
         // null (enabled-but-failed); the toggle-off case is stated
         // 'never-recorded' here. The IMU sensor log rides the same frozen
         // SensorLogEvidence contract as stills (native 0.15+) — a pre-parity
@@ -1491,9 +1490,8 @@ export default function CaptureScreen() {
           startVideo({
             deliveryPath: `${FileSystem.cacheDirectory}capture-${stamp}.mp4`,
             evidenceDir,
-            // The settings toggle drives a REAL sink (0.13.0: it was a dead
-            // control — the module had no PCM tee, so the record could only
-            // ever say 'never-recorded').
+            // The settings toggle drives a REAL sink: the module tees PCM,
+            // so the record can say more than 'never-recorded'.
             rawPcm: settings.captureEvidence.rawPcm,
           }),
           15000,
@@ -1624,7 +1622,7 @@ export default function CaptureScreen() {
       // capture-evidence sensors toggle is on — off means 'never-recorded',
       // stated as such, never silently skipped.
       const sensorLogPath = settings.includeSensors ? `${dir}note-${stamp}.sensors.jsonl` : null;
-      // Raw-audio sink (0.18.3): the toggle that video honors now records an
+ // Raw-audio sink: the toggle that video honors now records an
       // uncompressed LPCM master for audio takes too — the tap's hardware
       // frames written straight through, sealed as captureEvidence.rawPcmPath.
       const rawPcmPath = settings.captureEvidence.rawPcm ? `${dir}note-${stamp}.raw.caf` : null;
@@ -1709,16 +1707,16 @@ export default function CaptureScreen() {
 
   const switchMode = (m: Mode) => {
     if (recording) return;
-    // The light is per mode (0.15.0 Drop 2): entering a mode re-derives
+    // The light is per mode: entering a mode re-derives
     // the applied light from THAT mode's persisted preference — photo's
     // flash pref and video's torch never carry into each other, and the
-    // trip to audio always goes dark. (0.14.2: photo↔video hops ride the
+    // trip to audio always goes dark. (Photo↔video hops ride the
     // same native session, so this is a chrome call, not a rebuild.)
     setRibbonParam(null);
     if (m === 'audio') setTorch(false);
     else if (m === 'video') setTorch(settings.videoTorch);
     else {
-      // W2.2: entering PHOTO mode goes dark (continuous light off) and
+      // Entering PHOTO mode goes dark (continuous light off) and
       // re-applies the persisted strobe preference to the photo output —
       // the flash strobe does photo lighting now, never the torch.
       setTorch(false);
@@ -1761,7 +1759,7 @@ export default function CaptureScreen() {
 
   const selectLens = async (l: ExhibitLens) => {
     // 0.18.7 (field: "the 0.5 doesn't work when the multiple lenses is
-    // off"): a same-lens tap used to return early on the JS state alone —
+    // off"): a same-lens tap must not return early on the JS state alone —
     // if the state and the live session ever drifted (a graph teardown or
     // a rebuild that landed on a different stack), the pill went dead and
     // stayed dead. The native call is idempotent (it answers
@@ -1801,7 +1799,7 @@ export default function CaptureScreen() {
     try {
       const res = await setNativeLens(l);
       if (!res.applied) {
-        // 0.18.7: refusals go to the diagnostics log verbatim — the field
+        // Refusals go to the diagnostics log verbatim — the field
         // report after a dead-pill tap then carries the native reason.
         logDiagnostic({ t: Date.now(), kind: 'camera', outcome: 'info', message: `lens switch to ${l} refused: ${res.reason ?? 'no reason'}` });
         showToast(res.reason === 'no-session-or-front-facing'
@@ -1873,11 +1871,11 @@ export default function CaptureScreen() {
     proCaps.focusModes?.locked || proCaps.focusModes?.manual ||
     proCaps.whiteBalanceModes?.locked || proCaps.whiteBalanceModes?.manual
   );
-  /** 0.18.6 (Noah): the dual-view graph is LIVE — second camera attached,
+ /** The dual-view graph is LIVE — second camera attached,
    *  both lenses streaming. The 0.5/1 pills are zoom stops on this graph,
-   *  not switches, so they hide exactly while this holds. 0.18.7 (Noah):
-   *  the pro tray no longer hides wholesale — only the controls that
-   *  errored in the field (per-constituent focus/WB/ISO/shutter) hide;
+ * not switches, so they hide exactly while this holds. The pro tray does
+   *  not hide wholesale — only the controls that error in the field
+   *  (per-constituent focus/WB/ISO/shutter) hide;
    *  flash/torch and EV keep working on the fused device and stay (see
    *  visibleProParams). Everything returns when Multiple lenses turns off
    *  (the session rebuilds — altView is a lifecycle dep). */
@@ -1993,7 +1991,7 @@ export default function CaptureScreen() {
   };
 
   // ------------------------------------------------------------------
-  // The precision bar (0.18.2) — the ONLY adjustment surface. Every pro
+ // The precision bar — the ONLY adjustment surface. Every pro
   // param docks here: ladder params scrub integer rung indices (snap 1, a
   // detent per rung, rung 0 = AUTO where the hardware has one), continuous
   // params scrub their native range (SHTR in stops, so a uniform drag is a
@@ -2050,11 +2048,10 @@ export default function CaptureScreen() {
           onReset: () => void applyBias(0),
         };
       case 'focus': {
-        // 0.18.4 (Noah: "the focus has huge jumps"): the five-rung ladder
-        // made the whole manual range four coarse jumps. [0,1) stays the
-        // AUTO zone; [1, 11] is now CONTINUOUS lensPosition ((v−1)/10 with
-        // snap 0.05 = 0.005 motor steps), with haptic detents and tick marks
-        // at the old ladder positions so the familiar landmarks remain.
+        // A five-rung ladder would make the whole manual range four coarse
+        // jumps. [0,1) is the AUTO zone; [1, 11] is CONTINUOUS lensPosition
+        // ((v−1)/10 with snap 0.05 = 0.005 motor steps), with haptic detents
+        // and tick marks at the ladder positions as landmarks.
         const AUTO_ZONE = 1;
         const domain = { min: 0, max: 11 };
         const toLens = (v: number) => Math.min(1, Math.max(0, (v - AUTO_ZONE) / 10));
@@ -2289,19 +2286,19 @@ export default function CaptureScreen() {
     );
   }
 
-  // Declared after proParams is fully built (0.18.7 ordering fix): the
+  // Declared after proParams is fully built: the
   // dual-live filter reads the complete param list, never a partial one.
   const visibleProParams = dualLive ? proParams.filter((p) => DUAL_SAFE_PARAMS.includes(p.id)) : proParams;
 
   // ------------------------------------------------------------------
-  // Light, per mode (0.15.0 Drop 2): PHOTO has a flash preference
+  // Light, per mode: PHOTO has a flash preference
   // (auto/on/off, bolt glyph + state badge), VIDEO has the torch (on/off,
   // flashlight glyph). The preferences persist in settings; the two modes
   // never share a light state and never conflate icons.
   // ------------------------------------------------------------------
 
   /**
-   * Photo-flash preference (W2.2 — REAL strobe path): the preference
+   * Photo-flash preference (REAL strobe path): the preference
    * persists in settings and drives the photo output's flashMode via the
    * native setPhotoFlashMode bridge. The torch is NEVER driven by this —
    * it stays the video-only continuous light. The preference itself is
@@ -2480,7 +2477,7 @@ export default function CaptureScreen() {
         </View>
       ) : null}
 
-      {/* The top HUD is ONE column stack (0.15.0 overlap fix): the seal pill
+      {/* The top HUD is ONE column stack: the seal pill
           and the proof toggles were two independently-positioned rows
           (top:0 and top:52), so a long fingerprint pill or a narrow device
           could land the toggle row ON the pill. One stack, laid out by
@@ -2620,7 +2617,7 @@ export default function CaptureScreen() {
           <Text style={styles.stereoCaption}>Dual camera not available</Text>
         ) : null}
 
-        {/* Zoom control (0.15.0 Drop 2): optical pills for the lenses the
+        {/* Zoom control: optical pills for the lenses the
             hardware reports (a tap is a genuine optical jump — these are
             real cameras, never crops), and a horizontal drag anywhere on
             the row turns it into the smooth zoom wheel (the "no
@@ -2636,7 +2633,7 @@ export default function CaptureScreen() {
             onJump={(l) => void selectLens(l)}
             onLive={applyLiveZoom}
             onCommit={commitZoom}
-            // 0.18.6 (Noah): no .5/1 pills while the dual-view graph is
+ // No.5/1 pills while the dual-view graph is
             // live — same condition as the PiP, so the pills vanish exactly
             // while the second camera is attached and return when Multiple
             // lenses is off (real lens switches again).
@@ -2666,7 +2663,7 @@ export default function CaptureScreen() {
               },
             ]}
           >
-            {/* ONE row of equal-width capsules (0.18.2), built from the
+            {/* ONE row of equal-width capsules, built from the
                 single param model: flex:1 each, same padding/typography/
                 radius/hairline, a 5px clay dot when manual. A tap docks
                 the precision bar — the capsule itself has no gestures.
@@ -2754,7 +2751,7 @@ export default function CaptureScreen() {
             // tray's FIRST chip, not a HUD button (0.17.1, owner
             // directive). The accent color is the one-glance signal: this
             // capture's optics were chosen by hand, and the record says so.
-            // 0.18.8 (Noah): the button STAYS while the dual-view graph is
+ // The button STAYS while the dual-view graph is
             // live — the tray itself narrows to the dual-safe controls
             // (visibleProParams filters to DUAL_SAFE_PARAMS), so honesty is
             // the reduced set, not a vanished button.
@@ -2928,7 +2925,7 @@ function HudPillToggle({
 }
 
 /**
- * Param capsule (0.18.2): the tray's ONE component — an equal-width
+ * Param capsule: the tray's ONE component — an equal-width
  * (flex:1) glass capsule with the param's label, its bridge-APPLIED value
  * in mono, and a 5px clay state dot when the param is manual (glyph +
  * hairline, never color alone). The capsule has NO gestures of its own:
@@ -3123,7 +3120,7 @@ const buildStyles = () => StyleSheet.create({
   // Full-width wrapper for the tray/ribbon inside the centered `controls`
   // column — without it the stretch below has nothing to stretch against.
   trayWrap: { alignSelf: 'stretch' },
-  // The tray row (0.18.2): flex-equalized capsules, 6px gutters, screen
+ // The tray row: flex-equalized capsules, 6px gutters, screen
   // padding both sides. No scroll, no wrap — every param the hardware
   // reports fits at once at 393pt (6 capsules ≈ 55pt each; the longest
   // value text, '1/4000' at 11px mono ≈ 40px, fits with room).
@@ -3149,7 +3146,7 @@ const buildStyles = () => StyleSheet.create({
     backgroundColor: 'rgba(13,13,15,0.55)',
     borderWidth: 1,
     // The HUD's dark-glass hairline — colors.border is the LIGHT scheme's
-    // divider gray and glowed white over the viewfinder (0.18.2 field).
+    // divider gray and glowed white over the viewfinder.
     borderColor: 'rgba(232,232,236,0.14)',
     borderRadius: 8,
     paddingHorizontal: 4,

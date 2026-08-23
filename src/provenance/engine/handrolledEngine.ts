@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS3 hand-rolled engine — a thin ADAPTER exposing the archived verifier
+ * A thin ADAPTER exposing the archived verifier
  * (src/c2pa/, moved not deleted) through the same
  * normalized shape as the upstream engine. Refactor only: the archived code
  * is called as-is, with zero behavior change; every existing suite keeps

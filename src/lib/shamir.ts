@@ -5,7 +5,7 @@
  * The newsroom desk private key (seal-to-desk) must never sit whole on
  * one laptop: one stolen machine must not decrypt every capture. This module
  * splits a secret (the 32-byte X25519 private key) into N shares, any K of
- * which reconstruct it — the doc-2 constraint, implemented.
+ * which reconstruct it.
  *
  * Share layout (binary): [ x-coordinate: 1 byte ][ y bytes: secret.length ][ tag: 4 bytes ]
  * The tag is the first 4 bytes of SHA-256(secret) — NOT a security boundary

@@ -2,7 +2,7 @@
 /**
  * Exhibits — encrypted library of every exhibit this device has sealed.
  * Thumbnails are decrypted on demand into an ephemeral cache (wiped on lock).
- * Each cell carries at most two quiet badges (0.17.0 mockup language): the
+ * Each cell carries at most two quiet badges: the
  * lock — sealed is the default state — and a pin when location OR wifi
  * data is embedded. Small glyphs on translucent dark discs, bottom-left.
  */
@@ -48,14 +48,14 @@ const JOB_ICON: Record<SealJobSnapshot['kind'], keyof typeof Ionicons.glyphMap> 
 };
 
 /**
- * Seal-failure visibility (0.15.1): vault insertion is the LAST step of
- * sealing, so a failed seal used to leave no trace here at all. This row
- * states the failed job plainly — what kind, when it was captured, the
+ * Seal-failure visibility: vault insertion is the LAST step of sealing, so
+ * a failed seal leaves nothing in the grid of its own. This row states the
+ * failed job plainly — what kind, when it was captured, the
  * verbatim error — and offers a retry (the queue's own failure logic is
  * unchanged; a retry that still fails is marked failed again).
  */
 /**
- * Seal-failure card (0.17.0 copy v5): the state, stated plainly — what
+ * Seal-failure card: the state, stated plainly — what
  * happened, that the capture is safe, two actions, and the verbatim error
  * one drawer down in Full details. Remove discards the queued draft.
  */
@@ -119,7 +119,7 @@ function FailedSealRow({ job }: { job: SealJobSnapshot }) {
 /**
  * A queued or in-flight seal renders IN THE GRID as a loading square —
  * the capture already has a place here; it just isn't sealed yet.
- * 0.18.3 (Noah): a QUEUED job is selectable like any sealed cell — Select
+ * A QUEUED job is selectable like any sealed cell — Select
  * mode can cancel it. An in-flight ('sealing') job is not: the pump has
  * claimed it and a seal in progress never loses work to a stray tap.
  */
@@ -184,7 +184,7 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
   // Badge flags: sealed entries carry them in the index;
   // legacy entries are backfilled once from the record — never from media.
   const [flags, setFlags] = useState<VaultFlags | null>(item.flags ?? null);
-  // Pin badge fact #2 (0.17.0): wifi embedded. The index flags bundle wifi
+ // Pin badge fact #2: wifi embedded. The index flags bundle wifi
   // into `identifying`, so the wifi claim itself is read from the sealed
   // record — but only when location alone doesn't already justify the pin.
   const [wifi, setWifi] = useState(false);
@@ -281,7 +281,7 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
           {selected ? <Ionicons name="checkmark" size={12} color="#fff" /> : null}
         </View>
       ) : (
-        // Badge row (0.17.0): at most two quiet discs, bottom-left. The lock
+ // Badge row: at most two quiet discs, bottom-left. The lock
         // is always there — sealed is the default state. The pin appears
         // only when location OR wifi data is actually embedded. No identity
         // badge, no bright colors: small dim glyphs on translucent discs.
@@ -349,7 +349,7 @@ export default function VaultScreen() {
     const m = jobIds.length;
     if ((n === 0 && m === 0) || deleting) return;
     const sealedCopy = 'These are the only sealed copies. The collection is encrypted on this device and its key never leaves the OS keychain, so no readable copy exists anywhere else. Deleted exhibits cannot be recovered or re-created. Shared/exported copies elsewhere are unaffected.';
-    // 0.18.4: sealing jobs are cancellable too — the copy states the one
+    // Sealing jobs are cancellable too — the copy states the one
     // case a discard can't intercept (a seal already past its final step).
     const queuedCopy = 'Queued or sealing captures are discarded unsealed — their encrypted drafts are deleted. A seal already past its final step completes and lands as a sealed exhibit. This cannot be undone.';
     Alert.alert(
@@ -425,7 +425,7 @@ export default function VaultScreen() {
 
   const exportSelected = () => {
     // Queued captures have no sealed record yet — nothing to export; only
-    // real exhibits count toward the metadata export (0.18.3).
+ // real exhibits count toward the metadata export.
     const n = items.filter((i) => selected.has(i.id)).length;
     if (n === 0 || exporting) return;
     Alert.alert(
@@ -678,7 +678,7 @@ const buildStyles = () => StyleSheet.create({
   thumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   thumbSnippet: { padding: spacing.sm, justifyContent: 'flex-start', gap: 5 },
   thumbSnippetText: { color: colors.textDim, fontSize: 10, lineHeight: 13, fontStyle: 'italic' },
-  // Badge row (0.17.0 mockup language): small translucent dark discs with a
+  // Badge row: small translucent dark discs with a
   // hairline light border, dim glyphs, bottom-left, 4px apart. Quiet by
   // design — the lock is the default state, not an alarm.
   badgeRow: {
@@ -704,7 +704,7 @@ const buildStyles = () => StyleSheet.create({
   },
   // Kind caption for non-photo tiles — same cap language as the mockup,
   // anchored bottom-right so it never collides with the badge row.
-  // 0.18.5 contrast pass: solid chip, white text (was dim text directly on
+  // Solid chip, white text (was dim text directly on
   // the thumbnail — unreadable on busy frames).
   kindCap: {
     position: 'absolute',

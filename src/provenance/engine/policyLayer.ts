@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS3 policy layer — THE verdict authority (SPEC §0.2, §2.1).
+ * THE verdict authority.
  *
  * No engine ever emits a verdict. Engines return normalized facts
  * (NormalizedEngineResult); THIS module composes them into OUR verdict
@@ -17,14 +17,14 @@
  *  2 | containerRejected = NOT_JPEG / NOT_BMFF                     → NOT_JPEG/NOT_BMFF — container gate, pre-manifest.
  *  3 | manifestFound = false                                       → NO_ATTESTATION    — absence of credentials proves nothing either way.
  *  4 | unreadable = true                                           → UNREADABLE        — corrupt file / parse failure.
- *  5 | unsupported = true (and NO positive tamper fact)            → UNSUPPORTED       — tri-state OURS (upstream has none, WS3-Binding-Path §6b).
+ * 5 | unsupported = true (and NO positive tamper fact) → UNSUPPORTED — tri-state OURS (upstream has none).
  *    |   classes: algorithm.unsupported, merkle-aux BMFF,
  *    |   assertion.bmffHash.malformed, assertion.boxesHash.unknownBox,
  *    |   unreadable-container/fragmented-MP4 engine errors,
  *    |   engine returned a manifest but no conclusive evaluation (all facts null)
  *  6 | signatureValid = false                                      → SIGNATURE_INVALID — claim/COSE/record signature failed.
  *  7 | claimAssertionsMatch = false                                → SIGNATURE_INVALID — assertion hashes ≠ signed claim (incl. upstream assertion.hashedURI.mismatch).
- *  8 | assetHashFailure = 'void-binding'                           → SIGNATURE_INVALID — A-1 binding guard (SPEC §0.3): the signed claim honors no usable
+ *  8 | assetHashFailure = 'void-binding' → SIGNATURE_INVALID — A-1 binding guard: the signed claim honors no usable
  *    |                                                                                  hard binding (upstream assertion.undeclared/missing/outsideManifest).
  *    |                                                                                  Integrity UNPROVEN — defective credentials, NEVER proven tamper.
  *  9 | assetHashMatches = false (assetHashFailure = 'mismatch')    → CONTENT_MODIFIED  — signature valid, media changed after signing.
@@ -35,8 +35,8 @@
  * tri-state): rows are evaluated 1→4, then 6→9, then 5,
  * then the row-10 gate. UNSUPPORTED is composed only when NO positive tamper
  * fact exists — a structure we cannot parse does not launder a rung that was
- * positively checked and FAILED into "unchecked" (project law: a failed rung
- * is proven tamper, never absence-of-proof). An asset that is both
+ * positively checked and FAILED into "unchecked": a failed rung is proven
+ * tamper, never absence-of-proof. An asset that is both
  * unparseable-structure AND proven-tamper is reported as proven tamper, with
  * the unsupported structure still disclosed in the facts.
  *
@@ -109,7 +109,7 @@ export async function policyVerdict(
   const result = await compose(n, opts);
   // --- Parity: hand-rolled engine output must compose to the archived
   // verdict on EVERY row. A mismatch is a POLICY BUG — thrown, never
-  // absorbed (SPEC §0.1: divergences are investigated, not silenced). ---
+  // absorbed. ---
   if (opts?.handrolledReport && opts.handrolledReport.verdict !== result.verdict) {
     throw new Error(
       `policy-layer parity failure: composed verdict ${result.verdict} ≠ archived verdict ${opts.handrolledReport.verdict} ` +

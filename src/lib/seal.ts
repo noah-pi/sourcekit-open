@@ -5,9 +5,9 @@
  * Threat model: a seized device should hold ciphertext the photographer
  * cannot open. When a newsroom roster carries a desk encryption key, captures
  * destined for the desk are sealed to that key: the copy that leaves the
- * vault (the share sheet) is readable ONLY by
- * whoever can reconstruct the desk private key from its Shamir shares —
- * not the photographer, not us, not anyone holding the device.
+ * vault (the share sheet) is readable only by whoever can reconstruct the
+ * desk private key from its Shamir shares. The photographer cannot, and
+ * neither can anyone holding the device.
  *
  * Construction (ECDH + HKDF + AES-256-GCM, all @noble):
  *   ephemeral X25519 keypair
@@ -31,7 +31,7 @@
  * What this does NOT do (honest notes the UI repeats):
  *  - The photographer's own vault copy stays protected by the vault passcode;
  *    sealing protects the desk-bound copies. Seizure guidance stays: lock /
- *    wipe before a crossing (W5.3 operational guidance).
+ *    wipe before a crossing.
  *  - The desk key is a software key. Its custody is the Shamir split —
  *    one stolen laptop must not decrypt everything; K shares together, in
  *    one machine's memory, are the whole key while they are there.

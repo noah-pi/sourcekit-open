@@ -42,7 +42,7 @@ async function getLocationClaim(): Promise<LocationClaim | 'unavailable'> {
 }
 
 /**
- * The Wi-Fi network the phone reports (W5.7). No permission request happens
+ * The Wi-Fi network the phone reports. No permission request happens
  * here — iOS decides from existing state: no location authorization, no
  * Wi-Fi Information entitlement, or no Wi-Fi association all come back as
  * 'unavailable'. The claim is self-reported and spoofable — see WifiClaim.
@@ -53,8 +53,8 @@ async function getWifiClaim(): Promise<WifiClaim | 'unavailable'> {
 }
 
 /**
- * The one-shot compass read. 0.18.6: this is NO LONGER the sealed pointing
- * direction — Apple defines CLHeading as the azimuth of the TOP EDGE's
+ * The one-shot compass read. This is NOT the sealed pointing direction:
+ * Apple defines CLHeading as the azimuth of the TOP EDGE's
  * horizontal projection, which for the actual shooting stance (phone
  * upright, top edge at the sky) is a near-degenerate number that flips
  * 180° with the sign of the tilt (the field report: "check your sun
@@ -79,7 +79,7 @@ const wrap360 = (deg: number): number => ((deg % 360) + 360) % 360;
 const wrap180 = (deg: number): number => ((((deg + 180) % 360) + 360) % 360) - 180;
 
 /**
- * Camera azimuth from the fused attitude (0.18.6). The camera looks out the
+ * Camera azimuth from the fused attitude. The camera looks out the
  * BACK of the phone — the device −Z axis — and the pose buffer already
  * holds the attitude at 100 Hz, anchored to the shutter instant, so the
  * pointing direction comes from the sample nearest the shutter instead of
@@ -158,7 +158,7 @@ export async function collectContext(params: {
   includeLocation: boolean;
   includeSensors: boolean;
   /**
-   * Wi-Fi network claim (W5.7) — strictly opt-in (Settings default off).
+ * Wi-Fi network claim — strictly opt-in (Settings default off).
    * Collected whenever enabled, regardless of the location toggle: if the
    * user already granted location permission it succeeds, otherwise iOS
    * returns nothing and the record honestly says 'unavailable'. Always
@@ -166,7 +166,7 @@ export async function collectContext(params: {
    */
   includeWifi: boolean;
   motionSamples: MotionSample[];
-  /** Fused DeviceMotion buffer for the signed pose trace (0.10.0). */
+ /** Fused DeviceMotion buffer for the signed pose trace. */
   poseSamples?: PoseSample[];
   /** Shutter moment the pose trace anchors to (default: now). */
   capturedAtMs?: number;
@@ -177,7 +177,7 @@ export async function collectContext(params: {
 
   const location = includeLocation ? await getLocationClaim() : 'redacted';
   const wifi = includeWifi ? await getWifiClaim() : 'redacted';
-  // 0.18.6: heading = camera azimuth AT THE SHUTTER from the pose buffer
+  // Heading = camera azimuth AT THE SHUTTER from the pose buffer
   // (true-north via the compass declination); plain compass read only when
   // no pose sample exists. See getHeadingDeg.
   const headingDeg =

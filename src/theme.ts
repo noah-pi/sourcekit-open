@@ -218,7 +218,7 @@ export const type = {
   mono: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
   system: Platform.select({ ios: 'System', default: undefined as unknown as string }),
   // Display: SF/system sans with tight tracking — verdict headlines, screen
-  // titles, onboarding. The serif register is retired.
+  // titles, onboarding.
   display: Platform.select({ ios: 'System', default: undefined as unknown as string }),
 };
 

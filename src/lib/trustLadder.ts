@@ -6,18 +6,15 @@
  *   bytes unchanged → signer identified → hardware-attested →
  *   time-bounded by an independent anchor
  *
- * 0.18.6 (Noah): the old rungs 2+3 ("known key" / "org-vouched") merged
- * into ONE rung. Identity is not knowable from the file at all unless an
- * organization outside the file vouches for the key — a roster entry or a
- * trust-list accession IS the identification, and a self-asserted org root
- * names an organization without identifying anyone. Two rungs pretended at
- * a distinction that does not exist.
+ * Identification is one rung, not two. Identity is not knowable from the
+ * file unless an organization outside it vouches for the key: a roster entry
+ * or a trust-list accession IS the identification, and a self-asserted org
+ * root names an organization without identifying anyone.
  *
  * This module is presentation logic, NOT a verdict engine: it computes
  * nothing new, it maps what verifyAsset / trustProvider / the OTS checker
  * already concluded into a fixed, always-visible shape. The mapping rules
- * are where honesty lives, so they are stated here and tested in the lab
- * (exhibit-open tests/test-ladder.mts):
+ * are stated here and tested in tests/test-ladder.mts:
  *
  * - Four states per rung. `reached` means the evidence actually verified —
  *   never "present", never "claimed". `unreached` is neutral (absence of
@@ -264,7 +261,7 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   }
 
   // --- Rung 2: signer identified -------------------------------------------
-  // 0.18.6 (Noah): one rung, because identification and accession are one
+ // One rung, because identification and accession are one
   // fact — the file alone can never name a signer; only vouching OUTSIDE
   // the file (a roster with timing evaluated, or a curated trust list)
   // identifies anyone. A self-asserted org root is NOT identification.

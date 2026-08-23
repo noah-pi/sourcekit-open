@@ -71,7 +71,7 @@ export interface ProofBundle {
   /** The embedded C2PA manifest segment (base64), when the media carried one. */
   c2paManifestBase64: string | null;
   /**
-   * The v2 streamedChunks chunk-map sidecar (WS2 Phase 2), exported from
+   * The v2 streamedChunks chunk-map sidecar, exported from
    * the vault's stored chunk maps so a desk can
    * RANGE-VERIFY the delivery file against the signed v2 roots (localize a
    * truncation/tamper to a chunk index) instead of root-only. ABSENT for

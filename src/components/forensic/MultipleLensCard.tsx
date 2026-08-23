@@ -99,7 +99,7 @@ function VideoPrimary({ uri, atSeconds, style }: { uri: string; atSeconds: numbe
   return <Image source={{ uri: thumbUri }} style={style} contentFit="cover" />;
 }
 
-/** One committed video pair frame for the filmstrip (0.18.5 post-field). */
+/** One committed video pair frame for the filmstrip. */
 export interface VideoPairFrameRef {
   frame: SecondaryFrameRef;
   /** The capture-side pair sequence number — the label, never a time claim. */
@@ -132,7 +132,7 @@ function FilmstripThumb({ frameRef, selected, onSelect }: {
     return () => { cancelled = true; };
   }, [frameRef]);
   return (
-    // 0.18.6 (Noah): the strip frames are tappable — a tap swaps THAT
+ // The strip frames are tappable — a tap swaps THAT
     // pair into the blend view + parallax above.
     <Pressable
       style={({ pressed }) => [styles.stripItem, pressed && { opacity: 0.7 }]}
@@ -161,14 +161,14 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   /** The committed native error string when the sink was enabled but failed
       at capture — a failure, stated as one (never "Not recorded"). */
   recordError?: string | null;
-  /** Video only (0.18.5 post-field): every committed pair frame — the
+ /** Video only: every committed pair frame — the
       second camera's view ACROSS the take, not only the compared moment. */
   videoFrames?: VideoPairFrameRef[] | null;
 }) {
   const styles = useThemedStyles(buildStyles);
   // 0 = primary only, 1 = secondary fully blended over the primary.
   const [mix, setMix] = useState(0.5);
-  // 0.18.6 (Noah): which take pair the blend view shows. Null → the
+ // Which take pair the blend view shows. Null → the
   // card's own secondaryFrame (the first recorded pair). A filmstrip tap
   // swaps the pair in — frame AND its PTS anchor.
   const [activePair, setActivePair] = useState<number | null>(null);
@@ -186,7 +186,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   // the committed frame bytes are materialized to the (plain, shred-on-lock)
   // cache once and shown from there.
   const [secondaryUri, setSecondaryUri] = useState<string | null>(null);
-  // 0.18.8: a materialized frame that expo-image cannot DECODE rendered as
+  // A materialized frame that expo-image cannot DECODE rendered as
   // an opaque black layer over the primary — the field's "fades to a black
   // box". A decode failure is a fact about this device, stated in words,
   // never pixels.
@@ -198,7 +198,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
       setSecondaryUri(null);
       return;
     }
-    // 0.18.5 stale-frame fix: the materialized path must be UNIQUE per
+    // The materialized path must be UNIQUE per
     // frame — expo-image caches decodes by URI, so a constant path showed
     // the FIRST exhibit's secondary frame on every later exhibit (the
     // bytes on disk were correct; the decode cache was not). Key the file
@@ -208,7 +208,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
     // fingerprint is raw base64 — a '/' in it made the cache path traverse
     // a nonexistent directory, the write failed, and the blend view
     // silently disappeared. Strip to a path-safe alphabet.
-    // 0.18.8: exported-video frames carry no committed sha256, and the old
+    // Exported-video frames carry no committed sha256, and the old
     // fallback fingerprint (length + first 24 base64 chars) was effectively
     // "length + the universal JFIF header" — every real JPEG shares those
     // 24 characters, so two same-length frames COLLIDED on one cache path
@@ -279,7 +279,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
         const secondary = await decodeBytesToGray(secBytes, 96, 64, 'forensic-secondary.jpg');
         let primarySource = primaryUri;
         if (kind === 'video') {
-          // 0.18.6: try the pair's moment first, then fall back through
+          // Try the pair's moment first, then fall back through
           // fixed offsets before declaring the measurement uncomputable —
           // one bad seek (e.g. t=0 on a moov-last file) must not kill it.
           const anchorMs = Math.max(0, Math.round((shownPtsSeconds ?? 0) * 1000));
@@ -385,7 +385,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
             )}
           </View>
 
-          {/* 0.18.5 post-field: the whole take's second camera — every
+          {/* The whole take's second camera — every
               committed pair frame as a strip, labeled by its capture-side
               sequence number (never a time claim: the anchors are host
               clock, not take-relative). */}
@@ -458,7 +458,7 @@ const buildStyles = () => StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: '#101013',
   },
-  // 0.18.6 (Noah): the selected strip frame — an accent ring, nothing
+ // The selected strip frame — an accent ring, nothing
   // more (selection is UI state, not a claim about the frame).
   stripImageSelected: { borderColor: colors.text, borderWidth: 2 },
   stripLabel: { color: colors.textFaint, fontSize: 9.5, marginTop: 2, textAlign: 'center' },

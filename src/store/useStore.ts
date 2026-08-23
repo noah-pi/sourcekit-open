@@ -189,8 +189,8 @@ export const useStore = create<AppState>((set, get) => ({
           stored.identityMode = stored.includeIdentity === true ? 'named' : 'anonymous';
         }
         delete stored.includeIdentity;
-        // CaptureKit retired (the 0.12.x two-session-owners lesson)
-        // — the experimental toggle key is dropped from stored settings.
+        // The experimental CaptureKit toggle key is dropped from stored
+        // settings.
         delete stored.captureKitEnabled;
         // One-time, guarded:
         //   • named identity with a non-empty alias keeps its behavior:

@@ -42,7 +42,7 @@ export interface CaptureCommitInput {
   motionVerdict?: string | null;
   /**
    * Capture-result context claims (Spec-Camera-Module-0.13 →
-   * src/provenance/stereoArtifacts.ts, plus W2.1/W2.4 full-res extras from
+   * src/provenance/stereoArtifacts.ts, plus full-res extras from
    * sealQueue): the five `context.stereo-*` claims whose VALUES state each
    * artifact's committed outcome ('sha256:<hex>' / 'error:<string>' /
    * 'never-recorded[:<reason>]'), and the additive `context.fullres-still`,
@@ -133,7 +133,7 @@ export function claimsFromCapture(input: CaptureCommitInput): { claims: ContextC
 
   // ---- capture-result context additions (optional) -----------------------
   // The claims arrive pre-built from commitStereoArtifacts (context.stereo-*)
-  // and from sealQueue's W2.1/W2.4 full-res extras (context.fullres-still,
+ // and from sealQueue's full-res extras (context.fullres-still,
   // context.fullres-secondary, context.capture-settings) — all folded into
   // this same signed tree by design. Fail-closed via an EXPLICIT allowlist:
   // anything else throws with the reason named, so junk can never ride the
@@ -185,8 +185,8 @@ export interface SealedCaptureDisclosure {
 
 /**
  * Commit the capture evidence AND produce the default Sealed-profile
- * bundle in one pass (WS2 Phase 2 §4: everything committed, nothing
- * disclosed beyond what the asset already carries). The Sealed bundle is
+ * bundle in one pass: everything committed, nothing disclosed beyond what
+ * the asset already carries. The Sealed bundle is
  * derived through the same openSubset path as any other profile — there
  * is no privileged construction.
  */

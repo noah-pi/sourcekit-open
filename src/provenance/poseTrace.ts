@@ -1,8 +1,8 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 2 §3: the signed gyro trace (com.verify.poseTrace).
+ * The signed gyro trace (com.verify.poseTrace).
  *
- * Source: the CaptureKit sensor JSONL (SPEC-WS1 §5.2) — one sample per
+ * Source: the CaptureKit sensor JSONL — one sample per
  * line, `{"t":<bootSec>,"kind":"gyro","x":..,"y":..,"z":..}` at ~100 Hz.
  * This module commits the trace under a Merkle root (reusing the
  * disclosure tree builder, so capture-side and desk-side speak one

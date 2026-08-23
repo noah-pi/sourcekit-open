@@ -49,7 +49,7 @@ export default function RootLayout() {
       startBarometerFeed();
       // Generate (or load) the device identity at launch so first capture is instant.
       getDeviceKey().catch(() => {});
-      // Hardware attestation is set-and-forget (0.18.0): ensured silently at
+ // Hardware attestation is set-and-forget: ensured silently at
       // every launch — local challenge, no registry contact, retried while
       // absent, never blocks startup. After the enclave key exists the first
       // run typically completes before the first capture.
@@ -161,7 +161,7 @@ export default function RootLayout() {
         <Stack.Screen name="lock" />
         <Stack.Screen name="set-passcode" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="(tabs)" />
-        {/* 0.18.6 field fix: the screen-edge swipe-back gesture was
+        {/* The screen-edge swipe-back gesture was
             stealing horizontal drags from the compare sliders on this
             screen ("dragging horizontally closed the detail view"). The
             Exhibits back button stays the way out. */}
