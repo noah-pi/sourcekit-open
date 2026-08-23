@@ -221,7 +221,7 @@ public class ExhibitCameraModule: Module {
   private var configuredFPS: Double = 30.0
   private var appliedStabilization: String = "auto"
   private var appliedHDR: Bool = false
-  /// Photo-strobe preference (W2.2): the flashMode written into every full-res
+  /// Photo-strobe preference: the flashMode written into every full-res
   /// capture's AVCapturePhotoSettings. Distinct from the torch, which stays the
   /// video-only continuous light. A per-capture value, not a device mode, so it
   /// persists across sessions.
@@ -468,7 +468,7 @@ public class ExhibitCameraModule: Module {
       }
     }
 
-    /// UI-driven zoom ramp (W2.3): ramp(toVideoZoomFactor:withRate:) with a
+    /// UI-driven zoom ramp: ramp(toVideoZoomFactor:withRate:) with a
     /// clamped rate. Instant jumps stay on setZoom.
     AsyncFunction("setZoomSmooth") { (factor: Double, rate: Double, promise: Promise) in
       self.sessionQueue.async {
@@ -476,7 +476,7 @@ public class ExhibitCameraModule: Module {
       }
     }
 
-    /// Photo-strobe preference (W2.2): flashMode for the photo output's stills.
+    /// Photo-strobe preference: flashMode for the photo output's stills.
     /// Not the torch, which is the video-only continuous light.
     AsyncFunction("setPhotoFlashMode") { (mode: String, promise: Promise) in
       self.sessionQueue.async {
@@ -1443,7 +1443,7 @@ extension ExhibitCameraModule {
     }
 
     // Photo output: primary only (RAW opt-in, session calibration, full-res
-    // stills, W2.1). The hardwareCost watchdog below arbitrates the steady-state
+    // stills). The hardwareCost watchdog below arbitrates the steady-state
     // cost (spec §6). Added inside this configuration, before startRunning,
     // never mid-flight.
     let primaryPhoto = AVCapturePhotoOutput()
@@ -2286,7 +2286,7 @@ extension ExhibitCameraModule {
         // outcome merge into captureSettings.
         let exif = PhotoExifExtractor.dictionary(from: photo)
         let fired = PhotoExifExtractor.flashFired(from: exif)
-        // M1/C6: the stabilization mode in force on this output's connection at
+        // The stabilization mode in force on this output's connection at
         // the commit instant, as the API reports it. nil where the connection
         // lacks stabilization; the builder then omits the key rather than
         // falling back to the preferred mode.
@@ -2301,7 +2301,7 @@ extension ExhibitCameraModule {
           flashSupportedModes: photoOutput.supportedFlashModes.map { DeviceModeMapper.flashMode($0) },
           activeStabilizationMode: activeStab
         )
-        // Color profile read from the delivered JPEG's own bytes (M1/C6).
+        // Color profile read from the delivered JPEG's own bytes.
         // Omitted when ImageIO reports no profile name.
         if let profileName = JpegColorSpaceReader.profileName(from: data) {
           captureSettingsBlock["deliveryStillColorSpace"] = profileName
@@ -2315,7 +2315,7 @@ extension ExhibitCameraModule {
           "note": flashNote as Any? ?? NSNull(),
         ] as [String: Any]
 
-        // D1 depth export: runs only after the delivery still is safely on
+        // Depth export runs only after the delivery still is safely on
         // disk. Any depth failure degrades to a stated never-recorded or error
         // rather than failing the capture, so it cannot regress sealing.
         let depth: (evidence: [String: Any], sha256: String?, metadata: [String: Any]?)
@@ -2345,7 +2345,7 @@ extension ExhibitCameraModule {
           "captureId": captureId,
           "deliveryPath": deliveryURL.path,
           "capturedAtMs": capturedAtMs,
-          // D1: bytes on disk at the evidence path; mime, map semantics,
+          // Bytes on disk at the evidence path; mime, map semantics,
           // dimensions, and accuracy in depthMetadata; sha256 of the exact
           // bytes. The JS commit layer takes these verbatim.
           "depth": depth.evidence,
@@ -2535,10 +2535,10 @@ extension ExhibitCameraModule {
           guard let self = self else { return }
           var final = burstPayload
           for (key, value) in sensorFields { final[key] = value }
-          // Full-res stills (W2.1): photo-output captures at full sensor
+          // Full-res stills: photo-output captures at full sensor
           // resolution, sequential per output to avoid starving the graph,
-          // folding the strobe outcome and OS-written EXIF into captureSettings
-          // (W2.4). A full-res failure does not reject the capture — the
+          // folding the strobe outcome and OS-written EXIF into captureSettings.
+          // A full-res failure does not reject the capture — the
           // delivery still already landed — and commits as a three-state
           // EvidencePath.
           self.attachFullResStills(
@@ -2878,7 +2878,7 @@ extension ExhibitCameraModule {
     let secondaryFormatID: String?
     let primaryStab: String?
     let secondaryStab: String?
-    // M1/C6: the stabilization mode in force as the connection reports it
+    // The stabilization mode in force as the connection reports it
     // (activeVideoStabilizationMode); the *Stab fields above are the preferred
     // mode. nil where the connection lacks stabilization.
     let primaryStabActive: String?
@@ -2886,7 +2886,7 @@ extension ExhibitCameraModule {
     let primaryHDR: Bool?
     let secondaryHDR: Bool?
     let configuredFPS: Double
-    // W2.2/W2.4: strobe preference and the output's supported modes,
+    // Strobe preference and the output's supported modes,
     // snapshotted so the settings block is built from one instant.
     let photoFlashPreference: ExhibitPhotoFlash
     let flashSupportedModes: [String]
@@ -3147,7 +3147,7 @@ extension ExhibitCameraModule {
       metadataEvidence = EvidencePathBuilder.error(ExhibitCameraErrorCode.sink, error.localizedDescription)
     }
 
-    // W2.4: the committed camera-settings block, every value read back from
+    // The committed camera-settings block, every value read back from
     // the device at this commit instant; flash and photo-EXIF facts merge in
     // later from the full-res photo's own metadata. Explicit nulls state
     // absence. Broken out of the payload literal because the inline
@@ -3395,7 +3395,7 @@ extension ExhibitCameraModule {
   }
 }
 
-// MARK: - Full-res stills (W2.1): photo-output captures at full sensor resolution
+// MARK: - Full-res stills: photo-output captures at full sensor resolution
 
 extension ExhibitCameraModule {
 
@@ -3411,15 +3411,15 @@ extension ExhibitCameraModule {
     let flashRequested: String
     let flashApplied: Bool
     let flashNote: String?
-    // M1/C1: device-reported videoZoomFactor at capture-fire time. The still is
+    // Device-reported videoZoomFactor at capture-fire time. The still is
     // center-cropped and upscaled by it while its EXIF FocalLength stays the
     // physical lens, so committing it makes the delivered image's effective
     // geometry derivable. nil only with no device reference.
     let zoomFactor: Double?
-    // M1/C6: color profile name read out of the delivered JPEG's own bytes
+    // Color profile name read out of the delivered JPEG's own bytes
     // (ImageIO); nil means omitted.
     let colorSpace: String?
-    // D1: the depth artifact's three-state evidence, the sha256 of its exact
+    // The depth artifact's three-state evidence, the sha256 of its exact
     // bytes, and its metadata (map semantics, dimensions, accuracy,
     // normalization window, calibration when delivered). never-recorded with a
     // reason whenever depth is absent.
@@ -3499,7 +3499,7 @@ extension ExhibitCameraModule {
   }
 
   /// One full-sensor JPEG capture on a photo output. The strobe preference is
-  /// validated against this output's supportedFlashModes (W2.2); an unsupported
+  /// validated against this output's supportedFlashModes; an unsupported
   /// mode degrades to off with the reason stated. The completion fires exactly
   /// once, on sessionQueue.
   private func captureFullResStill(
@@ -3527,7 +3527,7 @@ extension ExhibitCameraModule {
       flashNote = "flash mode '\(pref.rawValue)' is not in this output's supportedFlashModes — captured without the strobe (stated, not faked)"
     }
 
-    // M1/C1: the zoom factor in force as this capture fires (sessionQueue), not
+    // The zoom factor in force as this capture fires (sessionQueue), not
     // the configure-time value. The still is center-cropped and upscaled by
     // this same device property, so committing it makes the delivered image's
     // effective focal length and FOV derivable; the photo's EXIF FocalLength
@@ -3535,7 +3535,7 @@ extension ExhibitCameraModule {
     let zoomDevice = output === self.primaryPhotoOutput ? self.primaryDevice : self.secondaryDevice
     let zoomFactor = zoomDevice.map { Double($0.videoZoomFactor) }
 
-    // D1: request depth delivery only when the flag is on and the live output
+    // Request depth delivery only when the flag is on and the live output
     // supports it for the current device/format. The reason rides the depth
     // fields when it is not requested; a delivery or extraction failure later
     // degrades to depth-not-recorded rather than failing the still.
@@ -3591,11 +3591,11 @@ extension ExhibitCameraModule {
           dimensions = ["width": Int(d.width), "height": Int(d.height)]
         }
       }
-      // EXIF: only what the OS wrote into this photo's metadata (W2.4). The
+      // EXIF: only what the OS wrote into this photo's metadata. The
       // strobe-fired bit comes from that same metadata.
       let exif = PhotoExifExtractor.dictionary(from: photo)
       let fired = PhotoExifExtractor.flashFired(from: exif)
-      // D1: depth rides the delivered photo, extracted, written, and hashed
+      // Depth rides the delivered photo, extracted, written, and hashed
       // after the still is safe on disk. Any failure here states itself in the
       // depth evidence and does not touch the photo's own outcome.
       let depth: (evidence: [String: Any], sha256: String?, metadata: [String: Any]?)
@@ -3783,7 +3783,7 @@ extension ExhibitCameraModule {
     return parts.joined(separator: "; ")
   }
 
-  /// D1 gating: request depth delivery with a photo only when the flag is on
+  /// Depth gating: request depth delivery with a photo only when the flag is on
   /// (default true) and the live output reports support for the current
   /// device/format; there is no session-free depth-support query. Returns the
   /// never-recorded reason when not requested, nil when requested. Never
@@ -3797,13 +3797,13 @@ extension ExhibitCameraModule {
     guard output.isDepthDataDeliveryEnabled else { return "depth-unsupported" }
     settings.isDepthDataDeliveryEnabled = true
     if output.isCameraCalibrationDataDeliverySupported {
-      // D1's committed extrinsics ride the same delivery, under the same flag.
+      // The committed extrinsics ride the same delivery, under the same flag.
       settings.isCameraCalibrationDataDeliveryEnabled = true
     }
     return nil
   }
 
-  /// D1 depth export: when depth data arrived with a delivered photo,
+  /// Depth export: when depth data arrived with a delivered photo,
   /// canonicalize it (ExhibitDepthMapExtractor), write the PNG, and hash the
   /// exact bytes the JS commit layer receives. Absence is stated three-state;
   /// any failure here degrades to never-recorded or error rather than failing
@@ -3824,7 +3824,7 @@ extension ExhibitCameraModule {
     }
     var metadata = outcome.metadata
     if let calibration = photo.cameraCalibrationData {
-      // The extrinsics D1 signs ride the depth metadata when the OS delivered
+      // The signed extrinsics ride the depth metadata when the OS delivered
       // them with this photo.
       metadata["cameraCalibration"] = CalibrationSerializer.dictionary(
         from: calibration,
@@ -3843,13 +3843,13 @@ extension ExhibitCameraModule {
   }
 
   /// Folds one full-res outcome into the payload. The primary still also merges
-  /// its OS-written EXIF and strobe outcome into captureSettings (W2.4); photo
+  /// its OS-written EXIF and strobe outcome into captureSettings; photo
   /// metadata is the only source for flash-fired.
   private func mergeFullRes(_ payload: inout [String: Any], key: String, result: FullResOutcome) {
     payload[key] = result.evidence
     payload["\(key)Sha256"] = result.sha256 as Any? ?? NSNull()
     payload["\(key)Dimensions"] = result.dimensions as Any? ?? NSNull()
-    // M1/C1 + M1/C6: the capture-fire zoom factor and the artifact-read color
+    // The capture-fire zoom factor and the artifact-read color
     // profile ride beside the hash and dimensions for both full-res artifacts,
     // omitted when the source reported nothing.
     if let zoomFactor = result.zoomFactor {
@@ -3858,7 +3858,7 @@ extension ExhibitCameraModule {
     if let colorSpace = result.colorSpace {
       payload["\(key)ColorSpace"] = colorSpace
     }
-    // D1: the depth artifact's three-state evidence, the sha256 of its exact
+    // The depth artifact's three-state evidence, the sha256 of its exact
     // bytes, and its metadata (mime, map semantics, dimensions, accuracy).
     // Absence is stated via the evidence reason.
     payload["\(key)Depth"] = result.depthEvidence
@@ -4983,7 +4983,7 @@ extension ExhibitCameraModule {
     ])
   }
 
-  /// Full-sensor stills (W2.1): cap the photo output at its largest supported
+  /// Full-sensor stills: cap the photo output at its largest supported
   /// dimensions (iOS 16+; older OSes keep the format default and the committed
   /// dimensions say what arrived). Set once at addOutput time, inside the
   /// session's begin/commit discipline. supportedMaxPhotoDimensions belongs to
@@ -5032,7 +5032,7 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Instant device-zoom set (W2.3), for lens-jump continuity: a sweep that
+  /// Instant device-zoom set, for lens-jump continuity: a sweep that
   /// crossed an optical stop lands on the new stack's factor immediately.
   /// UI-driven ramps go through setZoomSmooth. Clamped to the device's
   /// supported range.
@@ -5068,7 +5068,7 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Ramped device-zoom set (W2.3): ramp(toVideoZoomFactor:withRate:) for
+  /// Ramped device-zoom set: ramp(toVideoZoomFactor:withRate:) for
   /// UI-driven scrub ramps. The rate is clamped to a usable band so a caller
   /// cannot wedge the device at rate 0 or slam it at 1000.
   func setZoomSmooth(_ factor: Double, rate: Double, promise: Promise?) {
@@ -5102,7 +5102,7 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Photo-strobe preference (W2.2): stored and written into every full-res
+  /// Photo-strobe preference: stored and written into every full-res
   /// capture's photoSettings at shutter time, validated against the output's
   /// supportedFlashModes there. No device mode is touched, and the preference
   /// survives sessions.
@@ -6104,7 +6104,7 @@ extension ExhibitCameraModule {
         ),
         "switchOverFactors": virtualSwitchOverFactors(for: device),
       ],
-      // Per-constituent-device ceilings (W2.3): every back stack this hardware
+      // Per-constituent-device ceilings: every back stack this hardware
       // has, each with its hardware max and the app-chosen quality cap. The UI
       // picks its per-lens ceiling from this; an absent lens is omitted.
       "lensZoomCaps": lensZoomCaps(),
@@ -6135,7 +6135,7 @@ extension ExhibitCameraModule {
     return options
   }
 
-  /// Hardware hand-off points (W2.3): virtualDeviceSwitchOverVideoZoomFactors
+  /// Hardware hand-off points: virtualDeviceSwitchOverVideoZoomFactors
   /// of the virtual device containing the active stack. When the primary is a
   /// physical device the factors are read from the virtual device
   /// (triple/dual-wide/dual) at the same position. Empty when no virtual device
@@ -6155,7 +6155,7 @@ extension ExhibitCameraModule {
     return []
   }
 
-  /// Per-constituent-device zoom ceilings (W2.3), keyed by the bridge's lens
+  /// Per-constituent-device zoom ceilings, keyed by the bridge's lens
   /// vocabulary so the UI never parses deviceType rawValues. Devices not present
   /// are omitted; listFormats is the presence source.
   private func lensZoomCaps() -> [[String: Any]] {

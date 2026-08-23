@@ -1,5 +1,5 @@
 /**
- * Solar geometry (M3): where the committed time and place put the sun.
+ * Solar geometry: where the committed time and place put the sun.
  *
  * Implements the NOAA solar ephemeris (fractional-year equation of time and
  * declination, true solar time, hour angle, elevation, azimuth), accurate to

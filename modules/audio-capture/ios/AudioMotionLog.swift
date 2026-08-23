@@ -3,9 +3,9 @@ import Foundation
 import CoreMotion
 
 /**
- * AudioMotionLog — the audio recorder's IMU sink (WS2 Phase 2 §3 parity).
+ * AudioMotionLog — the audio recorder's IMU sink.
  * While a recording runs, gyro samples stream to a JSONL file in the
- * CaptureKit SensorLogger line format (SPEC-WS1 §5.2):
+ * CaptureKit SensorLogger line format:
  *
  *   {"t":<bootSec>,"mach":<machTicks>,"kind":"gyro","x":..,"y":..,"z":..}
  *

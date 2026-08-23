@@ -335,39 +335,39 @@ export interface C2paManifestParams {
    * Labels must start with 'com.verify.' and must not collide with built-ins.
    */
   customAssertions?: { label: string; data: unknown }[] | null;
-  // ---- Standard assertions (C2–C5): each emitted only when its param is
+  // ---- Standard assertions: each emitted only when its param is
   // supplied. A missing input omits the assertion; it never fails the seal.
   /**
-   * C5: claim thumbnail — a small JPEG (≤512px) of the asset, embedded as
+   * Claim thumbnail — a small JPEG (≤512px) of the asset, embedded as
    * c2pa.thumbnail.claim.jpeg (JUMBF jpeg content box, like c2pa-rs).
    */
   thumbnailJpeg?: Uint8Array | null;
   /**
-   * C5: asset types for c2pa.asset-type.v2 (v2 JSON-array shape:
+   * Asset types for c2pa.asset-type.v2 (v2 JSON-array shape:
    * [{type, version?}]). e.g. ['image'], ['video'], ['audio'].
    */
   assetTypes?: string[] | null;
   /**
-   * C5: emit c2pa.training-mining with every standard entry
+   * Emit c2pa.training-mining with every standard entry
    * (c2pa.ai_training / c2pa.ai_generative_training / c2pa.data_mining /
    * c2pa.ai_inference) set to `notAllowed`. Label is c2pa.training-mining,
    * not cawg.training-mining, which the vendored enum does not carry.
    */
   trainingMiningDenied?: boolean;
   /**
-   * C3: capture-time pHash (16 hex chars, src/lib/phash.ts), embedded as
+   * Capture-time pHash (16 hex chars, src/lib/phash.ts), embedded as
    * c2pa.soft-binding (CBOR) under SOFT_BINDING_ALG_PHASH. Recovery metadata,
    * not a trust rung.
    */
   phashHex?: string | null;
   /**
-   * C4: with p.exif present, also emit the standard-supported fields as
+   * With p.exif present, also emit the standard-supported fields as
    * c2pa.metadata (JSON-LD, exif/tiff/exifEX namespaces) — signer-attributed.
    * com.verify.exif keeps the full sanitized set.
    */
   emitC2paMetadata?: boolean;
   /**
-   * C2 conformance: emit c2pa.actions.v2 declaring c2pa.created with
+   * Emit c2pa.actions.v2 declaring c2pa.created with
    * digitalSourceType digitalCapture (C2PA 2.1+ requires created/opened;
    * downstream tools check digitalSourceType first). `when` is the capture
    * time (ISO), optional.
@@ -444,7 +444,7 @@ function isValidCollectionUri(uri: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// C4: sanitized EXIF (com.verify.exif keys, src/lib/exif.ts) → standard
+// Sanitized EXIF (com.verify.exif keys, src/lib/exif.ts) → standard
 // XMP/JSON-LD fields for c2pa.metadata. Closed mapping: anything unmapped
 // stays only in com.verify.exif.
 // ---------------------------------------------------------------------------
@@ -658,11 +658,11 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
           'Proves WHICH org credential produced this file — never that its contents are true.',
       }))))
     : null;
-  // ---- Standard assertions (C2–C5) ----
+  // ---- Standard assertions ----
   // Order is fixed so the claim's assertion list is deterministic.
   const standardBoxes: Uint8Array[] = [];
   const standardLabels: string[] = [];
-  // C5: claim thumbnail (jpeg content box, like c2pa-rs thumbnails).
+  // Claim thumbnail (jpeg content box, like c2pa-rs thumbnails).
   if (p.thumbnailJpeg && p.thumbnailJpeg.length > 0) {
     standardBoxes.push(jumbBox(UUID_JPEG, LABEL_THUMBNAIL_CLAIM_JPEG, box('jpeg', p.thumbnailJpeg)));
     standardLabels.push(LABEL_THUMBNAIL_CLAIM_JPEG);
@@ -737,12 +737,12 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
       standardLabels.push(ingredientLabel);
     });
   }
-  // C5: asset type(s), v2 JSON-array shape per the SDK 2.3 enum label.
+  // Asset type(s), v2 JSON-array shape per the SDK 2.3 enum label.
   if (p.assetTypes && p.assetTypes.length > 0) {
     standardBoxes.push(jumbBox(UUID_JSON, LABEL_ASSET_TYPE_V2, box('json', utf8ToBytes(JSON.stringify(p.assetTypes.map((type) => ({ type })))))));
     standardLabels.push(LABEL_ASSET_TYPE_V2);
   }
-  // C5: training/data-mining permissions, every standard entry notAllowed
+  // Training/data-mining permissions, every standard entry notAllowed
   // (CBOR map per the spec).
   if (p.trainingMiningDenied) {
     standardBoxes.push(jumbBox(UUID_CBOR, LABEL_TRAINING_MINING, box('cbor', encode({
@@ -755,7 +755,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     }))));
     standardLabels.push(LABEL_TRAINING_MINING);
   }
-  // C3: soft binding from the capture-time pHash. Recovery metadata; the
+  // Soft binding from the capture-time pHash. Recovery metadata; the
   // hash.data/bmff assertions are the only hard bindings.
   if (p.phashHex && /^[0-9a-f]{16}$/i.test(p.phashHex)) {
     standardBoxes.push(jumbBox(UUID_CBOR, LABEL_SOFT_BINDING, box('cbor', encode({
@@ -765,7 +765,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     }))));
     standardLabels.push(LABEL_SOFT_BINDING);
   }
-  // C4: standard-supported EXIF fields as signer-attributed c2pa.metadata
+  // Standard-supported EXIF fields as signer-attributed c2pa.metadata
   // (JSON-LD); the full sanitized set stays in com.verify.exif.
   if (p.emitC2paMetadata && p.exif) {
     const metadataJson = buildC2paMetadataJson(p.exif);
@@ -817,7 +817,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
       standardLabels.push(LABEL_COLLECTION_HASH);
     }
   }
-  // C2: actions.v2 declaring c2pa.created + digitalSourceType digitalCapture.
+  // Actions.v2 declaring c2pa.created + digitalSourceType digitalCapture.
   if (p.createdDeclaration) {
     const action: Record<string, unknown> = {
       action: 'c2pa.created',

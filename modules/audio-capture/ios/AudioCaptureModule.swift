@@ -80,7 +80,7 @@ public class AudioCaptureModule: Module {
   private var stopResolved = false
   private var interruptionObserver: NSObjectProtocol?
 
-  // IMU sink (WS2 Phase 2 §3): gyro JSONL covering the recorded window in the
+  // IMU sink: gyro JSONL covering the recorded window in the
   // CaptureKit SensorLogger line format, backing the signed
   // com.verify.poseTrace. "unavailable" (no gyro or not requested) and "failed"
   // (sink died) are distinct states.

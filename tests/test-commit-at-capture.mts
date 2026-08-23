@@ -6,7 +6,7 @@
  * 'burned'. The scheduler respects the per-item policy (default: never).
  *
  * Also covers the geohash ladder derivation, the inventory and master-seed
- * invariants (A-01/A-02, docs/INTEGRITY.md), and the residual report in the
+ * invariants (docs/INTEGRITY.md), and the residual report in the
  * export path.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-commit-at-capture.mts
@@ -120,15 +120,15 @@ section('seal → bundle committed → openSubset derives salts');
   check('short opens exactly its rung-set',
     JSON.stringify(openedIds) === JSON.stringify(['identity.key-fingerprint', 'time.day', 'time.month', 'time.year'].sort()),
     JSON.stringify(openedIds));
-  check('no salt table exists anywhere in the state (A-02)',
+  check('no salt table exists anywhere in the state',
     !('salts' in state) && !('saltTable' in state) && !('salts' in opened.bundle));
 
-  // The inventoryDigest meta-leaf (A-01): doctoring a never-recorded
+  // The inventoryDigest meta-leaf: doctoring a never-recorded
   // declaration (an inventory entry) breaks verification against the same root.
   const tamperedBundle = JSON.parse(JSON.stringify(opened.bundle));
   tamperedBundle.inventoryEntries.find((e: any) => e.claimId === 'location.country').state = 'committed';
   const tv = verifyBundle(tamperedBundle, state.root, state.inventoryAssertion);
-  check('a doctored never-recorded declaration is caught (A-01)',
+  check('a doctored never-recorded declaration is caught',
     !tv.ok && tv.failures.some((f) => f.includes('inventory') || f.includes('never-recorded')),
     JSON.stringify(tv.failures));
 
@@ -277,7 +277,7 @@ section('end to end: a real seal commits the context tree');
   // The sealed bundle from the capture verifies against the manifest root.
   check('the manifest-committed root verifies the Sealed bundle',
     verifyBundle(r.disclosure!.sealedBundle, ct.root, ct).ok);
-  // Master seed never touches the manifest (A-02): it must not appear in the signed bytes.
+  // Master seed never touches the manifest: it must not appear in the signed bytes.
   const seedHex = r.disclosure!.masterSeedHex;
   const seedBytes = hexToBytes(seedHex);
   let found = false;

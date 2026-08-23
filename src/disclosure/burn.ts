@@ -11,7 +11,7 @@
  *
  * Invariants:
  *   - Every burn appends a `burn` event to the item's event log.
- *   - Salts derive from the seed at openSubset time only (A-02); this module
+ *   - Salts derive from the seed at openSubset time only; this module
  *     never holds a salt table.
  *   - Bundles already exported keep verifying after a burn.
  *   - The scheduler is policy plus an injected store: the app runs it on
@@ -56,7 +56,7 @@ export interface DisclosureItemState {
   sealedBundle: DisclosureBundle;
   /**
    * Hex master seed: present until a burn, deleted after. The only way a
-   * withheld rung can be opened (A-02: salts derive from it and exist
+   * withheld rung can be opened (salts derive from it and exist
    * nowhere else).
    */
   masterSeedHex?: string;

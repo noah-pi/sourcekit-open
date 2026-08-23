@@ -163,7 +163,7 @@ function rungDeviceCredential(bundle: ProofBundle): RungResult {
   if (record.orgCredential) {
     rows.push({
       label: 'org credential (mirror)',
-      value: `${record.orgCredential.subject ?? 'unnamed subject'} · issuer ${record.orgCredential.issuer ?? 'unnamed'} · the x5chain itself is not checked in M0`,
+      value: `${record.orgCredential.subject ?? 'unnamed subject'} · issuer ${record.orgCredential.issuer ?? 'unnamed'} · the x5chain itself is not checked`,
     });
   }
   if (record.biometricBound) {
@@ -189,7 +189,7 @@ function rungDeviceCredential(bundle: ProofBundle): RungResult {
       rows);
   }
   return rung(2, 'Device credential', 'agrees',
-    'the record carries signed custody commitments (listed below). Each is a commitment the signer made about itself, consistent with careful capture; none is hardware proof, and the full credential chain check is deferred to M1',
+    'the record carries signed custody commitments (listed below). Each is a commitment the signer made about itself, consistent with careful capture; none is hardware proof, and the full credential chain check is not run here',
     rows);
 }
 

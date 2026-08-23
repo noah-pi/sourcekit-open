@@ -18,7 +18,7 @@ import {
   type NormalizedEngineResult,
 } from './upstreamEngine';
 
-export const HANDROLLED_ENGINE_VERSION = 'archived@WS3-2026-08-06';
+export const HANDROLLED_ENGINE_VERSION = 'handrolled@2026-08-06';
 
 /** Facts the handrolled pipeline guarantees, mapped from its report. */
 function normalizeReport(report: VerificationReport): NormalizedEngineResult {

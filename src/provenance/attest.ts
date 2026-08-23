@@ -57,21 +57,21 @@ import { bytesToBase64, bytesToHex, base64ToBytes, concatBytes, utf8ToBytes } fr
 import { readFileBytes } from '../lib/fileHash';
 import { pHashFromGray32 } from '../lib/phash';
 import { logDiagnostic } from '../lib/diagnosticsLog';
-// Type-only import of the native capture contract (D1 depth fields), erased
+// Type-only import of the native capture contract (depth fields), erased
 // at runtime; this module never loads the camera module's expo glue.
 import type { CaptureResult, DepthArtifactMetadata, EvidencePath as CameraEvidencePath } from '../lib/exhibitCamera';
 
 /**
- * The standard-assertion set (C2-C5) handed to the embed layer. Each
+ * The standard-assertion set handed to the embed layer. Each
  * assertion fails closed on its own: a failed compute is absent and logged,
  * and the seal continues.
  */
 interface StandardAssertions {
-  /** C5: claim thumbnail, ≤512px JPEG (photos + video). */
+  /** Claim thumbnail, ≤512px JPEG (photos + video). */
   thumbnailJpeg?: Uint8Array | null;
-  /** C3: the capture-time pHash, 16 hex chars → c2pa.soft-binding (photos). */
+  /** The capture-time pHash, 16 hex chars → c2pa.soft-binding (photos). */
   phashHex?: string | null;
-  /** D1: GDepth depthmap assertion payload (photos, when depth recorded). */
+  /** GDepth depthmap assertion payload (photos, when depth recorded). */
   depthmap?: {
     data: Uint8Array;
     mime: 'image/jpeg' | 'image/png';
@@ -87,7 +87,7 @@ interface StandardAssertions {
     imageWidth?: number | null;
     imageHeight?: number | null;
   } | null;
-  /** D1: the sealed artifact set → c2pa.hash.collection.data (photos, when depth recorded). */
+  /** The sealed artifact set → c2pa.hash.collection.data (photos, when depth recorded). */
   collectionAssets?: { uri: string; bytes: Uint8Array; dcFormat?: string | null }[] | null;
   /** Secondary viewpoint → c2pa.ingredient.v3 + ingredient thumbnail (photos, when a secondary frame exists). */
   secondaryView?: {
@@ -120,7 +120,7 @@ export interface DepthCommitInput {
 }
 
 /**
- * Resolves the depth artifact to commit from a CaptureResult (D1): the
+ * Resolves the depth artifact to commit from a CaptureResult: the
  * full-res path's primary map first, the degraded path's `depth` as fallback.
  * The secondary map is not committed; there is one c2pa.depthmap per claim
  * and the collection is {photo, primary depth}. Null when the CaptureResult
@@ -325,7 +325,7 @@ function appVersion(): string {
 }
 
 /**
- * C5 (photo path): the ≤512px claim thumbnail, same recipe as the vault grid
+ * Photo path: the ≤512px claim thumbnail, same recipe as the vault grid
  * (ImageManipulator over the on-disk draft, lossy JPEG). A failure logs and
  * omits the assertion; the seal still completes.
  */
@@ -379,7 +379,7 @@ async function photoPhashHex(photoUri: string): Promise<string | null> {
 }
 
 /**
- * C5 (video path): a frame ~0.5 s in, resized to a ≤512px JPEG, the same
+ * Video path: a frame ~0.5 s in, resized to a ≤512px JPEG, the same
  * source as the vault grid thumbnail. When the frame cannot be read the
  * manifest ships without a claim thumbnail.
  */
@@ -436,7 +436,7 @@ export async function attestPhoto(params: {
    * and throws on any other.
    */
   stereoClaims?: ContextClaim[] | null;
-  /** D1: the resolved depth artifact. See DepthCommitInput. */
+  /** The resolved depth artifact. See DepthCommitInput. */
   depth?: DepthCommitInput | null;
   /** The resolved secondary viewpoint. See SecondaryCommitInput. */
   secondary?: SecondaryCommitInput | null;
@@ -491,7 +491,7 @@ export async function attestPhoto(params: {
     evidenceEnabled: params.evidenceEnabled ?? null,
     stereoClaims: params.stereoClaims ?? null,
   });
-  // D1: the depth artifact. 'never-recorded' and 'error' commit a signed
+  // The depth artifact. 'never-recorded' and 'error' commit a signed
   // statement of absence with the verbatim reason; 'path' reads the bytes
   // from disk, re-verifies the committed sha256, then commits
   // c2pa.depthmap.GDepth (the map's normalization window is GDepth's
@@ -594,7 +594,7 @@ export async function attestPhoto(params: {
     }
   }
   const signedRecord = await signRecord(record, params.key.signDigest, params.key.signPayload, params.pq);
-  // C3/C5: pHash and claim thumbnail, computed pre-signing so both land under
+  // PHash and claim thumbnail, computed pre-signing so both land under
   // the COSE claim signature. Each fails closed on its own.
   const standard: StandardAssertions = {
     thumbnailJpeg: await photoThumbnailJpeg(params.photoUri),
@@ -653,7 +653,7 @@ async function embedC2paInJpeg(stripped: Uint8Array, signedRecord: AttestationRe
       // when the active signer is the attested key.
       appAttest: key.backend === 'secure-enclave-attested' ? await getAttestationAssertion() : null,
       customAssertions: customAssertions ?? null,
-      // Data contract (C2-C5), on by default; a standard assertion the caller
+      // Data contract, on by default; a standard assertion the caller
       // could not build is absent.
       thumbnailJpeg: standard?.thumbnailJpeg ?? null,
       assetTypes: ['image'],
@@ -661,7 +661,7 @@ async function embedC2paInJpeg(stripped: Uint8Array, signedRecord: AttestationRe
       phashHex: standard?.phashHex ?? null,
       emitC2paMetadata: true,
       createdDeclaration: { when: signedRecord.capturedAt },
-      // D1: depth assertions, absent unless attestPhoto verified an artifact.
+      // Depth assertions, absent unless attestPhoto verified an artifact.
       depthmap: standard?.depthmap ?? null,
       collectionAssets: standard?.collectionAssets ?? null,
       // Secondary-viewpoint ingredient, absent unless a secondary frame verified.
@@ -702,7 +702,7 @@ async function embedC2paInPng(stripped: Uint8Array, signedRecord: AttestationRec
       probeTokenSizes: estimatedTsaTokenSizes,
       identity: identityAssertionFor(chain, signedRecord),
       appAttest: key.backend === 'secure-enclave-attested' ? await getAttestationAssertion() : null,
-      // Data contract (C2/C5). The PNG path receives pixels-only bytes with
+      // Data contract. The PNG path receives pixels-only bytes with
       // no file URI, so there is no source for a claim thumbnail or pHash,
       // and no EXIF for c2pa.metadata.
       assetTypes: ['image'],
@@ -1016,7 +1016,7 @@ async function embedC2paInBmff(
   fetchTimestamp: C2paManifestParams['fetchTimestamp'] = fetchTimestampTokensBounded,
   /** parity assertions (com.verify.* JUMBF boxes). */
   customAssertions?: { label: string; data: unknown }[] | null,
-  /** Standard assertions (C5 claim thumbnail for video). */
+  /** Standard assertions (claim thumbnail for video). */
   standard?: StandardAssertions | null
 ): Promise<Uint8Array> {
   const chain = certChainOverride ?? (await getDeviceCertChain()).chain;

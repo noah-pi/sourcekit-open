@@ -118,7 +118,7 @@ const nativeChunks = chunkEsStream('video', extractTrackStreams(cleanMp4)[0].es)
 const sealed = await attestVideo({
   videoUri: `${STAGED}/clean.mp4`,
   context: { location: { lat: 37.7749, lon: -122.4194 } } as any,
-  identity: { author: 'WS2 P2', organization: null },
+  identity: { author: 'Test Author', organization: null },
   key,
 });
 check('attestVideo produced signed bytes', !!sealed.signedVideoBytes);

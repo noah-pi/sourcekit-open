@@ -152,7 +152,7 @@ export function claimsFromCapture(input: CaptureCommitInput): { claims: ContextC
 /**
  * Commit the capture's context claims under one root. The caller (attest.ts)
  * generates the master seed and hands it to the vault store; it is never
- * returned in a salt table (A-02) and never rides in the manifest, only the
+ * returned in a salt table and never rides in the manifest, only the
  * root does.
  */
 export function commitCaptureEvidence(masterSeed: Uint8Array, input: CaptureCommitInput): CaptureCommit {

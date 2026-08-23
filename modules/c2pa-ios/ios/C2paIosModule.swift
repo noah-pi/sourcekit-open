@@ -7,7 +7,7 @@ import Foundation
 import Security  // SecAccessControlCreateFlags (same explicit import as upstream's SecureEnclaveSigner.swift)
 
 /**
- * C2paIos — upstream C2PA engine binding (SPEC WS3, WS3-Binding-Path §2/§7a),
+ * C2paIos — upstream C2PA engine binding,
  * wrapping c2pa-swift v0.0.12. Read: store JSON goes verbatim to
  * src/provenance/engine/upstreamEngineIos.ts; verdicts belong to the policy
  * layer (SPEC §0.2). Sign: PEM or Secure Enclave ES256. Offline invariant
@@ -69,8 +69,8 @@ public class C2paIosModule: Module {
     }
 
     /**
-     * Read and validate a detached (sidecar) manifest against its asset
-     * (WS3-Binding-Path §6c). Verified API: Reader(format:stream:manifest:) +
+     * Read and validate a detached (sidecar) manifest against its asset.
+     * Verified API: Reader(format:stream:manifest:) +
      * Stream(readFrom:) + reader.json.
      */
     AsyncFunction("readManifestDetached") { (path: String, format: String, manifestBase64: String) throws -> String in

@@ -252,7 +252,7 @@ export async function ensureEntryFlags(entry: VaultIndexEntry): Promise<VaultFla
 let keyCache: Uint8Array | null = null;
 
 /**
- * In-flight seal counter (D2): the cached vault key is dropped on
+ * In-flight seal counter: the cached vault key is dropped on
  * background/lock only when no seal is mid-write. Otherwise the seal queue's
  * next getVaultKey() would need a fresh keychain read, which under ACL is a
  * user-presence prompt, in a background window where no prompt can appear.
@@ -482,7 +482,7 @@ export interface SaveItemParams {
    */
   transcriptSnippet?: string;
   /**
-   * D1: the capture-side depth artifact, sealed beside the media as
+   * The capture-side depth artifact, sealed beside the media as
    * `${id}.depth.bin` with the same vault key, so it carries the media's
    * privacy contract. Its sha256 is committed pre-signing in the record
    * (context.depth) and in c2pa.hash.collection.data; this is the storage half
@@ -493,7 +493,7 @@ export interface SaveItemParams {
 }
 
 export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry> {
-  // In-flight for the whole save (D2): a background/lock arriving mid-save
+  // In-flight for the whole save: a background/lock arriving mid-save
   // must not drop the key out from under the writes below.
   inFlightSeals++;
   try {
@@ -539,7 +539,7 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
         // Placeholder icon in the grid; this path is an optimization.
       }
     }
-    // D1: seal the depth artifact beside the media (same key, same contract).
+    // Seal the depth artifact beside the media (same key, same contract).
     // Its claimed hash is cross-checked first, so the vault stores what the
     // signature describes or nothing.
     if (params.kind === 'photo' && params.depthArtifact) {

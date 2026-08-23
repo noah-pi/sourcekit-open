@@ -373,7 +373,7 @@ export interface CaptureOptions {
 }
 
 /**
- * The native depth artifact's committed facts (D1). Every field is a
+ * The native depth artifact's committed facts. Every field is a
  * capture-side claim; nothing is derived JS-side. The artifact is a 16-bit
  * grayscale PNG, min/max-normalized over [normalizationMin,
  * normalizationMax], with non-finite pixels written as 0 and counted.
@@ -457,7 +457,7 @@ export interface CaptureResult extends SensorLogEvidence {
    * user composed on) and commits the read-back. null when no connection
    * existed to read. */
   frontMirrored?: boolean | null;
-  // ---- D1 depth artifacts. Absent on older native builds and on some
+  // ---- Depth artifacts. Absent on older native builds and on some
   // early-exit branches; callers treat undefined as "not committed". ----
   /** Primary photo output's depth map: 16-bit grayscale PNG, min/max-
    * normalized with the window committed in fullResStillDepthMetadata.

@@ -69,7 +69,7 @@ enum ExhibitTorch: String {
   }
 }
 
-/// Photo-strobe preference (W2.2), distinct from the torch: sets
+/// Photo-strobe preference, distinct from the torch: sets
 /// AVCapturePhotoSettings.flashMode on the photo output for stills. The torch
 /// is the video-only continuous light. Values match the TS bridge.
 enum ExhibitPhotoFlash: String {
@@ -286,7 +286,7 @@ enum DeviceModeMapper {
     }
   }
 
-  /// OS-reported thermal state (ProcessInfo) → stable string (M1/C6).
+  /// OS-reported thermal state (ProcessInfo) → stable string.
   static func thermalState(_ state: ProcessInfo.ThermalState) -> String {
     switch state {
     case .nominal: return "nominal"
@@ -308,7 +308,7 @@ enum DeviceModeMapper {
   }
 }
 
-// MARK: - Digital-zoom quality caps (W2.3)
+// MARK: - Digital-zoom quality caps
 
 /// Conservative digital-zoom ceilings (device-zoom factor) per constituent
 /// device class. These are an app-chosen quality bar, not hardware limits; past
@@ -326,7 +326,7 @@ enum ExhibitZoomCaps {
   }
 }
 
-// MARK: - Photo EXIF extraction (W2.4: OS-written values only)
+// MARK: - Photo EXIF extraction (OS-written values only)
 
 /// Reads the EXIF numbers the OS wrote into a captured photo's metadata
 /// (AVCapturePhoto.metadata → Exif sub-dictionary) and re-keys them under the
@@ -371,7 +371,7 @@ enum PhotoExifExtractor {
   }
 }
 
-// MARK: - Delivered-JPEG color space (M1/C6)
+// MARK: - Delivered-JPEG color space
 
 /// Reads the color profile name out of a delivered JPEG's bytes (ImageIO).
 /// nil when ImageIO reports no profile name; the request path is never used as
@@ -384,7 +384,7 @@ enum JpegColorSpaceReader {
   }
 }
 
-// MARK: - Depth map export (D1; c2pa.depthmap capture side)
+// MARK: - Depth map export (c2pa.depthmap capture side)
 
 /**
  * Canonicalizes a delivered AVDepthData into the committed depth artifact: a
@@ -523,7 +523,7 @@ enum ExhibitDepthMapExtractor {
   }
 }
 
-// MARK: - Capture settings block (W2.4: every setting from a device read)
+// MARK: - Capture settings block (every setting from a device read)
 
 /// Builds the committed capture-settings dictionary: the camera state at
 /// shutter time. Every value is read back from the AVCaptureDevice at commit
@@ -558,7 +558,7 @@ enum CaptureSettingsBuilder {
     }
 
     // Temperature/tint via the OS's converter from the device-reported gains
-    // (W2.4). Committed whenever the gains are valid; outside WB lock the
+    // Committed whenever the gains are valid; outside WB lock the
     // values are transient, which the note states.
     var wbTempTint: [String: Any]? = nil
     if let wb = wbGains {
@@ -574,7 +574,7 @@ enum CaptureSettingsBuilder {
       ]
     }
 
-    // ---- zoom/crop geometry (M1/C1): the delivered image is the format
+    // ---- zoom/crop geometry: the delivered image is the format
     // readout center-cropped by videoZoomFactor when > 1 (iOS digital zoom is a
     // symmetric crop; past an optical stop the device changes, which
     // physicalDevice commits). The committed crop inputs make the delivered
@@ -612,7 +612,7 @@ enum CaptureSettingsBuilder {
     let focal35mm: Double? = hfovRadians > 0 ? 18.0 / tan(hfovRadians / 2.0) : nil
 
     var out: [String: Any] = [
-      // W2.1: the delivery still's pixels come from the synchronized video
+      // The delivery still's pixels come from the synchronized video
       // frame at session resolution, resampled rather than a full-sensor
       // readout. The full-sensor still is the separate fullResStill artifact
       // with its own hash.
@@ -625,19 +625,19 @@ enum CaptureSettingsBuilder {
       "apertureFNumber": Double(device.lensAperture),
       "exposureTargetBias": Double(device.exposureTargetBias),
       "videoZoomFactor": Double(device.videoZoomFactor),
-      // Zoom/crop geometry and derived 35mm-equivalent (M1/C1); see the locals
+      // Zoom/crop geometry and derived 35mm-equivalent; see the locals
       // above. The delivered image is the crop these inputs describe.
       "sensorCrop": sensorCrop,
       "focalLength35mmEquivalent": focal35mm as Any? ?? NSNull(),
       // OS-reported thermal state at the commit instant (ProcessInfo, the same
-      // source the thermal policy reads) (M1/C6).
+      // source the thermal policy reads).
       "thermalState": DeviceModeMapper.thermalState(ProcessInfo.processInfo.thermalState),
       "thermalStateRaw": ProcessInfo.processInfo.thermalState.rawValue,
       "exposureMode": DeviceModeMapper.exposureMode(device.exposureMode),
       "focusMode": DeviceModeMapper.focusMode(device.focusMode),
       "whiteBalanceMode": DeviceModeMapper.whiteBalanceMode(device.whiteBalanceMode),
       "physicalDevice": device.deviceType.rawValue,
-      // Photo-strobe facts (W2.2/W2.4). flashFired stays null until the
+      // Photo-strobe facts. flashFired stays null until the
       // full-res photo's metadata answers; no photo means no strobe claim.
       "photoFlashMode": photoFlash.rawValue,
       "photoFlashHardware": device.hasFlash,
@@ -654,7 +654,7 @@ enum CaptureSettingsBuilder {
       "controlsReportedBy": "device",
     ]
     // The stabilization mode in force at the commit instant
-    // (activeVideoStabilizationMode, API-self-reported) (M1/C6). Omitted when
+    // (activeVideoStabilizationMode, API-self-reported). Omitted when
     // the connection reported nothing; the preferred mode is not substituted.
     if let activeStabilizationMode = activeStabilizationMode {
       out["stabilizationModeActive"] = activeStabilizationMode
@@ -733,7 +733,7 @@ enum MetadataBlockBuilder {
     let format = device.activeFormat
     let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
 
-    // ---- zoom/crop geometry (M1/C1): the delivered image is the format
+    // ---- zoom/crop geometry: the delivered image is the format
     // readout center-cropped by videoZoomFactor when > 1 (iOS digital zoom is a
     // symmetric crop; past an optical stop the device changes, which
     // physicalDevice/formatID commit). focalLengthPixels and fieldOfViewDegrees
@@ -792,11 +792,11 @@ enum MetadataBlockBuilder {
       "stabilizationMode": stabilizationMode as Any? ?? NSNull(),
       // The mode in force on the connection at the commit instant
       // (activeVideoStabilizationMode, API-self-reported; stabilizationMode
-      // above is the preferred mode) (M1/C6).
+      // above is the preferred mode).
       "stabilizationModeActive": activeStabilizationMode as Any? ?? NSNull(),
       "hdrEnabled": hdrEnabled as Any? ?? NSNull(),
       // OS-reported thermal state at the commit instant (ProcessInfo, the same
-      // source the thermal policy reads) (M1/C6).
+      // source the thermal policy reads).
       "thermalState": DeviceModeMapper.thermalState(ProcessInfo.processInfo.thermalState),
       "thermalStateRaw": ProcessInfo.processInfo.thermalState.rawValue,
       // Every field above is read back from the device or connection, not from
@@ -807,7 +807,7 @@ enum MetadataBlockBuilder {
       "focusDistanceMeters": NSNull(),
       "focalLengthPixels": focalPixels as Any? ?? NSNull(),
       "fieldOfViewDegrees": Double(format.videoFieldOfView),
-      // Zoom/crop geometry for the delivered image (M1/C1). focalLengthPixels
+      // Zoom/crop geometry for the delivered image. focalLengthPixels
       // and FOV above are the uncropped format; these inputs describe the crop
       // delivered. See the locals above.
       "videoZoomFactor": zoomFactor,
@@ -952,7 +952,7 @@ enum ExhibitDebugFlags {
   static var legacyMultiInputGraph: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: legacyMultiInputGraphKey) ?? false
   }
-  /// D1 depth export. Default true: an unset suite reads as on, unlike the
+  /// Depth export. Default true: an unset suite reads as on, unlike the
   /// isolation flags above. The escape hatch for turning depth off on device
   /// without a rebuild.
   static var depthCapture: Bool {
