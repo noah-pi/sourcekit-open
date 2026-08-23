@@ -4,38 +4,22 @@
  *
  * Three share modes, in increasing order of disclosure:
  *
- *   hash-only   The source-protection primitive. Proves a capture with this
- *               SHA-256 existed, was signed by this key, and was anchored at
- *               these times — without releasing the media, the record, the
- *               location, or anything else. A journalist can hand this to an
- *               editor as a receipt while the media stays unpublished.
+ *   hash-only   Media SHA-256, payload digest, signer fingerprint and anchor
+ *               state. Proves the capture existed and was signed without
+ *               releasing media, record, or location.
  *
- *   proof-only  The full attestation record + embedded C2PA manifest +
- *               OTS receipts, bound to the media by hash — plus, when the
- *               vault holds them, the v2 chunk-map sidecar for desk-side
- *               range verification (absent for stills and legacy
- *               captures, honestly). A desk can verify every claim except
- *               the pixels, and later match the media to this proof (exact
- *               hash, or pHash recovery — docs/RECOVERY.md).
+ *   proof-only  Attestation record + embedded C2PA manifest + OTS receipts,
+ *               bound to the media by hash, plus the v2 chunk-map sidecar
+ *               when the vault holds it. Verifies every claim except the
+ *               pixels; media is matched to the proof afterwards by exact
+ *               hash or pHash recovery (docs/RECOVERY.md).
  *
- *   proof+media The signed file itself (it already embeds everything) —
- *               handled by the existing share flow, with de-identify options.
+ *   proof+media The signed file itself, through the share flow with
+ *               de-identify options.
  *
- * Both JSON formats are deliberately plain and human-readable: a desk editor
- * can open them in any text editor and see exactly what is claimed.
- *
- * FORMAT HISTORY: 'exhibit-proof-bundle/2' adds the optional `stereo`
- * section (stereo-capture artifacts, src/provenance/stereoArtifacts.ts) —
- * per-artifact three-state entries (recorded hash+inline bytes / committed
- * error string / never-recorded declaration) plus the primary-frame hash
- * they pair with. The app has never left the lab: there is NO migration
- * and NO legacy reader. '/1' bundles are rejected at the format gate
- * (proofBundleGate) with the version named; re-export from the vault with
- * a current build. '/2' was then extended ADDITIVELY with
- * the optional `videoStereo` section (periodic video stereo pairs) — an
- * optional field gated by isVideoStereoBundleSection when present, so no
- * format bump: every prior '/2' bundle still validates, and a '/2' bundle
- * without the field is the same honest absence as before.
+ * Both JSON formats are plain text a desk editor can read directly. Bundles
+ * whose 'exhibit-proof-bundle/*' version this build does not read are
+ * rejected at proofBundleGate; there is no migration path or legacy reader.
  */
 
 import type { AttestationRecord, ChunkMapSidecar } from '../provenance/manifest';
@@ -71,31 +55,25 @@ export interface ProofBundle {
   /** The embedded C2PA manifest segment (base64), when the media carried one. */
   c2paManifestBase64: string | null;
   /**
-   * The v2 streamedChunks chunk-map sidecar, exported from
-   * the vault's stored chunk maps so a desk can
-   * RANGE-VERIFY the delivery file against the signed v2 roots (localize a
-   * truncation/tamper to a chunk index) instead of root-only. ABSENT for
-   * stills (zero tracks — structural), for captures whose v2 build
-   * degraded, and for bundles shared before this field existed — an absent
-   * sidecar is honest, never a failure; root-only verification remains.
+   * v2 streamedChunks chunk-map sidecar, exported from the vault's stored
+   * chunk maps, so a desk can range-verify the delivery file against the
+   * signed v2 roots and localize a truncation to a chunk index. Omitted for
+   * stills (zero tracks) and when the v2 build degraded; root-only
+   * verification still applies.
    */
   chunkMaps?: ChunkMapSidecar;
   /**
-   * Stereo-capture artifacts (format /2, Spec-Camera-Module-0.13 §5): the
-   * committed geometry INPUTS — secondary frame + calibration + sync
-   * timestamps + metadata inline, raw DNG hash-only — each in an explicit
-   * three-state entry. ABSENT when the capture path recorded no stereo
-   * artifacts at all (legacy single-lens fallback) — an honest absence,
-   * stated by the missing field itself, never a failure.
+   * Stereo-capture artifacts (Spec-Camera-Module-0.13 §5): the committed
+   * geometry inputs — secondary frame, calibration, sync timestamps, metadata
+   * inline, raw DNG hash-only — each as an explicit three-state entry.
+   * Omitted when the capture path recorded no stereo artifacts.
    */
   stereo?: StereoBundleSection;
   /**
-   * VIDEO stereo pairs (format /2 extended additively, Spec §8): the
-   * committed periodic-pair entries — secondary frame + calibration each in
-   * the same three-state contract, PTS anchors verbatim — plus the native
-   * pairsCommitted / pairsMissed / hardwareCost counts (a missed pair is a
-   * declared count, never suspicion). ABSENT when no pair cadence ran —
-   * same honest-absence rule as `stereo`.
+   * Video stereo pairs (Spec §8): committed periodic-pair entries — secondary
+   * frame and calibration under the same three-state contract, PTS anchors
+   * verbatim — plus the native pairsCommitted / pairsMissed / hardwareCost
+   * counts. Omitted when no pair cadence ran.
    */
   videoStereo?: VideoStereoBundleSection;
 }
@@ -137,11 +115,11 @@ export function buildProofBundle(
     payloadDigestHex: bytesToHex(payloadDigest(record)),
     record,
     c2paManifestBase64,
-    // Honest absence: the field is simply omitted when no maps exist.
+    // Field omitted when no maps exist.
     ...(chunkMaps ? { chunkMaps } : {}),
-    // Same rule for stereo artifacts: omitted when the capture path had no
-    // stereo module output at all; when the module ran, every artifact is
-    // accounted for inside the section (three states, no silent absence).
+    // Same for stereo artifacts: omitted when the capture path produced no
+    // stereo module output. When it ran, every artifact is accounted for
+    // inside the section by one of the three states.
     ...(stereo ? { stereo } : {}),
     ...(videoStereo ? { videoStereo } : {}),
   };
@@ -174,10 +152,8 @@ export function isProofBundle(x: unknown): x is ProofBundle {
 }
 
 /**
- * The format gate, with the reason named. Any 'exhibit-proof-bundle/*'
- * version this build does not read is REJECTED — the pre-release lab format
- * has no migration path and no legacy reader; the error says so and names
- * both versions. Non-bundle input is told apart from a wrong-version bundle.
+ * Format gate. Any 'exhibit-proof-bundle/*' version this build does not read
+ * is rejected with both versions named; non-bundle input gets its own error.
  */
 export function proofBundleGate(x: unknown): { ok: true; bundle: ProofBundle } | { ok: false; error: string } {
   if (typeof x !== 'object' || x === null) {
@@ -223,9 +199,9 @@ export interface ExportEntry {
 }
 
 /**
- * CSV with formula-injection guards: any cell that a spreadsheet would
- * interpret as a formula (=, +, -, @) is quote-prefixed. Media hashes and
- * labels are attacker-influenceable data — treat them that way everywhere.
+ * CSV with formula-injection guards: any cell a spreadsheet would read as a
+ * formula (=, +, -, @) is quote-prefixed. Hashes and labels are
+ * attacker-influenceable data.
  */
 export function exportEntriesToCsv(entries: ExportEntry[]): string {
   const esc = (v: string): string => {

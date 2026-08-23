@@ -1,4 +1,4 @@
-// UNBUILT — rides EAS build 2; validated by on-device soak checklist, not CI.
+// Not covered by CI; validated by the on-device soak checklist.
 import ExpoModulesCore
 import AVFoundation
 import CoreMedia
@@ -9,167 +9,61 @@ import UIKit
 import simd
 
 /**
- * ExhibitCamera — the app's ONE camera session (Spec-Camera-Module-0.13).
+ * ExhibitCamera — the app's single camera session (Spec-Camera-Module-0.13).
  *
- * The camera commits, it never concludes: this module captures frames,
- * calibration, timestamps, and metadata. No analysis, no verdicts. Depth
- * (D1, 0.16.0): a depth map is committed when — and only when — the
- * hardware honestly delivers one with a photo; otherwise the payload
- * states depth-not-recorded with the reason. Every committed
- * artifact is an input the desk can re-derive from; nothing is a computed
- * answer.
+ * Captures frames, calibration, timestamps, and metadata; it does no analysis
+ * and reaches no verdicts. Every committed artifact is an input the desk can
+ * re-derive from. A depth map is committed only when the hardware delivers one
+ * with the photo; otherwise the payload states depth-not-recorded with a
+ * reason.
  *
  * Architecture:
- *   - ONE AVCaptureMultiCamSession, unconditionally — single-cam devices
- *     run the same code path with one input/output (spec §1, §7).
+ *   - One AVCaptureMultiCamSession always; single-cam devices run the same
+ *     code path with one input/output (spec §1, §7).
  *   - Primary + secondary AVCaptureVideoDataOutput feed an
- *     AVCaptureDataOutputSynchronizer delivering hardware-synced frame
- *     pairs onto the serial sessionQueue (spec §4.1).
- *   - The native preview layer (ExhibitCameraPreviewView) binds to this
- *     same session — zero contention by construction.
- *   - Delivery video uses the CaptureKit AVAssetWriter pattern (H.264 +
- *     AAC); audio output sits OUTSIDE the synchronizer (synchronized
- *     audio/video collections are a known-flaky path — forums), on the
- *     same serial queue.
+ *     AVCaptureDataOutputSynchronizer delivering hardware-synced frame pairs
+ *     onto the serial sessionQueue (spec §4.1).
+ *   - The native preview layer (ExhibitCameraPreviewView) binds to this same
+ *     session.
+ *   - Delivery video uses an AVAssetWriter (H.264 + AAC); the audio output
+ *     sits outside the synchronizer, on the same serial queue.
+ *   - Graph wiring is explicit everywhere: addInputWithNoConnections /
+ *     addOutputWithNoConnections plus a manual AVCaptureConnection per port.
+ *     Implicit connection forming is Apple's documented multi-cam hazard.
+ *   - On a multi-cam session only formats flagged isMultiCamSupported may be
+ *     set, so configureFormat filters for that and falls up to the smallest
+ *     multi-cam format rather than failing the attach.
+ *   - Rear stereo rides the dual-wide virtual device (one input, constituent
+ *     ports, hardware-synced); legacyMultiInputGraph A/Bs back to two device
+ *     inputs.
+ *   - No secondary AVCapturePhotoOutput is attached. The stereo still derives
+ *     from the retained pair's ultra-wide frame (deriveSecondaryStillFromPair)
+ *     at stream resolution, with no OS EXIF, strobe, or depth; each absence is
+ *     stated in the outcome's flashNote.
  *
- * Calibration strategy (REVIEW-CHECK — see spec §4.2 and the companion
- * report): per-frame intrinsics come from the DOCUMENTED attachment path
- * (connection.isCameraIntrinsicMatrixDeliveryEnabled → sample-buffer
- * attachment kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix, iOS 11+).
- * Full calibration (extrinsics, distortion LUTs) comes from the DOCUMENTED
- * photo path (AVCapturePhotoSettings.isCameraCalibrationDataDeliveryEnabled
- * → photo.cameraCalibrationData), captured once per session configuration
- * via a dual photo capture, and from the RAW photo when opted in.
- * 0.17.2: that one-shot is OFF BY DEFAULT (ExhibitDebugFlags
- * .sessionCalibrationPhoto) — the 0.17.1 field flood (primary-half drops
- * 0, secondary-half 100%, onset ~1 s into the session = the one-shot's
- * fire time) names its SECONDARY photo capture the primary suspect for
- * the dead secondary stream. With it off, calibrationSource commits
- * 'unavailable' — stated, never fabricated; per-frame intrinsics ride the
- * frame attachments, unaffected. The ≤12 MP maxPhotoDimensions clamp on
- * the photo outputs is likewise ON by default now (the unclamped 48 MP
- * photo-stream reservation on a live multi-cam graph was the 0.15.2
- * structural suspect); both flags were A/B-flippable from
- * Settings ▸ Diagnostics (the calibration switch and one-shot were later
- * retired outright in 0.18.6 — see below).
- * AVCaptureVideoDataOutput.isCameraCalibrationDataDeliveryEnabled is NOT
- * used: its presence/behavior on the video data output could not be
- * confirmed from public documentation at draft time. If on-device review
- * confirms a per-frame full-calibration path exists, it should replace the
- * session-photo path; the committed JSON's `calibrationSource` field is
- * designed so the desk can tell which path produced every matrix.
- *
- * 0.17.2 additions:
- *   - Drop-flood diagnostics split: secondary-ABSENT (the synchronizer
- *     returned no data object) vs secondary-DROPPED (the platform marked
- *     the data dropped) vs complete pairs vs stale shutters — the 0.17.1
- *     flood could not be discriminated past "secondary-half N".
- *   - Secondary-output RESEAT (rung 2): one remove/re-add of the secondary
- *     video data output per session at 300 consecutive secondary drops
- *     (the 150-drop rebind cannot resurrect a parked stream).
- *   - Shutter-burst sink ("frames around the shutter"): opt-in via
- *     configureSession(opts.ring); a tiny retained ring (3 pre + 4 post,
- *     preview mode only, complete frames only) commits to
- *     evidenceDir/ring-<captureId>/ as ringBufferDir on the capture
- *     payload. Depth is deliberate — held frames hold pool buffers.
- *   - Raw-audio-master ENF anchor: rawPcmInfo on the stopVideo payload
- *     (firstSampleWallClockUtcMs, sampleCount, sampleRate, fileSha256) +
- *     the tap-alive counter (audioBufferCount) + the previously-silent
- *     converter-creation hole, now a stated E_SINK.
- *   - Selectable secondary stack (configureSession opts.secondaryLens /
- *     setSecondaryLens; 'auto' = the UW↔W/T pairing) and an inert,
- *     flag-gated, UNTESTED extension point for a third synchronized view
- *     (capabilities().thirdViewCapable reports the hardware probe).
- *
- * 0.18.5 (iPhone 17 field matrix verdict): the secondary AVCapturePhotoOutput
- * is GONE — never attached in any configuration. The 2026-08-17 matrix ran
- * all four 12MP-clamp × session-calibration combinations on the old build:
- * every session delivered ZERO secondary video frames from frame one with a
- * green census, pressure 0.69 (< 1.0), hardwareCost 0.5, and a LIVE PiP
- * (preview layer bound directly to the UW port, bypassing the data output).
- * Both debug flags, both costs, and the formats are exonerated; the photo
- * output's attachment was the last shared structural element. The stereo
- * still now derives from the retained synchronized pair's UW frame
- * (deriveSecondaryStillFromPair) at stream resolution — stated in the
- * outcome's flashNote, with no OS EXIF / strobe / depth (all three stated,
- * never faked). UW session calibration commits 'unavailable' (the one-shot
- * covers the primary only). If complete-pairs climb from zero on this
- * build, the photo output's mere attachment was the killer; if not, the
- * graph is minimal (video data outputs only) and the failure dump
- * exonerates outputs entirely.
- *
- * 0.18.6: the session-calibration one-shot is RETIRED — no call site
- * remains and the settings switch is gone. With the secondary photo
- * output detached (above), the one-shot could only ever harvest a
- * primary-only calibration, and the committed rig extrinsic requires BOTH
- * lenses' full calibration — so its product was unreachable by any
- * commitment path while the capture itself remained the 0.17.1 named
- * suspect. The calibration block commits 'unavailable' (stated, never
- * fabricated); per-frame intrinsics ride the frame attachments and were
- * never behind the switch. The 12 MP clamp stays ON by default behind
+ * Calibration (spec §4.2): per-frame intrinsics come from the sample-buffer
+ * attachment kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix
+ * (connection.isCameraIntrinsicMatrixDeliveryEnabled, iOS 11+). There is no
+ * live path for full calibration (extrinsics, distortion LUTs), so the
+ * calibration block commits 'unavailable'; the committed JSON's
+ * `calibrationSource` field names which path produced every matrix. The 12 MP
+ * maxPhotoDimensions clamp on the photo output stays on by default behind
  * photoMaxDimensionsPolicy.
  *
- * 0.18.1 additions (iPhone 17 / iOS 26 field triage):
- *   - EXPLICIT multi-cam wiring everywhere the graph is built
- *     (addInputWithNoConnections / addOutputWithNoConnections + manual
- *     AVCaptureConnection per port — the WWDC19 249/225 pattern; implicit
- *     connection forming is Apple's documented multi-cam hazard). The
- *     0.18.0 field signature was a secondary video data output ABSENT for
- *     the synchronizer's whole life while the explicitly-wired PiP preview
- *     on the SAME input port streamed fine.
- *   - Connection census diagnostics: a per-output
- *     enabled/active/port-device summary rides the configureSession resolve
- *     payload ("connections"), the onSyncStalled event, and every capture
- *     failure dump (primaryVideoConn/secondaryVideoConn).
- *   - Shutter-burst ring retains primary-valid frames even when the
- *     secondary half is absent (each ring index entry states its own
- *     completeness) — a secondary flood degrades the burst to primary-only
- *     frames honestly instead of committing no burst at all.
- *   - The zero-audio-buffer E_SINK now states the audio connection's
- *     liveness (audioConn=...) so the field can discriminate "no
- *     connection" from "connection live, no buffers".
+ * Thread confinement: all mutable session state lives on `sessionQueue`. The
+ * synchronizer and the audio output deliver onto that same queue. Events are
+ * emitted from that queue (sendEvent is safe from any thread); view-scoped
+ * events hop to main.
  *
- * 0.18.2 additions (iPhone 17 / iOS 26.6 field triage, round 2 — the
- * 0.18.1 explicit wiring shipped and the signature was UNCHANGED, which
- * exonerates connection forming and indicts the stream configuration):
- *   - configureFormat now filters isMultiCamSupported when a second camera
- *     will run (Apple: on AVCaptureMultiCamSession you may ONLY set
- *     multi-cam-flagged formats — the rule this module silently violated,
- *     and the top remaining suspect for the secondary stream never
- *     activating). Falls UP to the smallest multi-cam format rather than
- *     failing the attach; every pick/refusal is logged.
- *   - Every silent failure path in the graph build (wireOutput refusal
- *     stages, format picks, partner-attach rollback, reseat outcome) now
- *     writes to the persistent diagnostics log via onCameraDiagnostic.
- *   - The live connection census (enabled/active/port-device + each
- *     device's active format summary) rides: the configureSession log
- *     line, the first-frame log line, both stall-flood rungs, every
- *     capture payload ("connections"), and session interruption events
- *     (AVCaptureSessionWasInterrupted / InterruptionEnded / runtimeError
- *     observers, all logged).
- *   - Exposure/white-balance/focus parity: both devices are pinned to
- *     continuousAutoExposure + continuousAutoWhiteBalance at configure
- *     time, and pro controls (bias, exposure mode, WB mode, focus mode)
- *     mirror onto the secondary with per-device guards and clamps
- *     (mirrorProControlsToSecondary).
- *
- * Thread confinement: ALL mutable session state lives on `sessionQueue`.
- * The synchronizer and the audio output deliver onto that same queue.
- * Events are emitted from that queue (sendEvent is safe from any thread);
- * view-scoped events hop to main.
- *
- * Watchdogs (0.12.1 pattern, spec §6): every native await has a timeout —
- * first frame 10 s, capture 10 s, stop 10 s. A hung native call must
- * never freeze the UI.
+ * Watchdogs (spec §6): every native await has a timeout — first frame 10 s,
+ * capture 10 s, stop 10 s.
  *
  * No network I/O of any kind.
  */
 
 /**
- * promise.reject(code, description) silently DROPS the description on
- * SDK 57 (see CaptureKitModule for the full audit note). This subclass
- * carries the message in `reason` so actionable errors reach JS.
- * Own copy — separate pod target.
+ * promise.reject(code, description) drops the description on SDK 57, so this
+ * subclass carries the message in `reason` to reach JS.
  */
 final class ExhibitCameraNamedException: Exception {
   private let message: String
@@ -207,8 +101,7 @@ final class ExhibitAudioHandler: NSObject, AVCaptureAudioDataOutputSampleBufferD
   }
 }
 
-/// AVCapturePhotoCaptureDelegate forwarder — one per photo-output capture
-/// (session calibration one-shot and RAW opt-in).
+/// AVCapturePhotoCaptureDelegate forwarder — one per photo-output capture.
 final class ExhibitPhotoHandler: NSObject, AVCapturePhotoCaptureDelegate {
   let completion: (AVCapturePhoto?, Error?) -> Void
 

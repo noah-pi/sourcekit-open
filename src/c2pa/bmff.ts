@@ -2,31 +2,28 @@
 /**
  * ISO Base Media File Format (MP4/MOV/M4A) surgery for C2PA embedding.
  *
- * What this module does, per the C2PA spec (BMFF-based assets):
+ * Per the C2PA spec for BMFF-based assets:
  *
  *   - Walks root-level boxes (32-bit and 64-bit largesize headers).
  *   - Builds the C2PA `uuid` box: usertype d8fec3d6-1b0e-483c-9297-5828877ec481,
  *     version/flags 0, box_purpose "manifest", 8-byte merkle offset (0 = no
- *     merkle aux boxes), then the raw JUMBF manifest store — byte-identical
- *     to what c2pa-rs writes (see write_c2pa_box in bmff_io.rs).
- *   - Inserts that box immediately after `ftyp` and repairs the one thing
- *     that would otherwise silently break playback: absolute chunk offsets
- *     in stco/co64 tables shift when bytes are inserted before `mdat`
- *     (c2pa-rs calls this adjust_known_offsets).
- *   - Extracts / strips the manifest box again (strip is the exact inverse
- *     of embed — verified bit-for-bit in the lab).
+ *     merkle aux boxes), then the raw JUMBF manifest store. Byte-identical
+ *     to c2pa-rs write_c2pa_box in bmff_io.rs.
+ *   - Inserts that box immediately after `ftyp` and shifts the absolute chunk
+ *     offsets in stco/co64, which would otherwise point past the inserted
+ *     bytes and break playback (adjust_known_offsets in c2pa-rs).
+ *   - Extracts and strips the manifest box; strip is the inverse of embed.
  *
- * Scope, honestly: monolithic (non-fragmented) files only — no moof/mvex/
- * styp, no multi-mdat merkle hashing. iPhone camera recordings are always
- * monolithic. Anything else throws BmffUnsupported and the caller falls
- * back to the sidecar attestation rather than failing the capture.
+ * Scope: monolithic files only, no moof/mvex/styp and no multi-mdat merkle
+ * hashing. iPhone camera recordings are monolithic. Anything else throws
+ * BmffUnsupported and the caller falls back to the sidecar attestation.
  *
- * Pure module — no React Native dependencies.
+ * Pure module, no React Native dependencies.
  */
 
 import { concatBytes, asciiToBytes } from '../lib/bytes';
 
-/** The C2PA usertype for uuid boxes, per spec (NOT the JUMBF "c2pa" prefix UUID). */
+/** The C2PA usertype for uuid boxes, per spec. Not the JUMBF "c2pa" prefix UUID. */
 export const C2PA_UUID_BYTES = new Uint8Array([
   0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c, 0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81,
 ]);
@@ -89,7 +86,7 @@ export function parseRootBoxes(bytes: Uint8Array): RootBox[] {
   return boxes;
 }
 
-/** True when the first box is an ftyp (any brand — mp4, qt, M4A, …). */
+/** True when the first box is an ftyp, any brand (mp4, qt, M4A). */
 export function isBmff(bytes: Uint8Array): boolean {
   return bytes.length >= 12 && type4(bytes, 4) === 'ftyp';
 }
@@ -148,8 +145,8 @@ export function extractC2paStoreBmff(bytes: Uint8Array): ExtractedBmffStore | nu
     while (q < b.start + b.size && bytes[q] !== 0) q++;
     if (q >= b.start + b.size) continue;
     const purpose = String.fromCharCode(...bytes.subarray(purposeStart, q));
-    if (purpose !== 'manifest') continue; // e.g. a 'merkle' aux box — not ours
-    // merkle offset (u64 BE) must be 0: we never write merkle aux boxes
+    if (purpose !== 'manifest') continue; // e.g. a 'merkle' aux box
+    // merkle offset (u64 BE) must be 0; this module writes no merkle aux boxes
     let merkleOffset = 0;
     for (let i = 0; i < 8; i++) merkleOffset = merkleOffset * 256 + bytes[q + 1 + i];
     if (merkleOffset !== 0) {

@@ -1,15 +1,11 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Post-quantum dual-signature layer: ML-DSA-65 (FIPS 204) alongside classical
- * ES256, hedging a future P-256 break.
+ * Post-quantum dual-signature layer: ML-DSA-65 (FIPS 204) alongside ES256.
  *
- * The signature is carried on the record (record.pqSignature) over the same
- * canonical payload the ECDSA signature covers. The PQ public key is committed
- * inside that payload as record.pqKey, so removing the signature and leaving
- * the key is detectable, and removing the key breaks the classical signature.
- *
- * The key is software — there is no enclave ML-DSA — so this is no defense
- * against a compromised device.
+ * record.pqSignature covers the same canonical payload as the ECDSA
+ * signature, and the PQ public key is committed inside that payload as
+ * record.pqKey: stripping the signature is detectable, and stripping the key
+ * breaks the classical signature. The key is software, not enclave-held.
  */
 
 import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
@@ -17,16 +13,16 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToBase64, base64ToBytes, bytesToHex, utf8ToBytes } from './bytes';
 
 export const PQ_ALG = 'ML-DSA-65';
-/** The honest custody label — must appear wherever this layer is displayed. */
+/** Custody label, shown wherever this layer is displayed. */
 export const PQ_CUSTODY = 'software';
 
 /** ML-DSA-65 (FIPS 204) byte sizes — pinned by the test suite. */
 export const PQ_SIZES = { publicKey: 1952, secretKey: 4032, signature: 3309 } as const;
 
-/** FIPS 204 context string: domain-separates our signatures from every other protocol's. Fixed forever. */
+/** FIPS 204 context string, domain-separating these signatures. Never change it. */
 const PQ_CONTEXT = utf8ToBytes('verify.app/pq-layer-v1');
 
-/** The PQ public-key block committed INSIDE the signed payload — the binding that makes the layer meaningful. */
+/** PQ public-key block, committed inside the signed payload. */
 export interface PqPublicKeyBlock {
   alg: typeof PQ_ALG;
   custody: typeof PQ_CUSTODY;
@@ -69,9 +65,9 @@ export function generatePqKeyPair(): PqKeyPair {
 }
 
 /**
- * Deterministic keypair from a 32-byte seed — stored this way because the full
- * ML-DSA secret key (4032 bytes) exceeds the OS keychain's per-item limit.
- * Losing the seed loses the key: no recovery, by design.
+ * Deterministic keypair from a 32-byte seed. Seeds are stored instead of the
+ * 4032-byte secret key, which exceeds the keychain's per-item limit. Losing
+ * the seed loses the key; there is no recovery path.
  */
 export function pqKeyPairFromSeed(seed: Uint8Array): PqKeyPair {
   const { publicKey, secretKey } = ml_dsa65.keygen(seed);
@@ -94,7 +90,7 @@ export function pqPublicBlock(publicKey: Uint8Array, enrolledAt: string): PqPubl
   };
 }
 
-/** Parse + shape-check a committed block. Null on anything malformed — fails closed. */
+/** Parse and shape-check a committed block. Null on anything malformed. */
 export function pqPublicBlockFrom(x: unknown): { publicKey: Uint8Array; fingerprint: string; enrolledAt: string } | null {
   if (typeof x !== 'object' || x === null) return null;
   const b = x as Record<string, unknown>;
@@ -113,7 +109,7 @@ export function pqSign(secretKey: Uint8Array, message: Uint8Array): Uint8Array {
   return new Uint8Array(ml_dsa65.sign(message, secretKey, { context: PQ_CONTEXT }));
 }
 
-/** Boolean verification — never throws; malformed input is simply invalid. */
+/** Boolean verification. Never throws; malformed input is invalid. */
 export function pqVerify(publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array): boolean {
   try {
     if (publicKey.length !== PQ_SIZES.publicKey || signature.length !== PQ_SIZES.signature) return false;
@@ -123,10 +119,7 @@ export function pqVerify(publicKey: Uint8Array, message: Uint8Array, signature: 
   }
 }
 
-/**
- * PQ layer check, for display: `present` vs legacy/stripped, `keyCommitted`
- * is the strip detector, custody always reported for honest labeling.
- */
+/** PQ layer check, for display. `keyCommitted` is the strip detector. */
 export interface PqLayerCheck {
   present: boolean;
   /** PQ public key was committed inside the signed payload. */

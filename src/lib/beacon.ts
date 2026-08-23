@@ -1,33 +1,19 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Bitcoin beacon — a signed TIME LOWER BOUND.
- *
- * Embedding the hash of the latest known Bitcoin block in the signed payload
- * proves the signature was created AFTER that block existed: nobody can know
- * a block's hash before it is mined. This is the counterpart of the
- * OpenTimestamps anchor (which bounds time from above — the digest existed
- * before its confirmation block). Together they bracket the signing moment:
+ * Bitcoin beacon: a signed time lower bound. The hash of the latest known
+ * block, embedded in the signed payload, proves the signature was made after
+ * that block was mined. With the OpenTimestamps anchor bounding from above:
  *
  *   beacon block time  ≤  signing time  ≤  OTS confirmation time
  *
- * WHAT IT PROVES: the payload was signed no earlier than the embedded block.
- * WHAT IT DOES NOT PROVE: anything finer. The device's `observedAt` clock
- * reading is self-reported; the block hash is the only objectivity here.
+ * It proves nothing finer; `observedAt` is the device's own clock reading.
  *
- * DOC-2 CONSTRAINTS (implemented, not aspirational):
- *  - NEVER a per-capture fetch. The app refreshes the cache on a jittered
- *    schedule decoupled from shutter events (app foreground + timer). At
- *    seal time the signer reads whatever is cached — fresh or stale — and
- *    the staleness is disclosed in the record (`observedAt`).
- *  - Cache aggressively: one cached tip serves every capture until the next
- *    scheduled refresh.
- *  - User-pinnable endpoint: setBeaconEndpoint overrides the default pool
- *    (a newsroom can run its own Esplora instance and pin it).
- *  - Network presence is never hidden: refreshes happen on a schedule
- *    unrelated to captures, so an observer cannot correlate a fetch with a
- *    shutter event; the record states where the tip came from (`source`).
- *  - Fail safe: no cached tip → beacon is simply absent from the record and
- *    the verifier reports that honestly. Never blocks a capture.
+ * Refresh is a jittered schedule (app foreground + timer), not a per-capture
+ * fetch, so network activity cannot be correlated with a shutter event. One
+ * cached tip serves every capture until the next refresh; seal time reads
+ * whatever is cached, fresh or stale, and the record carries `observedAt` and
+ * `source`. setBeaconEndpoint pins a newsroom's own Esplora instance. With no
+ * cached tip the beacon is omitted from the record and capture continues.
  */
 
 export interface BeaconCommitment {
@@ -36,11 +22,11 @@ export interface BeaconCommitment {
   blockHash: string;
   /** Block height, monotonicity-checked against the cache. */
   blockHeight: number;
-  /** When the device fetched this tip (ISO). SELF-REPORTED device clock. */
+  /** When the device fetched this tip (ISO), from the self-reported device clock. */
   observedAt: string;
   /** Host that served the tip (e.g. "mempool.space"). Self-reported. */
   source: string;
-  /** Honesty label, matches the captureIntegrity/deviceIntegrity pattern. */
+  /** Disclosure label carried in the record, as with captureIntegrity/deviceIntegrity. */
   note: 'lower-bound: signing happened after this block existed; observation time self-reported';
 }
 
@@ -83,9 +69,8 @@ export function isValidTip(blockHash: unknown, blockHeight: unknown): boolean {
 }
 
 /**
- * Jittered delay until the next scheduled refresh. `rng` injectable for
- * tests (defaults to Math.random). The jitter is what decouples fetches
- * from any regular, correlatable rhythm.
+ * Jittered delay until the next scheduled refresh; `rng` is injectable for
+ * tests. The jitter keeps fetches off a correlatable rhythm.
  */
 export function nextRefreshDelayMs(rng: () => number = Math.random): number {
   return BEACON_REFRESH_BASE_MS + Math.floor(rng() * BEACON_REFRESH_JITTER_MS);
@@ -120,11 +105,10 @@ export function resetBeaconForTests(): void {
 }
 
 /**
- * Fetch the current tip and update the cache. Tries each endpoint in order;
- * a tip that fails shape validation or REGRESSES in height is refused (a
- * hostile or broken endpoint cannot move the lower bound backwards). Never
- * throws — returns null on total failure; the absence is disclosed, not
- * hidden.
+ * Fetches the current tip and updates the cache, trying each endpoint in
+ * order. A tip that fails shape validation or regresses in height is refused,
+ * so a hostile or broken endpoint cannot move the lower bound backwards.
+ * Never throws; returns null when every endpoint fails.
  */
 export async function refreshBeacon(
   fetchImpl: typeof fetch = fetch,
@@ -145,7 +129,7 @@ export async function refreshBeacon(
       cache = { blockHash, blockHeight, observedAtMs: nowMs, source };
       return currentBeacon(nowMs);
     } catch {
-      // endpoint failed — fall through to the next one
+      // Endpoint failed; try the next one.
     }
   }
   return null;

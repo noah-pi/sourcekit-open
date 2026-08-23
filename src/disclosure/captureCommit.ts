@@ -5,21 +5,17 @@
  * (commit.ts). The root rides in the C2PA manifest as the
  * `com.verify.contextTree` assertion.
  *
- * The default profile is sealed — everything committed, nothing opened.
+ * The default profile is sealed: everything committed, nothing opened.
  * Opening later re-derives salts from the master seed.
  *
- * What can and can't be derived here:
- *   time     — all six rungs come from capturedAt by prefix truncation.
- *   location — geohash-5/7/9 and exact are derived from the GPS fix.
- *              country, region and grid-region need reverse geocoding, which
- *              is a lookup this module can't do, so they are declared
- *              never-recorded rather than fabricated.
- *   identity — key-fingerprint is the signer fingerprint; named and org come
- *              from the byline fields. roster-status is a lookup, not a
- *              seal-time fact, so it is never-recorded.
- *   sensor   — 'present' reflects whether a sensor log was actually written,
- *              never inferred from a motion verdict or poseTrace.
- *              'residual-summary' carries the motion verdict when one exists.
+ * What is derived here:
+ *   time     — all six rungs, from capturedAt by prefix truncation.
+ *   location — geohash-5/7/9 and exact, from the GPS fix. country, region and
+ *              grid-region need reverse geocoding, so they are never-recorded.
+ *   identity — key-fingerprint, plus named and org from the byline fields.
+ *              roster-status is a lookup, so it is never-recorded.
+ *   sensor   — 'present' is sink presence only; 'residual-summary' carries the
+ *              motion verdict when one exists.
  */
 import { coarsen, exactLocationValue, LOCATION_RUNGS, TIME_RUNGS, claimIdFor } from './ladder';
 import type { ContextClaim } from './inventory';
@@ -34,24 +30,21 @@ export interface CaptureCommitInput {
   location: { lat: number; lon: number } | 'redacted' | 'unavailable' | null;
   /** Byline identity exactly as the record carries it. */
   identity: { author: string | null; organization: string | null } | 'redacted';
-  /** Signer key fingerprint (hex) — the identity.key-fingerprint rung. */
+  /** Signer key fingerprint (hex); the identity.key-fingerprint rung. */
   fingerprint: string;
   /** Was a sensor log actually written? Sink presence only, not inferred. */
   sensorLogRecorded: boolean;
   /** Motion verdict string (sensor.residual-summary), when one was computed. */
   motionVerdict?: string | null;
   /**
-   * Capture-result context claims (Spec-Camera-Module-0.13 →
-   * src/provenance/stereoArtifacts.ts, plus full-res extras from
-   * sealQueue): the five `context.stereo-*` claims whose VALUES state each
-   * artifact's committed outcome ('sha256:<hex>' / 'error:<string>' /
-   * 'never-recorded[:<reason>]'), and the additive `context.fullres-still`,
-   * `context.fullres-secondary`, `context.capture-settings` claims. Exactly
-   * those claim IDs are admitted — anything else throws, fail-closed.
-   * ABSENT when no stereo module ran (legacy single-lens path) — the
-   * context family is optional additions, so a non-stereo capture simply
-   * carries no stereo claims. When the module ran, all five claims are
-   * present: no silent absence.
+   * Capture-result context claims (Spec-Camera-Module-0.13, built in
+   * src/provenance/stereoArtifacts.ts and sealQueue): five `context.stereo-*`
+   * claims whose values state each artifact's outcome ('sha256:<hex>' /
+   * 'error:<string>' / 'never-recorded[:<reason>]'), plus
+   * `context.fullres-still`, `context.fullres-secondary` and
+   * `context.capture-settings`. Only those claim IDs are admitted; anything
+   * else throws. Absent entirely on the single-lens path; when the stereo
+   * module ran, all five stereo claims are present.
    */
   stereoClaims?: ContextClaim[];
 }
@@ -63,9 +56,9 @@ export interface CaptureCommit {
 }
 
 /**
- * Build the claims + never-recorded declarations for one capture. Pure
- * and deterministic: same evidence → same claim values, so a verifier
- * re-deriving from the same record sees the identical inventory.
+ * Build the claims and never-recorded declarations for one capture. Pure and
+ * deterministic: same evidence gives the same claim values, so a verifier
+ * re-deriving from the record sees an identical inventory.
  */
 export function claimsFromCapture(input: CaptureCommitInput): { claims: ContextClaim[]; neverRecordedIds: string[] } {
   const claims: ContextClaim[] = [];
@@ -90,17 +83,17 @@ export function claimsFromCapture(input: CaptureCommitInput): { claims: ContextC
     for (let r = 0; r < LOCATION_RUNGS.length; r++) {
       const name = LOCATION_RUNGS[r];
       if (name === 'country' || name === 'region' || name === 'grid-region') {
-        // Reverse geocoding is a lookup, not a derivation — never recorded
-        // by the commitment core, declared so at commit time (immutable).
+        // Reverse geocoding is a lookup, not a derivation; declared
+        // never-recorded at commit time and immutable after.
         neverRecordedIds.push(claimIdFor('location', name));
       } else {
         push(claimIdFor('location', name), 'location', r, coarsen('location', exact, r));
       }
     }
   } else {
-    // 'redacted' (signer opted out), 'unavailable' (OS returned nothing),
-    // or null (no fix): every rung is declared never-recorded. The STATE is
-    // already public in the record's location field — committing nothing.
+    // 'redacted' (signer opted out), 'unavailable' (OS returned nothing) or
+    // null (no fix): every rung is never-recorded. The state itself is already
+    // public in the record's location field.
     for (let r = 0; r < LOCATION_RUNGS.length; r++) {
       neverRecordedIds.push(claimIdFor('location', LOCATION_RUNGS[r]));
     }
@@ -108,8 +101,8 @@ export function claimsFromCapture(input: CaptureCommitInput): { claims: ContextC
 
   // ---- identity ---------------------------------------------------------
   push('identity.key-fingerprint', 'identity', 0, input.fingerprint);
-  // roster-status is a roster-engine lookup result, not a seal-time
-  // derivation — declaring it never-recorded beats caching a stale verdict.
+  // roster-status is a roster-engine lookup, not a seal-time derivation, so it
+  // is never-recorded rather than a cached verdict.
   neverRecordedIds.push('identity.roster-status');
   const idn = input.identity;
   if (idn !== 'redacted' && idn.organization) {
@@ -132,13 +125,12 @@ export function claimsFromCapture(input: CaptureCommitInput): { claims: ContextC
   }
 
   // ---- capture-result context additions (optional) -----------------------
-  // The claims arrive pre-built from commitStereoArtifacts (context.stereo-*)
- // and from sealQueue's full-res extras (context.fullres-still,
-  // context.fullres-secondary, context.capture-settings) — all folded into
-  // this same signed tree by design. Fail-closed via an EXPLICIT allowlist:
-  // anything else throws with the reason named, so junk can never ride the
-  // signed tree. buildInventory validates them like any claim, and the
-  // inventory meta-leaf binds their entries into the root.
+  // Claims arrive pre-built from commitStereoArtifacts (context.stereo-*) and
+  // from sealQueue's full-res extras (context.fullres-still,
+  // context.fullres-secondary, context.capture-settings), folded into the same
+  // signed tree. The allowlist below is fail-closed: anything else throws.
+  // buildInventory validates them like any claim, and the inventory meta-leaf
+  // binds their entries into the root.
   if (input.stereoClaims) {
     for (const c of input.stereoClaims) {
       const allowed =
@@ -158,10 +150,10 @@ export function claimsFromCapture(input: CaptureCommitInput): { claims: ContextC
 }
 
 /**
- * Commit the capture's context claims under one root. The master seed is
- * generated by the caller (attest.ts) and handed to the vault store
- * afterwards — it is NEVER returned as part of a salt table (A-02) and
- * never rides in the manifest (only the root does).
+ * Commit the capture's context claims under one root. The caller (attest.ts)
+ * generates the master seed and hands it to the vault store; it is never
+ * returned in a salt table (A-02) and never rides in the manifest, only the
+ * root does.
  */
 export function commitCaptureEvidence(masterSeed: Uint8Array, input: CaptureCommitInput): CaptureCommit {
   const { claims, neverRecordedIds } = claimsFromCapture(input);
@@ -170,10 +162,9 @@ export function commitCaptureEvidence(masterSeed: Uint8Array, input: CaptureComm
 
 /**
  * What the vault store (disclosure/burn.ts) persists per sealed item:
- * everything needed to derive any future profile's bundle on demand from
- * the master seed — plus the DEFAULT Sealed-profile bundle itself.
- * masterSeedHex is vault-only: it never rides in the manifest, the proof
- * bundle, or any export.
+ * everything needed to derive any profile's bundle from the master seed, plus
+ * the default Sealed-profile bundle. masterSeedHex is vault-only; it never
+ * rides in the manifest, the proof bundle, or any export.
  */
 export interface SealedCaptureDisclosure {
   root: string;
@@ -184,11 +175,10 @@ export interface SealedCaptureDisclosure {
 }
 
 /**
- * Commit the capture evidence AND produce the default Sealed-profile
- * bundle in one pass: everything committed, nothing disclosed beyond what
- * the asset already carries. The Sealed bundle is
- * derived through the same openSubset path as any other profile — there
- * is no privileged construction.
+ * Commit the capture evidence and produce the default Sealed-profile bundle in
+ * one pass: everything committed, nothing disclosed beyond what the asset
+ * already carries. The Sealed bundle goes through the same openSubset path as
+ * any other profile.
  */
 export function sealCaptureDisclosure(masterSeed: Uint8Array, input: CaptureCommitInput): SealedCaptureDisclosure {
   const { committed, neverRecordedIds } = commitCaptureEvidence(masterSeed, input);

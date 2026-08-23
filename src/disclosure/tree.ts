@@ -28,7 +28,7 @@ export interface MerkleTree {
   layers: Uint8Array[][];
 }
 
-/** parent = SHA-256(left || right) — positional, StreamingHasher-identical. */
+/** parent = SHA-256(left || right), positional. Matches StreamingHasher. */
 export function hashPair(left: Uint8Array, right: Uint8Array): Uint8Array {
   return sha256(concatBytes(left, right));
 }
@@ -63,8 +63,8 @@ export function buildTree(leaves: Uint8Array[]): MerkleTree {
 
 /**
  * Sibling digests (raw, bottom-up) proving the leaf at `leafIndex`.
- * A promoted odd leaf contributes NO sibling at that level — the proof
- * carries exactly one digest per level where the node was paired.
+ * A promoted odd leaf contributes no sibling at that level; the proof
+ * carries one digest per level where the node was paired.
  */
 export function inclusionProof(tree: MerkleTree, leafIndex: number): Uint8Array[] {
   const leafCount = tree.layers.length === 0 ? 0 : tree.layers[0].length;
@@ -85,8 +85,7 @@ export function inclusionProof(tree: MerkleTree, leafIndex: number): Uint8Array[
 /**
  * Recompute the root from a leaf digest, its proof, and its slot, and
  * compare against `root` (lowercase hex). `index` and `treeSize` pin the
- * slot: a valid proof presented for the WRONG index fails, because the
- * promotion/pairing path no longer lines up.
+ * slot, so a valid proof presented for the wrong index fails.
  */
 export function verifyInclusion(
   root: string,
@@ -119,7 +118,7 @@ export function verifyInclusion(
   return bytesToHex(node) === root.toLowerCase();
 }
 
-/** Hex helper for bundle (de)serialization — proofs travel as hex arrays. */
+/** Hex helpers for bundle (de)serialization: proofs travel as hex arrays. */
 export function proofToHex(proof: Uint8Array[]): string[] {
   return proof.map(bytesToHex);
 }

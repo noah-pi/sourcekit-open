@@ -1,15 +1,13 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * EnvironmentCard — sun/shadow, horizon, and weather for the sealed time
- * and place, in the same juxtaposition style as the Inspect screen.
+ * EnvironmentCard: sun/shadow, horizon, and weather for the sealed time and
+ * place, in the Inspect screen's juxtaposition style.
  *
- * The horizon and shadow modules REUSE the Inspect screen's components
- * (src/components/Juxtapose.tsx — HorizonCard / ShadowCard) so the two
- * screens can never drift apart; weather renders in the same card language
- * but fetches BY DEFAULT when a location is present (Inspect puts the fetch
- * behind a tap). Offline the weather module says "Network not available",
- * neutral. Every module juxtaposes the sealed claim with what should be
- * true and never concludes.
+ * Horizon and shadow reuse the Inspect components (HorizonCard / ShadowCard
+ * in src/components/Juxtapose.tsx) so the two screens stay in step. Weather
+ * fetches on mount here when a location is present; Inspect puts that fetch
+ * behind a tap. Each module shows the sealed claim next to the reference
+ * value without drawing a conclusion.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -38,8 +36,8 @@ function windWords(kmh: number): string {
   return 'strong wind';
 }
 
-/** Weather: the official archive reading for the sealed hour — fetched by
- *  default (a location is present), offline stated as "Network not available". */
+/** Weather: archive reading for the sealed hour. Fetches on mount; offline it
+ *  shows a retry line. */
 function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
   lat: number;
   lon: number;

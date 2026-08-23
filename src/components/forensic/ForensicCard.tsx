@@ -1,12 +1,10 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * ForensicCard — the shared shell for the Forensic Checks modules.
- *
- * One flat card (mockup language: 1px hairline border, radius 14, no
- * elevation, no gradient), a 10.5px/800 uppercase title in dim ink, and a
- * one-line plain-English sub stating WHAT the module compares. The body is
- * the module's own juxtaposition. Absence is a neutral gray "Not recorded"
- * line — never red, never suspicion; red is reserved for proven tamper.
+ * ForensicCard — shared shell for the Forensic Checks modules. Flat card
+ * (1px hairline, radius 14, no elevation), 10.5px/800 uppercase title, and a
+ * one-line sub naming what the module compares; the body is the module's own
+ * juxtaposition. Absence renders as a neutral gray "Not recorded" line; red
+ * is reserved for proven tamper.
  */
 
 import React from 'react';
@@ -29,7 +27,7 @@ export function ForensicCard({ title, sub, children }: {
   );
 }
 
-/** The neutral absence line — the ONLY way a module says "nothing here". */
+/** The neutral absence line every module uses to say nothing was recorded. */
 export function NotRecorded({ reason }: { reason?: string }) {
   const styles = useThemedStyles(buildStyles);
   return (
