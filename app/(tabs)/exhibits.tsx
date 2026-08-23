@@ -457,7 +457,8 @@ export default function VaultScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        {/* Beta tag: the ScreenTitle `tag` prop, same as the Settings header. */}
+        {/* Beta tag: the ScreenTitle `tag` prop, the same one the Settings
+            header uses. */}
         <ScreenTitle title="Exhibits" tag="in beta" subtitle="Manage media. Stored locally." />
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           {items.length > 0 ? (

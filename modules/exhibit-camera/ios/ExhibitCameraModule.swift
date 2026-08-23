@@ -5255,20 +5255,19 @@ extension ExhibitCameraModule {
     stereoDetachedForThermal = true
   }
 
-  /// Thermal gate for the IMU sink: serious/critical pressure parks the
-  /// logger — the same policy that halves pair cadence (serious) and
-  /// detaches stereo (critical) (spec §6).
+  /// Thermal gate for the IMU sink: serious or critical pressure parks the
+  /// logger, matching the policy that halves pair cadence and detaches stereo
+  /// (spec §6).
   private func sensorLogBlockedByThermal() -> Bool {
     let state = ProcessInfo.processInfo.thermalState
     return state == .serious || state == .critical
   }
 
-  /// IMU sink thermal park (0.15): stops the logger and marks the sink
-  /// thermal-stopped so captures report sensorLogState 'unavailable' — a
-  /// stated degradation, never a fabricated log. CoreMotion is independent
-  /// of the capture graph, so this is safe even mid-calibration one-shot.
-  /// Recovery mirrors the stereo detach: not silent — the logger restarts
-  /// only on the next configureSession, which re-reads the toggle.
+  /// IMU sink thermal park: stops the logger and marks the sink
+  /// thermal-stopped, so captures report sensorLogState 'unavailable'.
+  /// CoreMotion is independent of the capture graph, so this is safe even
+  /// mid-calibration one-shot. The logger restarts only on the next
+  /// configureSession, which re-reads the toggle.
   private func stopSensorLogForThermal() {
     guard let logger = sensorLogger else { return }
     logger.stop()
@@ -5276,13 +5275,12 @@ extension ExhibitCameraModule {
     sensorLogThermalStopped = true
   }
 
-  /// Stops the session entirely (screen blur / unmount). Safe to call with
-  /// nothing running. In-flight video is finalized first honestly: an
-  /// unfinished delivery file is worse than a stated rejection.
+  /// Stops the session entirely (screen blur or unmount). Safe to call with
+  /// nothing running; in-flight video must be finalized first.
   func stopSession(promise: Promise) {
-    // Guard the WHOLE recording state machine (0.15.0 Drop 2): tearing down
-    // mid-seal orphaned the in-flight stop promise and leaked the writer —
-    // the old mode==.video check couldn't see a stop that was still sealing.
+    // Guard the whole recording state machine: tearing down mid-seal orphans
+    // the in-flight stop promise and leaks the writer, and a mode==.video check
+    // cannot see a stop that is still sealing.
     switch videoState {
     case .recording:
       promise.reject(ExhibitCameraNamedException(
@@ -5304,12 +5302,12 @@ extension ExhibitCameraModule {
       return
     }
     rejectStart(ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Session stopped before the first frame"))
-    // teardownSession unbinds both preview layers synchronously on this
-    // queue before releasing the session (0.18.9) — no separate hop here.
+    // teardownSession unbinds both preview layers synchronously on this queue
+    // before releasing the session, so no separate hop is needed.
     let stopError = teardownSession()
     if let stopError = stopError {
-      // The session is torn down either way; the rejection states that the
-      // stop itself threw (0.14.2 SIGABRT path — now a promise, not a crash).
+      // The session is torn down either way; the rejection states that the stop
+      // itself threw.
       promise.reject(ExhibitCameraNamedException(
         ExhibitCameraErrorCode.platform,
         "Session stop raised an exception: \(stopError.localizedDescription)"
@@ -5320,13 +5318,11 @@ extension ExhibitCameraModule {
   }
 
   /// Releases all session state. Idempotent; sessionQueue only. Returns the
-  /// error from an NSException-safe stopRunning (0.15.0 Drop 2 — the
-  /// 0.14.2 SIGABRT path): nil on a clean stop, so stopSession can reject
-  /// honestly instead of crashing the bridge. The error is also surfaced as
-  /// an onSessionError event (deduped) regardless of caller. Typed (any
-  /// Error)? to match the shim's imported return exactly — Swift imports
-  /// the ObjC nullable-NSError return as (any Error)? under the pinned
-  /// NS_SWIFT_NAME, and a mismatch here was EAS round-2's lone error.
+  /// error from an NSException-safe stopRunning, nil on a clean stop, so
+  /// stopSession can reject instead of crashing the bridge; the error is also
+  /// surfaced as a deduped onSessionError event. The return is typed
+  /// (any Error)? to match the shim: Swift imports the ObjC nullable-NSError
+  /// return that way under the pinned NS_SWIFT_NAME.
   @discardableResult
   private func teardownSession() -> (any Error)? {
     if let observer = runtimeErrorObserver {
@@ -5345,7 +5341,7 @@ extension ExhibitCameraModule {
       NotificationCenter.default.removeObserver(observer)
       interruptionEndedObserver = nil
     }
-    // 0.18.4-R3: the isActive timeline observers die with the session.
+    // The isActive timeline observers die with the session.
     connectionActiveObservers.forEach { $0.invalidate() }
     connectionActiveObservers.removeAll()
     sessionStartWallClock = nil
@@ -5354,10 +5350,9 @@ extension ExhibitCameraModule {
     audioOutput?.setSampleBufferDelegate(nil, queue: nil)
     let deadSession = session
     if let deadSession = deadSession { teardownPipConnection(in: deadSession) }
-    // NSException-safe, idempotent stop (0.15.0 Drop 2): never twice in a
-    // row, never reentrant (sessionQueue is serial and this is the only
-    // teardown path), and a thrown ObjC exception comes back as an NSError
-    // instead of escaping to the bridge as SIGABRT.
+    // NSException-safe, idempotent stop: sessionQueue is serial and this is the
+    // only teardown path, and a thrown ObjC exception comes back as an NSError
+    // instead of reaching the bridge as SIGABRT.
     var stopError: (any Error)? = nil
     if let deadSession = deadSession {
       stopError = ExhibitSessionControl.safelyStop(deadSession)
@@ -5369,29 +5364,21 @@ extension ExhibitCameraModule {
       }
     }
     session = nil
-    // 0.18.9 TEARDOWN CRASH FIX (field logs 6545F417 watchdog + 3F5D846E /
-    // A07A0CA3 SIGABRT, all 0.18.8 (47)): unbind BOTH preview layers HERE,
-    // synchronously, on sessionQueue, while `deadSession` still strongly
-    // holds the session — so no layer is attached when the last reference
-    // drops at the end of this function.
-    //   • The 0.18.8 main.async hops left every layer attached until the
-    //     main queue drained; the layer (which RETAINS its session) could
-    //     then die with the session on a Fig workloop, where the session's
-    //     dealloc re-entered detachFromFigCaptureSession on its own sync
-    //     queue → assert/SIGABRT.
-    //   • The same hops put setSession: on MAIN, where it can synchronously
-    //     commit the capture graph (_commitConfiguration → _buildAndRunGraph
-    //     → AVRunLoopCondition wait) and block past the 8 s scene-update
-    //     watchdog while sessionQueue was mid-configuration → SIGKILL.
-    // AVCaptureVideoPreviewLayer serializes session attachment internally on
-    // its Fig sync queue, so the setter is safe from any OTHER queue; from
-    // sessionQueue it is trivially ordered against stopRunning above and
-    // against any begin/commit on this serial queue. After these two calls
-    // no layer retains the session, so its final release happens right here
-    // with nothing attached.
+    // Unbind both preview layers here, synchronously on sessionQueue, while
+    // `deadSession` still holds the session strongly, so no layer is attached
+    // when the last reference drops at the end of this function. A layer
+    // retains its session: left attached, it can die with the session on a Fig
+    // workloop, where the session's dealloc re-enters
+    // detachFromFigCaptureSession on its own sync queue and aborts. Deferring
+    // the unbind to main also puts setSession: on main, where it can
+    // synchronously commit the capture graph and block past the 8 s
+    // scene-update watchdog. AVCaptureVideoPreviewLayer serializes session
+    // attachment internally on its Fig sync queue, so the setter is safe from
+    // any other queue, and from sessionQueue it is ordered against stopRunning
+    // above and any begin/commit on this serial queue.
     if deadSession != nil {
-      // Module-held PiP ref first (survives a view swap); the view's own
-      // pipLayer is normally the same object — detach is idempotent.
+      // Module-held PiP ref first, since it survives a view swap; the view's own
+      // pipLayer is normally the same object and detach is idempotent.
       pipLayer?.session = nil
       if let view = previewView {
         view.detachPipFromSession()
@@ -5417,10 +5404,10 @@ extension ExhibitCameraModule {
     stallRecovering = false
     stallBounced = false
     stallEscalated = false
-    // pipWanted/pipLayer intentionally survive a rebuild: the RN altPreview
-    // prop handler only refires when the value CHANGES, so clearing them here
-    // left the inset permanently black after any session rebuild (0.14.1 bug).
-    // configureSession's ensurePipConnection reattaches to the same layer.
+    // pipWanted and pipLayer survive a rebuild: the RN altPreview prop handler
+    // only refires when the value changes, so clearing them here would leave the
+    // inset black after a session rebuild. configureSession's
+    // ensurePipConnection reattaches to the same layer.
     pipConnection = nil
     droppedPairCount = 0
     droppedPrimaryCount = 0
@@ -5433,9 +5420,8 @@ extension ExhibitCameraModule {
     secondaryReseatDone = false
     stereoActive = false
     stereoDetachedForThermal = false
-    // Shutter-burst teardown (0.17.2): drop the ring + abandon any
-    // collection. A capture waiting on the burst settles via its own 10 s
-    // watchdog — the existing teardown-mid-capture discipline.
+    // Shutter-burst teardown: drop the ring and abandon any collection. A
+    // capture waiting on the burst settles via its own 10 s watchdog.
     burstSinkWanted = false
     burstRing.removeAll()
     burstPostFrames.removeAll()
@@ -5447,9 +5433,8 @@ extension ExhibitCameraModule {
     audioBufferCount = 0
     pcmFirstSampleWallClockUtcMs = nil
     pcmAnchorSource = ""
-    // secondaryLensPreference intentionally survives a rebuild (the
-    // photoFlashPreference pattern): a stored preference applies at the
-    // next configureSession unless that call's opts override it.
+    // secondaryLensPreference survives a rebuild: a stored preference applies
+    // at the next configureSession unless that call's opts override it.
     sessionCalibration = [:]
     sessionCalibrationObjects = [:]
     calibrationCaptureInFlight = false
@@ -5473,9 +5458,9 @@ extension ExhibitCameraModule {
     deliveryURL = nil
     evidenceDirURL = nil
     videoStartDate = nil
-    // IMU sink teardown (0.15): stop delivery, drop the ring, nil the
-    // reference. Safe from sessionQueue (CoreMotion stop + lock-confined
-    // clear; handlers are [weak self]).
+    // IMU sink teardown: stop delivery, drop the ring, nil the reference. Safe
+    // from sessionQueue: CoreMotion stop plus a lock-confined clear, and the
+    // handlers are [weak self].
     sensorLogger?.stop()
     sensorLogger = nil
     sensorLogWanted = false
@@ -5492,9 +5477,9 @@ extension ExhibitCameraModule {
     startPromiseDone = false
     stopTimeout?.cancel()
     stopTimeout = nil
-    // A stop in flight (or joined to one) must never dangle across a
-    // teardown: reject every outstanding promise honestly — the seal's
-    // late finishWriting completion is identity-guarded and becomes a no-op.
+    // A stop in flight, or joined to one, must not dangle across a teardown, so
+    // reject every outstanding promise. The seal's late finishWriting
+    // completion is identity-guarded and becomes a no-op.
     if let pendingStop = stopPromise {
       pendingStop.reject(ExhibitCameraNamedException(
         ExhibitCameraErrorCode.noSession,
@@ -5509,8 +5494,7 @@ extension ExhibitCameraModule {
       ))
     }
     stopWaiters.removeAll()
-    // A queued start (E_BUSY race fix, 0.15.0 Drop 2) must never dangle
-    // across a teardown: reject it honestly.
+    // A queued start must not dangle across a teardown either.
     if let pending = pendingStartVideo {
       pendingStartVideo = nil
       pending.promise.reject(ExhibitCameraNamedException(
@@ -5525,18 +5509,18 @@ extension ExhibitCameraModule {
 
 // MARK: - Pro controls (spec §14)
 //
-// Every setter: sessionQueue-confined, capability-guarded, clamps applied
-// and REPORTED BACK, and a safe stated no-op (never a JS-visible throw)
-// when the hardware lacks the capability. The committed metadata reads the
-// device back at capture time — these setters are intent, the metadata
-// block is evidence.
+// Every setter is sessionQueue-confined and capability-guarded, reports the
+// clamps it applied, and no-ops with a stated reason instead of throwing into
+// JS when the hardware lacks the capability. The committed metadata reads the
+// device back at capture time: these setters are intent, the metadata block is
+// the record.
 
 extension ExhibitCameraModule {
 
   /// { mode: 'auto'|'locked'|'custom', iso?, durationSeconds? }.
   /// 'custom' requires both iso and durationSeconds; each is clamped to the
-  /// ACTIVE FORMAT's min/max (not the device's global range — formats
-  /// differ) and the clamped values are reported back as applied values.
+  /// active format's min/max, not the device's global range, and the clamped
+  /// values are reported back as applied.
   func setExposureMode(opts: [String: Any], promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -5572,7 +5556,7 @@ extension ExhibitCameraModule {
           return
         }
         let format = device.activeFormat
-        // Clamp to the active format's actual ranges (spec §14).
+        // Clamp to the active format's ranges (spec §14).
         let clampedISO = min(max(isoNumber.floatValue, format.minISO), format.maxISO)
         let requestedDuration = CMTime(seconds: durationNumber.doubleValue, preferredTimescale: 1_000_000_000)
         var clampedDuration = requestedDuration
@@ -5586,8 +5570,8 @@ extension ExhibitCameraModule {
         promise?.resolve([
           "applied": true,
           "exposureMode": "custom",
-          // The REQUESTED-clamped values; the device-settled values are
-          // committed in the metadata block at capture (device-reported).
+          // The requested values after clamping; the device-settled values are
+          // committed in the metadata block at capture.
           "iso": Double(clampedISO),
           "durationSeconds": CMTimeGetSeconds(clampedDuration),
           "isoClamped": clampedISO != isoNumber.floatValue,
@@ -5601,7 +5585,7 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "lock-failed: \(error.localizedDescription)"])
       return
     }
-    // 0.18.2: mirror the applied exposure mode onto the secondary.
+    // Mirror the applied exposure mode onto the secondary.
     mirrorProControlsToSecondary()
   }
 
@@ -5615,7 +5599,7 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "exposure-point-unsupported"])
       return
     }
-    // Same view→device mapping as setFocusPoint (REVIEW-CHECK on device).
+    // Same view-to-device mapping as setFocusPoint.
     let devicePoint = CGPoint(x: CGFloat(y), y: CGFloat(1.0 - x))
     do {
       try device.lockForConfiguration()
@@ -5632,9 +5616,9 @@ extension ExhibitCameraModule {
   }
 
   /// { mode: 'auto'|'locked'|'manual', lensPosition? }.
-  /// 'manual' = focus locked at an explicit lensPosition (0–1, clamped).
-  /// iOS has no focus-distance API; lensPosition is the honest manual
-  /// control and it is committed per capture (spec §5).
+  /// 'manual' locks focus at an explicit lensPosition (0–1, clamped). iOS has
+  /// no focus-distance API, so lensPosition is the manual control and it is
+  /// committed per capture (spec §5).
   func setFocusMode(opts: [String: Any], promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -5660,12 +5644,10 @@ extension ExhibitCameraModule {
         device.focusMode = .locked
         promise?.resolve(["applied": true, "focusMode": "locked"])
       case "manual":
-        // 0.18.5 crash fix: isFocusModeSupported(.locked) is NOT sufficient
-        // for the custom-lens-position API — the virtual DualWide device
-        // reports .locked supported yet setFocusModeLocked(lensPosition:)
-        // throws an NSException (the 2026-08-17 field crash). Swift cannot
-        // catch ObjC exceptions; the custom-position support bit is the
-        // only honest gate.
+        // isFocusModeSupported(.locked) does not cover the custom-lens-position
+        // API: the virtual DualWide device reports .locked supported yet
+        // setFocusModeLocked(lensPosition:) throws an NSException, which Swift
+        // cannot catch. Gate on the custom-position support bit.
         guard device.isFocusModeSupported(.locked),
               device.isLockingFocusWithCustomLensPositionSupported else {
           promise?.resolve(["applied": false, "reason": "manual-focus-unsupported"])
@@ -5690,15 +5672,14 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "lock-failed: \(error.localizedDescription)"])
       return
     }
-    // 0.18.2: mirror the applied focus mode onto the secondary.
+    // Mirror the applied focus mode onto the secondary.
     mirrorProControlsToSecondary()
   }
 
   /// { mode: 'auto'|'locked'|'manual', temperature?, tint? }.
-  /// 'manual' converts temperature+tint → gains via the device's own
-  /// converter, clamps each gain to [1, maxWhiteBalanceGain], locks, and
-  /// reports the round-tripped temperature/tint of the CLAMPED gains so
-  /// the caller sees what the hardware actually accepted.
+  /// 'manual' converts temperature and tint to gains via the device's own
+  /// converter, clamps each gain to [1, maxWhiteBalanceGain], locks, and reports
+  /// the round-tripped temperature and tint of the clamped gains.
   func setWhiteBalanceMode(opts: [String: Any], promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -5724,9 +5705,9 @@ extension ExhibitCameraModule {
         device.whiteBalanceMode = .locked
         promise?.resolve(["applied": true, "whiteBalanceMode": "locked"])
       case "manual":
-        // 0.18.5 crash fix: same class as focus — .locked mode support does
-        // NOT imply custom-gains locking; the virtual device throws an
-        // uncatchable NSException. Gate on the custom-gains bit.
+        // Same as focus: .locked mode support does not imply custom-gains
+        // locking, and the virtual device throws an uncatchable NSException.
+        // Gate on the custom-gains bit.
         guard device.isWhiteBalanceModeSupported(.locked),
               device.isLockingWhiteBalanceWithCustomDeviceGainsSupported else {
           promise?.resolve(["applied": false, "reason": "manual-white-balance-unsupported"])
@@ -5748,8 +5729,8 @@ extension ExhibitCameraModule {
         gains.greenGain = min(max(gains.greenGain, 1.0), maxGain)
         gains.blueGain = min(max(gains.blueGain, 1.0), maxGain)
         device.setWhiteBalanceModeLocked(with: gains, completionHandler: nil)
-        // Round-trip: what temperature/tint do the clamped gains
-        // correspond to? Reported so the UI shows what was applied.
+        // Round-trip the clamped gains back to temperature and tint so the UI
+        // shows what was applied.
         let appliedTT = device.temperatureAndTintValues(for: gains)
         promise?.resolve([
           "applied": true,
@@ -5769,18 +5750,16 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "lock-failed: \(error.localizedDescription)"])
       return
     }
-    // 0.18.2: mirror the applied white-balance mode onto the secondary.
+    // Mirror the applied white-balance mode onto the secondary.
     mirrorProControlsToSecondary()
   }
 
-  /// Torch with level: nil → off; otherwise setTorchModeOn(level:)
+  /// Torch with level: nil turns it off, otherwise setTorchModeOn(level:)
   /// clamped to the documented 1.0 API ceiling. Missing torch hardware is a
-  /// stated no-op, never a throw (spec §14 guardrail).
-  // REVIEW-CHECK (EAS build fix): maxTorchLevel is NOT an AVCaptureDevice
-  // member — the documented surface is the global constant
-  // the 1.0 API ceiling (compiler confirmed neither maxTorchLevel symbol exists
-  // exist). Argument label is level:, not withLevel:. Next build should
-  // confirm all three maxTorchLevel sites compile.
+  /// stated no-op rather than a throw (spec §14).
+  ///
+  /// maxTorchLevel is not visible to Swift in this SDK, so 1.0 is used as the
+  /// ceiling. The argument label is level:, not withLevel:.
   func setTorchLevel(level: Double?, promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -5798,11 +5777,11 @@ extension ExhibitCameraModule {
         promise?.resolve(["applied": true, "torchLevel": 0.0])
         return
       }
-      // REVIEW-CHECK (EAS build fix 2): neither AVCaptureDevice.maxTorchLevel nor
-      // the global AVCaptureMaxTorchLevel is visible to Swift in this SDK. 1.0 is
-      // the documented torch-level ceiling; if a device enforces a lower maximum,
-      // setTorchModeOn(level:) throws and the catch below returns applied:false
-      // with the native error — the failure is surfaced, never hidden.
+      // Neither AVCaptureDevice.maxTorchLevel nor the global
+      // AVCaptureMaxTorchLevel is visible to Swift in this SDK, so 1.0 is the
+      // ceiling. A device enforcing a lower maximum makes
+      // setTorchModeOn(level:) throw, and the catch below returns
+      // applied:false with the native error.
       let clamped = min(max(Float(level), 0.0), Float(1.0))
       guard clamped > 0 else {
         device.torchMode = .off
@@ -5826,12 +5805,11 @@ extension ExhibitCameraModule {
 
 extension ExhibitCameraModule {
 
-  /// Per-lens format inventory. No session required — device-level query.
-  /// formatID is "<deviceType.rawValue>:<index>" (stable per device model
-  /// + OS). RAW support is per-OUTPUT, not per-format: it requires a photo
-  /// output connected to the device, so it is reported from the running
-  /// session when available and null with a note otherwise — stated,
-  /// never guessed.
+  /// Per-lens format inventory; a device-level query needing no session.
+  /// formatID is "<deviceType.rawValue>:<index>", stable per device model and
+  /// OS. RAW support is per-output, not per-format, and needs a photo output
+  /// connected to the device, so it is reported from the running session when
+  /// available and null with a note otherwise.
   func listFormats() -> [String: Any] {
     let lenses: [(String, AVCaptureDevice.DeviceType, AVCaptureDevice.Position)] = [
       ("ultraWide", .builtInUltraWideCamera, .back),
@@ -5842,7 +5820,7 @@ extension ExhibitCameraModule {
     var result: [String: Any] = [:]
     for (label, type, position) in lenses {
       guard let device = AVCaptureDevice.default(type, for: .video, position: position) else {
-        // Lens absent on this hardware: present:false — unreached, never red.
+        // Lens absent on this hardware.
         result[label] = ["present": false]
         continue
       }
@@ -5874,16 +5852,16 @@ extension ExhibitCameraModule {
     return [
       "lenses": result,
       "multiCamSupported": AVCaptureMultiCamSession.isMultiCamSupported,
-      // RAW is a photo-output property; honest null without a session.
+      // RAW is a photo-output property, so it is null without a session.
       "rawSupported": primaryPhotoOutput.map { !$0.availableRawPhotoPixelFormatTypes.isEmpty } as Any? ?? NSNull(),
       "rawNote": "rawSupported requires a running session (photo-output query); null means unknown, not unsupported",
     ]
   }
 
-  /// { formatID, frameRate? } — applies to the CURRENT primary device
-  /// only (switch lenses first). Both photo and video flow from the device
-  /// format, so one setter covers both — stated in the result. Rolls back
-  /// and reports if the hardware-cost budget would be exceeded (spec §6).
+  /// { formatID, frameRate? }, applied to the current primary device only;
+  /// switch lenses first. Photo and video both flow from the device format, so
+  /// one setter covers both, stated in the result. Rolls back and reports if
+  /// the hardware-cost budget would be exceeded (spec §6).
   func setFormat(opts: [String: Any], promise: Promise?) {
     guard let session = session, let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -5919,8 +5897,8 @@ extension ExhibitCameraModule {
       device.activeFormat = target
       var appliedFPS = configuredFPS
       if let fps = requestedFPS {
-        // Clamp the requested frame rate into the format's supported
-        // ranges; pin min==max so the synchronizer sees a steady stream.
+        // Clamp the requested frame rate into the format's supported ranges and
+        // pin min == max so the synchronizer sees a steady stream.
         let maxFPS = target.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? fps
         let minFPS = target.videoSupportedFrameRateRanges.map { $0.minFrameRate }.min() ?? fps
         appliedFPS = min(max(fps, minFPS), maxFPS)
@@ -5930,8 +5908,8 @@ extension ExhibitCameraModule {
       }
       device.unlockForConfiguration()
 
-      // Hardware-cost watchdog (spec §6): a format that breaks the budget
-      // is rolled back and reported, never silently throttled.
+      // Hardware-cost watchdog (spec §6): a format over budget is rolled back
+      // and reported rather than throttled.
       if session.hardwareCost > 1.0 {
         do {
           try device.lockForConfiguration()
@@ -5966,17 +5944,15 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Video stabilization on the primary video connection. 'auto' is the
-  /// system choice — allowed, but the committed metadata reads the
-  /// connection back so the applied mode is evidence, not assumption.
+  /// Video stabilization on the primary video connection. 'auto' hands the
+  /// choice to the system; the committed metadata reads the connection back so
+  /// the applied mode is recorded.
   func setVideoStabilizationMode(_ mode: String, promise: Promise?) {
-    // REVIEW-CHECK (EAS build fix): connection-level
-    // isVideoStabilizationModeSupported(_:) no longer exists in recent
-    // SDKs — the documented capability check is
-    // AVCaptureDevice.Format.isVideoStabilizationModeSupported(_:) on the
-    // active format. preferredVideoStabilizationMode /
-    // activeVideoStabilizationMode stay on the connection. Next build
-    // should confirm this compiles.
+    // Connection-level isVideoStabilizationModeSupported(_:) no longer exists in
+    // recent SDKs; the capability check is
+    // AVCaptureDevice.Format.isVideoStabilizationModeSupported(_:) on the active
+    // format. preferredVideoStabilizationMode and activeVideoStabilizationMode
+    // stay on the connection.
     guard let device = primaryDevice,
           let connection = primaryVideoOutput?.connection(with: .video) else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -6001,7 +5977,7 @@ extension ExhibitCameraModule {
     promise?.resolve([
       "applied": true,
       "stabilizationMode": mode,
-      // Connection read-back: what the pipeline actually has now.
+      // Connection read-back: what the pipeline has now.
       "activeMode": DeviceModeMapper.stabilizationMode(connection.preferredVideoStabilizationMode),
     ])
   }

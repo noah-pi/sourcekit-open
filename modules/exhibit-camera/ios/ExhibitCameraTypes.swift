@@ -385,7 +385,7 @@ enum JpegColorSpaceReader {
   }
 }
 
-// MARK: - Depth map export (D1, 0.16.0 — c2pa.depthmap capture side)
+// MARK: - Depth map export (D1; c2pa.depthmap capture side)
 
 /**
  * Canonicalizes a delivered AVDepthData into the committed depth artifact: a
