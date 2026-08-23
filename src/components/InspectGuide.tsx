@@ -1,12 +1,7 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * InspectGuide — the FAQ at the bottom of the Inspect tab.
- *
- * Truly an FAQ: every question sits behind its own dropdown, answers are the
- * approved plain declarative facts. No question is answered before it's asked.
- *
- * Closing line, always: custody, not reality — this app proves the file's
- * history; what the file shows is for the viewer to weigh.
+ * InspectGuide — the FAQ at the bottom of the Inspect tab. Each question is
+ * its own collapsed dropdown, followed by a fixed closing line.
  */
 
 import React, { useState } from 'react';

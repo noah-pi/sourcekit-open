@@ -1,36 +1,23 @@
 /**
- * Solar geometry (M3) — where the committed time and place put the sun.
+ * Solar geometry (M3): where the committed time and place put the sun.
  *
- * Nothing in the repo computes sun position, so this module implements the
- * standard NOAA solar ephemeris (fractional-year equation of time and
- * declination, true solar time, hour angle, elevation, azimuth) — a
- * deterministic function of latitude, longitude, and UTC instant, accurate
- * to ~0.01°, which dwarfs every other error source here.
+ * Implements the NOAA solar ephemeris (fractional-year equation of time and
+ * declination, true solar time, hour angle, elevation, azimuth), accurate to
+ * ~0.01° from latitude, longitude, and UTC instant.
  *
- * What this card is and is not: it computes the PREDICTION side (committed
- * place ◌ + committed device clock ◌ → sun elevation/azimuth → shadow
- * grammar). The MEASUREMENT side — reading an actual shadow in the pixels —
- * is image analysis the M2/M3 engine does not run, and the card says so:
- * the prediction is exposed for a reviewer to weigh against the photo, and
- * the state is 'insufficient' (undecidable), never a silent green. The one
- * finding it CAN make alone: a sun below the horizon — no shadow grammar
- * applies, consistent with a night capture, and a daylight-looking photo
- * would be for a person to weigh.
- *
- * Error bounds carry the standing caveat verbatim: "error bounds are
- * provisional pending corpus characterization".
- *
- * Location honesty: the committed location is self-reported by the device
- * (GPS is a claim, not a proof). Every value text marks it ◌. If the record
- * carries no usable location ('redacted' / 'unavailable' / absent), the
- * card renders not-run — there is no sun without a place.
+ * Prediction side only. Measuring a shadow in the pixels is image analysis
+ * this engine does not run, so the card state is 'insufficient'. The one
+ * standalone finding is a sun below the horizon, where no shadow grammar
+ * applies. Every value text marks the self-reported location with ◌; a
+ * record with no usable location ('redacted', 'unavailable', absent) renders
+ * not-run. Numbers carry SOLAR_CAVEAT.
  */
 
 import type { AttestationRecord, LocationClaim } from '../../provenance/manifest';
 import { makeCard, makeNotRun } from '../interpret/cards';
 import type { EvidenceCard } from '../types';
 
-/** The standing caveat, verbatim — stated once, applies to every number here. */
+/** The standing caveat, appended to every number this module reports. */
 export const SOLAR_CAVEAT = 'error bounds are provisional pending corpus characterization';
 
 const DEG = 180 / Math.PI;
@@ -86,12 +73,12 @@ export function solarPosition(latDeg: number, lonDeg: number, at: Date): SolarPo
 export interface ShadowGrammar {
   /** Shadow length for a 1 m pole, cm. */
   poleShadowCm: number;
-  /** Direction the shadow POINTS, degrees clockwise from north (azimuth + 180°). */
+  /** Direction the shadow points, degrees clockwise from north (azimuth + 180°). */
   bearingDeg: number;
 }
 
 export function shadowGrammar(pos: SolarPosition): ShadowGrammar | null {
-  if (pos.elevationDeg <= 0) return null; // sun down — no shadow grammar applies
+  if (pos.elevationDeg <= 0) return null; // sun down, no shadow grammar applies
   const tanEl = Math.tan(pos.elevationDeg * RAD);
   return {
     poleShadowCm: Math.round((100 / tanEl) * 10) / 10,

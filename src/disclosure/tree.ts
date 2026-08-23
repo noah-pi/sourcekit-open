@@ -3,24 +3,19 @@
  * Merkle tree over committed leaf digests
  * (docs/INTEGRITY.md — selective disclosure).
  *
- * Conventions MATCHED with the capture-side streaming tree
- * (exhibit-app CaptureKit StreamingHasher.swift), so the disclosure tree
- * and the streamed-media tree speak one language:
+ * Conventions match the capture-side streaming tree (exhibit-app CaptureKit
+ * StreamingHasher.swift):
  *
- *   - leaves are RAW 32-byte digests, never hex, inside the tree
- *   - an odd leaf is PROMOTED unchanged to the next level
+ *   - leaves are raw 32-byte digests, never hex, inside the tree
+ *   - an odd leaf is promoted unchanged to the next level
  *   - the root is emitted as lowercase hex
- *   - zero leaves → SHA-256 of the empty input (documented degenerate
- *     case, same as StreamingHasher)
+ *   - zero leaves gives SHA-256 of the empty input
  *   - a single leaf is its own root
  *
- * "Sorted-pair" means the pairs are formed over the SORTED
- * leaf set: leaves are sorted by claimId upstream (inventory.ts) and
- * paired in that order. Parents are positional, exactly like
- * StreamingHasher — parent = SHA-256(left || right) — so a leaf's slot
- * is fully bound: an inclusion proof presented for the WRONG index
- * (within-pair or cross-pair) or the wrong tree size fails, which the
- * suite pins.
+ * Leaves are sorted by claimId upstream (inventory.ts) and paired in that
+ * order; parents are positional, parent = SHA-256(left || right). That
+ * binds a leaf's slot, so a proof presented for the wrong index or the
+ * wrong tree size fails.
  */
 
 import { sha256 } from '@noble/hashes/sha256';

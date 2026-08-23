@@ -4,23 +4,17 @@ import DeviceCheck
 import Security
 
 /**
- * App Attest (DCAppAttestService).
+ * App Attest (DCAppAttestService). Apple's App Attest CA signs an attestation
+ * object stating that this is genuine Apple hardware running an unmodified
+ * install of this app.
  *
- * Apple's hardware attestation: the App Attest service generates a Secure
- * Enclave key and produces an attestation object — a WebAuthn-format
- * statement signed by Apple's App Attest CA proving "this is genuine Apple
- * hardware running a genuine, unmodified install of this app."
- *
- * Apple deliberately gives the app no SecKey access to App Attest keys —
- * they are usable only through DCAppAttestService.attestKey /
- * generateAssertion (which track the hardware counter), so an App Attest
- * key can never sign our manifests. Instead the attestation is BOUND to the
- * app's own Secure Enclave signing key: the caller hashes that key's public
- * bytes into the clientDataHash (SHA256(challenge ‖ signingPublicKey) — the
- * industry-standard emulated key attestation), Apple's nonce extension in
- * the attestation leaf certificate then certifies the binding, and all
- * media signing continues with the Enclave key. The registry server
- * re-derives and verifies the same construction.
+ * App Attest keys have no SecKey access and can only be used through
+ * DCAppAttestService, so they never sign manifests. The attestation is instead
+ * bound to the app's own Secure Enclave signing key: the caller passes
+ * clientDataHash = SHA256(challenge ‖ signingPublicKey) (emulated key
+ * attestation), and Apple's nonce extension in the attestation leaf
+ * certificate certifies that binding. The registry server re-derives the same
+ * construction.
  *
  * API:
  *   isSupported                        -> Bool
@@ -30,11 +24,9 @@ import Security
  *   deleteAttestKey                    -> Void
  */
 /**
- * promise.reject(code, description) silently DROPS the description on SDK 57:
- * the JS-visible message is built from `reason` (which the convenience init
- * never sets), so every rejection arrived as "CODE: undefined reason" and
- * real failures were undiagnosable. This subclass carries the message in
- * `reason`, so actionable errors reach JS.
+ * SDK 57 workaround: promise.reject(code, description) drops the description,
+ * because the JS-visible message is built from `reason`, which the convenience
+ * init never sets. This subclass puts the message in `reason`.
  */
 final class NamedException: Exception {
   private let message: String
@@ -75,10 +67,8 @@ public class AppAttestModule: Module {
       }
     }
 
-    // clientDataHashBase64 is the EXACT 32-byte hash to bind into the
-    // attestation — the caller computes SHA256(challenge ‖ signingPublicKey)
-    // so the Apple-certified attestation also commits to the app's Enclave
-    // signing key (emulated key attestation).
+    // clientDataHashBase64 is the 32-byte hash bound into the attestation:
+    // SHA256(challenge ‖ signingPublicKey), computed by the caller.
     AsyncFunction("attestKey") { (keyId: String, clientDataHashBase64: String, promise: Promise) in
       guard let hash = Data(base64Encoded: clientDataHashBase64), hash.count == 32 else {
         promise.reject(NamedException("ATTEST_BAD_HASH", "clientDataHash must be base64 of 32 bytes"))

@@ -79,8 +79,8 @@ export interface RungResult {
   title: string;
   state: CheckState;
   /**
-   * One honest clause naming WHAT was compared or WHY the rung did not run
-   * or could not decide. Never a verdict word.
+   * One clause naming what was compared, or why the rung did not run or
+   * could not decide. No verdict words.
    */
   detail: string;
   /** Optional checkable rows (fingerprints, digests, counts) the UI lists. */

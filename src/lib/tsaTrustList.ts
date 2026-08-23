@@ -1,12 +1,10 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * tsaTrustList — pinned time-stamping authorities. A valid RFC 3161
- * token proves only that SOME TSA signed it — anyone can run a TSA and mint
- * any genTime (e.g. to backdate a capture around a revocation) — so time
- * claims anchor only against this bundled pin list (SHA-256 over cert DER):
- * the C2PA TSA Trust List plus FreeTSA (root AND leaf pinned; the root
- * survives leaf rotation). Unpinned authorities still display as genuine but
- * never anchor roster/validity evaluation; stale pins fail safe, never error.
+ * tsaTrustList — pinned time-stamping authorities, SHA-256 over cert DER.
+ * An RFC 3161 token only proves some TSA signed it, and any TSA can mint any
+ * genTime, so time claims anchor against this list: the C2PA TSA Trust List
+ * plus FreeTSA. Unpinned authorities display as genuine but never anchor
+ * roster or validity evaluation; stale pins fail safe rather than error.
  */
 
 export interface PinnedTsa {

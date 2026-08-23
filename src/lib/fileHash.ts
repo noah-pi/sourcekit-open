@@ -1,15 +1,12 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * File hashing and reading over expo-file-system.
+ * File hashing and reading over expo-file-system. Hashing is chunked (4 MiB)
+ * so large videos never load into memory at once.
  *
- * Hashing is chunked (4 MiB) so multi-hundred-megabyte videos never load
- * into memory at once. Whole-file reads are NOT photo-only — readFileBytes
- * is called on video at attest.ts:680 and verifyFs.ts:42, on audio at
- * attest.ts:775, and on any picked media at verifyFs.ts:66. Each read costs
- * ~1.33× the file size in base64 plus the decoded copy, so a 200 MB clip
- * peaks past 700 MB in the JS heap and iOS kills the app. Stopgap: the app
- * now caps clips at two minutes in the UI. Planned fix: native streaming
- * seal/verify (a Swift SealIO module) so the bytes never enter the JS heap.
+ * readFileBytes loads whole files, including video and audio, at ~1.33x the
+ * file size in base64 plus the decoded copy; a 200 MB clip peaks past 700 MB
+ * in the JS heap and iOS kills the app. The UI's two-minute clip cap holds
+ * this down.
  */
 
 import * as FileSystem from 'expo-file-system/legacy';

@@ -1,17 +1,14 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * TrustedTime — the TIME section, shared by the Inspect result and the
- * exhibit detail screen. Copy v5: icon rows, minimal words.
+ * exhibit detail screen. One icon row per time source:
  *
  *   ● Certificate authority · Aug 12, 7:41 PM
  *   ○ Public ledger · pending
  *
- * Icons carry status, words carry facts. A countersignature renders as
- * "Certificate authority" exactly when the verifier pinned its operator;
- * a genuine token from an unpinned operator says so; a failed token is
- * named as failed (proven tamper, never absence of proof). The device
- * clock appears only when it disagrees with a countersigned anchor — or
- * when it is the only time there is.
+ * A token from an unpinned operator is labeled as such; a failed token is
+ * labeled failed. The device clock row appears only when it disagrees with a
+ * countersigned anchor, or when it is the only time on the file.
  */
 
 import React from 'react';
@@ -101,9 +98,8 @@ export function TrustedTimeSection({ report, otsView }: { report: VerificationRe
   }
   if (otsView) rows.push(...ledgerRows(otsView));
 
-  // The device clock is a claim. It appears when it disagrees with a
-  // countersigned anchor (amber — a wrong clock is possible without
-  // tampering), or when it is the only time on the file.
+  // Device clock row: amber when it disagrees with a countersigned anchor,
+  // dim when it is the only time on the file.
   if (rec) {
     const capturedMs = Date.parse(rec.capturedAt);
     const anchorIso = ts?.earliestTrustedUtc ?? ts?.earliestValidUtc ?? null;

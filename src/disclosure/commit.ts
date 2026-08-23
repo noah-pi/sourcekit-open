@@ -1,11 +1,10 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Commit + burn semantics (docs/INTEGRITY.md — selective disclosure).
- * One Merkle root commits the full claim set; leaf 0 is the inventory meta-leaf,
- * so the root binds the never-recorded declaration at commit time. No salt table
- * ever leaves this module: salts are re-derived from the master
- * seed, so burning the seed closes unopened leaves for everyone, including us
- * The camera commits; it never concludes — no verdicts here.
+ * One Merkle root commits the full claim set; leaf 0 is the inventory
+ * meta-leaf, so the root also binds the never-recorded declaration. No salt
+ * table leaves this module — salts are re-derived from the master seed, so
+ * burning the seed closes every unopened leaf.
  */
 
 import { buildInventory, inventoryDigest, type ContextClaim, type InventoryAssertion } from './inventory';
@@ -33,8 +32,8 @@ export interface CommittedContext {
 /**
  * Commit the full context-claim set under one root; buildInventory enforces
  * exact coverage of the expected claim set. Deterministic in (seed, claims,
- * declarations). No salt table is returned: salts exist
- * only as transient derivations and are re-derived from the seed at open time.
+ * declarations). No salt table is returned — salts are re-derived from the
+ * seed at open time.
  */
 export function commitContext(
   masterSeed: Uint8Array,
@@ -46,8 +45,8 @@ export function commitContext(
   }
   const { leaves, inventoryAssertion } = buildInventory(claims, neverRecordedIds);
   const digests = leaves.map((c) => leafDigest(c, deriveLeafSalt(masterSeed, c.claimId, c.rung)));
-  // The inventory meta-leaf rides at index 0: the root binds the
-  // never-recorded declaration, not just the committed claims.
+  // Inventory meta-leaf at index 0, so the root binds the never-recorded
+  // declaration as well as the committed claims.
   const tree = buildTree([inventoryDigest(inventoryAssertion.entries), ...digests]);
   return {
     root: tree.root,

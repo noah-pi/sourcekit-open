@@ -40,10 +40,8 @@ for (let i = 0; i < B64.length; i++) B64_LOOKUP[B64.charCodeAt(i)] = i;
 export function base64ToBytes(b64: string): Uint8Array {
   const clean = b64.replace(/=+$/, '').replace(/\s/g, '');
   const len = clean.length;
-  // Strict validation: B64_LOOKUP[bad] would fall through `|| 0` — and
-  // since 'A' legitimately maps to 0, invalid characters decoded as 'A',
-  // turning malformed input into silent garbage instead of an error.
-  // Reject anything outside the alphabet.
+  // Reject anything outside the alphabet: 'A' maps to 0, so an unvalidated
+  // bad character would decode as 'A' and turn malformed input into garbage.
   for (let i = 0; i < len; i++) {
     const code = clean.charCodeAt(i);
     if (code > 127 || B64_LOOKUP[code] < 0) throw new Error('base64: invalid character');
@@ -72,7 +70,7 @@ export function bytesToBase64(bytes: Uint8Array): string {
     out += String.fromCharCode.apply(null, slice as unknown as number[]);
   }
   if (typeof btoa !== 'undefined') return btoa(out);
-  // Minimal fallback — never hit on Hermes or Node >= 16 (both provide btoa).
+  // Fallback for runtimes without btoa (Hermes and Node >= 16 have it).
   let res = '';
   for (let i = 0; i < out.length; i += 3) {
     const a = out.charCodeAt(i);
