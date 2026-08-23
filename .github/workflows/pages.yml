@@ -34,7 +34,7 @@ jobs:
           # no manual Settings -> Pages step is needed.
           enablement: true
       # Best-effort. The page renders without the image, so a fetch failure
-      # must never block a publish.
+      # must not block a publish.
       - name: Fetch public-domain historical images
         continue-on-error: true
         run: ./site/assets/fetch.sh

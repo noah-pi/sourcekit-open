@@ -1,13 +1,11 @@
-// UNBUILT — rides EAS build 2; validated by on-device soak checklist, not CI.
 #import "ExhibitSessionControl.h"
 
-/// The exception name + reason are committed verbatim into the NSError so
-/// the eventual rejection/event text says EXACTLY what the OS threw —
-/// stated, never guessed.
+/// The exception name and reason go into the NSError verbatim, so the
+/// rejection text says what the OS threw.
 static NSError *ExhibitSessionLifecycleError(NSString *operation, NSException *exception) {
   NSString *reason = exception.reason ?: @"no reason given";
   NSString *message = [NSString stringWithFormat:
-      @"AVCaptureSession %@ threw %@: %@ (session state unknown — stated, not guessed)",
+      @"AVCaptureSession %@ threw %@: %@ (session state unknown)",
       operation, exception.name, reason];
   return [NSError errorWithDomain:@"com.exhibit.camera.session-lifecycle"
                              code:1

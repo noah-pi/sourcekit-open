@@ -4,14 +4,14 @@
     "divergence": "verdict",
     "handrolled": "UNSUPPORTED",
     "upstream": "INTACT",
-    "reason": "THE intentional divergence class of the oracle design (WS3-Binding-Path §6b): the manifest's uuid box carries a nonzero merkle-aux offset. Our build declines the whole structure (BmffUnsupported → UNSUPPORTED — 'unchecked, not condemned', 0.11.0 audit A-4). Upstream c2pa-rs (wasm 0.11.1) evaluates the manifest anyway: it supports merkle-aux structures and its c2pa.hash.bmff.v2 evaluation over the untouched media succeeds, so its composed verdict is a genuine INTACT for bytes IT can check. Neither engine was weakened to force agreement (SPEC §0.3): our UNSUPPORTED is the honest posture for structures this build cannot verify; upstream's INTACT is honest for structures it can. Revisit this entry the day our build learns merkle-aux evaluation."
+    "reason": "The intentional divergence class of the oracle design: the manifest's uuid box carries a nonzero merkle-aux offset. Our build declines the whole structure (BmffUnsupported → UNSUPPORTED: unchecked, not condemned). Upstream c2pa-rs (wasm 0.11.1) evaluates the manifest anyway: it supports merkle-aux structures and its c2pa.hash.bmff.v2 evaluation over the untouched media succeeds, so its composed verdict is a genuine INTACT for bytes IT can check. Neither engine was weakened to force agreement: our UNSUPPORTED is the honest posture for structures this build cannot verify; upstream's INTACT is honest for structures it can. Revisit this entry the day our build learns merkle-aux evaluation."
   },
   {
     "file": "oracle-merkle-aux.mp4",
     "divergence": "unsupportedPosture",
     "handrolled": "everything — the manifest uses a structure this build cannot verify (manifest references merkle aux boxes — unsupported). Not a broken file, not tamper: unchecked.",
     "upstream": "false",
-    "reason": "Posture record for the row above, pinned with the EXACT strings (1.0.0 audit M-03/M2): hand-rolled declines the structure with this precise reason, upstream does not decline (unsupported=false). Any change on either side — our build gaining merkle support, a reworded decline reason, or upstream starting to reject such boxes — fails loudly here and gets investigated, never absorbed."
+    "reason": "Posture record for the row above, pinned with the exact strings: hand-rolled declines the structure with this precise reason, upstream does not decline (unsupported=false). Any change on either side — our build gaining merkle support, a reworded decline reason, or upstream starting to reject such boxes — fails loudly here and gets investigated, never absorbed."
   },
   {
     "file": "oracle-merkle-aux.mp4",

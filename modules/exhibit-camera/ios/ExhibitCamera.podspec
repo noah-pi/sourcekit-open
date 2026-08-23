@@ -1,4 +1,3 @@
-# UNBUILT — rides EAS build 2; validated by on-device soak checklist, not CI.
 Pod::Spec.new do |s|
   s.name           = 'ExhibitCamera'
   s.version        = '1.0.0'
@@ -15,9 +14,8 @@ Pod::Spec.new do |s|
   s.frameworks = 'AVFoundation', 'CoreMotion', 'CoreMedia', 'CoreVideo', 'CoreImage', 'ImageIO'
 
   s.source_files = '**/*.{h,m,mm,swift,hpp,cpp}'
-  # Public so the pod's Swift sources see the NSException-safe session
-  # lifecycle shim (ExhibitSessionControl) through the generated umbrella
-  # header — framework targets have no bridging header; a public header is
-  # the same-module Swift→ObjC path (0.15.0 Drop 2).
+  # Public so the pod's Swift sources reach the NSException-safe session
+  # shim through the generated umbrella header. Framework targets have no
+  # bridging header, so a public header is the Swift-to-ObjC path.
   s.public_header_files = 'ExhibitSessionControl.h'
 end
