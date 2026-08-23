@@ -28,8 +28,11 @@ Only the keychain, filesystem and device-model calls are swapped out, in
 ```sh
 node scripts/check-dependency-budget.mjs   # exits 0
 npx tsc --noEmit                           # clean
-node tests/stage.mjs                       # then run the suites you touched
+npm test                                   # every suite
 ```
+
+`npm test` stages the lab and runs all of it. `node tests/run-all.mjs <name>`
+runs the subset whose filename matches, which is faster while you iterate.
 
 The README has more on the lab.
 

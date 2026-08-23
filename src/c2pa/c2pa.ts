@@ -64,6 +64,19 @@ function assertionRefLabel(url: string): string {
   return m ? m[1] : url;
 }
 
+// Assertion references from a claim of either generation. v1 puts them under
+// `assertions`; v2 splits them into `created_assertions` and
+// `gathered_assertions`. Reading only `assertions` leaves a v2 claim with no
+// referenced labels, which drops every binding to void-binding.
+function claimAssertionRefs(claim: unknown): { url?: string; hash?: Uint8Array }[] {
+  const out: { url?: string; hash?: Uint8Array }[] = [];
+  for (const key of ['created_assertions', 'gathered_assertions', 'assertions']) {
+    const refs = mapGet(claim, key) as { url?: string; hash?: Uint8Array }[] | undefined;
+    if (Array.isArray(refs)) out.push(...refs);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // JUMBF boxes
 // ---------------------------------------------------------------------------
@@ -1226,6 +1239,48 @@ function readU32(b: Uint8Array, o: number): number {
   return ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
 }
 
+/**
+ * Decodes a JSON-family assertion payload. This writer emits JSON assertions
+ * as 'json' content boxes; c2pa-rs serializes the same assertion data as
+ * 'cbor' boxes. The content box type picks the decoder; any other type, or a
+ * decode failure, reads as absence.
+ */
+function parseJsonishAssertion(body: Uint8Array): unknown {
+  if (body.length < 8) return null;
+  const type = String.fromCharCode(body[4], body[5], body[6], body[7]);
+  const content = body.subarray(8, readU32(body, 0));
+  try {
+    if (type === 'json') return JSON.parse(bytesToUtf8(content));
+    if (type === 'cbor') return decode(content);
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Extracts an embedded binary resource. c2pa-rs stores binary payloads
+ * (thumbnails and other blobs) as a bfdb descriptor box (0x00, MIME string,
+ * 0x00 — ISO 19566-5) followed by a bidb box holding the raw bytes. Anything
+ * that is not exactly that shape reads as absence.
+ */
+function extractEmbeddedData(body: Uint8Array): { mime: string; bytes: Uint8Array } | null {
+  if (body.length < 16 || String.fromCharCode(body[4], body[5], body[6], body[7]) !== 'bfdb') return null;
+  const bfdbLen = readU32(body, 0);
+  if (bfdbLen < 9 || bfdbLen + 8 > body.length) return null;
+  const bfdb = body.subarray(8, bfdbLen);
+  if (bfdb[0] !== 0x00) return null;
+  let q = 1;
+  while (q < bfdb.length && bfdb[q] !== 0) q++;
+  if (q >= bfdb.length) return null;
+  const mime = bytesToUtf8(bfdb.subarray(1, q));
+  if (!/^[a-z]+\/[a-z0-9.+-]+$/i.test(mime)) return null;
+  if (String.fromCharCode(body[bfdbLen + 4], body[bfdbLen + 5], body[bfdbLen + 6], body[bfdbLen + 7]) !== 'bidb') return null;
+  const bidbLen = readU32(body, bfdbLen);
+  if (bidbLen < 8 || bfdbLen + bidbLen > body.length) return null;
+  return { mime, bytes: body.subarray(bfdbLen + 8, bfdbLen + bidbLen) };
+}
+
 /** One entry of a standard C2PA actions assertion (edit history). */
 export interface EditAction {
   /** e.g. 'c2pa.edited', 'c2pa.cropped' — or a vendor-specific name. */
@@ -1288,8 +1343,13 @@ export interface C2paManifest {
    * (telemetry.pqKey), which also detects a strip.
    */
   pq: { alg: string; fingerprint: string; signature: Uint8Array } | null;
-  /** Raw content bytes of the com.verify.app-attest assertion, when present. */
-  appAttestAssertion: Uint8Array | null;
+  /**
+   * Content of the com.verify.app-attest assertion, when present: the decoded
+   * object for a 'json' or 'cbor' content box, otherwise the raw bytes.
+   */
+  appAttestAssertion: Record<string, unknown> | Uint8Array | null;
+  /** Which claim box parsed: 1 for 'c2pa.claim', 2 for 'c2pa.claim.v2'. */
+  claimVersion: 1 | 2;
   /** Signed on-device transcript (audio), when present. */
   transcript: TranscriptAssertion | null;
   /**
@@ -1355,6 +1415,12 @@ export interface C2paManifest {
    * for display, each with its own `referenced` gate.
    */
   thumbnails: { label: string; bytes: Uint8Array; referenced: boolean }[];
+  /**
+   * Embedded binary resources (bfdb/bidb content boxes) keyed by assertion
+   * label, as c2pa-rs writes them. Claim and ingredient thumbnails also
+   * surface in `thumbnails`; each carries its own `referenced` gate.
+   */
+  resources: Record<string, { mime: string; bytes: Uint8Array; referenced: boolean }>;
   /**
    * c2pa.depthmap.GDepth: declared depth map — GDepth envelope fields plus
    * the decoded map image. Claim-bound only when `referenced`. The scene-match
@@ -1535,11 +1601,14 @@ export function parseManifestChain(storePayload: Uint8Array): { manifests: (C2pa
 
 function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManifest | null {
   const find = (label: string) => manifest.children.find((c) => c.label === label) ?? null;
-  const claimNode = find('c2pa.claim');
+  // Claim box: 'c2pa.claim' (v1) or 'c2pa.claim.v2' (c2pa-rs).
+  const claimV1Node = find('c2pa.claim');
+  const claimNode = claimV1Node ?? find('c2pa.claim.v2');
   const sigNode = find('c2pa.signature');
   const assertionsNode = find('c2pa.assertions');
   if (!claimNode || !sigNode) return null;
-  let appAttestAssertion: Uint8Array | null = null;
+  const claimVersion: 1 | 2 = claimV1Node ? 1 : 2;
+  let appAttestAssertion: Record<string, unknown> | Uint8Array | null = null;
 
   // Claim: body is a single 'cbor' box.
   if (claimNode.body.length < 8) return null;
@@ -1564,8 +1633,12 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
   // verification — the chain only names the key, and a swapped chain fails
   // the signature. Chain trust is a separate axis downstream (signerTrust).
   const headerMap = decode(protectedHeader);
-  const chain = (mapGet(headerMap, 33) ?? mapGet(headerMap, 'x5chain') ??
-    mapGet(arr[1], 33) ?? mapGet(arr[1], 'x5chain')) as Uint8Array[] | undefined;
+  // RFC 9360 serializes a single-certificate x5chain as a bare bstr rather
+  // than a one-element array, which is what c2pa-rs emits. Both encodings
+  // name the same chain, so a bare bstr is wrapped here.
+  const rawChain = (mapGet(headerMap, 33) ?? mapGet(headerMap, 'x5chain') ??
+    mapGet(arr[1], 33) ?? mapGet(arr[1], 'x5chain')) as Uint8Array[] | Uint8Array | undefined;
+  const chain = rawChain instanceof Uint8Array ? [rawChain] : rawChain;
   if (!chain || chain.length === 0) return null;
   const certDer = chain[0];
 
@@ -1573,14 +1646,8 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
   // in the store but not listed were attached after signing; they are parsed
   // for display and carry no weight.
   const referencedAssertionLabels: string[] = [];
-  {
-    const refs = mapGet(claim, 'assertions');
-    if (Array.isArray(refs)) {
-      for (const r of refs) {
-        const url = (r as { url?: unknown } | null)?.url;
-        if (typeof url === 'string') referencedAssertionLabels.push(assertionRefLabel(url));
-      }
-    }
+  for (const r of claimAssertionRefs(claim)) {
+    if (typeof r?.url === 'string') referencedAssertionLabels.push(assertionRefLabel(r.url));
   }
   const claimReferences = (label: string): boolean => referencedAssertionLabels.includes(label);
 
@@ -1600,11 +1667,28 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
   let depthmap: C2paManifest['depthmap'] = null;
   let collectionHash: C2paManifest['collectionHash'] = null;
   const thumbnails: C2paManifest['thumbnails'] = [];
+  const resources: C2paManifest['resources'] = {};
   const ingredients: C2paManifest['ingredients'] = [];
   if (assertionsNode) {
     for (const a of assertionsNode.children) {
       assertionHashes[a.label] = sha256(a.full.subarray(8));
-      if (a.label === 'c2pa.hash.data' && a.body.length >= 8) {
+      const embedded = extractEmbeddedData(a.body);
+      if (embedded) {
+        // Embedded binary resource (bfdb+bidb). Registered for hashed-URI
+        // consumers; claim and ingredient thumbnails also surface in
+        // `thumbnails` so both layouts render the same way.
+        resources[a.label] = { mime: embedded.mime, bytes: embedded.bytes, referenced: claimReferences(a.label) };
+        if (
+          // c2pa-rs keeps multi-instance labels unique with a double-underscore
+          // suffix ('c2pa.thumbnail.ingredient__1'); this writer suffixes with
+          // '.N'. Both parse.
+          /^c2pa\.thumbnail\.(claim|ingredient)(\.\d+|__\d+)?$/.test(a.label) &&
+          (embedded.mime === 'image/jpeg' || embedded.mime === 'image/png') &&
+          embedded.bytes.length > 0
+        ) {
+          thumbnails.push({ label: a.label, bytes: embedded.bytes, referenced: claimReferences(a.label) });
+        }
+      } else if (a.label === 'c2pa.hash.data' && a.body.length >= 8) {
         const cborBytes = a.body.subarray(8, readU32(a.body, 0));
         // Structural validation, not a blind cast: mutated CBOR can decode
         // to a map missing exclusions/hash. Malformed leaves hashData null,
@@ -1619,7 +1703,9 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
         ) {
           hashData = { exclusions: decoded.exclusions, alg: decoded.alg, hash: decoded.hash };
         }
-      } else if (a.label === 'c2pa.hash.bmff.v2' && a.body.length >= 8) {
+      } else if ((a.label === 'c2pa.hash.bmff.v2' || a.label === 'c2pa.hash.bmff.v3') && a.body.length >= 8) {
+        // v3 (spec 2.2, c2pa-rs output) is structurally identical to v2 here:
+        // xpath exclusions, alg, and hash, over the same exclusion walk.
         const cborBytes = a.body.subarray(8, readU32(a.body, 0));
         const decoded = decode(cborBytes) as { exclusions?: BmffExclusion[]; alg?: string; hash?: Uint8Array } | null;
         if (
@@ -1631,14 +1717,20 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
           hashBmff = { exclusions: decoded.exclusions, alg: decoded.alg, hash: decoded.hash };
         }
       } else if (a.label === 'com.verify.app-attest' && a.body.length >= 8) {
-        appAttestAssertion = a.body.subarray(8, readU32(a.body, 0));
+        // c2pa-rs writes this assertion as a 'cbor' content box; this writer
+        // uses 'json'. Content that decodes as neither flows on as raw bytes,
+        // so it still fails on parse merit downstream.
+        const parsed = parseJsonishAssertion(a.body);
+        appAttestAssertion = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as Record<string, unknown>)
+          : a.body.subarray(8, readU32(a.body, 0));
       } else if (a.label === 'com.verify.transcript' && a.body.length >= 8) {
         try {
-          transcript = JSON.parse(bytesToUtf8(a.body.subarray(8, readU32(a.body, 0)))) as TranscriptAssertion;
+          transcript = parseJsonishAssertion(a.body) as TranscriptAssertion;
         } catch { /* non-fatal */ }
       } else if (a.label === 'com.verify.identity' && a.body.length >= 8) {
         try {
-          const j = JSON.parse(bytesToUtf8(a.body.subarray(8, readU32(a.body, 0))));
+          const j = parseJsonishAssertion(a.body) as { namedActor?: { org?: unknown; role?: unknown }; referenced_assertions?: { hash?: unknown }[] } | null;
           const ref = Array.isArray(j?.referenced_assertions) ? j.referenced_assertions[0] : null;
           if (typeof j?.namedActor?.org === 'string' && typeof ref?.hash === 'string') {
             identity = {
@@ -1650,15 +1742,19 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
         } catch { /* non-fatal: a malformed assertion is absence */ }
       } else if (a.label === 'com.verify.exif' && a.body.length >= 8) {
         try {
-          exif = {
-            data: JSON.parse(bytesToUtf8(a.body.subarray(8, readU32(a.body, 0)))),
-            referenced: claimReferences(a.label),
-          };
+          const parsed = parseJsonishAssertion(a.body);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            exif = {
+              data: parsed as Record<string, unknown>,
+              referenced: claimReferences(a.label),
+            };
+          }
         } catch { /* non-fatal */ }
       } else if (a.label === 'com.verify.telemetry' && a.body.length >= 8) {
-        try {
-          telemetry = JSON.parse(bytesToUtf8(a.body.subarray(8, readU32(a.body, 0))));
-        } catch { /* non-fatal */ }
+        const parsed = parseJsonishAssertion(a.body);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          telemetry = parsed as Record<string, unknown>;
+        }
       } else if ((a.label === 'c2pa.actions' || a.label === 'c2pa.actions.v2') && a.body.length >= 8) {
         // Standard C2PA edit history (CBOR): how a Canon→Photoshop file
         // surfaces its edits. Structurally validated; malformed CBOR reads
@@ -1692,11 +1788,11 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
             actions = { list, referenced: claimReferences(a.label) };
           }
         } catch { /* non-fatal: a malformed assertion is absence */ }
-      } else if (/^c2pa\.ingredient(\.v\d+)?(\.\d+)?$/.test(a.label) && a.body.length >= 8) {
+      } else if (/^c2pa\.ingredient(\.v\d+)?(\.\d+|__\d+)?$/.test(a.label) && a.body.length >= 8) {
         // Standard C2PA ingredient (CBOR): an asset this file was made from,
-        // as declared by the sealing software. The (.\d+)? suffix matches
-        // multi-still video, where later pair ingredients are suffixed
-        // (c2pa.ingredient.v3.5) to keep claim labels unique.
+        // as declared by the sealing software. The instance suffix is '.N'
+        // from this writer (multi-still video, where later pair ingredients
+        // are suffixed to keep claim labels unique) or '__N' from c2pa-rs.
         try {
           const cborBytes = a.body.subarray(8, readU32(a.body, 0));
           const decoded = decode(cborBytes) as Record<string, unknown> | null;
@@ -1704,14 +1800,26 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
             // The data hash and thumbnail identifier let the de-identify
             // re-seal carry second-camera stills forward unchanged.
             const data = decoded.data as { hash?: unknown } | undefined;
-            const thumb = decoded.thumbnail as { identifier?: unknown } | undefined;
+            // This writer's v1-style ingredients name the thumbnail with
+            // {identifier}; c2pa-rs v3 ingredients use a hashed URI, whose key
+            // is 'url' in the spec ('uri' also accepted).
+            const thumb = decoded.thumbnail as { identifier?: unknown; url?: unknown; uri?: unknown } | undefined;
+            const thumbRef = thumb?.url ?? thumb?.uri;
+            const thumbId =
+              typeof thumb?.identifier === 'string' ? thumb.identifier
+              : typeof thumbRef === 'string' ? assertionRefLabel(thumbRef)
+              : undefined;
+            // v1 ingredients carry 'title'/'format'; c2pa-rs v3 ingredients
+            // carry 'dc:title'/'dc:format'.
+            const titleRaw = decoded.title ?? decoded['dc:title'];
+            const formatRaw = decoded.format ?? decoded['dc:format'];
             ingredients.push({
-              title: typeof decoded.title === 'string' ? decoded.title : undefined,
-              format: typeof decoded.format === 'string' ? decoded.format : undefined,
+              title: typeof titleRaw === 'string' ? titleRaw : undefined,
+              format: typeof formatRaw === 'string' ? formatRaw : undefined,
               relationship: typeof decoded.relationship === 'string' ? decoded.relationship : undefined,
               instanceId: typeof decoded.instanceId === 'string' ? decoded.instanceId : undefined,
               dataHashHex: data?.hash instanceof Uint8Array ? bytesToHex(data.hash) : undefined,
-              thumbnailIdentifier: typeof thumb?.identifier === 'string' ? thumb.identifier : undefined,
+              thumbnailIdentifier: thumbId,
               label: a.label,
               referenced: claimReferences(a.label),
             });
@@ -1845,11 +1953,12 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
         // hash binds the raw box ONLY when the claim references the label —
         // an unreferenced box parses fine but proves nothing.
         try {
+          // 'json' content box (this writer) or 'cbor' (c2pa-rs).
           customAssertions[a.label] = {
-            data: JSON.parse(bytesToUtf8(a.body.subarray(8, readU32(a.body, 0)))),
+            data: parseJsonishAssertion(a.body),
             referenced: claimReferences(a.label),
           };
-        } catch { /* non-fatal: malformed JSON is absence */ }
+        } catch { /* non-fatal: a malformed body is absence */ }
       }
     }
   }
@@ -1885,10 +1994,36 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
   } catch { /* malformed PQ entry — treated as absent */ }
 
   // claim_generator: the software that sealed this manifest. Self-asserted,
-  // display only.
-  const claimGenerator = typeof claim['claim_generator'] === 'string' ? (claim['claim_generator'] as string) : null;
+  // display only. v1 claims carry claim_generator (a string); v2 claims
+  // replace it with claim_generator_info, a map {name, version} or an array
+  // of them. Both normalize to "name/version".
+  const claimGenerator = (() => {
+    const g = claim['claim_generator'];
+    if (typeof g === 'string') return g;
+    const info = claim['claim_generator_info'] as unknown;
+    const first = Array.isArray(info) ? info[0] : info;
+    if (first && typeof first === 'object' && !Array.isArray(first)) {
+      const m = first as Record<string, unknown>;
+      if (typeof m['name'] === 'string') {
+        return typeof m['version'] === 'string' ? `${m['name']}/${m['version']}` : (m['name'] as string);
+      }
+    }
+    return null;
+  })();
 
-  return { claim, claimBytes, protectedHeader, signature, certDer, certChain: chain.map((c) => new Uint8Array(c)), certChainLength: chain.length, hashData, hashBmff, telemetry, manifestLabel: manifest.label, assertionHashes, referencedAssertionLabels, timestampTokens, timestampVersion, pq, appAttestAssertion, transcript, exif, identity, customAssertions, actions, c2paMetadata, softBinding, trainingMining, assetType, thumbnails, depthmap, collectionHash, ingredients, claimGenerator, manifestCount };
+  // The c2pa-rs path carries the capture-time pHash as com.verify.phash
+  // (JSON { alg, hex }) rather than a raw CBOR soft-binding block. Surface it
+  // through the same field: recovery metadata with the weight of
+  // c2pa.soft-binding, claim-bound only when referenced.
+  if (!softBinding && customAssertions['com.verify.phash']) {
+    const p = customAssertions['com.verify.phash'];
+    const d = p.data as { alg?: unknown; hex?: unknown } | null;
+    if (d && typeof d.alg === 'string' && typeof d.hex === 'string' && /^[0-9a-f]+$/i.test(d.hex)) {
+      softBinding = { alg: d.alg, valueHex: d.hex, referenced: p.referenced };
+    }
+  }
+
+  return { claim, claimBytes, protectedHeader, signature, certDer, certChain: chain.map((c) => new Uint8Array(c)), certChainLength: chain.length, hashData, hashBmff, telemetry, manifestLabel: manifest.label, assertionHashes, referencedAssertionLabels, timestampTokens, timestampVersion, pq, appAttestAssertion, claimVersion, transcript, exif, identity, customAssertions, actions, c2paMetadata, softBinding, trainingMining, assetType, thumbnails, resources, depthmap, collectionHash, ingredients, claimGenerator, manifestCount };
 }
 
 /**
@@ -2007,7 +2142,15 @@ export function verifyManifest(
         // signatures (truepic-20230212-library.jpg in the c2pa-org
         // public-testfiles). A high-S signature binds the same key to the
         // same message, so rejecting it would false-red genuine media.
-        signatureValid = p256.verify(m.signature, sha256(sigStructure), pub, { format: 'compact', lowS: false });
+        // Both ES256 byte forms are accepted: P1363 compact (this signer,
+        // Truepic-era files) and ASN.1 DER (the spec's ECDSA serialization,
+        // which c2pa-rs emits). Failing both is an invalid signature, not an
+        // unsupported one.
+        const digest = sha256(sigStructure);
+        let ok = false;
+        try { ok = p256.verify(m.signature, digest, pub, { format: 'compact', lowS: false }); } catch { ok = false; }
+        if (!ok) { try { ok = p256.verify(m.signature, digest, pub, { format: 'der', lowS: false }); } catch { ok = false; } }
+        signatureValid = ok;
       }
     } else if (algId === -37 || algId === -38 || algId === -39) {
       // PS256/PS384/PS512 (RSA-PSS): Adobe's 2022-era files. The key comes
@@ -2047,10 +2190,9 @@ export function verifyManifest(
   // it; an unreferenced c2pa.hash.* box could have been attached after
   // signing, self-consistent over arbitrary media. Unreferenced binding,
   // malformed exclusion set, and no binding at all all yield void-binding.
-  const claimAssertionRefs = mapGet(m.claim, 'assertions') as { url?: string }[] | undefined;
+  const bindingRefs = claimAssertionRefs(m.claim);
   const claimReferencesBinding = (label: string): boolean =>
-    Array.isArray(claimAssertionRefs) &&
-    claimAssertionRefs.some((r) => typeof r?.url === 'string' && assertionRefLabel(r.url) === label);
+    bindingRefs.some((r) => typeof r?.url === 'string' && assertionRefLabel(r.url) === label);
   if (m.hashData && m.hashData.alg === 'sha256' && m.hashData.exclusions.length > 0 && claimReferencesBinding('c2pa.hash.data')) {
     // All exclusions are honored; foreign manifests (Leica, Adobe) use
     // several, and verifying only the first would false-red genuine media.
@@ -2079,7 +2221,7 @@ export function verifyManifest(
       assetHashMatches = walkMatches;
       if (!walkMatches) assetHashFailure = 'mismatch';
     }
-  } else if (m.hashBmff && m.hashBmff.alg === 'sha256' && m.hashBmff.exclusions.length > 0 && claimReferencesBinding('c2pa.hash.bmff.v2')) {
+  } else if (m.hashBmff && m.hashBmff.alg === 'sha256' && m.hashBmff.exclusions.length > 0 && (claimReferencesBinding('c2pa.hash.bmff.v2') || claimReferencesBinding('c2pa.hash.bmff.v3'))) {
     try {
       const recomputed = hashBmffV2(fileBytes, m.hashBmff.exclusions);
       const walkMatches = recomputed.length === m.hashBmff.hash.length && recomputed.every((v, i) => v === m.hashBmff!.hash[i]);
@@ -2113,15 +2255,12 @@ export function verifyManifest(
   //    assets carry them, so they are disclosed as unreferenced (see
   //    referencedAssertionLabels) rather than failing closed.
   let claimAssertionsMatch = true;
-  const refs = mapGet(m.claim, 'assertions') as { url?: string; hash?: Uint8Array }[] | undefined;
-  if (Array.isArray(refs)) {
-    for (const ref of refs) {
-      if (!ref?.url || !ref.hash) { claimAssertionsMatch = false; continue; }
-      const label = assertionRefLabel(ref.url);
-      const actual = m.assertionHashes[label];
-      if (!actual || actual.length !== ref.hash.length || !actual.every((v, i) => v === ref.hash![i])) {
-        claimAssertionsMatch = false;
-      }
+  for (const ref of claimAssertionRefs(m.claim)) {
+    if (!ref?.url || !ref.hash) { claimAssertionsMatch = false; continue; }
+    const label = assertionRefLabel(ref.url);
+    const actual = m.assertionHashes[label];
+    if (!actual || actual.length !== ref.hash.length || !actual.every((v, i) => v === ref.hash![i])) {
+      claimAssertionsMatch = false;
     }
   }
 
