@@ -29,8 +29,13 @@ jobs:
           echo "node   $(node -v)"
           echo "npm    $(npm -v)"
 
+      # npm ci honors the tracked lockfile. `npm install` floats every ~range
+      # in package.json, which is the leading suspect: locally the lockfile
+      # pins expo 57.0.14, and adding the `react-native-strict-api` condition
+      # to a local typecheck reproduces this job's failure exactly — same
+      # files, same lines, same error codes.
       - name: Install
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Resolved versions
         run: |
