@@ -544,8 +544,8 @@ export default function CaptureScreen() {
   // consulted only while its control is open.
   const trayZone = useRef<{ y0: number; y1: number } | null>(null);
   const ribbonZone = useRef<{ y0: number; y1: number } | null>(null);
-  const trayWrapRef = useRef<View>(null);
-  const ribbonWrapRef = useRef<View>(null);
+  const trayWrapRef = useRef<React.ComponentRef<typeof View>>(null);
+  const ribbonWrapRef = useRef<React.ComponentRef<typeof View>>(null);
   const proOpenRef = useRef(false);
   proOpenRef.current = proOpen;
   const ribbonOpenRef = useRef(false);

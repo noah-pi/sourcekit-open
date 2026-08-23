@@ -900,7 +900,7 @@ export default function InspectScreen() {
   // any, sits on the inspected media. Clean is always the default.
   const [overlay, setOverlay] = useState<string>('clean');
   // The empty state links to the field guide and scrolls straight to it.
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   useEffect(() => {
     getDeviceKey().then((k) => setOwnFingerprint(k.fingerprint)).catch(() => {});

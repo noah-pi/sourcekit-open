@@ -78,6 +78,13 @@ jobs:
             $(ls *.mts | grep -v -E '^(test|tool|build)-')
         working-directory: tests/.staged
 
+      - name: Typecheck the app (strict, tsconfig.json)
+        # Screens and components, against the versions the lockfile pins.
+        # --legacy-peer-deps because the lockfile was generated with it.
+        run: |
+          npm ci --legacy-peer-deps --no-audit --no-fund
+          npx tsc --noEmit -p tsconfig.json
+
   supply-chain:
     runs-on: ubuntu-latest
     steps:

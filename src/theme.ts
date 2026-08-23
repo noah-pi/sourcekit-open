@@ -186,7 +186,12 @@ export function useEffectiveScheme(): EffectiveScheme {
  *   const buildStyles =  => StyleSheet.create({ … colors.x … });
  *   const styles = useThemedStyles(buildStyles);
  */
-export function useThemedStyles<T extends StyleSheet.NamedStyles<T>>(build: () => T): T {
+// The constraint StyleSheet.create itself imposes. Read off create rather
+// than named directly: React Native 0.87 moved this type behind an internal
+// name when the generated types became the default.
+type StyleMap = Parameters<typeof StyleSheet.create>[0];
+
+export function useThemedStyles<T extends StyleMap>(build: () => T): T {
   const scheme = useEffectiveScheme();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- scheme is the invalidation key; colors mutates in place before listeners fire
   return useMemo(() => StyleSheet.create(build()), [scheme]);

@@ -30,9 +30,9 @@ layer can't explain.
 ## Continuous enforcement
 
 CI (`.github/workflows/ci.yml`) runs every suite `tests/.staged` discovers, a
-strict typecheck of the staged core, a dependency allow-list with per-package
-caps, and `npm audit` on every budgeted manifest — on every push and pull
-request.
+strict typecheck of both the staged core and the app, a dependency allow-list
+with per-package caps, and `npm audit` on every budgeted manifest — on every
+push and pull request.
 
 ## What the AI assistance did and didn't do
 

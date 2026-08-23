@@ -487,7 +487,7 @@ export default function VaultScreen() {
         ListHeaderComponent={
           // Needs attention: collapsed header line with the count; tap opens
           // the failure cards. Hidden when there are no failed jobs.
-          failedJobs.length === 0 ? null : (
+          failedJobs.length === 0 ? undefined : (
             <View style={styles.attentionSection}>
               <Pressable style={styles.attentionToggle} onPress={() => setAttentionOpen((o) => !o)} hitSlop={8}>
                 <Text style={styles.attentionToggleText}>Needs attention · {failedJobs.length}</Text>

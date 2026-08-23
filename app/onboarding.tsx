@@ -84,7 +84,7 @@ export default function Onboarding() {
   const router = useRouter();
   const { setOnboarded, onboarded } = useStore();
   const [page, setPage] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   // Replay from the camera HUD lock badge gets an X-out; first run has none,
   // since the tour gates entry to the app.
