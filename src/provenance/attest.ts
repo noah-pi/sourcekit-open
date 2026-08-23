@@ -670,10 +670,8 @@ async function embedC2paInJpeg(stripped: Uint8Array, signedRecord: AttestationRe
       telemetry: signedRecord as unknown as Record<string, unknown>,
       signDigest: key.signDigest,
       signPayload: key.signPayload,
-      // The post-quantum signature lives in the record, not here. The record
-      // signs its own canonical JSON, which carries asset.sha256, so the media
-      // is covered — and a general-purpose C2PA writer has nowhere to put a
-      // second signature.
+      // The post-quantum signature is carried on the record, which signs its
+      // own canonical JSON and commits asset.sha256.
       pq: null,
       certChain: chain,
       cleanFileSha256: sha256(stripped),
@@ -728,10 +726,8 @@ async function embedC2paInPng(stripped: Uint8Array, signedRecord: AttestationRec
       telemetry: signedRecord as unknown as Record<string, unknown>,
       signDigest: key.signDigest,
       signPayload: key.signPayload,
-      // The post-quantum signature lives in the record, not here. The record
-      // signs its own canonical JSON, which carries asset.sha256, so the media
-      // is covered — and a general-purpose C2PA writer has nowhere to put a
-      // second signature.
+      // The post-quantum signature is carried on the record, which signs its
+      // own canonical JSON and commits asset.sha256.
       pq: null,
       certChain: chain,
       cleanFileSha256: sha256(stripped),
@@ -1097,10 +1093,8 @@ async function embedC2paInBmff(
     telemetry: signedRecord as unknown as Record<string, unknown>,
     signDigest: key.signDigest,
     signPayload: key.signPayload,
-    // The post-quantum signature lives in the record, not here. The record
-    // signs its own canonical JSON, which carries asset.sha256, so the media
-    // is covered — and a general-purpose C2PA writer has nowhere to put a
-    // second signature.
+    // The post-quantum signature is carried on the record, which signs its
+    // own canonical JSON and commits asset.sha256.
     pq: null,
     certChain: chain,
     cleanFileSha256: sha256(stripped), // unused by the BMFF builder — the v2 hash replaces it
