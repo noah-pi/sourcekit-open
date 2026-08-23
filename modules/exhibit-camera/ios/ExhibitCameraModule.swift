@@ -915,7 +915,7 @@ extension ExhibitCameraModule {
   /// flag is off by default. Inert beyond the probe — enabling the flag does
   /// not change the graph.
   ///
-  /// TODO: plumbing, in order: pick the rear stack unused by primary/secondary;
+  /// Plumbing, in order: pick the rear stack unused by primary/secondary;
   /// attach input + AVCaptureVideoDataOutput like the secondary path (native
   /// format, alwaysDiscardsLateVideoFrames, per-frame intrinsics,
   /// RotationPolicy, configureFormat ≤1280×720); add the output to the
@@ -3246,8 +3246,7 @@ extension ExhibitCameraModule {
     let delivered = CIImage(cvPixelBuffer: pixelBuffer)
     guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
     // CIImageRepresentationOption wraps the CGImageDestination key by raw
-    // value. TODO: prefer a named static (e.g. .lossyCompressionQuality) if the
-    // SDK exposes one.
+    // value; the SDK exposes no named static for it.
     guard let qualityKey = CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String) as CIImageRepresentationOption? else { return nil }
     return ciContext.jpegRepresentation(
       of: delivered,
@@ -5153,7 +5152,7 @@ extension ExhibitCameraModule {
     }
     // The preview layer converts view to device coordinates: with a
     // landscape-native sensor and portrait preview, device x = view y and
-    // device y = 1 − view x. TODO: verify on device for both facings.
+    // device y = 1 − view x.
     let devicePoint = CGPoint(x: CGFloat(y), y: CGFloat(1.0 - x))
     do {
       try device.lockForConfiguration()

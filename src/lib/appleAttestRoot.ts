@@ -27,7 +27,11 @@ export const APPLE_ATTEST_ROOT_DER = base64ToBytes(
 );
 
 /**
- * App ID that attestation is bound to (TEAM_ID.BUNDLE_ID). rpIdHash in a
- * genuine attestation's authData is SHA-256 of this string. Not a secret.
+ * App ID that attestation is bound to, as `TEAM_ID.BUNDLE_ID`. rpIdHash in a
+ * genuine attestation's authData is SHA-256 of this string, so a build must
+ * set its own 10-character Apple Team ID here. Not a secret; it appears in
+ * every receipt. Left empty in this repository: with no value set, App Attest
+ * verification reports that the app id is unconfigured rather than checking
+ * against someone else's.
  */
-export const VERIFY_APPLE_APP_ID = '7L49FYJH6Q.com.verify.camera';
+export const VERIFY_APPLE_APP_ID = '';

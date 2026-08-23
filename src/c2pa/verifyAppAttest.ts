@@ -132,8 +132,12 @@ export function verifyAppAttestAssertion(
     `chain valid at attestation-mint time — the chain-wide validity intersection (${new Date(mintEarliest).toISOString().slice(0, 10)} → ${new Date(mintLatest).toISOString().slice(0, 10)}) bounds when Apple minted this attestation; an enrollment artifact is not re-dated by the media's signing time`,
   );
 
-  // 2. rpIdHash binds the attestation to this app.
+  // 2. rpIdHash binds the attestation to this app. An unset app id cannot
+  // establish that binding, so the check fails rather than passing vacuously.
   const authData = new Uint8Array(att.authData);
+  if (!VERIFY_APPLE_APP_ID) {
+    return fail('app id is not configured in this build (VERIFY_APPLE_APP_ID in src/lib/appleAttestRoot.ts), so the attestation cannot be bound to an app');
+  }
   const rpIdOk = equalBytes(authData.subarray(0, 32), sha256(asciiToBytes(VERIFY_APPLE_APP_ID)));
   checks.push(`attestation minted for this app (rpIdHash = SHA-256 of ${VERIFY_APPLE_APP_ID})`);
   if (!rpIdOk) return fail('attestation was minted for a different app');
