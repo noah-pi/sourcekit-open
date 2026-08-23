@@ -1,26 +1,19 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Disclosure ladders — the fixed coarseness rungs every
- * claim family commits under (docs/INTEGRITY.md — selective disclosure).
+ * Disclosure ladders — the fixed coarseness rungs every claim family commits
+ * under (docs/INTEGRITY.md — selective disclosure). A ladder is an ordered
+ * list of rung names, coarsest first (rung 0), and every capture carries the
+ * full expected claim set. A claim with no data is declared `never-recorded`
+ * in the inventory assertion at commit time, which the signed root binds.
  *
- * A ladder is an ordered list of rung names, coarsest first (rung 0).
- * Every capture carries the FULL expected claim set: all rungs of all
- * ladders below. A claim with no data at capture time is declared
- * `never-recorded` in the inventory assertion AT COMMIT TIME — it cannot
- * be rewritten later, because the inventory is committed under the signed
- * root (manifest wiring is Phase 2; the assertion shape ships now).
+ * The `context` family has no fixed ladder: free-form claims
+ * (`context.<label>`) whose rung numbers the caller assigns.
  *
- * The `context` family has NO fixed ladder: it carries free-form,
- * project-specific claims (`context.<label>`) whose rung numbers are
- * assigned by the caller. Everything else is pinned here.
- *
- * Value derivation: `coarsen` implements TIME and LOCATION derivation
- * (pure prefix truncation — of the normalized exact-ms string for time,
- * of the full 9-char geohash for location — so a coarse value is always
- * a prefix of the exact one). Location country/region/grid-region are
- * reverse geocoding (a lookup, not a derivation) and stay caller-side:
- * the honest move is declaring them never-recorded. Identity and sensor
- * values are likewise pre-derived by the caller.
+ * `coarsen` derives time and location values by prefix truncation — of the
+ * normalized exact-ms string for time, of the full 9-char geohash for
+ * location. Location country/region/grid-region are reverse geocoding, and
+ * identity and sensor values are pre-derived, so all of those stay
+ * caller-side.
  */
 
 export type ClaimFamily = 'location' | 'time' | 'identity' | 'sensor' | 'context';
@@ -41,7 +34,7 @@ export const SENSOR_RUNGS = [
   'present', 'residual-summary',
 ] as const;
 
-/** Families with a fixed ladder. `context` is deliberately absent. */
+/** Families with a fixed ladder. `context` has none. */
 export const LADDERS = {
   location: LOCATION_RUNGS,
   time: TIME_RUNGS,
@@ -71,10 +64,9 @@ export function claimIdFor(family: LadderedFamily, rungName: string): string {
 }
 
 /**
- * Every claimId a capture MUST account for, sorted: all rungs of all
- * fixed ladders. Each is either committed (has a value) or declared
- * never-recorded at commit time. `context.*` claims are optional
- * additions outside this fixed set.
+ * Every claimId a capture must account for, sorted: all rungs of all fixed
+ * ladders. Each is either committed or declared never-recorded at commit time.
+ * `context.*` claims are optional additions outside this set.
  */
 export function expectedClaimIds(): string[] {
   const ids: string[] = [];
@@ -87,19 +79,14 @@ export function expectedClaimIds(): string[] {
 const EXACT_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 // ---------------------------------------------------------------------------
-// Geohash: the location family's PURE derivation. The exact
-// claim value is the canonical string `'<lat>,<lon>'` (6 decimal places,
-// round-half-away-from-zero at 5e-7° ≈ 5 cm — below GPS noise, so the
-// quantization never decides anything a desk would weigh). Coarser rungs
-// are PREFIX TRUNCATIONS of the full 9-character geohash, exactly like the
-// time family: geohash-9 → geohash-7 → geohash-5.
+// Geohash — the location family's derivation. The exact claim value is
+// `'<lat>,<lon>'` at 6 decimal places (round-half-away-from-zero at
+// 5e-7° ≈ 5 cm, below GPS noise). Coarser rungs are prefix truncations of the
+// full 9-character geohash: geohash-9 → geohash-7 → geohash-5.
 //
-// country / region / grid-region are NOT derived here: naming an
-// administrative region from coordinates is reverse geocoding — a network
-// or dataset lookup that has no place in a pure commitment core. Callers
-// declare those rungs never-recorded (honest absence) rather than fake a
-// derivation. The geohash rungs carry the same information content with a
-// desk-side decode.
+// country / region / grid-region are not derived here; naming an
+// administrative region from coordinates needs a reverse-geocoding lookup.
+// Callers declare those rungs never-recorded.
 // ---------------------------------------------------------------------------
 
 const GEOHASH_BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
@@ -143,17 +130,13 @@ export function exactLocationValue(lat: number, lon: number): string {
 }
 
 /**
- * Derive the canonical string value of a claim at a coarser rung from its
- * exact value. TIME and LOCATION (Phase 2): the coarsened value is a
- * strict prefix of the normalized exact string
- * (`YYYY-MM-DDTHH:MM:SS.sssZ` → year `YYYY`, month `YYYY-MM`,
- * day `YYYY-MM-DD`, hour `YYYY-MM-DDTHH`, minute `YYYY-MM-DDTHH:MM`,
- * exact-ms unchanged; 9-char geohash → geohash-9/7/5, exact unchanged).
- * Location rungs that are reverse geocoding (country, region,
- * grid-region) throw with the honest instruction: declare them
- * never-recorded. Identity and sensor values are caller-derived;
- * calling coarsen for those families throws, naming where the
- * derivation lives.
+ * Derive the canonical value of a claim at a coarser rung from its exact
+ * value. For time and location the result is a strict prefix of the normalized
+ * exact string (`YYYY-MM-DDTHH:MM:SS.sssZ` → year `YYYY`, month `YYYY-MM`, day
+ * `YYYY-MM-DD`, hour `YYYY-MM-DDTHH`, minute `YYYY-MM-DDTHH:MM`, exact-ms
+ * unchanged; 9-char geohash → geohash-9/7/5, exact unchanged). The
+ * reverse-geocoded location rungs (country, region, grid-region) and the
+ * identity and sensor families throw; those values are caller-derived.
  */
 export function coarsen(family: ClaimFamily, exactValue: string, rung: string | number): string {
   const idx = typeof rung === 'number' ? rung : rungIndex(family, rung);
@@ -186,8 +169,8 @@ export function coarsen(family: ClaimFamily, exactValue: string, rung: string | 
         throw new Error(`coarsen: location exact value must be '<lat>,<lon>' at 6 decimals, got '${exactValue}'`);
       }
       const precision = name === 'geohash-5' ? 5 : name === 'geohash-7' ? 7 : 9;
-      // Prefix truncation of the full geohash — a coarse value is always a
-      // prefix of the finer one, the same derivation shape as the time family.
+      // Prefix truncation of the full geohash: a coarse value is always a
+      // prefix of the finer one.
       return geohashEncode(Number(m[1]), Number(m[2]), 9).slice(0, precision);
     }
     throw new Error(

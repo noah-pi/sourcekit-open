@@ -1,22 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Round-trip: BUILD → VERIFY, with timestamps on.
+ * Round-trip: build then verify, with timestamps on. Builds a real manifest
+ * through buildC2paSegment, countersigned by real TimeStampTokens from two
+ * mock TSAs (ECDSA and RSA; the RSA one exercises the
+ * rsaEncryption-to-digestAlgorithm mapping), embeds it in a real JPEG, and
+ * runs verifyPhotoBytes over the bytes. Catches drift between the builder and
+ * the verifier, such as a countersign message reconstructed a few bytes off.
  *
- * Builder and verifier tested against SEPARATE fixtures, never against
- * each other, let whole bug classes through — a countersign message
- * reconstructed 3 bytes off (every genuine TSA token fails), RSA TSAs
- * rejected outright. This suite closes that loop permanently: it builds a
- * real manifest through the real builder (buildC2paSegment), countersigned
- * by real TimeStampTokens from mock TSAs (one ECDSA, one RSA — the RSA one
- * exercises the rsaEncryption→digestAlgorithm mapping), embeds it
- * in a real JPEG, and runs the real verifier (verifyPhotoBytes) over the
- * bytes. Any drift between the two sides fails here, loudly.
- *
- * The mock TSAs are full CMS/RFC-3161 producers — TSTInfo, signed
- * attributes, messageDigest binding, chain — not stubs. They are NOT on the
- * pinned TSA trust list, so the report must show valid-but-unpinned:
- * trusted time does not anchor (earliestTrustedUtc null) while display time
- * still surfaces (earliestValidUtc set).
+ * The mock TSAs are full CMS/RFC-3161 producers (TSTInfo, signed attributes,
+ * messageDigest binding, chain), not stubs, and are not on the pinned TSA
+ * trust list, so the report must show valid-but-unpinned: earliestTrustedUtc
+ * null while earliestValidUtc is set.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-roundtrip.mts
  */
@@ -39,8 +33,8 @@ function check(name: string, cond: boolean, detail = ''): void {
 }
 
 // ---------------------------------------------------------------------------
-// Tiny DER writer (mirrors src/lib/cert.ts — duplicated here so the lab owns
-// its mock-TSA plumbing and the app code stays untouched)
+// Tiny DER writer. Mirrors src/lib/cert.ts; duplicated so the lab owns its
+// mock-TSA plumbing.
 // ---------------------------------------------------------------------------
 
 function derLen(n: number): Uint8Array {
@@ -85,7 +79,7 @@ const name = (org: string, cn: string) =>
   seq(set(seq(oid(OID.organizationName), utf8(org))), set(seq(oid(OID.commonName), utf8(cn))));
 
 // ---------------------------------------------------------------------------
-// Mock TSAs — full RFC 3161 producers over lab keys
+// Mock TSAs: full RFC 3161 producers over lab keys.
 // ---------------------------------------------------------------------------
 
 interface MockTsa {
@@ -112,9 +106,9 @@ function buildToken(
     seq(oid(OID.contentType), set(oid(OID.tstInfo))),
     seq(oid(OID.messageDigest), set(octet(sha256(tst)))),
   );
-  // The signed bytes are the SET OF Attributes (universal 0x31 tag) — the
-  // implicit [0] in the SignerInfo carries the same content with the
-  // context tag (RFC 5652 §5.4).
+  // The signed bytes are the SET OF Attributes (universal 0x31 tag); the
+  // implicit [0] in the SignerInfo carries the same content with the context
+  // tag (RFC 5652 §5.4).
   const signature = sign(tlv(0x31, attrsContent));
   const signerInfo = seq(
     int1(1),                                            // version
@@ -148,8 +142,8 @@ function makeRsaTsa(): MockTsa {
     seq(utcTime(notBefore), utcTime(notAfter)),         // validity
     name('Exhibit Lab', 'Test TSA RSA'),                 // subject
     spki,
-    // RFC 3161 §2.3: a TSA cert MUST carry critical
-    // EKU id-kp-timeStamping — the verifier enforces it.
+    // RFC 3161 §2.3: a TSA cert must carry critical EKU id-kp-timeStamping.
+    // The verifier enforces it.
     tlv(0xa3, seq(
       seq(oid(OID.extKeyUsage), tlv(0x01, new Uint8Array([0xff])), tlv(0x04, seq(oid(OID.kpTimeStamping)))),
     )),
@@ -163,8 +157,8 @@ function makeRsaTsa(): MockTsa {
         certDer,
         message,
         (signedBytes) => new Uint8Array(crypto.sign('sha256', Buffer.from(signedBytes), privateKey)),
-        // The RSA shape's whole point: real RSA TSAs announce rsaEncryption here —
-        // the digest lives in the SignerInfo digestAlgorithm field above.
+        // Real RSA TSAs announce rsaEncryption here; the digest lives in the
+        // SignerInfo digestAlgorithm field above.
         seq(oid(OID.rsaEncryption), NULL),
       );
     },
@@ -185,9 +179,8 @@ console.log('— Build → verify round trip —');
 // Lab device signer.
 const devPriv = p256.utils.randomPrivateKey();
 const devPub = p256.getPublicKey(devPriv, false);
-// Mirror production exactly: every app signer emits canonical low-S
-// (deviceKey.ts et al. pass { lowS: true }); the record/COSE verifiers
-// enforce it — the harness mirrors the real signing discipline.
+// Canonical low-S, as every app signer emits (deviceKey.ts and friends pass
+// { lowS: true }) and the record/COSE verifiers enforce.
 const devSignDigest = async (d: Uint8Array) => p256.sign(d, devPriv, { lowS: true }).toDERRawBytes();
 const devCert = await buildSelfSignedCert(devPub, devSignDigest, new Date(Date.now() - 60_000));
 
@@ -226,8 +219,8 @@ const record = buildRecord({
   publicKeyBase64: bytesToBase64(devPub),
   fingerprint: bytesToHex(sha256(devPub)),
 });
-// Signed time lower bound: the cached Bitcoin tip rides the
-// record — inside the signed payload, like every other self-reported signal.
+// Signed time lower bound: the cached Bitcoin tip rides inside the signed
+// payload, like every other self-reported signal.
 record.beacon = {
   chain: 'bitcoin',
   blockHash: 'ab'.repeat(32),
@@ -249,8 +242,8 @@ const segment = await buildC2paSegment(
     signDigest: devSignDigest,
     certChain: [devCert],
     cleanFileSha256: sha256(JPEG_1PX),
-    // Two witness tokens: one ECDSA, one RSA. The builder asks, the mock
-    // TSAs answer — exactly the shape fetchTimestampTokens produces online.
+    // Two witness tokens, ECDSA and RSA, in the shape fetchTimestampTokens
+    // produces online.
     fetchTimestamp: async (message) => [ecTsa.answer(message), rsaTsa.answer(message)],
     // The signed camera-reported assertion (sanitized upstream).
     exif: { ISO: 400, FNumber: 1.78, FocalLength: 6.86, Orientation: 1 },
@@ -289,9 +282,8 @@ check('the Bitcoin beacon signs in and is reported as a time lower bound',
 
 console.log('\n— one signature per claim, native-seal hop —');
 
-// The two-phase fixpoint must burn EXACTLY ONE claim signature no matter how
-// many size iterations it runs. Biometric-bound keys prompt per signature —
-// per-iteration signing would prompt Face ID again and again, and a
+// The two-phase fixpoint must spend exactly one claim signature however many
+// size iterations it runs: biometric-bound keys prompt per signature, and a
 // reusable signing session would be a silent-forgery window.
 {
   let claimSigs = 0;
@@ -317,8 +309,8 @@ console.log('\n— one signature per claim, native-seal hop —');
     `verdict=${countedReport.verdict} valid=${countedReport.c2pa?.timestamps.valid}`);
 }
 
-// signPayload (the native-seal hop): digest+sign in ONE call, and the
-// builder never touches the digest path when the hop is available.
+// signPayload (the native-seal hop): digest and sign in one call. The builder
+// never touches the digest path when the hop is available.
 {
   let payloadCalls = 0;
   let digestCalls = 0;
@@ -351,8 +343,8 @@ const tamperedReport = await verifyPhotoBytes(tampered);
 check('one flipped byte after signing → CONTENT_MODIFIED',
   tamperedReport.verdict === 'CONTENT_MODIFIED', `verdict=${tamperedReport.verdict}`);
 
-// Drift control: a token over the WRONG message must fail messageImprint even
-// when everything else is genuine (the countersign-message drift class, injected deliberately).
+// Drift control: a token over the wrong message must fail messageImprint even
+// when everything else is genuine.
 const wrongMessage = new Uint8Array(sha256(signedJpeg)); // any wrong bytes
 const driftToken = ecTsa.answer(wrongMessage);
 const driftSegment = await buildC2paSegment(
@@ -379,9 +371,8 @@ check('...while the file itself still verifies INTACT (time is not integrity)',
 
 console.log('\n— box surgery: an unreferenced box carries no weight —');
 
-// A com.verify.exif box spliced into the assertion store AFTER signing must
-// parse as UNREFERENCED and report honestly — never the claim-bound string
-// "signed as self-reported metadata, hash cross-checked against the claim".
+// A com.verify.exif box spliced into the assertion store after signing must
+// parse as unreferenced, not as the claim-bound wording.
 {
   const bareSegment = await buildC2paSegment(
     {
@@ -408,8 +399,8 @@ console.log('\n— box surgery: an unreferenced box carries no weight —');
     bx('json', utf8ToBytes(JSON.stringify({ ISO: 3200, FNumber: 2.8 }))),
   ));
 
-  // Walk the fixed layout: APP11 at 2 → store jumb → manifest jumb → claim,
-  // assertions jumbs. Splice the box in as the assertions box's last child.
+  // Walk the fixed layout: APP11 at 2, store jumb, manifest jumb, claim,
+  // assertions jumb. The box is spliced in as the assertions box's last child.
   const rd32 = (b: Uint8Array, o: number) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
   const segAt = 2;
   const storeAt = segAt + 4 + 8; // marker+length (4) + APP11 JUMBF header (8)

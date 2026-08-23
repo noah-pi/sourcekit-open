@@ -1,19 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * MultipleLensCard — the second camera's committed frame, next to the
- * primary view.
- *
- * What it does and does not do:
- *  - HIDDEN entirely for audio exhibits (the module does not apply).
- *  - No secondary capture → one neutral "Not recorded" line.
- *  - A committed secondary frame → an interactive overlay (primary view,
- *    secondary blended on top through a draggable opacity slider) and an
- *    on-device parallax measurement: both frames decoded small (96 px
- *    grayscale), a grid of patches NCC-matched within a horizontal window.
- *    The card reports ONLY the matched-patch count and the median
- *    horizontal disparity in pixels — no interpretation, no verdict.
- *  - Decode failure anywhere → "Parallax could not be computed on this
- *    device", neutral. Never red: absence and failure are not tamper.
+ * MultipleLensCard — the second camera's committed frame, next to the primary
+ * view.
+ *  - Hidden entirely for audio exhibits.
+ *  - No secondary capture: one neutral "Not recorded" line.
+ *  - A committed secondary frame: an overlay (primary view with the secondary
+ *    blended over it through a draggable opacity slider) plus an on-device
+ *    parallax measurement — both frames decoded at 96 px grayscale, a patch
+ *    grid NCC-matched within a horizontal window. Reports the matched-patch
+ *    count and median horizontal disparity only.
+ *  - Decode failure anywhere: neutral "Parallax could not be computed on this
+ *    device". Never red; absence and failure are not tamper.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -45,12 +42,10 @@ type ParallaxState =
   | { state: 'done'; result: ParallaxResult }
   | { state: 'unavailable' };
 
-/** The primary view: the photo itself, or — for video — a thumbnail
-    extracted at the pair's primary PTS anchor. (0.18.6 field fix: a
-    paused VideoView sat at frame 0 and rendered BLACK for the whole
-    blend box, so the slider blended the second camera against nothing.
-    A thumbnail is also exactly what the parallax measurement below
-    compares against — one frame, both uses.) */
+/** The primary view: the photo itself, or for video a thumbnail extracted at
+    the pair's primary PTS anchor. A paused VideoView sits at frame 0 and
+    renders black across the blend box, and the thumbnail is also what the
+    parallax measurement compares against. */
 function PrimaryView({ kind, uri, atSeconds, style }: {
   kind: 'photo' | 'video';
   uri: string;
@@ -67,11 +62,9 @@ function VideoPrimary({ uri, atSeconds, style }: { uri: string; atSeconds: numbe
   useEffect(() => {
     let cancelled = false;
     setExhausted(false);
-    // 0.18.8 field fix ("fades from the original view to a black box" on
-    // exported videos): ONE seek attempt meant a single bad extract (t=0 on
-    // a moov-last export, a slow content-uri read) left the whole blend box
-    // on its near-black background. Walk the same fallback ladder the
-    // parallax measurement already uses before declaring failure.
+    // Walk the same fallback ladder the parallax measurement uses before
+    // declaring failure: a single bad extract (t=0 on a moov-last export, a
+    // slow content-uri read) would otherwise leave the blend box black.
     const anchorMs = Math.max(0, Math.round(atSeconds * 1000));
     const attempts = [anchorMs, 0, 250, 1000].filter((v, i, a) => a.indexOf(v) === i);
     (async () => {
@@ -87,7 +80,7 @@ function VideoPrimary({ uri, atSeconds, style }: { uri: string; atSeconds: numbe
     return () => { cancelled = true; };
   }, [uri, atSeconds]);
   if (!thumbUri) {
-    // Total failure is stated, never a silent black box.
+    // Total failure is stated in words rather than a black box.
     return exhausted ? (
       <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
         <Text style={{ color: colors.textFaint, fontSize: fontSize.xs, textAlign: 'center', paddingHorizontal: 16 }}>
@@ -102,17 +95,16 @@ function VideoPrimary({ uri, atSeconds, style }: { uri: string; atSeconds: numbe
 /** One committed video pair frame for the filmstrip. */
 export interface VideoPairFrameRef {
   frame: SecondaryFrameRef;
-  /** The capture-side pair sequence number — the label, never a time claim. */
+  /** Capture-side pair sequence number; a label, not a time claim. */
   pairIndex: number;
-  /** The pair's primary PTS anchor (s) when the record carries it — the
-      moment the blend/parallax primary frame is pulled from when this
-      pair is selected. Null → unknown, the first frame is used. */
+  /** The pair's primary PTS anchor (s) when the record carries it: the moment
+      the blend/parallax primary frame comes from while this pair is selected.
+      Null uses the first frame. */
   ptsSeconds?: number | null;
 }
 
-/** A video pair frame materialized to cache once (expo-image caches decodes
-    by URI — the path keys on the committed sha256, same discipline as the
-    compare view's frame). */
+/** A video pair frame materialized to cache once. expo-image caches decodes
+    by URI, so the path keys on the committed sha256, as in the compare view. */
 function FilmstripThumb({ frameRef, selected, onSelect }: {
   frameRef: VideoPairFrameRef;
   selected: boolean;
@@ -132,8 +124,8 @@ function FilmstripThumb({ frameRef, selected, onSelect }: {
     return () => { cancelled = true; };
   }, [frameRef]);
   return (
- // The strip frames are tappable — a tap swaps THAT
-    // pair into the blend view + parallax above.
+    // Strip frames are tappable: a tap swaps that pair into the blend view
+    // and parallax above.
     <Pressable
       style={({ pressed }) => [styles.stripItem, pressed && { opacity: 0.7 }]}
       onPress={onSelect}
@@ -151,26 +143,26 @@ function FilmstripThumb({ frameRef, selected, onSelect }: {
 
 export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFrameTimeSeconds, recordError, videoFrames }: {
   kind: 'photo' | 'video' | 'audio';
-  /** The decrypted media URI — the primary view (photo or video). */
+  /** Decrypted media URI for the primary view (photo or video). */
   primaryUri: string | null;
   /** The committed secondary frame, or null when none was committed. */
   secondaryFrame: SecondaryFrameRef | null;
   /** Video only: the pair's primary PTS anchor (s), so the parallax frame
-      comes from the moment the pair was taken. Null → the first frame. */
+      comes from the moment the pair was taken. Null uses the first frame. */
   primaryFrameTimeSeconds?: number | null;
-  /** The committed native error string when the sink was enabled but failed
-      at capture — a failure, stated as one (never "Not recorded"). */
+  /** Committed native error string when the sink was enabled but failed at
+      capture. Rendered as a failure, not as "Not recorded". */
   recordError?: string | null;
- /** Video only: every committed pair frame — the
-      second camera's view ACROSS the take, not only the compared moment. */
+  /** Video only: every committed pair frame, the second camera's view across
+      the take rather than the compared moment alone. */
   videoFrames?: VideoPairFrameRef[] | null;
 }) {
   const styles = useThemedStyles(buildStyles);
   // 0 = primary only, 1 = secondary fully blended over the primary.
   const [mix, setMix] = useState(0.5);
- // Which take pair the blend view shows. Null → the
-  // card's own secondaryFrame (the first recorded pair). A filmstrip tap
-  // swaps the pair in — frame AND its PTS anchor.
+  // Which take pair the blend view shows. Null uses the card's own
+  // secondaryFrame (the first recorded pair); a filmstrip tap swaps in
+  // another pair's frame and PTS anchor.
   const [activePair, setActivePair] = useState<number | null>(null);
   useEffect(() => { setActivePair(null); }, [secondaryFrame]);
   const activeRef = activePair != null
@@ -186,10 +178,8 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   // the committed frame bytes are materialized to the (plain, shred-on-lock)
   // cache once and shown from there.
   const [secondaryUri, setSecondaryUri] = useState<string | null>(null);
-  // A materialized frame that expo-image cannot DECODE rendered as
-  // an opaque black layer over the primary — the field's "fades to a black
-  // box". A decode failure is a fact about this device, stated in words,
-  // never pixels.
+  // A materialized frame expo-image cannot decode renders as an opaque black
+  // layer over the primary, so a decode failure is stated in words instead.
   const [secondaryDecodeFailed, setSecondaryDecodeFailed] = useState(false);
   useEffect(() => {
     let cancelled = false;
@@ -198,23 +188,13 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
       setSecondaryUri(null);
       return;
     }
-    // The materialized path must be UNIQUE per
-    // frame — expo-image caches decodes by URI, so a constant path showed
-    // the FIRST exhibit's secondary frame on every later exhibit (the
-    // bytes on disk were correct; the decode cache was not). Key the file
-    // by the committed sha256; fall back to a cheap content fingerprint
-    // when a legacy bundle lacks it.
-    // 0.18.6 field fix (the Inspect second-view vanish): the fallback
-    // fingerprint is raw base64 — a '/' in it made the cache path traverse
-    // a nonexistent directory, the write failed, and the blend view
-    // silently disappeared. Strip to a path-safe alphabet.
-    // Exported-video frames carry no committed sha256, and the old
-    // fallback fingerprint (length + first 24 base64 chars) was effectively
-    // "length + the universal JFIF header" — every real JPEG shares those
-    // 24 characters, so two same-length frames COLLIDED on one cache path
-    // and expo-image's URI-keyed decode cache served the wrong (or a stale,
-    // half-overwritten) image. Hash the decoded bytes: unique per frame,
-    // stable across visits.
+    // The materialized path must be unique per frame: expo-image caches
+    // decodes by URI, so a shared path serves one exhibit's frame for every
+    // other. Key the file by the committed sha256, and for frames without one
+    // (exported video) by a hash of the decoded bytes — a fingerprint over the
+    // leading base64 collides, since every JPEG shares the JFIF header. The
+    // key is stripped to a path-safe alphabet; a '/' in it makes the write
+    // traverse a nonexistent directory and fail.
     const frameBytes = base64ToBytes(shownFrame.dataBase64);
     const frameKey = (shownFrame.sha256?.slice(0, 16) ?? bytesToHex(sha256(frameBytes)).slice(0, 16))
       .replace(/[^A-Za-z0-9-]/g, '');
@@ -234,17 +214,14 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   const slider = useMemo(
     () =>
       PanResponder.create({
-        // 0.18.6 field fix, corrected: the drag-thief was the detail
-        // screen's swipe-back gesture, now disabled on that screen — so
-        // the wrap claims its touches directly again (tap sets the blend,
-        // a drag follows the finger). The wrap is a dedicated 44 px
-        // control row; page scroll starts above or below it.
+        // The wrap claims its touches directly: tap sets the blend, drag
+        // follows the finger. It is a dedicated 44 px control row, so page
+        // scroll starts above or below it.
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        // 0.18.1 field fix ("the compare slider doesn't work"): once a
-        // horizontal drag IS claimed, never cede it to the enclosing
-        // ScrollView mid-gesture — the default termination request lets a
-        // parent scroller steal the responder, freezing the thumb.
+        // Once a horizontal drag is claimed, do not cede it to the enclosing
+        // ScrollView: the default termination request lets a parent scroller
+        // steal the responder and freeze the thumb.
         onPanResponderTerminationRequest: () => false,
         onShouldBlockNativeResponder: () => true,
         onPanResponderGrant: (e) => {
@@ -265,10 +242,9 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
     [],
   );
 
-  // The honest parallax measurement: both views decoded to the same 96×64
-  // gray grid, a patch grid NCC-matched within a ±14 px horizontal window.
-  // Numbers only — matched count and median disparity. Any failure along
-  // the way lands in the neutral "could not be computed" state.
+  // Parallax measurement: both views decoded to the same 96×64 gray grid, a
+  // patch grid NCC-matched within a ±14 px horizontal window. Reports matched
+  // count and median disparity; any failure lands in "could not be computed".
   useEffect(() => {
     let cancelled = false;
     if (!shownFrame || !primaryUri || kind === 'audio') return;
@@ -279,9 +255,9 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
         const secondary = await decodeBytesToGray(secBytes, 96, 64, 'forensic-secondary.jpg');
         let primarySource = primaryUri;
         if (kind === 'video') {
-          // Try the pair's moment first, then fall back through
-          // fixed offsets before declaring the measurement uncomputable —
-          // one bad seek (e.g. t=0 on a moov-last file) must not kill it.
+          // Try the pair's moment first, then fixed offsets, before calling
+          // the measurement uncomputable; one bad seek (t=0 on a moov-last
+          // file) should not end it.
           const anchorMs = Math.max(0, Math.round((shownPtsSeconds ?? 0) * 1000));
           const attempts = [anchorMs, 0, 250, 1000].filter((v, i, a) => a.indexOf(v) === i);
           let thumbUri: string | null = null;
@@ -306,7 +282,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
     };
   }, [shownFrame, primaryUri, kind, shownPtsSeconds]);
 
-  // Audio exhibits: the module does not apply — the card hides entirely.
+  // Audio exhibits: the card is hidden.
   if (kind === 'audio') return null;
 
   return (
@@ -324,9 +300,9 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
           {primaryUri && secondaryUri && !secondaryDecodeFailed ? (
             <View>
               <View style={styles.compareBox}>
-                {/* 0.18.6 (Noah): the primary frame follows the SELECTED
-                    pair's anchor — tapping a strip frame re-seeks the
-                    primary thumbnail to that pair's moment. */}
+                {/* The primary frame follows the selected pair's anchor:
+                    tapping a strip frame re-seeks the primary thumbnail to
+                    that pair's moment. */}
                 <PrimaryView kind={kind} uri={primaryUri} atSeconds={shownPtsSeconds} style={StyleSheet.absoluteFill} />
                 <View style={[StyleSheet.absoluteFill, { opacity: mix }]}>
                   <Image
@@ -351,11 +327,10 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
                 {...slider.panHandlers}
                 accessibilityLabel="Blend between primary and second camera"
               >
-                {/* pointerEvents="none" on the children: the WRAP must stay
-                    the touch target — a touch landing on the track/thumb
-                    otherwise reports locationX relative to that child (the
-                    thumb is 14 px wide) and the blend jumps to ~0 (0.18.1
-                    field fix). */}
+                {/* pointerEvents="none" on the children keeps the wrap as the
+                    touch target: a touch landing on the track or the 14 px
+                    thumb reports locationX relative to that child, sending the
+                    blend to ~0. */}
                 <View style={styles.sliderTrack} pointerEvents="none">
                   <View style={[styles.sliderFill, { width: `${mix * 100}%` }]} />
                 </View>
@@ -458,8 +433,8 @@ const buildStyles = () => StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: '#101013',
   },
- // The selected strip frame — an accent ring, nothing
-  // more (selection is UI state, not a claim about the frame).
+  // Selected strip frame: an accent ring only. Selection is UI state, not a
+  // claim about the frame.
   stripImageSelected: { borderColor: colors.text, borderWidth: 2 },
   stripLabel: { color: colors.textFaint, fontSize: 9.5, marginTop: 2, textAlign: 'center' },
 });

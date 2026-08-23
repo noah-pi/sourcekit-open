@@ -1,55 +1,50 @@
 /**
- * Stereo ingestion glue: maps the ExhibitCamera CaptureResult's
- * three-state EvidencePaths onto the commitStereoArtifacts input contract
- * (src/provenance/stereoArtifacts.ts — the only ingestion-library touch
- * point).
+ * Stereo ingestion glue: maps the ExhibitCamera CaptureResult's three-state
+ * EvidencePaths onto the commitStereoArtifacts input contract
+ * (src/provenance/stereoArtifacts.ts, the only ingestion-library touch point).
  *
  * Two jobs:
  *
- *  1. THREE-STATE MAPPING. The bridge's object-form EvidencePath
+ *  1. Three-state mapping. The bridge's object-form EvidencePath
  *     ({state:'path'} / {state:'error'} / {state:'never-recorded'}) becomes
- *     the manifest's path/null/'never-recorded' vocabulary, with bytes read
- *     for recorded paths (REQUIRED), the native error string carried
- *     verbatim for failures (REQUIRED), and the stated reason for
- *     never-recorded. A recorded file that cannot be READ at seal time is
- *     stated as an error ('seal-time read failed: …') — never committed as
- *     recorded-without-bytes, never silently dropped.
+ *     the manifest's path/null/'never-recorded' vocabulary: bytes are read
+ *     for recorded paths, the native error string is carried verbatim for
+ *     failures, and never-recorded carries its stated reason. A recorded
+ *     file that cannot be read at seal time becomes an error entry
+ *     ('seal-time read failed: …'), never a recorded entry without bytes.
  *
- *  2. COMMITTED-SHAPE CONVERSION. The native module commits its own JSON
+ *  2. Committed-shape conversion. The native module writes its own JSON
  *     shapes; the desk's parsers (parseStereoCalibration /
- *     parseStereoTimestamps / stereoMetadataFromBlock) define the COMMITTED
- *     contract, so the conversion happens here, in the glue, before
- *     hashing — the hashed/committed bytes are the desk-shape JSON:
+ *     parseStereoTimestamps / stereoMetadataFromBlock) define the committed
+ *     contract, so conversion happens here, before hashing:
  *
- *     calibration: the native 4×3 row-major extrinsic (secondary→primary)
- *       is INVERTED to the committed rotation[9] (row-major) +
- *       translationM[3] with P_secondary = R·P_primary + t semantics
- *       (rigid inverse: R' = Rᵀ, t' = −Rᵀ·t). Intrinsics 3×3 row-major →
- *       {fx,fy,cx,cy,width,height} pixels from the session-photo full
- *       calibration. baselineMeters is OMITTED (the device never commits
- *       it; the desk cross-checks |t| when present — a glue-computed value
- *       would be self-agreement, not a cross-check). calibrationSource
+ *     calibration: the native 4×3 row-major extrinsic (secondary→primary) is
+ *       inverted to rotation[9] (row-major) + translationM[3] with
+ *       P_secondary = R·P_primary + t semantics (rigid inverse: R' = Rᵀ,
+ *       t' = −Rᵀ·t). Intrinsics 3×3 row-major → {fx,fy,cx,cy,width,height}
+ *       pixels from the session-photo full calibration. baselineMeters is
+ *       omitted: the device never commits it, and a glue-computed value
+ *       would make the desk's |t| cross-check circular. calibrationSource
  *       carries the native source labels.
  *
  *     timestamps: native {primaryHostSeconds, secondaryHostSeconds,
  *       capturedAtMs, synchronizedDeltaMs} → {primaryPtsSeconds,
  *       secondaryPtsSeconds, wallClockAnchorIso, synchronizedDeltaMs}.
  *
- *     metadata: the nested {primary, secondary} native blocks flatten to
- *       the desk's primary-device block. controlsReportedBy:'device' and
- *       focusDistanceMeters:null carry through verbatim (verified, not
- *       assumed). focalLengthMm is DERIVED from the committed calibration
- *       (fx px × pixelSizeMicrometers / 1000) — the device reports no mm
- *       number natively; the derivation note is committed alongside so the
- *       desk can recompute the same value from the calibration artifact.
+ *     metadata: the nested {primary, secondary} native blocks flatten to the
+ *       desk's primary-device block. controlsReportedBy:'device' and
+ *       focusDistanceMeters:null carry through verbatim. focalLengthMm is
+ *       derived from the committed calibration (fx px ×
+ *       pixelSizeMicrometers / 1000), since the device reports no mm number;
+ *       the derivation note is committed so the desk can recompute it.
  *
- *     A conversion failure does NOT fabricate: the artifact becomes an
- *     'error' state with the reason verbatim, and the raw native file is
- *     still vault-stored (<name>-native-raw) so nothing is destroyed.
+ *     A conversion failure yields an 'error' artifact with the reason
+ *     verbatim, and the raw native file is still vault-stored
+ *     (<name>-native-raw).
  *
- * rawDng: bytes are read for the hash but flagged hash-only by the
- * ingestion library (INLINE_IN_BUNDLE.rawDng === false) — the bundle
- * carries the commitment, the vault holds the bytes.
+ * rawDng: bytes are read for the hash but flagged hash-only by the ingestion
+ * library (INLINE_IN_BUNDLE.rawDng === false), so the bundle carries the
+ * commitment and the vault holds the bytes.
  */
 
 import { bytesToUtf8, utf8ToBytes } from '../lib/bytes';
@@ -57,8 +52,8 @@ import type { CaptureResult, CalibrationFile, SerializedCalibrationData } from '
 import type { StereoArtifactId, StereoCaptureArtifacts, StereoArtifactInput, StereoVideoPairInput } from './stereoArtifacts';
 import { STEREO_ARTIFACT_IDS } from './stereoArtifacts';
 
-/** A committed artifact file to vault-store: fileName + the COMMITTED bytes
-    (post-conversion for the JSON artifacts — what the hash binds). */
+/** A committed artifact file to vault-store: fileName plus the committed
+    bytes, post-conversion for JSON artifacts — what the hash binds. */
 export interface CommittedStereoFile {
   id: StereoArtifactId;
   fileName: string;
@@ -103,8 +98,8 @@ function intrinsicsShapeFrom(full: SerializedCalibrationData, label: string): {
 }
 
 /**
- * Native 4×3 row-major extrinsic (3 rows × 4 cols: [R|t]), secondary→primary
- * → committed rotation[9] row-major + translationM[3] with
+ * Native 4×3 row-major extrinsic (3 rows × 4 cols: [R|t]), secondary→primary,
+ * to committed rotation[9] row-major + translationM[3] with
  * P_secondary = R·P_primary + t semantics (the rigid inverse).
  */
 function convertExtrinsics(m12: number[], label: string): { rotation: number[]; translationM: [number, number, number] } {
@@ -127,8 +122,8 @@ function convertExtrinsics(m12: number[], label: string): { rotation: number[]; 
 /**
  * Convert the native calibration JSON to the committed desk shape
  * (parseStereoCalibration's contract). Throws with the reason when the
- * session-photo full calibration is absent — per-frame intrinsics alone
- * cannot bind the rig extrinsic, and a partial commitment is not evidence.
+ * session-photo full calibration is absent: per-frame intrinsics alone
+ * cannot bind the rig extrinsic.
  */
 export function convertCalibrationJson(nativeText: string): string {
   const o = JSON.parse(nativeText) as CalibrationFile & Record<string, unknown>;
@@ -144,7 +139,7 @@ export function convertCalibrationJson(nativeText: string): string {
     intrinsicsWide: intrinsicsShapeFrom(primary, 'primaryFull'),
     intrinsicsUltraWide: intrinsicsShapeFrom(secondary, 'secondaryFull'),
     extrinsics: convertExtrinsics(secondary.extrinsicMatrixRowMajor, 'secondaryFull'),
-    // Honesty passthrough: which physical devices the slots actually are.
+    // Which physical devices the slots actually are.
     deviceLabels: { wide: primary.device, ultraWide: secondary.device },
   };
   return JSON.stringify(converted);
@@ -196,9 +191,9 @@ function devicePositionOf(raw: unknown): string {
 /**
  * Flatten the native {primary, secondary, …} metadata JSON to the desk's
  * primary-device block. controlsReportedBy and focusDistanceMeters carry
- * through VERBATIM (verified, not assumed). focalLengthMm is derived from
- * the committed calibration (fx px × pixelSizeMicrometers / 1000) and the
- * derivation note is committed — the device reports no mm number natively.
+ * through verbatim. focalLengthMm is derived from the committed calibration
+ * (fx px × pixelSizeMicrometers / 1000) with the derivation note committed,
+ * since the device reports no mm number natively.
  */
 export function convertMetadataJson(nativeText: string, calibrationText: string | null): string {
   const o = JSON.parse(nativeText) as {
@@ -217,7 +212,7 @@ export function convertMetadataJson(nativeText: string, calibrationText: string 
     throw new Error('metadata: focusDistanceMeters must be null by construction (iOS exposes no focus-distance API)');
   }
   // focalLengthMm: derived from the committed session calibration when no
-  // native mm number exists (it never does on this path).
+  // native mm number exists.
   let focalLengthMm: number | null = typeof p.focalLengthMm === 'number' && Number.isFinite(p.focalLengthMm) ? p.focalLengthMm : null;
   if (focalLengthMm === null && calibrationText) {
     try {
@@ -243,8 +238,8 @@ export function convertMetadataJson(nativeText: string, calibrationText: string 
       ? `${ab.mainsHz}Hz (${ab.note ?? 'region-derived'})`
       : 'not reported';
   return JSON.stringify({
-    // The full native primary block rides through untyped — the desk reads
-    // what it needs; the committed contract fields below override by key.
+    // The full native primary block rides through untyped; the committed
+    // contract fields below override by key.
     ...p,
     controlsReportedBy: 'device',
     focusDistanceMeters: null,
@@ -260,8 +255,8 @@ export function convertMetadataJson(nativeText: string, calibrationText: string 
     physicalDeviceRaw: p.physicalDevice ?? null,
     antiBanding,
     antiBandingRaw: typeof ab === 'object' ? ab : null,
-    // The secondary device's block stays nested — the desk's block is the
-    // primary's; nothing is dropped.
+    // The secondary device's block stays nested; the desk's block is the
+    // primary's.
     secondary: o.secondary ?? null,
     ...(o.captureId ? { captureId: o.captureId } : {}),
     secondaryBytes: o.secondaryBytes ?? null,
@@ -275,10 +270,10 @@ export function convertMetadataJson(nativeText: string, calibrationText: string 
 
 /**
  * Map a CaptureResult to commitStereoArtifacts inputs. `readBytes` reads a
- * plain filesystem path (the bridge never emits file:// URIs, but tolerate
- * both). JSON artifacts are CONVERTED to the committed desk shape before
- * hashing; conversion failures become stated 'error' entries and the raw
- * native bytes ride the file list as <stem>-native-raw<ext>.
+ * plain filesystem path; the bridge never emits file:// URIs but both are
+ * tolerated. JSON artifacts are converted to the committed desk shape before
+ * hashing; conversion failures become 'error' entries and the raw native
+ * bytes ride the file list as <stem>-native-raw<ext>.
  */
 export async function buildStereoInputs(
   result: CaptureResult,
@@ -370,19 +365,18 @@ export async function buildStereoInputs(
 }
 
 // ---------------------------------------------------------------------------
-// VIDEO pair glue (Spec §8): the module writes pairs/pair-%04d-secondary.jpg
-// and pairs/pair-%04d-calibration.json during recording; the PTS anchors
-// ride the onStereoPairCaptured event (no timestamps file exists per pair).
-// The events — collected by the capture screen and carried on the seal job —
-// are the enumeration source: dense pairIndex, anchors verbatim. A null
-// artifact path in an event is the module's own sink-failure report and maps
-// to a stated 'error' entry; the calibration JSON converts to the committed
-// desk shape exactly like the photo path.
+// Video pair glue (Spec §8). The module writes pairs/pair-%04d-secondary.jpg
+// and pairs/pair-%04d-calibration.json during recording; PTS anchors ride the
+// onStereoPairCaptured event, since no per-pair timestamps file exists. Those
+// events, collected by the capture screen and carried on the seal job, are
+// the enumeration source: dense pairIndex, anchors verbatim. A null artifact
+// path is the module's own sink-failure report and maps to an 'error' entry;
+// the calibration JSON converts exactly like the photo path.
 // ---------------------------------------------------------------------------
 
-/** Structural mirror of the bridge's StereoPairCapturedEvent — declared
-    here so the glue's contract stands alone (the bridge type is assignable
-    to this; the open tree stages this file without the bridge). */
+/** Structural mirror of the bridge's StereoPairCapturedEvent, declared here
+    so the glue's contract stands alone; the bridge type is assignable to it
+    and the open tree stages this file without the bridge. */
 export interface StereoVideoPairEvent {
   index: number;
   secondaryPath: string | null;
@@ -408,9 +402,8 @@ function pairFileName(index: number, id: 'secondaryFrame' | 'calibration', ext: 
 
 /**
  * Map the collected pair events to commitStereoVideoArtifacts inputs.
- * `readBytes` reads a plain filesystem path. Read failures and calibration
- * conversion failures become stated 'error' entries (native-raw preserved
- * in the file list) — never fabricated, never silently dropped.
+ * `readBytes` reads a plain filesystem path. Read and calibration-conversion
+ * failures become 'error' entries, with native-raw preserved in the file list.
  */
 export async function buildStereoVideoPairInputs(
   events: StereoVideoPairEvent[],
@@ -423,8 +416,8 @@ export async function buildStereoVideoPairInputs(
     for (const id of ['secondaryFrame', 'calibration'] as const) {
       const path = id === 'secondaryFrame' ? ev.secondaryPath : ev.calibrationPath;
       if (path === null) {
-        // The module reported this sink failure at capture time (E_SINK) —
-        // stated as an error entry, verbatim about what is known.
+        // The module reported this sink failure at capture time (E_SINK);
+        // recorded as an error entry.
         artifacts[id] = {
           path: null,
           error: `the module reported a null ${id === 'secondaryFrame' ? 'secondaryPath' : 'calibrationPath'} for pair ${ev.index} at capture time (sink write failure, stated by the module)`,

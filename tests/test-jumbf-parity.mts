@@ -1,12 +1,12 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * JUMBF assertions + media parity.
+ * JUMBF assertions and media parity.
  *
  *   - com.verify.streamedChunks / contextTree / poseTrace / captureIntegrity
- *     ride as REAL JUMBF assertion boxes (hashed into the claim via the
- *     standard assertionHashes path) — not as JSON blobs inside telemetry;
- *   - THE PARITY PRINCIPLE: the same assertion label set for photo, video,
- *     and audio — the only divergences are the named exceptions;
+ *     ride as JUMBF assertion boxes hashed into the claim through the
+ *     standard assertionHashes path, not as JSON inside telemetry;
+ *   - parity: the same assertion label set for photo, video, and audio, with
+ *     only the named exceptions diverging;
  *   - a tampered custom assertion fails the claim's assertion-hash binding;
  *   - golden: the assertion-box layout is byte-stable for fixed inputs.
  *
@@ -33,8 +33,8 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 const section = (t: string) => console.log(`\n— ${t} —`);
 
-// Repo-relative default: stage.mjs copies this suite INTO tests/.staged, so
-// the staged dir is this file's own directory. VERIFY_STAGED_DIR overrides
+// Repo-relative default: stage.mjs copies this suite into tests/.staged, so
+// the staged dir is this file's own directory. VERIFY_STAGED_DIR overrides it
 // when running the un-staged source against a lab staged elsewhere.
 const STAGED = process.env.VERIFY_STAGED_DIR ?? fileURLToPath(new URL('.', import.meta.url));
 const key = labSigner();
@@ -44,7 +44,7 @@ const sensorLog = Array.from(
 ).join('\n') + '\n';
 const evidenceEnabled = { ring: true, rawPcm: true, sensors: true };
 
-/** The parity set (present for EVERY media kind). */
+/** The parity set: present for every media kind. */
 const PARITY_LABELS = [
   'com.verify.captureIntegrity',
   'com.verify.contextTree',
@@ -109,7 +109,7 @@ for (const kind of ['photo', 'video', 'audio'] as const) {
     PARITY_LABELS.every((l) => m.referencedAssertionLabels.includes(l) && m.customAssertions[l]?.referenced === true));
 }
 
-// The ONLY allowed divergences by media kind — each named, none silent.
+// The allowed divergences by media kind, each named.
 {
   const sc = (k: 'photo' | 'video' | 'audio') => manifests[k].customAssertions['com.verify.streamedChunks']?.data as any;
   check('photo streamedChunks is the structural zero-track assertion',
@@ -159,7 +159,7 @@ section('a tampered custom assertion fails the claim binding');
   const tm = parseManifest(extractC2paStore(tampered)!.payload)!;
   const v = verifyManifest(tampered, tm);
   check('tampered poseTrace fails the claim assertion-hash binding', v.claimAssertionsMatch === false, JSON.stringify(v));
-  // The binding check is over the box bytes — the parsed claim's hash for the
+  // The binding check is over the box bytes: the parsed claim's hash for the
   // tampered label must differ from a recomputation over the tampered box.
   const intact = verifyManifest(photo.signedPhotoBytes!, manifests.photo);
   check('the untampered manifest verifies clean',
@@ -186,8 +186,8 @@ section('golden: the assertion-box layout is byte-stable for fixed inputs');
   const a2 = await build();
   const m1 = parseManifest(extractC2paStore(a1.signedPhotoBytes!)!.payload)!;
   const m2 = parseManifest(extractC2paStore(a2.signedPhotoBytes!)!.payload)!;
-  // captureToSignatureMs is excluded: it derives from wall-clock at seal
-  // time, so two builds from a fixed capturedAt honestly differ on it.
+  // captureToSignatureMs is excluded: it comes from wall-clock at seal time,
+  // so two builds from a fixed capturedAt differ on it.
   const stripClock = (d: unknown) => {
     const c = { ...(d as Record<string, unknown>) };
     delete c.captureToSignatureMs;
@@ -196,15 +196,15 @@ section('golden: the assertion-box layout is byte-stable for fixed inputs');
   check('fixed inputs → byte-identical assertion bodies',
     JSON.stringify(m1.customAssertions['com.verify.poseTrace']?.data) === JSON.stringify(m2.customAssertions['com.verify.poseTrace']?.data) &&
     stripClock(m1.customAssertions['com.verify.captureIntegrity']?.data) === stripClock(m2.customAssertions['com.verify.captureIntegrity']?.data));
-  // The contextTree root differs ONLY because the master seed is fresh —
-  // the inventory ENTRIES (states, never-recorded) must be stable.
+  // The contextTree root differs only because the master seed is fresh; the
+  // inventory entries (states, never-recorded) must be stable.
   const e1 = m1.customAssertions['com.verify.contextTree']?.data as any;
   const e2 = m2.customAssertions['com.verify.contextTree']?.data as any;
   check('fixed inputs → identical inventory entries + never-recorded declaration',
     JSON.stringify(e1.entries) === JSON.stringify(e2.entries) &&
     JSON.stringify(e1.neverRecorded) === JSON.stringify(e2.neverRecorded));
   // Golden: the exact JSON serialization of the zero-track streamedChunks
-  // assertion (schema stability — a field rename breaks this on purpose).
+  // assertion. A field rename breaks this on purpose.
   const expectedStill =
     '{"label":"com.verify.streamedChunks","v":2,"alg":"sha256-merkle","chunkBytes":1048576,"tracks":[],' +
     '"superRoot":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","binding":"delivery-file",' +

@@ -6,14 +6,9 @@ import ImageIO
 import simd
 
 /**
- * Shared value types for the ExhibitCamera module.
- *
- * The camera commits, it never concludes: every field recorded here must be
- * LITERALLY TRUE. If the platform cannot provide a value, we record an
- * explicit null and say so — we never fabricate. Absence is stated, never
- * suspicious; unsupported hardware is unreached, never red.
- *
- * No network I/O of any kind.
+ * Shared value types for the ExhibitCamera module. Every recorded field is a
+ * value the platform actually reported; where it cannot provide one, the field
+ * is an explicit null. No network I/O.
  */
 
 // MARK: - Error codes (JS-visible; do not rename — JS matches on these)
@@ -75,9 +70,9 @@ enum ExhibitTorch: String {
   }
 }
 
-/// Photo-strobe preference (W2.2), distinct from the torch: this sets
-/// AVCapturePhotoSettings.flashMode on the photo output for stills; the
-/// torch stays the video-only continuous light. Values match the TS bridge.
+/// Photo-strobe preference (W2.2), distinct from the torch: sets
+/// AVCapturePhotoSettings.flashMode on the photo output for stills. The torch
+/// is the video-only continuous light. Values match the TS bridge.
 enum ExhibitPhotoFlash: String {
   case auto
   case on
@@ -100,7 +95,7 @@ enum ExhibitPhotoFlash: String {
 
 /// 'available'   — multicam supported, both back devices present, calibration
 ///                 delivery supported, hardwareCost ≤ 1.0 at probe time.
-/// 'unsupported' — hardware/OS cannot do stereo. Unreached, never red.
+/// 'unsupported' — hardware or OS cannot do stereo.
 /// 'unreached'   — not probed, permissions missing, or module absent.
 enum StereoAvailability: String {
   case available
@@ -108,13 +103,13 @@ enum StereoAvailability: String {
   case unreached
 }
 
-// MARK: - EvidencePath (three-state honesty, spec §5)
+// MARK: - EvidencePath (three states, spec §5)
 
 /// Every committed artifact reports one of exactly three states:
 ///   { state: 'path', path }                 — the file exists on disk
-///   { state: 'error', code, message }       — attempted, failed; stated
-///   { state: 'never-recorded', reason }     — not attempted (toggle off /
-///                                             unsupported); unreached, never red
+///   { state: 'error', code, message }       — attempted and failed
+///   { state: 'never-recorded', reason }     — not attempted (toggle off or
+///                                             unsupported)
 enum EvidencePathBuilder {
   static func path(_ p: String) -> [String: Any] {
     ["state": "path", "path": p]
@@ -127,11 +122,11 @@ enum EvidencePathBuilder {
   }
 }
 
-// MARK: - Calibration serialization (spec §4.2 — commit the inputs)
+// MARK: - Calibration serialization (spec §4.2: commit the inputs)
 
 /// Serialize an AVCameraCalibrationData to a JSON-able dictionary (~2 KB).
-/// LUTs ride as float arrays. All values are exactly what the OS delivered;
-/// the desk undistorts and fits geometry — nothing here is interpreted.
+/// LUTs ride as float arrays. Values are exactly what the OS delivered; the
+/// desk undistorts and fits geometry.
 enum CalibrationSerializer {
 
   static func dictionary(from calibration: AVCameraCalibrationData, deviceLabel: String) -> [String: Any] {
@@ -139,7 +134,7 @@ enum CalibrationSerializer {
     let extr = calibration.extrinsicMatrix // matrix_float4x3
     return [
       "device": deviceLabel,
-      // simd stores column-major; we emit row-major with the convention stated.
+      // simd stores column-major; emitted row-major, with the convention stated.
       "intrinsicMatrixRowMajor": [
         intr.columns.0.x, intr.columns.1.x, intr.columns.2.x,
         intr.columns.0.y, intr.columns.1.y, intr.columns.2.y,
@@ -179,9 +174,9 @@ enum CalibrationSerializer {
   }
 }
 
-// MARK: - Anti-banding (CaptureKit §5.4 pattern — region-derived, never measured)
+// MARK: - Anti-banding (CaptureKit §5.4 pattern; region-derived)
 
-/// iOS exposes NO anti-banding query API; mainsHz is derived from the locale
+/// iOS exposes no anti-banding query API, so mainsHz is derived from the locale
 /// region. The literal note "region-derived" is part of the contract.
 struct ExhibitAntiBanding {
   static func mainsHz() -> Int {
@@ -204,7 +199,7 @@ struct ExhibitAntiBanding {
   }
 }
 
-// MARK: - Mach clock (own copy — separate pod target from CaptureKit)
+// MARK: - Mach clock (own copy; separate pod target from CaptureKit)
 
 enum ExhibitMachClock {
   static let timebase: mach_timebase_info_data_t = {
@@ -222,8 +217,8 @@ enum ExhibitMachClock {
 
   /// Boot-relative seconds back to (approximate) mach ticks, to tag IMU
   /// samples whose native CMLogItem.timestamp is already boot-relative
-  /// (CaptureKit SPEC §5.2: every sample carries BOTH clocks). Input is
-  /// non-negative by construction (uptime-derived).
+  /// (CaptureKit SPEC §5.2: every sample carries both clocks). Input is
+  /// non-negative by construction.
   static func bootSecondsToTicks(_ seconds: Double) -> UInt64 {
     let nanos = max(0.0, seconds) * 1_000_000_000.0
     return UInt64((nanos * Double(timebase.denom) / Double(timebase.numer)).rounded())
@@ -239,12 +234,11 @@ func exhibitCameraURL(for path: String) -> URL? {
   return URL(fileURLWithPath: path)
 }
 
-// MARK: - Device mode mappers (spec §5 — device-reported enums, mapped + raw)
+// MARK: - Device mode mappers (spec §5: device-reported enums, mapped and raw)
 
-/// The module's SETTER vocabulary ('auto'|'locked'|'custom' etc.) is the
-/// requested intent; the metadata block commits what the DEVICE reports.
-/// Device enums are emitted both mapped (stable string) and raw (Int) so
-/// nothing is lost in translation.
+/// The module's setter vocabulary ('auto'|'locked'|'custom' etc.) is the
+/// requested intent; the metadata block commits what the device reports.
+/// Device enums are emitted both mapped (stable string) and raw (Int).
 enum DeviceModeMapper {
   /// .continuousAutoExposure / .autoExpose → 'auto'; .locked → 'locked';
   /// .custom → 'custom'.
@@ -258,9 +252,9 @@ enum DeviceModeMapper {
   }
 
   /// .autoFocus → 'auto'; .continuousAutoFocus → 'continuous';
-  /// .locked → 'locked'. NOTE: the device cannot distinguish 'locked' from
-  /// 'manual' (locked with an explicit lensPosition) — both report
-  /// 'locked'; the manual intent is visible via lensPosition + 'locked'.
+  /// .locked → 'locked'. The device cannot distinguish 'locked' from 'manual'
+  /// (locked with an explicit lensPosition); manual intent shows as
+  /// lensPosition plus 'locked'.
   static func focusMode(_ mode: AVCaptureDevice.FocusMode) -> String {
     switch mode {
     case .autoFocus: return "auto"
@@ -271,8 +265,8 @@ enum DeviceModeMapper {
   }
 
   /// .autoWhiteBalance → 'auto'; .continuousAutoWhiteBalance →
-  /// 'continuous'; .locked → 'locked'. Same locked/manual conflation as
-  /// focus: manual white balance IS mode-locked with explicit gains.
+  /// 'continuous'; .locked → 'locked'. Same locked/manual conflation as focus:
+  /// manual white balance is mode-locked with explicit gains.
   static func whiteBalanceMode(_ mode: AVCaptureDevice.WhiteBalanceMode) -> String {
     switch mode {
     case .autoWhiteBalance: return "auto"
@@ -293,8 +287,7 @@ enum DeviceModeMapper {
     }
   }
 
-  /// OS-reported thermal state (ProcessInfo) → stable string. Reported by
-  /// the OS, never measured by us (M1/C6).
+  /// OS-reported thermal state (ProcessInfo) → stable string (M1/C6).
   static func thermalState(_ state: ProcessInfo.ThermalState) -> String {
     switch state {
     case .nominal: return "nominal"
@@ -316,14 +309,13 @@ enum DeviceModeMapper {
   }
 }
 
-// MARK: - Digital-zoom quality caps (W2.3 — a quality choice, stated as such)
+// MARK: - Digital-zoom quality caps (W2.3)
 
 /// Conservative digital-zoom ceilings (device-zoom factor) per constituent
-/// device class. These are an APP-CHOSEN quality bar, NOT hardware limits:
-/// past them the frame is a heavy digital crop of the sensor readout, and
-/// the app refuses to present that as optical reach. The device's own
-/// ceiling (maxAvailableVideoZoomFactor) is always exposed alongside as
-/// `hardwareMax` so nothing here hides the hardware number.
+/// device class. These are an app-chosen quality bar, not hardware limits; past
+/// them the frame is a heavy digital crop of the sensor readout. The device's
+/// own ceiling (maxAvailableVideoZoomFactor) is exposed alongside as
+/// `hardwareMax`.
 enum ExhibitZoomCaps {
   static func qualityCap(for deviceType: AVCaptureDevice.DeviceType) -> Double {
     switch deviceType {
@@ -335,13 +327,12 @@ enum ExhibitZoomCaps {
   }
 }
 
-// MARK: - Photo EXIF extraction (W2.4 — OS-written values only, never synthesized)
+// MARK: - Photo EXIF extraction (W2.4: OS-written values only)
 
-/// Reads the EXIF numbers the OS ITSELF wrote into a captured photo's
-/// metadata (AVCapturePhoto.metadata → Exif sub-dictionary) and re-keys
-/// them under the standard EXIF tag names the app contract commits. Values
-/// pass through verbatim (NSNumber); a tag the OS did not write is ABSENT —
-/// never defaulted, never derived.
+/// Reads the EXIF numbers the OS wrote into a captured photo's metadata
+/// (AVCapturePhoto.metadata → Exif sub-dictionary) and re-keys them under the
+/// standard EXIF tag names the app contract commits. Values pass through
+/// verbatim (NSNumber); a tag the OS did not write is absent.
 enum PhotoExifExtractor {
 
   static func dictionary(from photo: AVCapturePhoto) -> [String: Any] {
@@ -365,27 +356,27 @@ enum PhotoExifExtractor {
         out[contractKey] = value
       }
     }
-    // ISOSpeedRatings rides as an array in the OS metadata; commit its first
-    // element (the exposure ISO), exactly as written.
+    // ISOSpeedRatings rides as an array in the OS metadata; the first element
+    // (the exposure ISO) is committed as written.
     if let isoList = exif["ISOSpeedRatings"] as? [NSNumber], let first = isoList.first {
       out["ISOSpeedRatings"] = first
     }
     return out
   }
 
-  /// EXIF Flash tag, bit 0: the strobe fired. nil when the OS wrote no
-  /// Flash tag (no strobe claim at all — stated, never implied).
+  /// EXIF Flash tag, bit 0: the strobe fired. nil when the OS wrote no Flash
+  /// tag, which is committed as no strobe claim.
   static func flashFired(from exif: [String: Any]) -> Bool? {
     guard let value = exif["Flash"] as? NSNumber else { return nil }
     return (value.intValue & 0x1) != 0
   }
 }
 
-// MARK: - Delivered-JPEG color space (M1/C6 — the artifact's own claim)
+// MARK: - Delivered-JPEG color space (M1/C6)
 
-/// Reads the color profile name out of a DELIVERED JPEG's bytes (ImageIO).
-/// The artifact speaks for itself: nil when ImageIO reports no profile
-/// name — stated, never assumed from the request path.
+/// Reads the color profile name out of a delivered JPEG's bytes (ImageIO).
+/// nil when ImageIO reports no profile name; the request path is never used as
+/// a substitute.
 enum JpegColorSpaceReader {
   static func profileName(from data: Data) -> String? {
     guard let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -397,21 +388,19 @@ enum JpegColorSpaceReader {
 // MARK: - Depth map export (D1, 0.16.0 — c2pa.depthmap capture side)
 
 /**
- * Canonicalizes a delivered AVDepthData into the committed depth artifact:
- * a 16-bit grayscale PNG of the map AS DELIVERED — disparity or depth per
- * depthDataType, the semantics committed, never converted — min/max
- * normalized with the window committed alongside so source values are
- * recoverable (value = gray/65535 × span + min).
+ * Canonicalizes a delivered AVDepthData into the committed depth artifact: a
+ * 16-bit grayscale PNG of the map as delivered (disparity or depth per
+ * depthDataType, semantics committed, never converted), min/max normalized with
+ * the window committed alongside so source values are recoverable
+ * (value = gray/65535 × span + min).
  *
- * Why PNG and not a raw float dump: lossless, byte-deterministic
- * (hashable — the committed sha256 binds these exact bytes), and decodable
- * by the TS/web reader with zero native dependencies. No LiDAR assumption:
- * the source is whatever the photo output genuinely delivered (dual-camera
- * disparity / portrait pipeline on iPhone 17).
+ * PNG rather than a raw float dump: lossless, byte-deterministic so the
+ * committed sha256 binds these exact bytes, and decodable by the TS/web reader
+ * with no native dependencies. The source is whatever the photo output
+ * delivered; no LiDAR is assumed.
  *
- * nil when the map cannot be exported honestly (unknown pixel type, no
- * finite samples, encode failure) — a stated absence, never a fabricated
- * map.
+ * nil when the map cannot be exported (unknown pixel type, no finite samples,
+ * encode failure).
  */
 enum ExhibitDepthMapExtractor {
 
@@ -421,8 +410,8 @@ enum ExhibitDepthMapExtractor {
   }
 
   static func extract(from depthData: AVDepthData, photoWidth: Int?, photoHeight: Int?) -> Outcome? {
-    // Map semantics from the delivered pixel format; Float16 STORAGE is
-    // converted to Float32 for reading (storage only — semantics kept).
+    // Map semantics come from the delivered pixel format. Float16 storage is
+    // converted to Float32 for reading; the semantics are unchanged.
     let mapSemantics: String
     var data = depthData
     switch data.depthDataType {
@@ -449,8 +438,8 @@ enum ExhibitDepthMapExtractor {
     let bytesPerRow = CVPixelBufferGetBytesPerRow(map)
     guard width > 0, height > 0, bytesPerRow >= width * MemoryLayout<Float>.size else { return nil }
 
-    // Min/max over FINITE samples only; non-finite pixels (invalid
-    // disparity holes) stay 0 in the PNG and are counted, stated.
+    // Min/max over finite samples only; non-finite pixels (invalid disparity
+    // holes) stay 0 in the PNG and are counted.
     var minValue = Float.greatestFiniteMagnitude
     var maxValue = -Float.greatestFiniteMagnitude
     var nonFinite = 0
@@ -497,9 +486,9 @@ enum ExhibitDepthMapExtractor {
             intent: .defaultIntent
           ) else { return nil }
 
-    // "public.png" as a literal CFString: kUTTypePNG is deprecated on the
-    // iOS 15 SDK floor and UTType would need a UniformTypeIdentifiers
-    // import — the UTI string is stable and ImageIO accepts it directly.
+    // "public.png" as a literal CFString: kUTTypePNG is deprecated on the iOS
+    // 15 SDK floor and UTType would need a UniformTypeIdentifiers import. The
+    // UTI string is stable and ImageIO accepts it directly.
     let pngData = NSMutableData()
     guard let destination = CGImageDestinationCreateWithData(pngData, "public.png" as CFString, 1, nil) else { return nil }
     CGImageDestinationAddImage(destination, image, nil)
@@ -515,9 +504,9 @@ enum ExhibitDepthMapExtractor {
     var metadata: [String: Any] = [
       "mime": "image/png",
       "mapSemantics": mapSemantics,
-      // We request UNFILTERED depth (isDepthDataFilteredEnabled untouched —
-      // platform default off): the request is stated; the pipeline's own
-      // filtering choices beyond it are not knowable, never claimed.
+      // Unfiltered depth is requested (isDepthDataFilteredEnabled untouched,
+      // platform default off). The pipeline's own filtering beyond that is not
+      // knowable, so only the request is committed.
       "filtered": false,
       "width": width,
       "height": height,
@@ -535,14 +524,13 @@ enum ExhibitDepthMapExtractor {
   }
 }
 
-// MARK: - Capture settings block (W2.4 — every setting committed from a device read)
+// MARK: - Capture settings block (W2.4: every setting from a device read)
 
-/// Builds the committed capture-settings dictionary: the full camera state
-/// at shutter time. Every value is read back from the AVCaptureDevice at
-/// commit time (labeled controlsReportedBy:'device') or is an explicit
-/// null; flash/EXIF facts the photo path owns arrive as null here and are
-/// merged by the full-res capture completion (mergeFullRes) — a null is a
-/// stated absence, never a fabrication.
+/// Builds the committed capture-settings dictionary: the camera state at
+/// shutter time. Every value is read back from the AVCaptureDevice at commit
+/// time (labeled controlsReportedBy:'device') or is an explicit null.
+/// Flash and EXIF facts the photo path owns arrive null here and are merged by
+/// the full-res capture completion (mergeFullRes).
 enum CaptureSettingsBuilder {
 
   static func dictionary(
@@ -559,8 +547,8 @@ enum CaptureSettingsBuilder {
       if s.isFinite && s > 0 { exposureSec = s }
     }
 
-    // deviceWhiteBalanceGains can be mid-transition; garbage gains are worse
-    // than a stated null (same gate as MetadataBlockBuilder).
+    // deviceWhiteBalanceGains can be mid-transition; invalid gains commit as
+    // null (same gate as MetadataBlockBuilder).
     var wbGains: [String: Float]? = nil
     let gains = device.deviceWhiteBalanceGains
     if gains.redGain >= 1.0, gains.greenGain >= 1.0, gains.blueGain >= 1.0,
@@ -570,10 +558,9 @@ enum CaptureSettingsBuilder {
       wbGains = ["r": gains.redGain, "g": gains.greenGain, "b": gains.blueGain]
     }
 
-    // Temperature/tint via the OS's own converter FROM the device-reported
-    // gains (W2.4). Committed whenever the gains are valid — outside WB
-    // lock the values are transient, which the note states. The conversion
-    // itself is platform code, not our estimate.
+    // Temperature/tint via the OS's converter from the device-reported gains
+    // (W2.4). Committed whenever the gains are valid; outside WB lock the
+    // values are transient, which the note states.
     var wbTempTint: [String: Any]? = nil
     if let wb = wbGains {
       let tt = device.temperatureAndTintValues(
@@ -589,12 +576,11 @@ enum CaptureSettingsBuilder {
     }
 
     // ---- zoom/crop geometry (M1/C1): the delivered image is the format
-    // readout CENTER-CROPPED by videoZoomFactor when > 1 (iOS digital zoom
-    // is a symmetric crop; past an optical stop the DEVICE changes, which
-    // physicalDevice already commits). The committed crop inputs make the
-    // DELIVERED image's effective focal length (× zoomFactor) and effective
-    // FOV derivable — inputs committed, answers never computed. Read from
-    // the device at this commit instant, never configure-time state.
+    // readout center-cropped by videoZoomFactor when > 1 (iOS digital zoom is a
+    // symmetric crop; past an optical stop the device changes, which
+    // physicalDevice commits). The committed crop inputs make the delivered
+    // image's effective focal length (× zoomFactor) and FOV derivable. Read
+    // from the device at this commit instant, not configure-time state.
     let format = device.activeFormat
     let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
     let zoomFactor = Double(device.videoZoomFactor)
@@ -606,10 +592,10 @@ enum CaptureSettingsBuilder {
       "height": Int((Double(dims.height) / zoomFactor).rounded()),
       "outputDimensions": ["width": Int(dims.width), "height": Int(dims.height)],
     ]
-    // Center Stage (front ultra-wide): the module never enables it, so this
-    // is expected false — committed as the OS-REPORTED fact, rect included
-    // when the OS says it is active. iOS 16+ API: gated (the pod targets
-    // 15.1); on older OSes the keys are OMITTED, never fabricated.
+    // Center Stage (front ultra-wide): the module never enables it, so this is
+    // normally false. Committed as the OS reports it, rect included when the OS
+    // says it is active. iOS 16+ API, gated (the pod targets 15.1); on older
+    // OSes the keys are omitted.
     if #available(iOS 16.0, *) {
       sensorCrop["centerStageActive"] = device.isCenterStageActive
       if device.isCenterStageActive {
@@ -620,17 +606,17 @@ enum CaptureSettingsBuilder {
         ]
       }
     }
-    // 35mm-equivalent focal length: no direct API — derived from the
+    // 35mm-equivalent focal length: no direct API, so it is derived from the
     // device-reported horizontal FOV on a 36 mm reference (18/tan(hfov/2)).
-    // UNCROPPED-format value; the delivered crop's equivalent is × zoomFactor.
+    // Uncropped-format value; the delivered crop's equivalent is × zoomFactor.
     let hfovRadians = Double(format.videoFieldOfView) * .pi / 180.0
     let focal35mm: Double? = hfovRadians > 0 ? 18.0 / tan(hfovRadians / 2.0) : nil
 
     var out: [String: Any] = [
-      // Honesty note (W2.1): the DELIVERY still's pixels come from the
-      // synchronized video frame at session resolution — resampled, not a
-      // full-sensor readout. The full-sensor still is the separate
-      // fullResStill artifact with its own hash.
+      // W2.1: the delivery still's pixels come from the synchronized video
+      // frame at session resolution, resampled rather than a full-sensor
+      // readout. The full-sensor still is the separate fullResStill artifact
+      // with its own hash.
       "deliveryStillSource": "video-frame, resampled from the session-resolution stream",
       "iso": Double(device.iso),
       "exposureDurationSec": exposureSec as Any? ?? NSNull(),
@@ -640,13 +626,12 @@ enum CaptureSettingsBuilder {
       "apertureFNumber": Double(device.lensAperture),
       "exposureTargetBias": Double(device.exposureTargetBias),
       "videoZoomFactor": Double(device.videoZoomFactor),
-      // Zoom/crop geometry + derived 35mm-equivalent (M1/C1) — see the
-      // locals above; the delivered image is the crop these inputs describe.
+      // Zoom/crop geometry and derived 35mm-equivalent (M1/C1); see the locals
+      // above. The delivered image is the crop these inputs describe.
       "sensorCrop": sensorCrop,
       "focalLength35mmEquivalent": focal35mm as Any? ?? NSNull(),
-      // OS-REPORTED thermal state at the commit instant (ProcessInfo — the
-      // same source the thermal policy reads; reported by the OS, not
-      // measured) (M1/C6).
+      // OS-reported thermal state at the commit instant (ProcessInfo, the same
+      // source the thermal policy reads) (M1/C6).
       "thermalState": DeviceModeMapper.thermalState(ProcessInfo.processInfo.thermalState),
       "thermalStateRaw": ProcessInfo.processInfo.thermalState.rawValue,
       "exposureMode": DeviceModeMapper.exposureMode(device.exposureMode),
@@ -654,25 +639,24 @@ enum CaptureSettingsBuilder {
       "whiteBalanceMode": DeviceModeMapper.whiteBalanceMode(device.whiteBalanceMode),
       "physicalDevice": device.deviceType.rawValue,
       // Photo-strobe facts (W2.2/W2.4). flashFired stays null until the
-      // full-res photo's own metadata answers; no photo → no strobe claim.
+      // full-res photo's metadata answers; no photo means no strobe claim.
       "photoFlashMode": photoFlash.rawValue,
       "photoFlashHardware": device.hasFlash,
       "photoFlashSupportedModes": flashSupportedModes,
       "flashFired": NSNull(),
       // OS-written EXIF numbers from the full-res photo's metadata (merged
-      // later by mergeFullRes); null when no full-res photo ran this
-      // shutter. NEVER synthesized from device state.
+      // later by mergeFullRes); null when no full-res photo ran this shutter.
+      // Not synthesized from device state.
       "photoExif": NSNull(),
-      // iOS exposes no device focal-length-in-mm property; the full-res
-      // photo's EXIF FocalLength is the only honest mm source and rides in
-      // photoExif. The desk-facing mm derivation from committed calibration
-      // stays in the stereo glue.
+      // iOS exposes no device focal-length-in-mm property; the full-res photo's
+      // EXIF FocalLength is the only mm source and rides in photoExif. The
+      // desk-facing mm derivation from committed calibration is in the stereo
+      // glue.
       "controlsReportedBy": "device",
     ]
-    // The stabilization mode ACTUALLY in force at the commit instant
-    // (activeVideoStabilizationMode — API-self-reported, not measured)
-    // (M1/C6). OMITTED when the connection reported nothing — never
-    // fabricated from the preferred mode.
+    // The stabilization mode in force at the commit instant
+    // (activeVideoStabilizationMode, API-self-reported) (M1/C6). Omitted when
+    // the connection reported nothing; the preferred mode is not substituted.
     if let activeStabilizationMode = activeStabilizationMode {
       out["stabilizationModeActive"] = activeStabilizationMode
     }
@@ -680,12 +664,11 @@ enum CaptureSettingsBuilder {
   }
 }
 
-// MARK: - Metadata block (spec §5 — commit inputs, never computed answers)
+// MARK: - Metadata block (spec §5: commit inputs, not computed answers)
 
-/// Builds the per-device camera metadata dictionary. Every value is read
-/// from the device at capture time or is an explicit null. The pro-control
-/// fields (spec §14) are DEVICE-REPORTED applied values — the honesty win
-/// is that manual decisions become signed evidence — and are labeled via
+/// Builds the per-device camera metadata dictionary. Every value is read from
+/// the device at capture time or is an explicit null. The pro-control fields
+/// (spec §14) are device-reported applied values, labeled via
 /// `controlsReportedBy: 'device'`.
 enum MetadataBlockBuilder {
 
@@ -709,8 +692,8 @@ enum MetadataBlockBuilder {
       if s.isFinite && s > 0 { exposureSec = s }
     }
 
-    // deviceWhiteBalanceGains can be mid-transition; garbage gains are worse
-    // than a stated null.
+    // deviceWhiteBalanceGains can be mid-transition; invalid gains commit as
+    // null.
     var wb: [String: Float]? = nil
     let gains = device.deviceWhiteBalanceGains
     if gains.redGain >= 1.0, gains.greenGain >= 1.0, gains.blueGain >= 1.0,
@@ -720,8 +703,8 @@ enum MetadataBlockBuilder {
       wb = ["r": gains.redGain, "g": gains.greenGain, "b": gains.blueGain]
     }
 
-    // Pixel focal length comes from the committed calibration, not from
-    // marketing mm numbers. Null when the OS delivered no calibration.
+    // Pixel focal length comes from the committed calibration. Null when the OS
+    // delivered no calibration.
     var focalPixels: [String: Double]? = nil
     if let cal = calibration {
       focalPixels = [
@@ -730,11 +713,10 @@ enum MetadataBlockBuilder {
       ]
     }
 
-    // White-balance temperature/tint: computed FROM the device-reported
-    // gains via the OS's own converter — only meaningful when the device
-    // reports mode-locked (manual white balance IS locked-with-gains).
-    // Outside locked mode the conversion is still well-defined but the
-    // values are transient; we commit them only when locked, stated.
+    // White-balance temperature/tint, computed from the device-reported gains
+    // via the OS's converter. Only meaningful when the device reports
+    // mode-locked (manual white balance is locked-with-gains); outside locked
+    // mode the values are transient, so they are committed only when locked.
     var wbTempTint: [String: Any]? = nil
     if device.whiteBalanceMode == .locked, let wb = wb {
       let tt = device.temperatureAndTintValues(
@@ -753,15 +735,13 @@ enum MetadataBlockBuilder {
     let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
 
     // ---- zoom/crop geometry (M1/C1): the delivered image is the format
-    // readout CENTER-CROPPED by videoZoomFactor when > 1 (iOS digital zoom
-    // is a symmetric crop; past an optical stop the DEVICE changes, which
-    // physicalDevice/formatID already commit). focalLengthPixels and
-    // fieldOfViewDegrees below describe the UNCROPPED format; the inputs
-    // here make the DELIVERED image's effective focal length (× zoomFactor)
-    // and effective FOV derivable — inputs committed, answers never
-    // computed. videoZoomFactor is the SAME device property
-    // CaptureSettingsBuilder commits, read at this same commit instant —
-    // the two blocks agree by construction.
+    // readout center-cropped by videoZoomFactor when > 1 (iOS digital zoom is a
+    // symmetric crop; past an optical stop the device changes, which
+    // physicalDevice/formatID commit). focalLengthPixels and fieldOfViewDegrees
+    // below describe the uncropped format; these inputs make the delivered
+    // image's effective focal length (× zoomFactor) and FOV derivable.
+    // videoZoomFactor is the same device property CaptureSettingsBuilder
+    // commits, read at the same instant, so the two blocks agree.
     let zoomFactor = Double(device.videoZoomFactor)
     var sensorCrop: [String: Any] = [
       "applied": zoomFactor > 1.0,
@@ -771,10 +751,10 @@ enum MetadataBlockBuilder {
       "height": Int((Double(dims.height) / zoomFactor).rounded()),
       "outputDimensions": ["width": Int(dims.width), "height": Int(dims.height)],
     ]
-    // Center Stage (front ultra-wide): the module never enables it, so this
-    // is expected false — committed as the OS-REPORTED fact, rect included
-    // when the OS says it is active. iOS 16+ API: gated (the pod targets
-    // 15.1); on older OSes the keys are OMITTED, never fabricated.
+    // Center Stage (front ultra-wide): the module never enables it, so this is
+    // normally false. Committed as the OS reports it, rect included when the OS
+    // says it is active. iOS 16+ API, gated (the pod targets 15.1); on older
+    // OSes the keys are omitted.
     if #available(iOS 16.0, *) {
       sensorCrop["centerStageActive"] = device.isCenterStageActive
       if device.isCenterStageActive {
@@ -785,16 +765,16 @@ enum MetadataBlockBuilder {
         ]
       }
     }
-    // 35mm-equivalent focal length: no direct API — derived from the
+    // 35mm-equivalent focal length: no direct API, so it is derived from the
     // device-reported horizontal FOV on a 36 mm reference (18/tan(hfov/2)).
-    // UNCROPPED-format value; the delivered crop's equivalent is × zoomFactor.
+    // Uncropped-format value; the delivered crop's equivalent is × zoomFactor.
     let hfovRadians = Double(format.videoFieldOfView) * .pi / 180.0
     let focal35mm: Double? = hfovRadians > 0 ? 18.0 / tan(hfovRadians / 2.0) : nil
 
     return [
       "physicalDevice": device.deviceType.rawValue,
       "modelID": device.modelID,
-      // ---- pro controls (spec §14): ACTUAL applied values, device-reported ----
+      // ---- pro controls (spec §14): applied values, device-reported ----
       "exposureMode": DeviceModeMapper.exposureMode(device.exposureMode),
       "exposureModeRaw": device.exposureMode.rawValue,
       "exposureDurationSec": exposureSec as Any? ?? NSNull(),
@@ -811,27 +791,26 @@ enum MetadataBlockBuilder {
       "torchLevel": device.hasTorch ? Double(device.torchLevel) as Any : NSNull(),
       "formatID": formatID as Any? ?? NSNull(),
       "stabilizationMode": stabilizationMode as Any? ?? NSNull(),
-      // The mode ACTUALLY in force on the connection at the commit instant
-      // (activeVideoStabilizationMode — API-self-reported, not measured;
-      // stabilizationMode above is the PREFERRED mode) (M1/C6).
+      // The mode in force on the connection at the commit instant
+      // (activeVideoStabilizationMode, API-self-reported; stabilizationMode
+      // above is the preferred mode) (M1/C6).
       "stabilizationModeActive": activeStabilizationMode as Any? ?? NSNull(),
       "hdrEnabled": hdrEnabled as Any? ?? NSNull(),
-      // OS-REPORTED thermal state at the commit instant (ProcessInfo — the
-      // same source the thermal policy reads; reported by the OS, not
-      // measured) (M1/C6).
+      // OS-reported thermal state at the commit instant (ProcessInfo, the same
+      // source the thermal policy reads) (M1/C6).
       "thermalState": DeviceModeMapper.thermalState(ProcessInfo.processInfo.thermalState),
       "thermalStateRaw": ProcessInfo.processInfo.thermalState.rawValue,
-      // Every field above is read back from the device/connection, never
-      // from the module's request log. Labeled as such.
+      // Every field above is read back from the device or connection, not from
+      // the module's request log. Labeled as such.
       "controlsReportedBy": "device",
-      // iOS exposes NO public focus-distance-in-meters API. Stated null,
-      // never fabricated from lensPosition (spec §5).
+      // iOS exposes no public focus-distance-in-meters API, so this is null
+      // rather than derived from lensPosition (spec §5).
       "focusDistanceMeters": NSNull(),
       "focalLengthPixels": focalPixels as Any? ?? NSNull(),
       "fieldOfViewDegrees": Double(format.videoFieldOfView),
-      // Zoom/crop geometry for the DELIVERED image (M1/C1) — the
-      // focalLengthPixels/FOV above are the UNCROPPED format; these inputs
-      // describe the crop actually delivered. See the locals above.
+      // Zoom/crop geometry for the delivered image (M1/C1). focalLengthPixels
+      // and FOV above are the uncropped format; these inputs describe the crop
+      // delivered. See the locals above.
       "videoZoomFactor": zoomFactor,
       "sensorCrop": sensorCrop,
       "focalLength35mmEquivalent": focal35mm as Any? ?? NSNull(),
@@ -850,64 +829,56 @@ enum MetadataBlockBuilder {
       "synchronizedDeltaMs": synchronizedDeltaMs as Any? ?? NSNull(),
       "droppedPairCount": droppedPairCount,
       // Every iOS frame passes through the platform's computational pipeline
-      // (deep-fusion-class on supported devices). Stated so no manifest ever
-      // implies "unprocessed sensor data" for a JPEG (spec §10).
+      // (deep-fusion-class on supported devices). Stated so no manifest implies
+      // unprocessed sensor data for a JPEG (spec §10).
       "platformProcessing": "apple-default-pipeline",
     ]
   }
 }
 
 
-// MARK: - Rotation + mirroring policy (0.15.1 — per-device, never hardcoded)
+// MARK: - Rotation + mirroring policy (per-device, never hardcoded)
 
 /**
  * Every connection's horizon-level rotation angle comes from
- * AVCaptureDevice.RotationCoordinator — NEVER a hardcoded constant.
+ * AVCaptureDevice.RotationCoordinator, never a hardcoded constant. iPhone 17's
+ * Center Stage front camera has a portrait-mounted sensor (WWDC 2026 session
+ * 341), so the 90° constant that fits landscape-mounted sensors renders
+ * front-camera preview, video and stills sideways there. The coordinator reads
+ * the actual mounting and returns the right angle per device. Read once per
+ * connection setup; the app is portrait-locked, so the angle is stable per
+ * device, and lens swaps and session rebuilds re-apply it
+ * (applyConnectionPolicies / configureSession).
  *
- * Why (root cause of the iPhone 17 sideways-selfie bug): iPhone 17's
- * Center Stage front camera has a PORTRAIT-mounted sensor (WWDC 2026
- * session 341 — the front sensor changed from landscape-left to portrait;
- * Apple: "If your app relies on rotation values that worked before, photos
- * may appear sideways or upside down"). The 90° constant that fits every
- * landscape-mounted sensor renders front-camera preview, video, and stills
- * SIDEWAYS on that hardware. The coordinator reads the actual sensor
- * mounting and returns the correct angle per device (90° for legacy
- * landscape-mounted sensors, 0° for the portrait-mounted front sensor, in
- * this portrait-locked app). Read once per connection setup — the app is
- * portrait-locked, so the angle is stable per device; lens swaps and
- * session rebuilds re-apply it (applyConnectionPolicies / configureSession).
+ * Consumers: AVCaptureVideoDataOutput connections physically rotate their
+ * delivered buffers by this angle (see configureSession's orientation contract;
+ * the writer transform stays .identity). AVCapturePhotoOutput applies its own
+ * pixel compensation from its connection's angle, so photo connections need the
+ * same policy.
  *
- * Consumers: AVCaptureVideoDataOutput connections PHYSICALLY rotate their
- * delivered buffers by this angle (see configureSession's ORIENTATION
- * CONTRACT — the writer transform stays .identity); AVCapturePhotoOutput
- * applies its own pixel compensation from its connection's angle, so photo
- * connections need the same policy.
- *
- * Mirroring: preview layers auto-mirror the front camera; data and photo
- * outputs DO NOT (same session: "use isVideoMirrored on video data
- * outputs"). We set it EXPLICITLY — front connections mirror, so the
- * committed pixels match the mirrored preview the user composed on — and
- * the actual connection value is committed (frontMirrored in the capture
- * payload), never implied.
+ * Mirroring: preview layers auto-mirror the front camera, data and photo
+ * outputs do not, so it is set explicitly. Front connections mirror, matching
+ * the preview the user composed on, and the connection's value is committed as
+ * frontMirrored in the capture payload.
  */
 @available(iOS 17.0, *)
 enum RotationPolicy {
 
-  /// Horizon-level CAPTURE angle for a device's data/photo connections.
+  /// Horizon-level capture angle for a device's data/photo connections.
   static func captureAngle(for device: AVCaptureDevice) -> CGFloat {
     let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
     return coordinator.videoRotationAngleForHorizonLevelCapture
   }
 
-  /// Horizon-level PREVIEW angle for a device's preview-layer connection.
+  /// Horizon-level preview angle for a device's preview-layer connection.
   static func previewAngle(for device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer) -> CGFloat {
     let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
     return coordinator.videoRotationAngleForHorizonLevelPreview
   }
 
-  /// One policy for every connection kind: coordinator angle + explicit
-  /// front-camera mirroring. Call with the preview layer for preview-bound
-  /// connections (its angle can differ from the capture angle), nil for
+  /// One policy for every connection kind: coordinator angle plus explicit
+  /// front-camera mirroring. Pass the preview layer for preview-bound
+  /// connections, whose angle can differ from the capture angle, and nil for
   /// data/photo connections.
   static func apply(to connection: AVCaptureConnection, device: AVCaptureDevice, previewLayer: AVCaptureVideoPreviewLayer? = nil) {
     let angle = previewLayer.map { previewAngle(for: device, previewLayer: $0) } ?? captureAngle(for: device)
@@ -915,108 +886,85 @@ enum RotationPolicy {
       connection.videoRotationAngle = angle
     }
     if connection.isVideoMirroringSupported {
-      // Explicit, never inherited: data/photo connections default to NOT
-      // mirroring while the preview the user composed on does.
+      // Set explicitly: data/photo connections default to not mirroring while
+      // the preview does.
       connection.automaticallyAdjustsVideoMirroring = false
       connection.isVideoMirrored = (device.position == .front)
     }
   }
 }
 
-// MARK: - W7 isolation debug flags (photo-path wave-5/6 suspects)
+// MARK: - Photo-path isolation debug flags
 
 /**
- * Runtime-flippable switches for the wave-7 isolation build, flipped from
- * Settings ▸ Diagnostics to A/B the universal photo-path changes against
- * the field failure (every photo capture failing on iPhone 17 since wave
- * 5, even with stereo off). 0.17.2 default split — see the key notes:
- * photoConnectionRotation still defaults false (pre-wave-5 behavior);
- * photoMaxDimensionsPolicy now defaults TRUE; the 0.17.2
- * sessionCalibrationPhoto and thirdViewEnabled keys default FALSE:
- *   - photoConnectionRotation   — wave-5 RotationPolicy on PHOTO-output
- *                                 connections (data/preview rotation stays
- *                                 unconditional; it fixed real bugs).
- *   - photoMaxDimensionsPolicy  — wave-6 maxPhotoDimensions clamp (≤12 MP)
- *                                 on photo outputs + degraded-path settings.
- * 0.17.2 verdict folded in: the maxPhotoDimensions clamp is ON by default
- * (unset suite = ON; the flag is now the escape hatch to reproduce the
- * pre-clamp reservation), and the session-calibration one-shot is OFF by
- * default behind the new sessionCalibrationPhoto key — see the key notes.
- * Backed by a UserDefaults suite so the flags survive a session rebuild
- * and are readable from any queue. Isolation scaffolding, not a product
- * surface — remove with the wave-7 verdict.
+ * Runtime-flippable switches, set from Settings ▸ Diagnostics, for A/B-ing the
+ * photo-path changes on device:
+ *   - photoConnectionRotation   — RotationPolicy on photo-output connections.
+ *                                 Default false; data/preview rotation is
+ *                                 unconditional.
+ *   - photoMaxDimensionsPolicy  — maxPhotoDimensions clamp (≤12 MP) on photo
+ *                                 outputs and degraded-path settings. Default
+ *                                 true.
+ * Backed by a UserDefaults suite, so the flags survive a session rebuild and
+ * are readable from any queue. Isolation scaffolding, not a product surface.
  */
 enum ExhibitDebugFlags {
   static let suite = "exhibit.debug"
   static let photoConnectionRotationKey = "photoConnectionRotation"
   static let photoMaxDimensionsPolicyKey = "photoMaxDimensionsPolicy"
   static let depthCaptureKey = "depthCapture"
-  /// 0.17.2: the session-calibration dual-photo one-shot on the live
-  /// multi-cam graph. Default FALSE — the 0.17.1 field flood (primary-half
-  /// drops 0, secondary-half drops 100%, onset ~1 s into the session =
-  /// exactly when the one-shot fired; build-26 showed a photo capture can
-  /// leave an output unwilling to deliver afterward) names it the primary
-  /// suspect for the dead secondary stream. With it off, the "full"
-  /// calibration block commits 'unavailable' (stated, never fabricated);
-  /// per-frame intrinsics ride the frame attachments, unaffected.
-  /// 0.18.6: INERT — the one-shot is retired (no call site remains) and the
-  /// settings switch is gone; the key stays registered so a stale flipped
-  /// value in the suite reads as a no-op, not an unknown-key error.
+  /// Inert: the session-calibration dual-photo one-shot has no call site and
+  /// no settings switch. The key stays registered so a stale flipped value in
+  /// the suite reads as a no-op rather than an unknown-key error.
   static let sessionCalibrationPhotoKey = "sessionCalibrationPhoto"
-  /// 0.17.2: EXTENSION-POINT GATE for the opportunistic third synchronized
-  /// view. UNTESTED ON HARDWARE — must stay OFF in shipping builds until an
-  /// on-device soak validates the path. Default FALSE; the probe result is
-  /// reported via capabilities().thirdViewCapable regardless.
+  /// Extension-point gate for the opportunistic third synchronized view.
+  /// Untested on hardware; keep off in shipping builds until an on-device soak
+  /// validates the path. Default false; the probe result is reported via
+  /// capabilities().thirdViewCapable regardless.
   static let thirdViewEnabledKey = "thirdViewEnabled"
-  /// 0.18.4: A/B for the dual-wide VIRTUAL-device rear-stereo graph, which
-  /// is the DEFAULT (this flag ON restores the pre-0.18.4 two-device-input
-  /// graph). The 0.18.3 iPhone 17 field log exonerated format, wiring,
-  /// hardware cost, system pressure and the 30 fps billing promise on the
-  /// multi-input graph while the OS delivered zero secondary frames with
-  /// zero error callbacks — the virtual path (one input, constituent ports
-  /// requested by name, hardware-synced; Apple's AVDualCam architecture,
-  /// WWDC19-249) is a different OS code path entirely. Flip ON only to A/B.
+  /// A/B switch for the rear-stereo graph. Default false uses the dual-wide
+  /// virtual-device path (one input, constituent ports requested by name,
+  /// hardware-synced; Apple's AVDualCam architecture, WWDC19-249). True
+  /// restores the two-device-input graph, on which iPhone 17 delivered zero
+  /// secondary frames with no error callbacks.
   static let legacyMultiInputGraphKey = "legacyMultiInputGraph"
 
   static var photoConnectionRotation: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: photoConnectionRotationKey) ?? false
   }
-  /// 0.17.2 DEFAULT FLIP: the ≤12 MP maxPhotoDimensions clamp is now ON by
-  /// default — the unclamped 48 MP photo-stream reservation on a live
-  /// multi-cam graph was named "the structural suspect for BOTH field
-  /// failures" in the 0.15.2 note, and the clamp is honest evidence (the
-  /// committed dimensions state what actually arrived). The flag remains
-  /// settable to false so the wave-7 isolation can still A/B it.
+  /// The ≤12 MP maxPhotoDimensions clamp, on by default: an unclamped 48 MP
+  /// photo-stream reservation on a live multi-cam graph is the suspect for the
+  /// photo-path field failures. Settable to false to A/B it.
   static var photoMaxDimensionsPolicy: Bool {
     guard let defaults = UserDefaults(suiteName: suite),
           defaults.object(forKey: photoMaxDimensionsPolicyKey) != nil else { return true }
     return defaults.bool(forKey: photoMaxDimensionsPolicyKey)
   }
-  /// Default FALSE (0.17.2) — see the key's note above.
+  /// Default false; see the key's note above.
   static var sessionCalibrationPhoto: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: sessionCalibrationPhotoKey) ?? false
   }
-  /// Default FALSE — UNTESTED ON HARDWARE (0.17.2 extension-point gate).
+  /// Default false; untested on hardware.
   static var thirdViewEnabled: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: thirdViewEnabledKey) ?? false
   }
-  /// Default FALSE = the virtual-device graph is the rear-stereo default
-  /// (0.18.4). TRUE restores the two-device-input graph for A/B only.
+  /// False (the default) uses the virtual-device rear-stereo graph. True
+  /// restores the two-device-input graph, for A/B only.
   static var legacyMultiInputGraph: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: legacyMultiInputGraphKey) ?? false
   }
-  /// D1 depth export (0.16.0 feature): default TRUE — depth is a shipped
-  /// feature, so an UNSET suite means ON (unlike the W7 isolation flags
-  /// above, whose unset means OFF). The flag is the on-device escape
-  /// hatch: depth problems are isolable without a rebuild.
+  /// D1 depth export. Default true, since depth is a shipped feature, so an
+  /// unset suite means on (the isolation flags above default off). The flag is
+  /// the on-device escape hatch for isolating depth problems without a
+  /// rebuild.
   static var depthCapture: Bool {
     guard let defaults = UserDefaults(suiteName: suite),
           defaults.object(forKey: depthCaptureKey) != nil else { return true }
     return defaults.bool(forKey: depthCaptureKey)
   }
 
-  /// Only the known keys are writable; anything else returns false
-  /// so a typo in Diagnostics can't silently no-op an isolation run.
+  /// Only the known keys are writable; anything else returns false, so a typo
+  /// in Diagnostics does not silently no-op an isolation run.
   @discardableResult
   static func set(_ key: String, value: Bool) -> Bool {
     guard key == photoConnectionRotationKey || key == photoMaxDimensionsPolicyKey

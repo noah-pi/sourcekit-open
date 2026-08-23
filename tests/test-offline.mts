@@ -2,15 +2,13 @@
 /**
  * Full-offline chain (zero-dependency).
  *
- * The guarantee: with EVERY network call failing, the core loop of the
- * product still works end to end — capture signs, the signed file verifies,
- * tampering is still caught, and every export builds. The only fetches the
- * capture path even attempts are the public RFC 3161 timestamp authorities,
- * and those degrade honestly: capture succeeds without them and the report
- * states zero tokens rather than implying any.
+ * With every network call failing: capture signs, the signed file verifies,
+ * tampering is caught, and every export builds. The capture path's only
+ * fetches are the RFC 3161 timestamp authorities; without them capture
+ * succeeds and the report states zero tokens.
  *
- * Verification itself must perform ZERO network calls — the counter below
- * is the tripwire if anyone ever adds one.
+ * Verification must perform zero network calls; the fetch counter below is
+ * the tripwire.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-offline.mts
  */
@@ -36,10 +34,8 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 
 /**
- * A bare verdict code is not enough to debug a failure on someone else's
- * machine: SIGNATURE_INVALID has four separate causes in verifyAsset, and
- * the one that fired is only visible in the checks. So failures print the
- * check flags and any reason the verifier recorded for a check it skipped.
+ * Failure detail line. SIGNATURE_INVALID has four causes in verifyAsset and
+ * only the check flags say which fired, so print them plus any skip reasons.
  */
 const why = (report: any) =>
   [report.verdict,
@@ -70,13 +66,13 @@ check(
   signed.record.captureIntegrity?.note === 'self-reported' && typeof signed.record.captureIntegrity?.captureToSignatureMs === 'number'
 );
 
-// 2. Verification is INTACT — and performs ZERO network calls.
+// 2. Verification is INTACT and performs zero network calls.
 fetchCalls = 0;
 const report = await verifyPhotoBytes(signed.signedPhotoBytes!);
 check('signed photo verifies INTACT offline', report.verdict === 'INTACT', why(report));
 check('verification performs zero network calls', fetchCalls === 0, `${fetchCalls} fetch attempts during verify`);
 
-// 3. Time evidence degrades honestly: no tokens, stated as none.
+// 3. Time evidence: no tokens, reported as zero.
 check(
   'timestamp tokens honestly absent (present=0, valid=0)',
   (report.c2pa?.timestamps.present ?? -1) === 0 && (report.c2pa?.timestamps.valid ?? -1) === 0

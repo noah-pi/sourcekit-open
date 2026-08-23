@@ -2,27 +2,23 @@
 /**
  * Screen re-photography analysis — desk-side DSP core.
  *
- * Photographing a screen leaves statistical fingerprints a natural scene
- * rarely produces: rolling-shutter banding from backlight PWM, moiré from
- * the display pixel grid aliasing against the sensor grid, a lifted black
- * floor (no OLED/LCD renders true sensor black), and hard-clipped display
- * gamut. These analyzers measure those fingerprints.
+ * Photographing a screen leaves fingerprints a natural scene rarely
+ * produces: rolling-shutter banding from backlight PWM, moiré from the
+ * display grid aliasing against the sensor grid, a lifted black floor, and
+ * hard-clipped display gamut. These analyzers measure those.
  *
- * HONESTY — three hard rules:
- *  1. EVIDENCE, NEVER A VERDICT. Every function returns measurements and a
- *     descriptive strength band. Nothing here decides anything; a person
- *     weighs the numbers. No UI may gate on these values.
- *  2. NO FALSE POSITIVES ON FLAT SUBJECTS BY CONSTRUCTION. When a signal
- *     has no meaningful energy above its own noise floor, the analyzer
- *     reports 'insufficient-signal' — flat walls, blank skies, and pure
- *     noise must not "detect" anything.
- *  3. THRESHOLDS ARE CORPUS-CALIBRATED, NOT SCIENCE. The strength bands
- *     ship with ROC data before gaining any prominence; until then
- *     they are descriptive labels on raw numbers, which are always shown.
+ * Rules for every function here:
+ *  1. Return measurements plus a descriptive strength band. No UI may gate
+ *     on these values.
+ *  2. Report 'insufficient-signal' whenever a signal has no energy above its
+ *     own noise floor, so flat walls, blank skies, and pure noise cannot
+ *     read as a detection.
+ *  3. Strength bands are corpus-calibrated labels on the raw numbers, which
+ *     are always shown alongside them.
  *
- * All functions are pure (no DOM, no IO) so the open test suite exercises
- * them on synthetic patterns. The desk feeds them downsampled planes from
- * a canvas; they are not in the capture path.
+ * All functions are pure (no DOM, no IO) so the test suite can drive them on
+ * synthetic patterns. The desk feeds downsampled planes from a canvas; none
+ * of this is in the capture path.
  */
 
 export type SignalStrength = 'insufficient-signal' | 'none' | 'weak' | 'moderate' | 'strong';
@@ -34,7 +30,7 @@ export interface BandingResult {
   peakPower: number;
   /** Median spectral floor (robust noise estimate). */
   floorMedian: number;
-  /** Peak/floor ratio in dB. Higher = more periodic striping. */
+  /** Peak/floor ratio in dB. Higher means more periodic striping. */
   snrDb: number;
   strength: SignalStrength;
 }
@@ -50,7 +46,7 @@ export interface MoireResult {
 export interface BlackFloorResult {
   /** Darkest pixel luminance observed. */
   minLuma: number;
-  /** 0.5th-percentile luminance — robust dark-end estimate. */
+  /** 0.5th-percentile luminance: robust dark-end estimate. */
   p005: number;
   /** Fraction of pixels at near-zero luminance (< 4). */
   trueBlackFraction: number;
@@ -118,10 +114,10 @@ export function snrStrength(snrDb: number): SignalStrength {
 }
 
 /**
- * Rolling-shutter banding: periodic brightness stripes across sensor rows
- * (backlight PWM beating against the rolling readout). Row means are
- * detrended (linear fit removed — smooth gradients are not banding), then
- * FFT'd; the peak above the robust spectral floor is the measurement.
+ * Rolling-shutter banding: periodic brightness stripes across sensor rows,
+ * from backlight PWM beating against the rolling readout. Row means are
+ * detrended (a linear fit is removed, since smooth gradients are not
+ * banding) then FFT'd; the peak above the spectral floor is the measurement.
  */
 export function analyzeBanding(gray: ArrayLike<number>, width: number, height: number): BandingResult {
   const none: BandingResult = { peakFreq: 0, peakPower: 0, floorMedian: 0, snrDb: Number.NEGATIVE_INFINITY, strength: 'insufficient-signal' };
@@ -136,7 +132,7 @@ export function analyzeBanding(gray: ArrayLike<number>, width: number, height: n
     rows[y] = s / width;
   }
 
-  // Detrend: remove the least-squares line (smooth illumination gradient).
+  // Detrend: remove the least-squares line, i.e. smooth illumination.
   const n = height;
   let sx = 0, sy = 0, sxx = 0, sxy = 0;
   for (let i = 0; i < n; i++) {
@@ -150,7 +146,7 @@ export function analyzeBanding(gray: ArrayLike<number>, width: number, height: n
     rows[i] -= intercept + slope * i;
     residualEnergy += rows[i] * rows[i];
   }
-  // Flat-subject guard: no residual structure → nothing to analyze.
+  // Flat-subject guard: no residual structure means nothing to analyze.
   if (residualEnergy / n < 1e-6) return none;
 
   // FFT on a zero-padded power-of-two window.
@@ -183,16 +179,16 @@ export function analyzeBanding(gray: ArrayLike<number>, width: number, height: n
 }
 
 /**
- * Moiré: aliasing between the display's pixel grid and the sensor's —
- * isolated high-frequency peaks in the 2D spectrum. The input is
- * box-downsampled to ≤128 on the long side for a fixed-cost 2D FFT.
+ * Moiré: aliasing between the display's pixel grid and the sensor's, seen as
+ * isolated high-frequency peaks in the 2D spectrum. Input is box-downsampled
+ * to ≤128 on the long side for a fixed-cost 2D FFT.
  */
 export function analyzeMoire(gray: ArrayLike<number>, width: number, height: number): MoireResult {
   const none: MoireResult = { peakU: 0, peakV: 0, snrDb: Number.NEGATIVE_INFINITY, strength: 'insufficient-signal' };
   if (width < 32 || height < 32 || gray.length < width * height) return none;
 
-  // Box-downsample to at most 128×128 (keeps the FFT cheap and the
-  // analysis at the frequencies moiré actually lives in).
+  // Box-downsample to at most 128×128: cheap FFT, and the frequency range
+  // where moiré lives.
   const scale = Math.max(1, Math.floor(Math.max(width, height) / 128));
   const w = Math.floor(width / scale);
   const h = Math.floor(height / scale);
@@ -221,8 +217,8 @@ export function analyzeMoire(gray: ArrayLike<number>, width: number, height: num
   }
   if (energy / small.length < 1e-6) return none; // flat-subject guard
 
-  // 2D FFT via row passes then column passes (sizes already arbitrary —
-  // zero-pad each axis to a power of two).
+  // 2D FFT as row passes then column passes; each axis is zero-padded to a
+  // power of two.
   const wp = nextPow2(w);
   const hp = nextPow2(h);
   const plane = new Float64Array(wp * hp);
@@ -275,15 +271,15 @@ export function analyzeMoire(gray: ArrayLike<number>, width: number, height: num
 }
 
 /**
- * Black floor: a photographed screen's "black" is the display's own
- * backlight/OLED floor plus reflections — lifted above true sensor black.
- * Natural photos of dark scenes still reach near-zero luminance somewhere
- * (shadows, noise floor); screen re-photos characteristically don't.
+ * Black floor: a photographed screen's black is the display's backlight or
+ * OLED floor plus reflections, lifted above true sensor black. Natural dark
+ * scenes still reach near-zero luminance somewhere; screen re-photos
+ * typically do not.
  */
 export function analyzeBlackFloor(gray: ArrayLike<number>, width: number, height: number): BlackFloorResult {
   const n = Math.min(gray.length, width * height);
   if (n === 0) return { minLuma: 0, p005: 0, trueBlackFraction: 0, liftEstimate: 0 };
-  // 256-bin luminance histogram → robust percentiles, no full sort.
+  // 256-bin luminance histogram gives percentiles without a full sort.
   const hist = new Uint32Array(256);
   for (let i = 0; i < n; i++) {
     const v = gray[i];
@@ -310,9 +306,9 @@ export function analyzeBlackFloor(gray: ArrayLike<number>, width: number, height
 }
 
 /**
- * Display gamut: panels render saturated colors by pinning channels —
- * one channel at the rail while another sits near zero. Natural scenes
- * (even vivid ones) rarely produce large populations of railed pixels.
+ * Display gamut: panels render saturated colors by pinning one channel at
+ * the rail while another sits near zero. Natural scenes, even vivid ones,
+ * rarely produce large populations of railed pixels.
  */
 export function analyzeGamut(rgba: ArrayLike<number>, pixelCount: number): GamutResult {
   if (pixelCount <= 0 || rgba.length < pixelCount * 4) {

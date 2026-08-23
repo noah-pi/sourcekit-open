@@ -1,7 +1,8 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * End-to-end validation — every format, sign → verify → tamper-reject → c2patool.
- * Plus red-team spot checks: manifest transplant, truncation, unsigned files.
+ * End-to-end validation for every format: sign → verify → tamper-reject →
+ * c2patool, plus spot checks for manifest transplant, truncation, and
+ * unsigned files.
  */
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -27,8 +28,8 @@ const check = (name: string, ok: boolean, detail = '') => {
   else { fail++; console.log(`  FAIL ${name} :: ${detail}`); }
 };
 const skip = (name: string, why: string) => { skipped++; console.log(`  SKIP ${name} :: ${why}`); };
-// c2patool is the optional gold standard: when absent, its checks SKIP loudly
-// (excluded from the pass/fail tally) instead of failing. See README ▸ Requirements.
+// c2patool is optional; when absent its checks SKIP and are excluded from the
+// pass/fail tally. See README ▸ Requirements.
 const c2patoolBin = process.env.C2PATOOL ?? '/tmp/bin/c2patool';
 let c2patoolAvailable = false;
 try { execFileSync(c2patoolBin, ['--version'], { stdio: 'pipe' }); c2patoolAvailable = true; } catch { /* not installed */ }

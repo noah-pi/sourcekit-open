@@ -2,9 +2,9 @@
 /**
  * Filesystem wrappers around the pure byte verifiers (app-side only).
  *
- * verifyAsset.ts is deliberately free of file IO so the desk tool and any
- * browser environment can import the same verification core — these are the
- * three one-liners that read a vault/cache URI and delegate.
+ * verifyAsset.ts carries no file IO, so the desk tool and browser
+ * environments can import the same verification core. These wrappers read a
+ * vault/cache URI and delegate.
  */
 
 import { readFileBytes } from '../lib/fileHash';

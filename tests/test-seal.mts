@@ -1,11 +1,9 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Seal-to-desk + Shamir custody.
- *
- * The seizure story, made testable:
- *   device sealed artifact  →  ciphertext the photographer cannot open
- *   one stolen laptop       →  one Shamir share → decrypts NOTHING
- *   K shares together       →  desk key → desk opens and verifies the capture
+ * Seal-to-desk and Shamir custody:
+ *   sealed artifact    → ciphertext the device holder cannot open
+ *   one Shamir share   → decrypts nothing
+ *   K shares together  → desk key, which opens and verifies the capture
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-seal.mts
  */
@@ -30,7 +28,7 @@ const check = (name: string, ok: boolean, detail = '') => {
 const throws = async (fn: () => unknown): Promise<boolean> => {
   try { await fn(); return false; } catch { return true; }
 };
-/** Substring search — plaintext must never appear inside a sealed artifact. */
+/** Substring search: plaintext must never appear in a sealed artifact. */
 const contains = (hay: Uint8Array, needle: Uint8Array): boolean => {
   outer: for (let i = 0; i + needle.length <= hay.length; i++) {
     for (let j = 0; j < needle.length; j++) if (hay[i + j] !== needle[j]) continue outer;
@@ -63,20 +61,18 @@ check('threshold above count refused', await throws(() => splitSecret(secret, 4,
 const textRound = shareFromText(shareToText(s35[2]));
 check('share text encoding round-trips', textRound.x === s35[2].x && bytesToHex(textRound.y) === bytesToHex(s35[2].y));
 check('gutted share text rejected at the door', await throws(() => shareFromText(shareToText(s35[2]).slice(0, 20))));
-// Modest truncation still parses (a share can't know its secret's length) —
-// the LENGTH check catches it at combine…
+// Modest truncation still parses, since a share cannot know its secret's
+// length; the length check catches it at combine.
 const shortened = shareFromText(shareToText(s35[2]).slice(0, -8));
 check('truncated share caught at reconstruction (length)', await throws(() => combineShares([s35[0], s35[1], shortened])));
-// …and mid-string corruption (same length, valid base64) is caught by the TAG.
+// Mid-string corruption (same length, valid base64) is caught by the tag.
 const mangled = shareFromText(shareToText(s35[2]).slice(0, -6) + 'AAAAAA');
 check('mid-string share corruption caught at reconstruction (tag)', await throws(() => combineShares([s35[0], s35[1], mangled])));
 check('foreign text rejected as a share', await throws(() => shareFromText('hello world')));
 
-// A single share is cryptographically useless: with threshold 2, one share
-// plus ANY guessed second share reconstructs something — and the tag on a
-// real second split is what detects the wrong guess. Structural check:
-// one share alone throws (needs ≥2), and the y-bytes of a threshold-2 share
-// are uniformly random (they are secret + random·x evaluated in GF(256)).
+// One share carries no information: the y-bytes of a threshold-2 share are
+// uniformly random (secret + random*x in GF(256)). Structurally, combining
+// fewer than 2 shares throws.
 check('one share alone cannot even attempt reconstruction', await throws(() => combineShares([s22[0]])));
 
 // ---------- Seal format ----------

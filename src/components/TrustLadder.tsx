@@ -4,14 +4,12 @@
  *
  * Renders the projection from src/lib/trustLadder.ts as a vertical rail:
  * filled node = reached, hollow = unreached, ringed = highest reached,
- * brick = failed (proven tamper), gray italic = not-applicable (said out
- * loud, never hidden). No badges, no shields, no checkmark icons — CAWG
- * vocabulary warns that seals and ribbons read as authority claims.
+ * brick = failed (proven tamper), gray italic = not-applicable. No badges or
+ * checkmark icons; CAWG vocabulary warns that seals read as authority claims.
  *
- * DESIGN CONSTRAINT: the card must read correctly as a
- * cropped screenshot — it carries its own title ("What this file can
- * show") and the limits sentence inside the card, so the honest story
- * survives the crop. Never render the rungs without both.
+ * The card must read correctly as a cropped screenshot, so it carries its own
+ * title and the limits sentence inside the card. Do not render the rungs
+ * without both.
  */
 
 import React from 'react';
@@ -42,8 +40,8 @@ function RungRow({ rung, ringed, last }: { rung: LadderRung; ringed: boolean; la
         </View>
         {!last ? <View style={[styles.rail, failed && styles.railBroken]} /> : null}
       </View>
-      {/* VoiceOver: the rail graphics stay decorative; the row speaks as
-          one text element — name + detail, with the state as the value. */}
+      {/* VoiceOver: rail graphics are decorative; the row speaks as one text
+          element, name plus detail, with the state as the value. */}
       <View
         style={styles.rungText}
         accessibilityRole="text"
@@ -112,9 +110,8 @@ const buildStyles = () => StyleSheet.create({
     marginTop: 2,
   },
   nodeRing: {
-    // The current-highest rung gets a thicker ring — SAME outer diameter as
-    // every other node (the ringed dot renders 4 px
-    // larger, which read as emphasis-by-size on whichever rung sat last).
+    // Thicker ring for the current-highest rung, same outer diameter as every
+    // other node so it does not read as emphasis by size.
     borderWidth: 2.5,
   },
   nodeFailedDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: colors.danger },

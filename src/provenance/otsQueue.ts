@@ -1,20 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * OpenTimestamps anchor + queue lifecycle.
+ * OpenTimestamps anchor and queue lifecycle. At seal time the record's
+ * payload digest (the same one the device signature signs) goes to the free
+ * public calendars.
  *
- * At seal time we submit the record's payload digest (SHA-256 of the
- * canonical signed payload — the same digest the device signature signs)
- * to the free public calendars. Two honest outcomes:
+ *   - online:  'pending' receipts attach to the record at once; Bitcoin
+ *              confirmation lands ~1-2 h later via upgradePendingOts.
+ *   - offline: the digest waits in an on-device queue file and drains when
+ *              the network returns, recording the signing-to-anchor gap as
+ *              queueDelayMs.
  *
- *   - online:  receipts (state 'pending') are attached to the record
- *              immediately. Bitcoin confirmation takes ~1–2 h; the record
- *              says 'pending' and upgrades later (upgradePendingOts).
- *   - offline: the digest waits in an on-device queue file. When the
- *              network returns, the queue drains and the record gains its
- *              submissions WITH the recorded delay (queueDelayMs) — the
- *              gap between signing and anchoring is evidence, never hidden.
- *
- * Only a 32-byte hash ever leaves the device for this. No account, no cost.
+ * Only the 32-byte digest leaves the device.
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
@@ -30,7 +26,7 @@ const QUEUE_FILE = `${FileSystem.documentDirectory}exhibit-ots-queue.json`;
 interface QueueEntry {
   digestHex: string;
   recordId: string;
-  /** ISO — signing time (when the digest first tried and failed to submit). */
+  /** ISO signing time: when the digest first failed to submit. */
   queuedAt: string;
 }
 
@@ -76,10 +72,9 @@ function toSubmissions(
 }
 
 /**
- * Anchors a freshly sealed record: submit its payload digest to the
- * calendars and attach pending receipts; offline → queue with honest delay.
- * Never throws — ledger anchoring is best-effort around the capture, which
- * is already signed and complete without it.
+ * Anchors a freshly sealed record: submits its payload digest and attaches
+ * pending receipts, or queues it when offline. Never throws; the capture is
+ * already signed and complete without an anchor.
  */
 export async function anchorRecordWithOts(
   recordId: string,
@@ -120,7 +115,7 @@ export async function drainOtsQueue(calendarUrls: string[] = OTS_CALENDARS): Pro
       }
       const queueDelayMs = Math.max(0, Date.now() - Date.parse(entry.queuedAt));
       await updateRecord(entry.recordId, (r) => {
-        // A later live submission may have beaten the queue — merge, don't clobber.
+        // A later live submission may have beaten the queue: merge, don't clobber.
         const existing = r.ots?.digestHex === entry.digestHex ? (r.ots?.submissions ?? []) : [];
         const known = new Set(existing.map((s) => s.calendar));
         const fresh = toSubmissions(results, queueDelayMs).filter((s) => !known.has(s.calendar));
@@ -134,15 +129,12 @@ export async function drainOtsQueue(calendarUrls: string[] = OTS_CALENDARS): Pro
 }
 
 /**
- * Upgrades any pending receipts on a record by re-asking their calendars.
- * The calendar's upgrade endpoint is keyed by the COMMITMENT the pending
- * attestation sits on (the msg after walking the stored receipt's op
- * chain), never by the submitted digest — so the commitment is read out of
- * the stored receipt first. The calendar's answer is a bare continuation
- * Timestamp, spliced onto our stored chain (mergeUpgradedTimestamp) and
- * re-validated end-to-end before anything is persisted. Confirmed receipts
- * are persisted (block height + confirmation time).
- * Returns the updated OTS set when anything changed, else null.
+ * Upgrades a record's pending receipts by re-asking their calendars. The
+ * upgrade endpoint is keyed by the commitment the pending attestation sits
+ * on, not by the submitted digest, so the commitment is read out of the
+ * stored receipt first. The bare continuation Timestamp that comes back is
+ * spliced on (mergeUpgradedTimestamp) and re-validated before anything is
+ * persisted. Returns the updated OTS set when anything changed, else null.
  */
 export async function upgradePendingOts(
   recordId: string,
@@ -154,7 +146,7 @@ export async function upgradePendingOts(
   try {
     digest = hexToBytes(ots.digestHex);
   } catch {
-    return null; // corrupt anchor set — nothing trustworthy to upgrade against
+    return null; // corrupt anchor set: nothing to upgrade against
   }
   let changed = false;
   const submissions = await Promise.all(
@@ -181,8 +173,8 @@ export async function upgradePendingOts(
           confirmedAt: new Date().toISOString(),
         };
       } catch {
-        // A corrupt stored receipt degrades to "stays pending", never to a
-        // failed upgrade pass for the other calendars.
+        // A corrupt stored receipt stays pending and does not fail the
+        // upgrade pass for the other calendars.
         return s;
       }
     })

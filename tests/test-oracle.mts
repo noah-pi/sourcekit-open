@@ -1,12 +1,10 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Differential oracle: every corpus asset runs through BOTH
- * engines — the archived hand-rolled verifier and the official C2PA engine
- * (c2pa-node on node>=22, wasm fallback on the node-20 harness) — with
- * verdicts composed ONLY by the policy layer. Agreement is required; a
- * divergence is allowed only when it is whitelisted in
- * tests/oracle-whitelist.json WITH A WRITTEN REASON. Unwhitelisted
- * divergences FAIL. Nothing is silently absorbed.
+ * Differential oracle: every corpus asset runs through both engines, the
+ * archived hand-rolled verifier and the official C2PA engine (c2pa-node on
+ * node>=22, wasm fallback on the node-20 harness), with verdicts composed by
+ * the policy layer only. Agreement is required; a divergence passes only when
+ * tests/oracle-whitelist.json whitelists it with a written reason.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-oracle.mts
  */
@@ -85,8 +83,9 @@ console.log('— upstream engine availability —');
 // ---------- 0b. fact-level diffs surface ---
 console.log('— fact-level oracle diffs (synthetic) —');
 {
-  // An assertion-check flip on one engine, verdict unchanged, MUST produce a
-  // 'signatureFacts' divergence; an asset-hash flip an 'assetHashFacts' one.
+  // An assertion-check flip on one engine with the verdict unchanged must
+  // produce a 'signatureFacts' divergence; an asset-hash flip an
+  // 'assetHashFacts' one.
   const mk = () => {
     const n = baseResultLike('upstream-c2pa-wasm', 'synthetic');
     n.manifestFound = true;
@@ -200,26 +199,24 @@ const hashDataBox = (exclusions: unknown, hash: Uint8Array) =>
   jumbBox(c2paUuid('cbor'), 'c2pa.hash.data', box('cbor', encode({ exclusions, alg: 'sha256', hash, name: 'jumbf manifest', pad: new Uint8Array(10) })));
 
 {
-  // Claim references telemetry only — no hard binding honored (void).
+  // Claim references telemetry only, so no hard binding is honored (void).
   const seg = await foreignSegment([telemetryBox], ['com.verify.telemetry']);
   oracleCase('oracle-void-binding.jpg', await oracleVerify(concatBytes(clean.subarray(0, 2), seg, clean.subarray(2)), 'photo'));
 }
 {
-  // The attach attack: self-consistent binding box the claim does NOT reference.
-  // The victim is the SIGNED jpeg from §3: the attacker strips the legit C2PA
-  // APP11 chain (our embedder places it immediately after SOI) and splices in
-  // their own manifest whose hash.data honestly covers the result — only the
-  // claim's refusal to declare that binding gives it away. (Building this from
-  // the UNSIGNED clean.jpg deleted live image bytes mid-stream; the JPEG scan
-  // then bailed before any manifest work and the case silently stopped
-  // exercising the guard it exists to pin.)
+  // Attach attack: a self-consistent binding box the claim does not
+  // reference. The victim is the signed jpeg from §3; the attacker strips the
+  // legitimate C2PA APP11 chain (placed immediately after SOI) and splices in
+  // a manifest whose hash.data covers the result, so only the claim's failure
+  // to declare that binding gives it away. Build from the signed jpeg, not
+  // clean.jpg, which loses live image bytes and short-circuits the scan.
   const signedClean = j.signedPhotoBytes!;
   const legit = extractC2paStore(signedClean);
   if (!legit) throw new Error('attach-attack setup: signed fixture carries no extractable C2PA store');
   const restAfterStrip = concatBytes(signedClean.subarray(0, 2), signedClean.subarray(2 + legit.segmentLength));
   const attackerHash = sha256(restAfterStrip); // hash.data semantics: everything EXCEPT the exclusion range
-  // The claim/signature are independent of the hash.data box (the claim
-  // declares telemetry only — that refusal IS the tell), so build them once…
+  // The claim and signature are independent of the hash.data box, since the
+  // claim declares telemetry only, so build them once…
   const uuidC = bytesToHex(p256.utils.randomPrivateKey().subarray(0, 16));
   const claimC = encode({
     claim_generator: 'ForeignTool/1.0', 'dc:format': 'image/jpeg', 'dc:title': 'oracle.jpg', instanceID: uuidC,
@@ -229,9 +226,9 @@ const hashDataBox = (exclusions: unknown, hash: Uint8Array) =>
   const protC = bstr(concatBytes(new Uint8Array([0xa2, 0x01, 0x26, 0x18, 0x21, 0x81]), bstr(devCert)));
   const sigC = derToP1363LowS(await key.signDigest(sha256(concatBytes(new Uint8Array([0x84, 0x6a]), asciiToBytes('Signature1'), protC, new Uint8Array([0x40]), bstr(claimC)))));
   const coseC = concatBytes(new Uint8Array([0xd2, 0x84]), protC, new Uint8Array([0xa0, 0xf6]), bstr(sigC));
-  // …then fixed-point the exclusion span: the CBOR width of `length` itself
-  // changes the segment size, so iterate until the declared span equals the
-  // actual span (converges in ≤ 4 steps — the width is monotone).
+  // …then fixed-point the exclusion span: the CBOR width of `length` changes
+  // the segment size, so iterate until the declared span equals the actual
+  // span. Converges in ≤ 4 steps; the width is monotone.
   const assembleSeg = (span: number): Uint8Array => {
     const attackerBox = hashDataBox([{ start: 2, length: span }], attackerHash);
     const storeC = jumbBox(c2paUuid('c2pa'), 'c2pa', jumbBox(c2paUuid('c2ma'), 'foreign:urn:uuid:' + uuidC,
@@ -251,14 +248,13 @@ const hashDataBox = (exclusions: unknown, hash: Uint8Array) =>
   oracleCase('oracle-attach-attack.jpg', await oracleVerify(concatBytes(signedClean.subarray(0, 2), segC, signedClean.subarray(2 + legit.segmentLength)), 'photo'));
 }
 
-// ---------- 5. merkle-aux BMFF — the live UNSUPPORTED-tri-state case --------
+// ---------- 5. merkle-aux BMFF: the live UNSUPPORTED tri-state case ---------
 console.log('— merkle-aux BMFF (UNSUPPORTED tri-state) —');
 {
-  // Flip the uuid box's merkle-offset field to nonzero: the manifest now
-  // "references merkle aux boxes". Our build declines the whole structure
-  // (BmffUnsupported → UNSUPPORTED: unchecked, not condemned); upstream
-  // c2pa-rs tries to evaluate and fails its own way. That posture split is
-  // THE intentional divergence class of the oracle design — whitelisted.
+  // Flip the uuid box's merkle-offset field to nonzero so the manifest
+  // references merkle aux boxes. This build declines the structure
+  // (BmffUnsupported → UNSUPPORTED) while c2pa-rs evaluates and fails its own
+  // way. That posture split is a whitelisted divergence class.
   const bytes = Uint8Array.from(v.signedVideoBytes!);
   const store = extractC2paStoreBmff(bytes)!;
   check('source store extracted for merkle-offset injection', !!store);

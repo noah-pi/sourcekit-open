@@ -3,69 +3,53 @@ import ExpoModulesCore
 import LocalAuthentication
 import Security
 import CryptoKit
-import MachO // _dyld_image_count/_dyld_get_image_name — not exposed to Swift implicitly; explicit import required on recent SDKs
+import MachO // explicit import: _dyld_image_count/_dyld_get_image_name are not implicit on recent SDKs
 
-// NOTE: NamedException lives in AppAttestModule.swift. Both files compile
-// into the SAME SecureEnclave pod target, and Swift classes are visible
-// module-wide — declaring it here too is an "invalid redeclaration" build
-// error. (AudioCaptureModule.swift has its own copy because that module is
-// a separate pod target.)
+// NamedException lives in AppAttestModule.swift, which compiles into this same
+// SecureEnclave pod target, so redeclaring it here is a build error.
+// AudioCaptureModule.swift has its own copy; it is a separate pod target.
 
 /**
  * Secure Enclave signing identities.
  *
- * Two keys, two promises:
+ * Two keys:
  *
- * 1. The standard key (tag ...signing-key). P-256, generated inside the
- *    Secure Enclave, non-extractable: key material never exists in app
- *    memory and cannot be read out by any process — the chip signs.
+ * 1. Standard key (tag ...signing-key). P-256, generated inside the Secure
+ *    Enclave, non-extractable; the chip signs.
  *
- * 2. The biometric-bound key (tag ...signing-key-bio). Same silicon, but the
- *    access control adds .biometryCurrentSet + .privateKeyUsage: EVERY sign
- *    operation requires Face ID/Touch ID, and the key is permanently
- *    invalidated if the device's enrolled biometrics change. This binds each
- *    signature to a physically present, recognized person — not merely an
- *    unlocked phone. (Apple does not permit biometric ACLs on App Attest
- *    keys, which is why this is a separate identity — the app presents that
- *    trade-off honestly in Settings.)
+ * 2. Biometric-bound key (tag ...signing-key-bio). Access control adds
+ *    .biometryCurrentSet + .privateKeyUsage, so every sign requires Face
+ *    ID/Touch ID and the key is invalidated when enrolled biometrics change.
+ *    It is a separate identity because Apple does not permit biometric ACLs
+ *    on App Attest keys.
  *
  * Runtime-instrumentation hardening:
  *
- * a. PER-USE BIOMETRIC EVALUATION. sealBio evaluates Face ID once, signs
- *    exactly the payloads it was given, and invalidates the LAContext
- *    before returning. A
- *    runtime-instrumented process can no longer mint extra signatures
- *    silently inside a reuse window; forging a capture now needs a live,
- *    cooperating user per signature batch.
+ * a. Per-use biometric evaluation. sealBio evaluates Face ID once, signs the
+ *    payloads it was given, and invalidates the LAContext before returning.
  *
- * b. NATIVE SEAL. seal/sealBio compute SHA-256 and the Enclave signature in
- *    one native call — the payload is hashed here, never in JS — narrowing
- *    the hook surface from easy JS instrumentation to native-only.
+ * b. Native seal. seal/sealBio compute SHA-256 and the Enclave signature in
+ *    one native call, so the payload is never hashed in JS.
  *
- * c. SPEED BUMPS, PRICED HONESTLY. PT_DENY_ATTACH at module load, plus
- *    debugger/DYLD-injection artifact checks that GATE signing (active
- *    instrumentation → no signature). These are cost-raisers against
- *    commodity tooling (Frida, Cycript, SSL kill switches), NOT
- *    tamper-proofing: a determined adversary patches the checks themselves.
- *    The durable bounds stay off-device (time-anchoring, roster revocation,
- *    desk content analysis). Note the gate is on ACTIVE instrumentation
- *    only — jailbreak path indicators remain a signed self-report
- *    (src/lib/integrity.ts), never a gate, because refusing attacked
- *    journalists' devices was the failure mode we deliberately avoided.
+ * c. Speed bumps. PT_DENY_ATTACH at module load, plus debugger and
+ *    DYLD-injection artifact checks that gate signing. These raise the cost
+ *    of commodity tooling (Frida, Cycript, SSL kill switches); they are not
+ *    tamper-proofing. The gate covers active instrumentation only; jailbreak
+ *    path indicators stay a signed self-report in src/lib/integrity.ts.
  *
- * API surface (synchronous unless noted; Security framework calls are fast):
+ * API surface (synchronous unless noted):
  *   isAvailable        -> Bool
- *   getPublicKey       -> String?  — base64 65-byte X9.63 point
+ *   getPublicKey       -> String?  base64 65-byte X9.63 point
  *   generateKey        -> String
- *   sign(digest:)        -> String   — DER signature base64
+ *   sign(digest:)      -> String   DER signature base64
  *   deleteKey          -> Void
  *   getBioPublicKey    -> String?
  *   generateBioKey     -> String
- *   signBio(digest:)     -> String   — signs behind Face ID/Touch ID
+ *   signBio(digest:)   -> String   signs behind Face ID/Touch ID
  *   deleteBioKey       -> Void
- *   seal(payload:)       -> String   — SHA-256 + sign, one call (standard key)
- *   sealBio(payloads:, reason:) -> [String]  — one scan, per-use (async)
- *   deviceIntegrity    -> [String: Any]    — active-instrumentation findings
+ *   seal(payload:)     -> String   SHA-256 + sign in one call, standard key
+ *   sealBio(payloads:, reason:) -> [String]  one scan per call (async)
+ *   deviceIntegrity    -> [String: Any]  active-instrumentation findings
  */
 public class SecureEnclaveModule: Module {
   private let keyTag = "com.verify.camera.signing-key"
@@ -76,18 +60,15 @@ public class SecureEnclaveModule: Module {
     Name("SecureEnclave")
 
     // Speed bump (c): refuse debugger attachment for the process's lifetime.
-    // Cost-raiser only — a jailbroken host patches around it; documented as such.
     OnCreate {
       denyDebuggerAttach()
     }
 
     Function("isAvailable") { () -> Bool in
-      // Real probe: attempt an ephemeral Secure Enclave keypair; success
-      // means the SEP is present and functional. Simulator:
-      // kSecAttrTokenIDSecureEnclave is honored from iOS 13+ in the sim's
-      // SEP emulator — if the probe errors there, we report false and the
-      // JS layer falls back to software keys, which is the honest answer
-      // for that host anyway.
+      // Probe with an ephemeral Secure Enclave keypair; success means the SEP
+      // is present and functional. The simulator reports true without the
+      // probe (its SEP emulator honors kSecAttrTokenIDSecureEnclave from iOS
+      // 13); elsewhere a failed probe sends the JS layer to software keys.
       #if targetEnvironment(simulator)
         return true
       #else
@@ -133,7 +114,7 @@ public class SecureEnclaveModule: Module {
 
     Function("signBio") { (digestBase64: String) throws -> String in
       // SecKeyCreateSignature on a biometry-bound key invokes the system
-      // Face ID/Touch ID prompt — per-use evaluation, no session.
+      // Face ID/Touch ID prompt, once per call.
       try self.sign(digestBase64: digestBase64, tag: self.bioKeyTag)
     }
 
@@ -167,8 +148,7 @@ public class SecureEnclaveModule: Module {
         }
         payloads.append(d)
       }
-      // Per-use evaluation: a FRESH context, one scan, invalidated in defer —
-      // nothing reusable survives this call.
+      // Fresh context, one scan, invalidated in defer.
       let context = LAContext()
       context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { ok, error in
         guard ok else {
@@ -197,9 +177,9 @@ public class SecureEnclaveModule: Module {
     }
   }
 
-  // MARK: - Instrumentation gate (speed bumps, priced honestly)
+  // MARK: - Instrumentation gate
 
-  /// Signing refuses while ACTIVE runtime instrumentation is detected.
+  /// Signing refuses while active runtime instrumentation is detected.
   private func gateOnInstrumentation() throws {
     if isDebuggerAttached() { throw EnclaveError.instrumentationDetected("debugger attached") }
     let injected = injectedLibraryNames()
@@ -209,7 +189,7 @@ public class SecureEnclaveModule: Module {
   // MARK: - Keychain plumbing
 
   private func generateKey(tag: String, flags: SecAccessControlCreateFlags) throws -> String {
-    // If a key already exists, return it — rotation is an explicit delete+generate.
+    // Existing key is returned as-is; rotation is an explicit delete+generate.
     if let existing = self.loadKey(tag: tag), let pub = self.publicKeyBase64(from: existing) {
       return pub
     }
@@ -251,7 +231,7 @@ public class SecureEnclaveModule: Module {
     var error: Unmanaged<CFError>?
     guard let sig = SecKeyCreateSignature(
       key,
-      .ecdsaSignatureDigestX962SHA256, // we pre-hash; the Enclave signs the digest as-is
+      .ecdsaSignatureDigestX962SHA256, // pre-hashed; the Enclave signs the digest as-is
       digest as CFData,
       &error
     ) else {
@@ -267,10 +247,9 @@ public class SecureEnclaveModule: Module {
       kSecAttrKeyType as String: self.keyType,
       kSecReturnRef as String: true,
     ]
-    // A key reference retrieved WITH an authentication context uses that
-    // context's just-evaluated biometry for SecKeyCreateSignature — this is
-    // what lets ONE Face ID scan cover exactly one sealBio call's payloads.
-    // The caller invalidates the context in the same call; nothing is reused.
+    // A key reference retrieved with an authentication context uses that
+    // context's just-evaluated biometry for SecKeyCreateSignature, so one Face
+    // ID scan covers one sealBio call's payloads. The caller invalidates it.
     if let context = context {
       query[kSecUseAuthenticationContext as String] = context
     }
@@ -299,8 +278,7 @@ public class SecureEnclaveModule: Module {
 // MARK: - Anti-instrumentation primitives (file-scope; no state)
 
 /// PT_DENY_ATTACH via dlsym (ptrace is not exposed to Swift directly).
-/// Makes lldb/Frida's server-mode attach fail for this process. A jailbroken
-/// host patches around it — a cost-raiser, not a guarantee.
+/// Makes lldb and Frida server-mode attach fail for this process.
 private func denyDebuggerAttach() {
   typealias PtraceFn = @convention(c) (Int32, pid_t, Int32, Int32) -> Int32
   let PT_DENY_ATTACH: Int32 = 31
@@ -310,7 +288,7 @@ private func denyDebuggerAttach() {
   }
 }
 
-/// sysctl kinfo_proc — true while a debugger has this process traced.
+/// sysctl kinfo_proc: true while a debugger has this process traced.
 private func isDebuggerAttached() -> Bool {
   var info = kinfo_proc()
   var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
@@ -320,7 +298,7 @@ private func isDebuggerAttached() -> Bool {
 }
 
 /// Loaded-dynamic-image scan for commodity instrumentation artifacts.
-/// Returns the suspicious image names found (empty = none).
+/// Returns the suspicious image names found; empty means none.
 private func injectedLibraryNames() -> [String] {
   let needles = [
     "frida", "fridagadget", "cycript", "mobilesubstrate", "libsubstrate",

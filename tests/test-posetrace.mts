@@ -6,9 +6,9 @@
  *   - the assertion round-trips through a real seal and verifies against the
  *     exported trace;
  *   - one altered sample line breaks the root, named;
- *   - gyroPriorAuthenticated is locked false (self-reported, never a verdict);
- *   - honest absence: no gyro samples → no assertion;
- *   - a truncated tail line is skipped AND counted, never silent;
+ *   - gyroPriorAuthenticated is locked false (self-reported);
+ *   - no gyro samples means no assertion;
+ *   - a truncated tail line is skipped and counted;
  *   - the audio recorder's IMU log (anchor line + mach-ticks gyro lines)
  *     commits and verifies through the identical math.
  *
@@ -36,9 +36,9 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 const section = (t: string) => console.log(`\n— ${t} —`);
 
-// Repo-relative default: stage.mjs copies this suite INTO tests/.staged, so
-// the staged dir is this file's own directory. VERIFY_STAGED_DIR overrides
-// when running the un-staged source against a lab staged elsewhere.
+// stage.mjs copies this suite into tests/.staged, so the staged dir is this
+// file's own directory. VERIFY_STAGED_DIR overrides it when running the
+// un-staged source against a lab staged elsewhere.
 const STAGED = process.env.VERIFY_STAGED_DIR ?? fileURLToPath(new URL('.', import.meta.url));
 
 function gyroJsonl(n: number, hz = 100): string {
@@ -64,8 +64,8 @@ section('commit + verify');
   const v = verifyPoseTraceAssertion(a, trace);
   check('the trace verifies against its commitment', v.ok, JSON.stringify(v.failures));
 
-  // The root is the disclosure-tree root over the per-line leaves — the desk
-  // recomputes it from the exported JSONL with no canonical-JSON agreement.
+  // The root is the disclosure-tree root over the per-line leaves, so the
+  // desk recomputes it from the exported JSONL without canonical-JSON.
   const { gyro } = parseGyroJsonl(trace);
   const tree = buildTree(gyro.map((g) => poseTraceLeafDigest(g.line)));
   check('root = Merkle root over the exact line bytes', tree.root === a.root);

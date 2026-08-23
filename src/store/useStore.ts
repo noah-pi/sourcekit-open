@@ -17,11 +17,10 @@ const SETTINGS_FILE = `${FileSystem.documentDirectory}settings.json`;
 /**
  * CAWG-aligned identity disclosure, per capture:
  *   anonymous     — no byline, no org claim ('redacted' in the record)
- *   organization  — the installed org credential vouches for the org, no
- *                   personal byline (the stringer-in-a-hostile-country
- *                   setting; without an org credential it is effectively
- *                   anonymous, and the record shows exactly that)
- *   named         — personal byline + org credential when installed
+ *   organization  — the installed org credential vouches for the org, with no
+ *                   personal byline; with no credential installed the record
+ *                   reads as anonymous
+ *   named         — personal byline plus org credential when installed
  */
 export type IdentityMode = 'anonymous' | 'organization' | 'named';
 
@@ -30,16 +29,14 @@ export interface Settings {
   includeLocation: boolean;
   includeSensors: boolean;
   /**
-   * Byline inclusion: when on AND
-   * identityMode is 'named', the self-declared alias is embedded as the
-   * byline. Default OFF — an embedded name is identifying by design, so it
-   * is a deliberate, visible-at-a-glance choice, mirrored on the camera HUD.
+   * Byline inclusion: with this on and identityMode 'named', the self-declared
+   * alias is embedded as the byline. Default off, and mirrored on the camera
+   * HUD, because an embedded name identifies the author.
    */
   includeByline: boolean;
   /**
-   * Audio transcript embedding: when on, voice notes
-   * carry the on-device transcript inside the signed file. Off = the words
-   * stay audio-only.
+   * Audio transcript embedding: voice notes carry the on-device transcript
+   * inside the signed file. Off keeps the words audio-only.
    */
   includeTranscript: boolean;
   /**
@@ -49,10 +46,10 @@ export interface Settings {
    */
   faceCheckEnabled: boolean;
   /**
-   * Records the SSID/BSSID the phone reports at capture. Off by default:
-   * self-reported and spoofable, so it's a lead rather than proof of place.
-   * Always stripped from de-identified copies. Returns nothing unless the
-   * build carries the Wi-Fi Information entitlement and location permission.
+   * Records the SSID/BSSID the phone reports at capture. Off by default;
+   * self-reported and spoofable, so it is a lead, not proof of place. Always
+   * stripped from de-identified copies, and empty unless the build carries the
+   * Wi-Fi Information entitlement and location permission.
    */
   includeWifi: boolean;
   identityMode: IdentityMode;
@@ -82,13 +79,13 @@ export interface Settings {
   beaconEndpoint: string | null;
   /**
    * Which evidence sinks the native capture session runs. All on by default.
-   * Off means the files are never written, and the record says
-   * 'never-recorded' — distinct from the null an enabled-but-failed sink
-   * leaves. The files stay on-device; the phone doesn't analyze them.
+   * Off means the files are never written and the record says
+   * 'never-recorded', distinct from the null an enabled-but-failed sink
+   * leaves. Files stay on-device and are not analyzed here.
    *
-   * loadSettings drops two retired keys, `sensors` and `secondaryLens`, from
-   * stored settings: the sensor log follows includeSensors now, and the
-   * stereo partner is always the native 'auto' pairing.
+   * loadSettings strips the retired `sensors` and `secondaryLens` keys from
+   * stored settings: the sensor log follows includeSensors, and the stereo
+   * partner is always the native 'auto' pairing.
    */
   captureEvidence: {
     ring: boolean;
@@ -96,27 +93,24 @@ export interface Settings {
     altView: boolean;
   };
   /**
-   * Light preferences, per capture mode — the two modes
-   * never share a light state, and their icons never conflate:
-   *  - photoFlash: the PHOTO capture-light preference (auto/on/off, bolt
-   *    glyph + state badge). INTERIM: the bridge has no photo-strobe API
-   *    yet, so the camera screen drives it through the torch setter via
-   *    setPhotoFlashPreference (the single plug point for the native
-   *    flashMode contract when that wave lands).
-   *  - videoTorch: the VIDEO continuous light (flashlight glyph, on/off).
+   * Light preferences, one per capture mode; the modes share no light state.
+   *  - photoFlash: photo capture light (auto/on/off, bolt glyph + state
+   *    badge). The bridge exposes no photo-strobe API, so the camera screen
+   *    drives it through the torch setter via setPhotoFlashPreference, the
+   *    single plug point for a native flashMode contract.
+   *  - videoTorch: video continuous light (flashlight glyph, on/off).
    */
   photoFlash: 'auto' | 'on' | 'off';
   videoTorch: boolean;
   /**
-   * Appearance (0.15.x, Track E): 'device' follows the iPhone's dark-mode
-   * setting; 'dark'/'light' pin the in-app palette regardless of the OS.
-   * Default 'device'. Purely cosmetic — nothing about a record changes.
+   * Appearance: 'device' follows the iPhone's dark-mode setting; 'dark' and
+   * 'light' pin the in-app palette. Default 'device'. Cosmetic only; records
+   * are unaffected.
    */
   appearance: AppearancePreference;
   /**
-   * One-time → migration marker.
-   * Persisted so the migration runs exactly once; absent on fresh installs
-   * and pre-stores (which then migrate on next load).
+   * Migration marker, persisted so the migration runs exactly once. Absent on
+   * fresh installs and older stores, which migrate on next load.
    */
   migrated_0_11_1?: boolean;
 }
@@ -189,16 +183,13 @@ export const useStore = create<AppState>((set, get) => ({
           stored.identityMode = stored.includeIdentity === true ? 'named' : 'anonymous';
         }
         delete stored.includeIdentity;
-        // The experimental CaptureKit toggle key is dropped from stored
-        // settings.
+        // Retired CaptureKit toggle key: dropped from stored settings.
         delete stored.captureKitEnabled;
-        // One-time, guarded:
-        //   • named identity with a non-empty alias keeps its behavior:
-        //     the byline was embedded then, so includeByline stays ON.
-        //   • a stale assignmentId is cleared — the assignment UI is gone and
-        //     a leftover id must not silently keep signing assignment-mode.
-        //   • otsEnabled forced true — the Bitcoin anchor is default-always-on
-        //     now; the Settings display must stay honest about it.
+        // One-time migration:
+        //   • named identity with a non-empty alias keeps includeByline on.
+        //   • a stale assignmentId is cleared, since there is no assignment UI
+        //     and a leftover id would keep signing in assignment mode.
+        //   • otsEnabled forced true to match the always-on Bitcoin anchor.
         const needsMigration_0_11_1 = stored.migrated_0_11_1 !== true;
         if (needsMigration_0_11_1) {
           if (
@@ -214,24 +205,20 @@ export const useStore = create<AppState>((set, get) => ({
           stored.otsEnabled = true;
           stored.migrated_0_11_1 = true;
         }
-        // Guard against a corrupted/unknown stored value — anything outside
-        // the three choices falls back to the default.
+        // Anything outside the three choices falls back to the default.
         if (stored.appearance !== undefined && !['device', 'dark', 'light'].includes(stored.appearance)) {
           delete stored.appearance;
         }
         const merged = { ...DEFAULT_SETTINGS, ...stored };
-        // Coerce retired captureEvidence keys out of the stored
-        // object BEFORE the merge — otherwise the spread below would carry
-        // them forward forever (full-rate is now implied by includeSensors;
-        // the stereo partner is always the native 'auto' pairing).
+        // Strip retired captureEvidence keys before the merge; the spread
+        // below would otherwise carry them forward indefinitely.
         if (stored.captureEvidence && typeof stored.captureEvidence === 'object') {
           delete stored.captureEvidence.sensors;
           delete stored.captureEvidence.secondaryLens;
         }
-        // Shallow merge would DROP keys added to nested objects after the
-        // user's store was written. Rebuild
-        // the nested evidence object over the defaults so new sinks default
-        // ON and existing choices survive verbatim.
+        // A shallow merge drops nested keys the stored object predates, so
+        // rebuild the evidence object over the defaults: new sinks default on
+        // and existing choices survive verbatim.
         merged.captureEvidence = { ...DEFAULT_SETTINGS.captureEvidence, ...(stored.captureEvidence ?? {}) };
         setTsaUrls(merged.tsaUrls);
         // Push the persisted appearance into the theme before first paint.
@@ -241,8 +228,8 @@ export const useStore = create<AppState>((set, get) => ({
           onboarded: parsed.onboarded === true,
           settingsLoaded: true,
         });
-        // Persist the migration marker immediately so it runs exactly once —
-        // otherwise a later includeByline opt-out would be re-migrated back on.
+        // Persist the marker immediately so the migration runs once; without
+        // it a later includeByline opt-out would be migrated back on.
         if (needsMigration_0_11_1) await persist(merged, parsed.onboarded === true);
         return;
       }

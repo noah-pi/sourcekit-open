@@ -2,23 +2,23 @@
 /**
  * streamedChunks v2 — per-track Merkle commitments.
  *
- * The per-track structure is derived HERE, at the TS layer, by demuxing
- * the finalized delivery file: each track's elementary stream is the
+ * The per-track structure is derived at the TS layer by demuxing the
+ * finalized delivery file: each track's elementary stream is the
  * concatenation of its samples (stbl sample tables), chunked as
  * `chunkDigest = SHA-256(trackId ‖ uint64BE index ‖ bytes)` over 1 MiB
  * logical chunks.
  *
- * BINDING HONESTY (load-bearing): v2 roots bind the DELIVERY-FILE BYTES
- * reconstructed at seal time. The assertion says so in its `binding`
- * field and every verifier report string says so again.
+ * v2 roots bind the delivery-file bytes reconstructed at seal time. The
+ * assertion states that in its `binding` field and the verifier reports
+ * repeat it.
  *
  * Media parity: the same math serves video+audio (two tracks), audio-only
  * (one LPCM/AAC track), and photos-as-video (one track). Stills emit the
- * assertion with zero tracks — structural, stated in the note.
+ * assertion with zero tracks, noted as structural.
  *
- * Scope: monolithic MP4/MOV/M4A only (iPhone camera output always is).
- * Fragmented or malformed containers degrade to null, never throw into
- * the seal path. Pure module — no React Native dependencies.
+ * Scope: monolithic MP4/MOV/M4A only. Fragmented or malformed containers
+ * degrade to null rather than throwing into the seal path. Pure module, no
+ * React Native dependencies.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
@@ -95,7 +95,7 @@ function child(b: Uint8Array, parent: SubBox, type: string): SubBox | null {
 
 export interface TrackStream {
   trackId: StreamedChunksTrackId;
-  /** Sample-entry fourcc from stsd (e.g. 'avc1', 'mp4a') — a container fact. */
+  /** Sample-entry fourcc from stsd (e.g. 'avc1', 'mp4a'). */
   codec: string;
   /** Concatenated sample bytes in sample order (the ES byte stream). */
   es: Uint8Array;
@@ -130,7 +130,7 @@ function extractTrack(b: Uint8Array, trak: SubBox): TrackStream | null {
     throw new TrackChunksUnsupported('stz2 compact sample sizes are not supported');
   }
 
-  // Codec = the first sample entry's fourcc (a container fact, never inferred).
+  // Codec is the first sample entry's fourcc, read rather than inferred.
   const sc = stsd.start + stsd.headerSize;
   if (sc + 16 > b.length) throw new TrackChunksUnsupported('truncated stsd');
   const entryCount = readU32(b, sc + 4);
@@ -197,9 +197,8 @@ function extractTrack(b: Uint8Array, trak: SubBox): TrackStream | null {
     throw new TrackChunksUnsupported('sample tables do not cover every declared sample');
   }
 
-  // Concatenate the ES bytes; a file that ends early is TRUNCATED — return
-  // the contiguous prefix plus the marker so verification localizes, never
-  // guesses.
+  // Concatenate the ES bytes. A file that ends early returns the contiguous
+  // prefix plus the truncation marker, so verification can localize it.
   let truncated = false;
   let missingFromSample: number | null = null;
   let total = 0;
@@ -222,10 +221,10 @@ function extractTrack(b: Uint8Array, trak: SubBox): TrackStream | null {
 }
 
 /**
- * Tolerant root-level scan: stops at (and keeps, clamped to the bytes the
- * file actually holds) a truncated final box — typically an mdat cut short.
- * Verification needs the intact moov to localize the truncation; the seal
- * path rejects truncated streams separately.
+ * Tolerant root-level scan: keeps a truncated final box (typically an mdat
+ * cut short), clamped to the bytes present. Verification needs the intact
+ * moov to localize the truncation; the seal path rejects truncated streams
+ * separately.
  */
 function scanRootBoxesTolerant(b: Uint8Array): SubBox[] {
   const out: SubBox[] = [];
@@ -255,11 +254,11 @@ function scanRootBoxesTolerant(b: Uint8Array): SubBox[] {
 
 /**
  * Demux a monolithic BMFF file into its per-track elementary streams,
- * ordered video-then-audio (canonical assertion order). Returns [] when
+ * ordered video-then-audio (the canonical assertion order). Returns [] when
  * no media tracks exist; throws TrackChunksUnsupported on fragmented or
- * moov-less containers — callers degrade, never crash the seal path. A
- * truncated file yields streams with `truncated: true` (the contiguous
- * available prefix), so verification can LOCALIZE instead of fail blind.
+ * moov-less containers, which callers degrade on. A truncated file yields
+ * streams with `truncated: true` carrying the contiguous prefix, so
+ * verification can localize the cut.
  */
 export function extractTrackStreams(bytes: Uint8Array): TrackStream[] {
   const roots = scanRootBoxesTolerant(bytes);
@@ -297,7 +296,7 @@ function u64be(n: number): Uint8Array {
   return out;
 }
 
-/** The Swift wire format, exactly: SHA-256(trackId ‖ uint64BE index ‖ chunk bytes). */
+/** The Swift wire format: SHA-256(trackId ‖ uint64BE index ‖ chunk bytes). */
 export function chunkDigest(trackId: StreamedChunksTrackId, index: number, bytes: Uint8Array): Uint8Array {
   return sha256(concatBytes(utf8ToBytes(trackId), u64be(index), bytes));
 }
@@ -322,7 +321,7 @@ export function chunkEsStream(
   return out;
 }
 
-/** Merkle root over chunk digests (raw 32-byte leaves, odd promoted — the shared convention). */
+/** Merkle root over chunk digests: raw 32-byte leaves, odd leaf promoted. */
 export function chunkRootHex(digestsHex: string[]): string {
   return buildTree(digestsHex.map(hexToBytes)).root;
 }
@@ -340,9 +339,7 @@ export type StreamedChunksV2Result =
   | { ok: true; build: StreamedChunksV2Build }
   | { ok: false; reason: string };
 
-/**
- * Build the v2 assertion + vault chunk maps from the finalized delivery
- */
+/** Build the v2 assertion and vault chunk maps from the delivery bytes. */
 export function buildStreamedChunksV2(
   bytes: Uint8Array
 ): StreamedChunksV2Result {
@@ -380,7 +377,6 @@ export function buildStreamedChunksV2(
     };
   }
 
-  // Mandatory-when-possible cross-check against the capture-time commitment.
   const total = entries.reduce((n, e) => n + e.chunkCount, 0);
   const assertion: StreamedChunksAssertionV2 = {
     label: STREAMED_CHUNKS_V2_LABEL,
@@ -396,9 +392,9 @@ export function buildStreamedChunksV2(
 }
 
 /**
- * The zero-track v2 assertion for still images (media parity: the same
- * label set rides every kind; a JPEG has no elementary streams — a
- * structural fact, stated in the note, never an absent assertion).
+ * The zero-track v2 assertion for still images. Media parity keeps the same
+ * label set on every kind; a JPEG has no elementary streams, which the note
+ * states.
  */
 export function buildStreamedChunksV2ForStill(): StreamedChunksAssertionV2 {
   return {
@@ -417,10 +413,9 @@ export function buildStreamedChunksV2ForStill(): StreamedChunksAssertionV2 {
 }
 
 /**
- * The export-ready chunk-map sidecar. The app's proof-bundle export wires
- * this in ('proof-only' mode): the vault's stored
- * chunk maps travel with the proof so a desk can range-verify the delivery
- * file without the vault.
+ * The export-ready chunk-map sidecar. The proof-bundle export ('proof-only'
+ * mode) carries the vault's stored chunk maps with the proof so a desk can
+ * range-verify the delivery file without the vault.
  */
 export function buildChunkMapSidecar(
   assetSha256: string,
@@ -429,11 +424,11 @@ export function buildChunkMapSidecar(
   return { format: CHUNK_MAP_SIDECAR_FORMAT, assetSha256, maps };
 }
 
-// ---- Verification (v2 — the only version this tree produces) ----
+// ---- Verification (v2, the only version this tree produces) ----
 
 export interface StreamedChunksVerification {
   version: 2;
-  /** What the verified roots bind — stated in every report. */
+  /** What the verified roots bind; restated in every report. */
   binding: 'delivery-file';
   ok: boolean;
   failures: string[];
@@ -459,12 +454,11 @@ function localize(
 }
 
 /**
- * Verify a streamedChunks v2 assertion against the media bytes it rides
- * in. Roots recompute from the delivery file; truncation localizes to a
- * chunk index when the chunk map is available, and the report says the
- * locked honest string when it isn't. Unknown fields on the assertion are
- * IGNORED (UNSUPPORTED semantics per policyLayer — a future field never
- * fails a known check).
+ * Verify a streamedChunks v2 assertion against the media bytes it rides in.
+ * Roots recompute from the delivery file; truncation localizes to a chunk
+ * index when the chunk map is available, and the report falls back to the
+ * locked string when it is not. Unknown assertion fields are ignored
+ * (UNSUPPORTED semantics per policyLayer).
  */
 export function verifyStreamedChunksAssertion(
   bytes: Uint8Array,
@@ -491,8 +485,8 @@ export function verifyStreamedChunksAssertion(
     return { version: 2, binding: 'delivery-file', ok: false, failures, notes, truncation };
   }
 
-  // Zero tracks: a still image — structural. The superRoot must be the
-  // empty-input hash; there is nothing else to recompute.
+  // Zero tracks means a still image: the superRoot must be the empty-input
+  // hash, with nothing else to recompute.
   if (a.tracks.length === 0) {
     if (a.superRoot !== streamedChunksSuperRoot([])) {
       failures.push('superRoot mismatch for a zero-track (still) assertion');
@@ -501,7 +495,7 @@ export function verifyStreamedChunksAssertion(
     return { version: 2, binding: 'delivery-file', ok: failures.length === 0, failures, notes, truncation };
   }
 
-  // --- superRoot recomputation over the DECLARED roots -------------------
+  // --- superRoot recomputation over the declared roots -------------------
   for (const [i, t] of a.tracks.entries()) {
     if (typeof t?.root !== 'string' || !HEX64.test(t.root)) {
       failures.push(`tracks[${i}] ('${String(t?.trackId)}'): malformed root`);
@@ -521,8 +515,8 @@ export function verifyStreamedChunksAssertion(
   try {
     streams = extractTrackStreams(bytes);
   } catch (e) {
-    // Unparseable container: the roots cannot be recomputed — UNPROVEN,
-    // not proven tamper.
+    // Unparseable container: the roots cannot be recomputed, so UNPROVEN
+    // rather than proven tamper.
     failures.push(`delivery-file demux failed (${(e as Error).message}) — v2 roots could not be recomputed`);
     return { version: 2, binding: 'delivery-file', ok: false, failures, notes, truncation };
   }
@@ -544,7 +538,7 @@ export function verifyStreamedChunksAssertion(
     }
     const recomputed = chunkEsStream(stream.trackId, stream.es);
     if (map) {
-      // Chunk map available: digest-by-digest — truncation (or edit)
+      // Chunk map available: digest-by-digest, so a truncation or edit
       // localizes to a chunk index.
       const idx = localize(declared.trackId, recomputed, map.chunks);
       if (idx !== null) {
@@ -584,19 +578,16 @@ export function verifyStreamedChunksAssertion(
 }
 
 /**
- * Desk-side consumer of the proof-bundle chunk-map sidecar: the app
- * exports buildChunkMapSidecar output inside the proof
- * bundle; this is the minimal verifying reader. It range-verifies the
- * media against the v2 roots WITH the maps present — a tampered or
- * truncated delivery file localizes to a chunk index.
+ * Desk-side reader for the proof-bundle chunk-map sidecar that the app
+ * exports from buildChunkMapSidecar. It range-verifies the media against the
+ * v2 roots with the maps present, so a tampered or truncated delivery file
+ * localizes to a chunk index.
  *
- * Honesty rules:
- *   - absent sidecar  → honest root-only verification (older exports,
- *     stills, degraded builds) — the locked missing-map note, never a failure;
- *   - wrong format    → a named failure, never a guess;
- *   - assetSha256 ≠ sha256(media) → a named failure: these maps describe a
- *     DIFFERENT asset — silently range-verifying against them would pin the
- *     wrong media's chunks onto this file.
+ *   - absent sidecar  → root-only verification with the locked missing-map
+ *     note, not a failure;
+ *   - wrong format    → a named failure;
+ *   - assetSha256 ≠ sha256(media) → a named failure: the maps describe a
+ *     different asset.
  */
 export function verifyChunkMapSidecar(
   bytes: Uint8Array,
@@ -621,10 +612,8 @@ export function verifyChunkMapSidecar(
       truncation: null,
     };
   }
-  // Structural validation BEFORE use: the sidecar crossed the wire as JSON,
-  // so its SHAPE is untrusted — a type-malformed map must surface as a NAMED
-  // failure, never a throw ('map.chunks.map is not a function' is not a
-  // failure name).
+  // The sidecar crossed the wire as JSON, so validate its shape before use;
+  // a type-malformed map must surface as a named failure, not a throw.
   const shapeError = chunkMapSidecarShapeError(sidecar.maps);
   if (shapeError) {
     return { ...base, ok: false, failures: [shapeError], notes: [], truncation: null };
@@ -636,7 +625,7 @@ export function verifyChunkMapSidecar(
  * Named structural failure for a malformed sidecar maps object, or null when
  * every map is usable: keyed by a known track id, trackId in the known enum,
  * chunks an array of { index: int ≥ 0, bytes: int ≥ 0, sha256Hex: 64 lowercase
- * hex }. Anything else is a wrong-format sidecar — named, never thrown.
+ * hex }. Anything else is a wrong-format sidecar.
  */
 function chunkMapSidecarShapeError(maps: unknown): string | null {
   if (maps == null || typeof maps !== 'object' || Array.isArray(maps)) {

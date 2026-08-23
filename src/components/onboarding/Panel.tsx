@@ -1,11 +1,9 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Panel — one onboarding block's entrance.
- *
- * A short fade-and-rise (250ms, native driver, transform + opacity only)
- * that replays each time its panel becomes the active page. Blocks on the
- * same page pass a small stagger delay so the headline lands before the
- * body — cheap enough to re-run on every page change with zero perf cost.
+ * Panel — one onboarding block's entrance. A fade-and-rise (250ms, native
+ * driver, transform and opacity only) that replays whenever its panel becomes
+ * the active page. Blocks on the same page pass a stagger delay so the
+ * headline lands before the body.
  */
 
 import React, { useEffect, useRef } from 'react';

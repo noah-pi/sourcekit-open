@@ -2,10 +2,10 @@
 /**
  * Reference corpus validation.
  *
- * Runs our verifier against tests/corpus/ and demands the expected verdicts
- * from expected-verdicts.json. The corpus is rebuilt by build-corpus.mts;
- * this runner is the CI gate — and the oracle for engine swaps: results
- * must be identical before and after.
+ * Runs the verifier against tests/corpus/ and requires the verdicts in
+ * expected-verdicts.json. build-corpus.mts rebuilds the corpus. This runner
+ * is the CI gate and the oracle for engine swaps: results must match before
+ * and after.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-corpus.mts
  */
@@ -56,8 +56,8 @@ for (const entry of manifest.files) {
     !!ci && ci.note === 'self-reported' && typeof ci.captureToSignatureMs === 'number' && ci.captureToSignatureMs >= 0);
 }
 {
-  // The signed pose trace (gyro evidence): it rides the signed record and
-  // the sealed video still verifies INTACT.
+  // The signed pose trace (gyro evidence) rides the signed record, and the
+  // sealed video still verifies INTACT.
   const ctx = {
     location: 'unavailable', headingDeg: null, pressureHPa: null, altitudeM: null,
     motion: { verdict: 'handheld', rms: 0.03, peakHz: 4 },
@@ -84,15 +84,13 @@ for (const entry of manifest.files) {
   });
   check('pose trace signs into the record',
     record.context?.poseTrace?.samples === 12 && record.captureIntegrity?.sensorTiming?.samples === 100);
-  // The BMFF hash fixpoint sizes with a dummy signature and signs ONCE
-  // on the converged round — record + claim = exactly two signatures per
-  // video, regardless of how many rounds the fixpoint runs.
-  // The corpus suite stages the REAL network TSA client, so token bytes can drift between a
-  // sizing probe and the real fetch; drift forces one extra CONVERGED round (each converged round
-  // signs exactly once — sizing rounds never sign). The strict "exactly one claim signature" pin
-  // lives in test-roundtrip with deterministic mock TSAs. Here we pin the core invariants: the
-  // record signature plus at least one claim signature, all via the one-hop payload path, and
-  // NEVER a digest-path call.
+  // The BMFF hash fixpoint sizes with a dummy signature and signs once on
+  // each converged round; sizing rounds never sign. This suite stages the
+  // real network TSA client, so token drift between probe and real fetch can
+  // force an extra converged round. The strict "exactly one claim signature"
+  // pin lives in test-roundtrip with deterministic mock TSAs. Pinned here:
+  // the record signature plus at least one claim signature, all via the
+  // one-hop payload path, and no digest-path call.
   check('video sealing signs only via the one-hop payload path (record + claim rounds), never per sizing round',
     payloadSigs >= 2 && digestSigs === 0, `payload=${payloadSigs} digest=${digestSigs}`);
   if (signedVideoBytes) {
@@ -111,12 +109,11 @@ for (const entry of manifest.files) {
 }
 
 console.log('\n— two-verifier conformance —');
-// Desk and the app share this verifier. Conformance means: every corpus file
-// yields the SAME verdict through the routing both sides use (magic bytes —
-// JPEG/PNG → photo verifier, 'ftyp'@4 → video verifier), the un-routed
-// verifier refuses cleanly with its NOT_* code, and repeated runs are
-// byte-identical — no hidden nondeterminism that could make two verifiers
-// disagree on the same file.
+// Desk and app share this verifier. Conformance means every corpus file
+// yields the same verdict through the routing both sides use (magic bytes:
+// JPEG/PNG to the photo verifier, 'ftyp'@4 to the video verifier), the
+// un-routed verifier refuses with its NOT_* code, and repeated runs are
+// byte-identical.
 for (const entry of manifest.files) {
   const bytes = new Uint8Array(fs.readFileSync(CORPUS + entry.file));
   const photoRoute =

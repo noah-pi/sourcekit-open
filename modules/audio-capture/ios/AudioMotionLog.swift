@@ -4,36 +4,28 @@ import CoreMotion
 
 /**
  * AudioMotionLog — the audio recorder's IMU sink (WS2 Phase 2 §3 parity).
- *
- * Audio joins photo/video poseTrace parity: while a recording runs, gyro
- * samples stream to a JSONL file in EXACTLY the CaptureKit SensorLogger
- * line format (SPEC-WS1 §5.2), so the desk speaks one sensor language for
- * every media kind:
+ * While a recording runs, gyro samples stream to a JSONL file in the
+ * CaptureKit SensorLogger line format (SPEC-WS1 §5.2):
  *
  *   {"t":<bootSec>,"mach":<machTicks>,"kind":"gyro","x":..,"y":..,"z":..}
  *
- * The FIRST line is the anchor record binding the sensor clock to the
- * recording's wall-clock start (the recording clock anchor), same as the
- * CaptureKit session anchor:
+ * The first line is the anchor record binding the sensor clock to the
+ * recording's wall-clock start, as in the CaptureKit session anchor:
  *   {"kind":"anchor","startedAtMs":..,"machAtAnchor":..,"bootSecAtAnchor":..}
  *
- * RATE HONESTY: CMMotionManager gyro is requested at 100 Hz
- * (gyroUpdateInterval = 0.01), the same target as the video-side logger.
- * CoreMotion delivery is best-effort — the committed poseTrace assertion
- * derives its `hz` from the trace's own intervals (median Δt), never from
- * this target, so a slower device states its real rate.
+ * Gyro is requested at 100 Hz (gyroUpdateInterval = 0.01), the same target as
+ * the video-side logger. CoreMotion delivery is best-effort, so the committed
+ * poseTrace assertion derives its `hz` from the trace's own median Δt, not
+ * from this target. Gyro only: the poseTrace commitment
+ * (src/provenance/poseTrace.ts) reads gyro lines, and accel/baro/loc stay on
+ * the CaptureKit-session sinks.
  *
- * Gyro only: the poseTrace commitment (src/provenance/poseTrace.ts) reads
- * gyro lines; accel/baro/loc are CaptureKit-session sinks and stay there.
- *
- * FAILURE HONESTY (mirrors SensorLogger rule 4): a write failure marks the
- * sink failed; finish then returns nil and the module reports
- * sensorLogState "failed" — the recording itself is never blocked. A failed
- * sink appends one last best-effort line,
+ * Failure states (SensorLogger rule 4): a write failure marks the sink failed,
+ * finish returns nil and the module reports sensorLogState "failed" without
+ * blocking the recording. A failed sink appends one last best-effort line,
  *   {"kind":"sinkFailed","t":<bootSec>}
- * so the log records its own truncation point. When the device has no gyro
- * at all, no logger is created and the module reports "unavailable" — the
- * poseTrace is honestly ABSENT, never fabricated, never silently empty.
+ * marking its own truncation point. With no gyro hardware no logger is created
+ * and the module reports "unavailable".
  */
 
 /// Boot-relative clock helpers, local to this module (the CaptureKit
@@ -60,8 +52,8 @@ private enum AudioMachClock {
   }
 }
 
-/// JSON-number-safe formatting: never emits inf/nan, fixed decimals, and
-/// String(format:) is locale-independent for %f — lines stay machine-parseable.
+/// JSON-number-safe formatting: no inf/nan, fixed decimals, and
+/// String(format:) is locale-independent for %f, so lines stay parseable.
 private func audioLogFixed(_ v: Double, _ places: Int = 6) -> String {
   guard v.isFinite else { return "0" }
   return String(format: "%.\(places)f", v)
@@ -110,8 +102,8 @@ final class AudioMotionLog {
     } catch {
       throw SinkError.cannotCreateFile(error.localizedDescription)
     }
-    // Anchor line first — binds mach/boot clock to the recording's
-    // wall-clock start anchor (same convention as CaptureKit SensorLogger).
+    // Anchor line first: binds the mach/boot clock to the recording's
+    // wall-clock start, as in CaptureKit SensorLogger.
     let anchor = AudioMachClock.nowTicks()
     let line = "{\"kind\":\"anchor\",\"startedAtMs\":\(anchorStartedAtMs),\"machAtAnchor\":\(anchor),\"bootSecAtAnchor\":\(audioLogFixed(AudioMachClock.ticksToBootSeconds(anchor), 9))}\n"
     writeLine(line)
@@ -143,10 +135,9 @@ final class AudioMotionLog {
     motion = nil
     writeLock.lock()
     let ok = !failed
-    // Self-describing truncation: when the sink failed mid-recording, the
-    // log itself records WHERE writes stopped. Best-effort — the underlying
-    // handle may be exactly what failed, in which case the absence of the
-    // marker is itself the record.
+    // When the sink failed mid-recording the log records where writes stopped.
+    // Best-effort: the handle may be what failed, in which case the marker's
+    // absence is the record.
     if failed && !closed, let handle = handle {
       let t = AudioMachClock.ticksToBootSeconds(AudioMachClock.nowTicks())
       let line = "{\"kind\":\"sinkFailed\",\"t\":\(audioLogFixed(t, 9))}\n"

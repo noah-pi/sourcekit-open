@@ -2,10 +2,9 @@
 /**
  * Capture-time context collection: GPS, compass heading, barometer.
  *
- * Every reading is OPTIONAL and individually disclosed in the attestation
- * record as 'redacted' (user opted out), 'unavailable' (hardware/permission
- * missing), or the value itself. Nothing here is ever fabricated — a null
- * sensor is recorded as null.
+ * Every reading is optional and disclosed in the attestation record as
+ * 'redacted' (opted out), 'unavailable' (hardware or permission missing), or
+ * the value itself. A null sensor is recorded as null.
  */
 
 import { Platform } from 'react-native';
@@ -42,10 +41,10 @@ async function getLocationClaim(): Promise<LocationClaim | 'unavailable'> {
 }
 
 /**
- * The Wi-Fi network the phone reports. No permission request happens
- * here — iOS decides from existing state: no location authorization, no
- * Wi-Fi Information entitlement, or no Wi-Fi association all come back as
- * 'unavailable'. The claim is self-reported and spoofable — see WifiClaim.
+ * The Wi-Fi network the phone reports. No permission is requested here; iOS
+ * decides from existing state, and missing location authorization, a missing
+ * Wi-Fi Information entitlement, or no association all return 'unavailable'.
+ * The claim is self-reported and spoofable — see WifiClaim.
  */
 async function getWifiClaim(): Promise<WifiClaim | 'unavailable'> {
   const claim = await getCurrentWifi();
@@ -53,15 +52,12 @@ async function getWifiClaim(): Promise<WifiClaim | 'unavailable'> {
 }
 
 /**
- * The one-shot compass read. This is NOT the sealed pointing direction:
- * Apple defines CLHeading as the azimuth of the TOP EDGE's
- * horizontal projection, which for the actual shooting stance (phone
- * upright, top edge at the sky) is a near-degenerate number that flips
- * 180° with the sign of the tilt (the field report: "check your sun
- * position map — i'm not sure it's calculated right in the overlay"). The
- * read still runs, for two things: the DECLINATION (trueHeading −
- * magHeading — a property of place and time, independent of how the
- * phone is held), and as the fallback when no pose sample exists.
+ * One-shot compass read. Not the sealed pointing direction: CLHeading is the
+ * azimuth of the top edge's horizontal projection, which in the shooting
+ * stance (phone upright, top edge skyward) is near-degenerate and flips 180°
+ * with the sign of the tilt. It is read for two things: the declination
+ * (trueHeading − magHeading, a property of place and time), and as the
+ * fallback when no pose sample exists.
  */
 async function getCompassRead(): Promise<{ trueHeading: number; magHeading: number } | null> {
   try {
@@ -79,19 +75,15 @@ const wrap360 = (deg: number): number => ((deg % 360) + 360) % 360;
 const wrap180 = (deg: number): number => ((((deg + 180) % 360) + 360) % 360) - 180;
 
 /**
- * Camera azimuth from the fused attitude. The camera looks out the
- * BACK of the phone — the device −Z axis — and the pose buffer already
- * holds the attitude at 100 Hz, anchored to the shutter instant, so the
- * pointing direction comes from the sample nearest the shutter instead of
- * a compass read taken after the capture call returned (by which time the
- * phone has usually moved). Convention (verified against the canonical
- * CMDeviceMotion quaternion decomposition): expo DeviceMotion runs
- * xMagneticNorthZVertical and its Euler angles compose as
- * R = Rz(yaw)·Ry(roll)·Rx(pitch), device→world, world frame X = magnetic
- * north, Y = west, Z = up. The result is MAGNETIC-referenced; the caller
- * adds the declination. Returns null when the aim is within ~10° of
- * straight up/down — a bearing is undefined there and no number is
- * invented.
+ * Camera azimuth from the fused attitude. The camera looks out the back of
+ * the phone (device −Z), and the pose buffer holds attitude at 100 Hz
+ * anchored to the shutter, so the direction comes from the sample nearest
+ * the shutter rather than a compass read taken after capture returned.
+ * Convention: expo DeviceMotion runs xMagneticNorthZVertical and its Euler
+ * angles compose as R = Rz(yaw)·Ry(roll)·Rx(pitch), device→world, with world
+ * X = magnetic north, Y = west, Z = up. The result is magnetic-referenced;
+ * the caller adds declination. Returns null when the aim is within ~10° of
+ * straight up or down, where a bearing is undefined.
  */
 export function cameraAzimuthMagneticDeg(rollDeg: number, pitchDeg: number, yawDeg: number): number | null {
   const RAD = Math.PI / 180;
@@ -109,7 +101,7 @@ export function cameraAzimuthMagneticDeg(rollDeg: number, pitchDeg: number, yawD
 }
 
 /** The sealed heading: camera azimuth (true north) at the shutter when the
- *  pose buffer reaches it; the plain compass read when it doesn't. */
+ *  pose buffer reaches it, otherwise the plain compass read. */
 async function getHeadingDeg(poseSamples: PoseSample[] | undefined, capturedAtMs: number): Promise<number | null> {
   const compass = await getCompassRead();
   if (poseSamples && poseSamples.length > 0) {
@@ -124,7 +116,7 @@ async function getHeadingDeg(poseSamples: PoseSample[] | undefined, capturedAtMs
         return Math.round(wrap360(azMag + declination));
       }
       // Degenerate aim or no declination read: fall through to the plain
-      // compass value rather than mix a magnetic azimuth into a
+      // compass value rather than put a magnetic azimuth in a
       // true-north-referenced field.
     }
   }
@@ -145,7 +137,7 @@ export async function startBarometerFeed(): Promise<void> {
       lastPressure = pressure;
     });
   } catch {
-    // Sensor absent — pressure will be recorded as null.
+    // Sensor absent: pressure is recorded as null.
   }
 }
 
@@ -158,28 +150,27 @@ export async function collectContext(params: {
   includeLocation: boolean;
   includeSensors: boolean;
   /**
- * Wi-Fi network claim — strictly opt-in (Settings default off).
-   * Collected whenever enabled, regardless of the location toggle: if the
-   * user already granted location permission it succeeds, otherwise iOS
-   * returns nothing and the record honestly says 'unavailable'. Always
-   * stripped on the de-identify path.
+   * Wi-Fi network claim; opt-in, Settings default off. Collected whenever
+   * enabled, regardless of the location toggle: it succeeds if location
+   * permission was already granted, otherwise iOS returns nothing and the
+   * record says 'unavailable'. Always stripped on the de-identify path.
    */
   includeWifi: boolean;
   motionSamples: MotionSample[];
- /** Fused DeviceMotion buffer for the signed pose trace. */
+  /** Fused DeviceMotion buffer for the signed pose trace. */
   poseSamples?: PoseSample[];
   /** Shutter moment the pose trace anchors to (default: now). */
   capturedAtMs?: number;
-  /** Trace window override — video passes its clip duration. */
+  /** Trace window override; video passes its clip duration. */
   poseTraceOpts?: PoseTraceOptions;
 }): Promise<SensorContext> {
   const { includeLocation, includeSensors, includeWifi, motionSamples } = params;
 
   const location = includeLocation ? await getLocationClaim() : 'redacted';
   const wifi = includeWifi ? await getWifiClaim() : 'redacted';
-  // Heading = camera azimuth AT THE SHUTTER from the pose buffer
-  // (true-north via the compass declination); plain compass read only when
-  // no pose sample exists. See getHeadingDeg.
+  // Heading is the camera azimuth at the shutter from the pose buffer,
+  // true-north via the compass declination; the plain compass read is used
+  // only when no pose sample exists. See getHeadingDeg.
   const headingDeg =
     includeSensors && includeLocation
       ? await getHeadingDeg(params.poseSamples, params.capturedAtMs ?? Date.now())
@@ -203,7 +194,7 @@ export async function requestCapturePermissions(includeLocation: boolean): Promi
     try {
       await Location.requestForegroundPermissionsAsync();
     } catch {
-      // Denied — location will simply be recorded as 'unavailable'.
+      // Denied: location is recorded as 'unavailable'.
     }
   }
 }

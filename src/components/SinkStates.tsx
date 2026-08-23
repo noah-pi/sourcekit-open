@@ -1,33 +1,17 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * SinkStates — the three-state honesty rendering of the capture-evidence
- * sinks.
+ * SinkStates — renders the capture-evidence sinks. Each sink is in one of
+ * three states (manifest.ts EvidencePath):
  *
- * Every sink in the signed record is in EXACTLY one of three states
- * (manifest.ts EvidencePath), and this component renders each literally:
+ *   string           — recorded; the drawer shows the on-device path
+ *   null             — enabled but failed at capture
+ *   'never-recorded' — toggle off, session did not run, or not applicable
  *
- *   string           — RECORDED: the sink produced its evidence; the signed
- *                      record carries the on-device path it sat at at seal
- *                      time. Shown verbatim (selectable, mono) in the drawer.
- *   null             — ENABLED BUT FAILED: the sink was turned on and
- *                      errored at capture time. A failure, rendered as a
- *                      failure — never as "off" and never smoothed over.
- *   'never-recorded' — NEVER RECORDED: the toggle was off, the native session
- *                      didn't run, or the sink does not apply to this media
- *                      kind. Rendered as never-recorded — never confused
- *                      with a failure, never suspicion.
- *
- * The rows are DRAWERS — tap one to reveal the specific
- * data that was captured (the sealed path, the pair counts, the coordinates).
- * Row order is the capture story itself: the lenses, then what the device
- * reported, then the media-adjacent masters. The roster:
- *
- *   Multiple Lenses · Sensor Log · Location · Raw Audio Master · Frames around the shutter
- *
- * The path-based sinks' block is absent only on records written before 1.0.0
- * — a fourth case, stated as one (an old record, not a claim that nothing
- * was recorded). The lens and location rows derive from other signed
- * sections, so they still render on old records.
+ * Rows are tap-to-open drawers holding the captured data. Row order:
+ * Multiple Lenses, Sensor Log, Location, Raw Audio Master, Frames around the
+ * shutter. Records without a captureEvidence block get the legacy notice
+ * instead of the path sinks; the lens and location rows derive from other
+ * signed sections and still render.
  */
 
 import React, { useState } from 'react';
@@ -42,17 +26,14 @@ import type { AttestationRecord, CaptureEvidencePaths, EvidencePath } from '../p
 
 /**
  * Multiple Lenses — the second camera's committed evidence. States come from
- * the record's stereo sections (stereoArtifacts.ts) with the same three-state
- * literalism: recorded / error / never-recorded. Absence is never suspicion;
- * geometry from these frames is a lead for later review, never a verdict;
- * nothing here says "passed" or "verified scene".
+ * the record's stereo sections (stereoArtifacts.ts): recorded, error, or
+ * never-recorded.
  */
 export interface AltViewSink {
   state: 'recorded' | 'failed' | 'never-recorded';
   detail: string;
-  /** The committed native error string, verbatim — present when state is
-      'failed' and the record carries one (always, on records this app writes).
-      Rendered in the drawer, never paraphrased. */
+  /** Committed native error string, verbatim. Present when state is 'failed'
+      and the record carries one. Rendered in the drawer as-is. */
   error?: string;
 }
 
@@ -69,10 +50,9 @@ export function deriveAltViewSink(record: AttestationRecord | null): AltViewSink
     };
   }
 
-  // Video: the section restates the native stop result verbatim. Zero
-  // committed pairs is an unreached state (unsupported, toggled off, or
-  // thermal-detached) — stated, never red. A missed pair is a declared
-  // count, never suspicion (STEREO_VIDEO_BUNDLE_NOTE).
+  // Video: the section restates the native stop result. Zero committed pairs
+  // means unsupported, toggled off, or thermal-detached, and is neutral, not
+  // a failure (STEREO_VIDEO_BUNDLE_NOTE).
   if (kind === 'video') {
     if (!vs) {
       return {
@@ -95,7 +75,7 @@ export function deriveAltViewSink(record: AttestationRecord | null): AltViewSink
     };
   }
 
-  // Photo: the paired frame's own committed state drives the row.
+  // Photo: the paired frame's committed state drives the row.
   if (!st) {
     return {
       state: 'never-recorded',
@@ -125,10 +105,9 @@ export function deriveAltViewSink(record: AttestationRecord | null): AltViewSink
 }
 
 /**
- * Location — a device-reported signal, listed with the evidence sinks
- * because that is what it is: captured at seal time, committed under
+ * Location — device-reported, captured at seal time and committed under
  * signature, never independently confirmed. 'removed' is the de-identified
- * case: the absence is itself part of the signed record.
+ * case, where the absence is part of the signed record.
  */
 export interface LocationSink {
   state: 'recorded' | 'never-recorded' | 'removed';
@@ -171,8 +150,8 @@ export function deriveLocationSink(record: AttestationRecord | null): LocationSi
 type Tone = 'good' | 'bad' | 'neutral';
 
 function pathState(p: EvidencePath): { tone: Tone; headline: string; detail: string } {
-  // Order matters: 'never-recorded' is itself a string, so it must be
-  // tested before the generic string (recorded path) case.
+  // 'never-recorded' is itself a string, so test it before the generic
+  // string (recorded path) case.
   if (p === 'never-recorded') {
     return {
       tone: 'neutral',
@@ -203,12 +182,11 @@ const PATH_SINKS: { key: keyof CaptureEvidencePaths; icon: keyof typeof Ionicons
   { key: 'ringBufferDir', icon: 'images-outline', label: 'Frames around the shutter', appliesTo: 'Photos only' },
 ];
 
-/** Extra plain-English line for the ring sink — "burst frames" meant nothing
- *  to a first-time reader. */
+/** Extra explainer line appended to the ring sink's drawer detail. */
 const RING_EXPLAINER = 'About 8 frames captured just before and after the shutter fired, for reviewing depth and timing later.';
 
-/** One sink row: header always visible (icon, label, scope, state badge);
- *  the specific captured data sits behind the chevron drawer. */
+/** One sink row. Header is always visible (icon, label, scope, state badge);
+ *  the captured data sits behind the chevron drawer. */
 function SinkRow({ icon, label, appliesTo, tone, headline, detail, path, mono, committedError }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -218,8 +196,7 @@ function SinkRow({ icon, label, appliesTo, tone, headline, detail, path, mono, c
   detail: string;
   path?: string;
   mono?: boolean;
-  /** The committed native error string, shown verbatim in a mono block —
-      the record commits it, so the drawer honors it. Never paraphrased. */
+  /** Committed native error string, shown verbatim in a mono block. */
   committedError?: string;
 }) {
   const styles = useThemedStyles(buildStyles);
@@ -258,14 +235,12 @@ function SinkRow({ icon, label, appliesTo, tone, headline, detail, path, mono, c
 
 export function SinkStates({ captureEvidence, altView, location, sensorSummary }: {
   captureEvidence?: CaptureEvidencePaths | null;
-  /** Multiple Lenses — derived via deriveAltViewSink. Rendered first: it is
-   *  the capture's own hardware story. */
+  /** Multiple Lenses — derived via deriveAltViewSink. Rendered first. */
   altView?: AltViewSink | null;
   /** Location — derived via deriveLocationSink. */
   location?: LocationSink | null;
-  /** What the sensor log actually captured (samples, rates, channels), built
-   *  from the sealed context. Shown INSTEAD of the on-device path — a file
-   *  path is not the data. */
+  /** What the sensor log captured (samples, rates, channels), built from the
+   *  sealed context. Replaces the on-device path in the drawer. */
   sensorSummary?: string | null;
 }) {
   const styles = useThemedStyles(buildStyles);
@@ -301,8 +276,7 @@ export function SinkStates({ captureEvidence, altView, location, sensorSummary }
         appliesTo={sensor.appliesTo}
         tone={sst.tone}
         headline={sst.headline}
-        // Recorded + a summary: show THE DATA, not the file path. Without a
-        // summary (older record shapes) fall back to the path wording.
+        // With a summary, show the data; without one, fall back to the path.
         detail={recorded && sensorSummary ? sensorSummary : sst.detail}
         path={recorded && !sensorSummary ? sp as string : undefined}
         mono

@@ -1,25 +1,20 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Context-claim inventory (docs/INTEGRITY.md — selective disclosure).
+ * Context-claim inventory (docs/INTEGRITY.md, selective disclosure).
  *
- * Every capture carries the FULL expected claim set — all rungs of all
- * fixed ladders (ladder.ts) plus any free-form `context.*` claims. Each
- * claim is in exactly one of three states, always:
+ * Every capture carries the full expected claim set: all rungs of all fixed
+ * ladders (ladder.ts) plus any free-form `context.*` claims. Each claim is in
+ * exactly one state:
  *
- *   committed       — a value was recorded and committed as a tree leaf
- *                     (it may later be disclosed or withheld per bundle)
- *   never-recorded  — declared AT COMMIT TIME in the inventory assertion;
- *                     immutable after, because the inventory entries are
- *                     hashed (`inventoryDigest`) into a reserved meta-leaf
- *                     of the tree — the root itself binds the declaration.
- *                     No leaf exists for the claim and none can ever appear.
- *   (withheld)      — not an inventory state: a committed claim that a
- *                     given disclosure bundle simply does not open.
- *                     Withheld means ABSENT from the bundle, never
- *                     encrypted.
+ *   committed       — recorded and committed as a tree leaf.
+ *   never-recorded  — declared at commit time in the inventory assertion and
+ *                     immutable after: the entries are hashed
+ *                     (`inventoryDigest`) into a reserved meta-leaf, so the
+ *                     root binds the declaration and no leaf can appear later.
+ *   (withheld)      — not an inventory state: a committed claim a given
+ *                     disclosure bundle does not open. Absent, not encrypted.
  *
- * This module commits context claims; it never concludes anything about
- * them. No verdicts.
+ * This module commits claims; it draws no verdicts.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
@@ -58,10 +53,8 @@ export interface InventoryEntry {
 }
 
 /**
- * The assertion shape destined for the manifest, under the project-specific
- * custom label `camera.contextTree`: custom `camera.*` labels only; verdict
- * codes and the policy layer are untouched. Nothing wires it into a manifest
- * yet.
+ * Assertion shape for the manifest, under the custom label
+ * `camera.contextTree`. Not yet wired into a manifest.
  */
 export interface InventoryAssertion {
   label: 'camera.contextTree';
@@ -75,25 +68,23 @@ export const DISCLOSURE_VERSION = '1.0.0-ws2' as const;
 
 const CLAIM_ID = /^(location|time|identity|sensor|context)\.[a-z0-9][a-z0-9-]*$/;
 
-/** A claim object carries EXACTLY these keys — nothing else digests in. */
+/** A claim object carries exactly these keys; nothing else digests in. */
 const CLAIM_KEYS = new Set(['claimId', 'family', 'rung', 'value']);
 
 /**
- * The inventory meta-leaf binds the whole inventory into the root. Were the
- * root to cover only the committed claims' leaf digests, a bundle maker
- * holding the seed could reclassify a withheld claim as never-recorded. So
- * the entries (sorted by claimId) are canonicalized and hashed under their
- * own domain, and the digest rides in the tree as a distinguished meta-leaf
- * at index 0.
+ * Meta-leaf that binds the whole inventory into the root: entries sorted by
+ * claimId, canonicalized and hashed under their own domain, carried at leaf
+ * index 0. Without it a bundle maker holding the seed could reclassify a
+ * withheld claim as never-recorded.
  */
 export const INVENTORY_DIGEST_DOMAIN = 'inventory-v1';
 export const INVENTORY_META_CLAIM_ID = '\x00inventory';
 
 /**
  * inventoryDigest = SHA-256('inventory-v1' ‖ canonical(entries sorted by
- * claimId)). Recomputed identically by the committer and every verifier —
- * a count-preserving swap of the never-recorded set changes it and fails
- * the meta-leaf inclusion check by name (bundle.ts).
+ * claimId)). Committer and verifier recompute it identically, so even a
+ * count-preserving swap of the never-recorded set fails the meta-leaf
+ * inclusion check (bundle.ts).
  */
 export function inventoryDigest(entries: InventoryEntry[]): Uint8Array {
   const sorted = [...entries].sort((a, b) => (a.claimId < b.claimId ? -1 : a.claimId > b.claimId ? 1 : 0));
@@ -102,16 +93,16 @@ export function inventoryDigest(entries: InventoryEntry[]): Uint8Array {
 }
 
 /**
- * Validate one claim's shape: known family, well-formed claimId, rung
- * within the family ladder, and — for laddered families — the claimId
- * exactly `${family}.${rungName}` so a leaf cannot smuggle a rung name
- * that disagrees with its rung number. Throws with the reason named.
+ * Validates one claim's shape: known family, well-formed claimId, rung within
+ * the family ladder, and for laddered families a claimId of exactly
+ * `${family}.${rungName}`, so a leaf cannot carry a rung name that disagrees
+ * with its rung number. Throws with the reason named.
  */
 export function validateClaim(claim: ContextClaim): void {
   if (!claim || typeof claim !== 'object') throw new Error('inventory: claim is not an object');
-  // Schema-pinned: canonicalize serializes ALL own
-  // enumerable keys, so an unexpected key would digest differently across
-  // implementations of "the same" claim. Reject them outright.
+  // Schema-pinned: canonicalize serializes all own enumerable keys, so an
+  // unexpected key digests differently across implementations of the same
+  // claim.
   for (const k of Object.keys(claim)) {
     if (!CLAIM_KEYS.has(k)) {
       throw new Error(`inventory: claim '${(claim as ContextClaim)?.claimId}' has unexpected key '${k}'; claims carry exactly claimId/family/rung/value`);
@@ -153,14 +144,13 @@ export function validateClaim(claim: ContextClaim): void {
 }
 
 /**
- * Build the sorted leaf set and the inventory assertion for a capture.
- * Pure and deterministic: same inputs → same leaves, same entries,
- * same order (sorted by claimId).
+ * Builds the sorted leaf set and the inventory assertion for a capture. Pure
+ * and deterministic: same inputs give the same leaves, entries, and order
+ * (sorted by claimId).
  *
- * Fixed-leaf schema: every expected claimId (all rungs of all
- * ladders) must be accounted for — present in `claims` with a value, or
- * listed in `neverRecordedIds`. Anything else throws with the gap named:
- * a capture that cannot say which state a claim is in must not commit.
+ * Fixed-leaf schema: every expected claimId must be accounted for, either
+ * present in `claims` with a value or listed in `neverRecordedIds`. Anything
+ * else throws with the gap named.
  */
 export function buildInventory(
   claims: ContextClaim[],

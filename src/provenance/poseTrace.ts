@@ -1,27 +1,23 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * The signed gyro trace (com.verify.poseTrace).
+ * The signed gyro trace (com.verify.poseTrace). Source is the CaptureKit
+ * sensor JSONL, one sample per line,
+ * `{"t":<bootSec>,"kind":"gyro","x":..,"y":..,"z":..}` at ~100 Hz. Commits
+ * the trace under a Merkle root (the disclosure tree builder) and reports
+ * the nominal rate from the trace's own intervals. No motion analysis.
  *
- * Source: the CaptureKit sensor JSONL — one sample per
- * line, `{"t":<bootSec>,"kind":"gyro","x":..,"y":..,"z":..}` at ~100 Hz.
- * This module commits the trace under a Merkle root (reusing the
- * disclosure tree builder, so capture-side and desk-side speak one
- * Merkle language) and reports the nominal rate derived from the
- * trace's own intervals. It performs NO motion analysis and no verdicts.
- *
- * Leaf format (reproducible by any desk holding the exported trace):
+ * Leaf format:
  *
  *   leafDigest = SHA-256('pose-trace-v1' ‖ <trimmed JSONL line bytes,
  *                                             without the newline>)
  *
- * Committing the TRIMMED line BYTES (not a re-serialization) means the
- * desk's recomputation needs no canonical-JSON agreement — the exported
- * JSONL, whitespace-trimmed per line, is the commitment, byte for byte.
+ * Committing the trimmed line bytes rather than a re-serialization means a
+ * desk recomputes the root with no canonical-JSON agreement needed.
  *
- * HONESTY INVARIANT (locked by G1, docs/INTEGRITY.md): the assertion declares
- * `gyroPriorAuthenticated: false` — the trace is committed (existence +
- * content bound at seal) but the device's motion claims remain
- * self-reported until a hardware-attested IMU path exists.
+ * Invariant (G1, docs/INTEGRITY.md): the assertion declares
+ * `gyroPriorAuthenticated: false`. The trace is bound at seal, but the
+ * motion values stay self-reported until a hardware-attested IMU path
+ * exists.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
@@ -46,15 +42,14 @@ export interface GyroSample {
 /** A gyro sample plus the exact JSONL line it was parsed from. */
 export interface GyroLine {
   sample: GyroSample;
-  /** The trimmed line bytes (whitespace + newline stripped) — the commitment unit. */
+  /** The trimmed line bytes (whitespace and newline stripped): the commitment unit. */
   line: string;
 }
 
 /**
- * Parse the gyro lines out of a CaptureKit sensor JSONL document.
- * Malformed lines are SKIPPED and counted — a truncated tail line (the
- * common case when a sink was killed mid-write) must not sink the whole
- * trace, but the skip is reported, never silent.
+ * Parse the gyro lines out of a CaptureKit sensor JSONL document. Malformed
+ * lines are skipped and counted, so a truncated tail line (a sink killed
+ * mid-write) does not lose the whole trace.
  */
 export function parseGyroJsonl(jsonl: string): { gyro: GyroLine[]; skippedLines: number } {
   const gyro: GyroLine[] = [];
@@ -77,8 +72,8 @@ export function parseGyroJsonl(jsonl: string): { gyro: GyroLine[]; skippedLines:
     ) {
       gyro.push({ sample: { t: s.t, x: s.x, y: s.y, z: s.z }, line });
     }
-    // Non-gyro lines (accel/baro/loc) are not skipped — they are simply
-    // not this trace. Only UNPARSEABLE lines count as skipped.
+    // Non-gyro lines (accel/baro/loc) are not part of this trace. Only
+    // unparseable lines count as skipped.
   }
   return { gyro, skippedLines };
 }
@@ -89,9 +84,8 @@ export function poseTraceLeafDigest(line: string): Uint8Array {
 }
 
 /**
- * Nominal sample rate from the trace's own intervals (median Δt). Falls
- * back to the CaptureKit nominal 100 Hz for traces too short to measure —
- * stated, never measured, in that case.
+ * Nominal sample rate from the trace's own intervals (median Δt). Traces too
+ * short to measure fall back to the CaptureKit nominal 100 Hz.
  */
 export function nominalHz(gyro: GyroLine[]): number {
   if (gyro.length < 3) return 100;
@@ -108,8 +102,8 @@ export function nominalHz(gyro: GyroLine[]): number {
 
 /**
  * Build the com.verify.poseTrace assertion over a sensor JSONL document.
- * Returns null (honest absence) when the document holds no gyro samples —
- * the assertion is never emitted empty.
+ * Returns null when the document holds no gyro samples; the assertion is
+ * never emitted empty.
  */
 export function buildPoseTraceAssertion(jsonl: string): PoseTraceAssertion | null {
   const { gyro } = parseGyroJsonl(jsonl);

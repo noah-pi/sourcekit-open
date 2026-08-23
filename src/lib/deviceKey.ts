@@ -2,17 +2,15 @@
 /**
  * Device signing identity.
  *
- * Primary path (iOS): a P-256 key generated INSIDE the Secure Enclave via the
- * native module. The private key is non-extractable — it never exists in app
- * memory and cannot be read out by any process; signing happens on the chip.
+ * Primary path (iOS): a P-256 key generated inside the Secure Enclave via the
+ * native module. The private key is non-extractable and signing happens on
+ * the chip.
  *
- * Fallback path (Android / dev / Expo Go): a software P-256 key stored in the
- * OS keychain via expo-secure-store with WHEN_UNLOCKED_THIS_DEVICE_ONLY —
- * hardware-encrypted at rest, but extractable by the running app. The UI and
- * README state which backend is active; nothing is overstated.
+ * Fallback path (Android, dev, Expo Go): a software P-256 key in the OS
+ * keychain via expo-secure-store with WHEN_UNLOCKED_THIS_DEVICE_ONLY;
+ * hardware-encrypted at rest but extractable by the running app.
  *
- * The public fingerprint is the device's identity either way, and every
- * attestation it signs is verifiable offline, forever.
+ * Either way the device's identity is the public-key fingerprint.
  */
 
 import * as SecureStore from 'expo-secure-store';
@@ -52,26 +50,20 @@ export interface DeviceSigner {
   publicKeyBase64: string;
   /** SHA-256 of the public key bytes, hex. */
   fingerprint: string;
-  /**
-   * Software private key, hex — ONLY present for the software fallback.
-   * Null for Secure Enclave keys (non-extractable by design).
-   */
+  /** Software private key, hex. Null for Secure Enclave keys. */
   privateKeyHex: string | null;
   /** ECDSA signature over a 32-byte digest. Returns DER, low-S normalized. */
   signDigest(digest: Uint8Array): Promise<Uint8Array>;
   /**
-   * Signs sha256(payload). On Secure Enclave backends the
-   * digest AND the signature are produced in one native call (the payload is
-   * never hashed in JS); on the biometric-bound key this is one per-use
-   * Face ID/Touch ID evaluation. Returns DER, low-S normalized.
+   * Signs sha256(payload). Secure Enclave backends produce the digest and the
+   * signature in one native call; the biometric-bound key adds one Face
+   * ID/Touch ID evaluation per call. Returns DER, low-S normalized.
    */
   signPayload(payload: Uint8Array): Promise<Uint8Array>;
   /**
-   * True when every signature required Face ID/Touch ID (biometric-bound
-   * Enclave key). Mutually exclusive with the attested backend: the App
-   * Attest attestation binds the plain Enclave signing key, so while
-   * biometric signing is active the bio key signs and the attestation
-   * simply doesn't apply; the UI presents that trade-off explicitly.
+   * True for the biometric-bound Enclave key, where every signature requires
+   * Face ID/Touch ID. Excludes the attested backend: App Attest binds the
+   * plain Enclave key, so its attestation does not cover the bio key.
    */
   biometricBound?: boolean;
 }
@@ -82,11 +74,9 @@ let cachedCert: Uint8Array | null = null;
 let cachedCertFor: string | null = null; // fingerprint the cached cert was built for
 
 /**
- * Signer backed by the biometric-bound Enclave key. Per-use evaluation:
- * every signPayload is ONE Face ID/Touch ID scan whose
- * authenticated context is invalidated natively before the call returns —
- * there is no reusable primed session, so a runtime-instrumented
- * process cannot mint extra signatures silently inside a window.
+ * Signer backed by the biometric-bound Enclave key. Each signPayload is one
+ * Face ID/Touch ID scan whose authenticated context is invalidated natively
+ * before the call returns, leaving no primed session behind.
  */
 function bioEnclaveSigner(publicKey: Uint8Array): DeviceSigner {
   return {
@@ -98,7 +88,7 @@ function bioEnclaveSigner(publicKey: Uint8Array): DeviceSigner {
     signPayload: async (payload) => {
       const sealed = await enclaveSealBio([payload], 'Authorize signing this capture');
       if (!sealed) {
-        // Old native build: hash in JS, per-signature prompt — same semantics.
+        // No native sealBio: hash in JS, one prompt per signature.
         return derNormalizeLowS(enclaveBioSignDigest(sha256(payload)));
       }
       return derNormalizeLowS(sealed[0]);
@@ -140,7 +130,7 @@ function enclaveSigner(publicKey: Uint8Array): DeviceSigner {
     signDigest: async (digest) => derNormalizeLowS(enclaveSignDigest(digest)),
     signPayload: async (payload) => {
       const sealed = enclaveSeal(payload);
-      if (!sealed) return derNormalizeLowS(enclaveSignDigest(sha256(payload))); // old native build
+      if (!sealed) return derNormalizeLowS(enclaveSignDigest(sha256(payload))); // no native seal
       return derNormalizeLowS(sealed);
     },
   };
@@ -151,8 +141,8 @@ export async function getDeviceKey(): Promise<DeviceSigner> {
   if (cached && cachedForBio === bio) return cached;
   cachedForBio = bio;
 
-  // 0. Biometric-bound Enclave key (explicit user choice — takes precedence;
-  //    every signature then requires Face ID, but App Attest cannot apply).
+  // 0. Biometric-bound Enclave key, when the setting is on. Takes precedence;
+  //    every signature requires Face ID and App Attest does not apply.
   if (bio && enclaveAvailable()) {
     let pub = enclaveBioGetPublicKey();
     if (!pub) {
@@ -168,11 +158,9 @@ export async function getDeviceKey(): Promise<DeviceSigner> {
     }
   }
 
-  // 1. Secure Enclave (iOS, production builds). When Apple's App Attest
-  //    attestation is bound to exactly this key (see appAttest.ts), the
-  //    backend upgrades to 'secure-enclave-attested' — same key, same
-  //    on-chip signing, plus a hardware certificate any verifier can
-  //    check offline.
+  // 1. Secure Enclave (iOS, production builds). When an App Attest
+  //    attestation is bound to this exact key (see appAttest.ts), the backend
+  //    reports 'secure-enclave-attested'.
   if (enclaveAvailable()) {
     let pub = enclaveGetPublicKey();
     if (!pub) {
@@ -208,8 +196,8 @@ export async function getDeviceKey(): Promise<DeviceSigner> {
 
 /**
  * The device's self-signed X.509 certificate (DER), embedded as the COSE
- * x5chain in every C2PA signature. Built once from the device key — the
- * Enclave signs the certificate's own TBS — and cached in the keychain.
+ * x5chain in every C2PA signature. Built once from the device key (the
+ * Enclave signs the certificate's own TBS) and cached in the keychain.
  */
 export async function getDeviceCert(): Promise<Uint8Array> {
   const signer = await getDeviceKey();
@@ -218,19 +206,15 @@ export async function getDeviceCert(): Promise<Uint8Array> {
   const stored = await SecureStore.getItemAsync(certKey, OPTIONS);
   if (stored) {
     const storedDer = base64ToBytes(stored);
-    // The subject is the only place the app name
-    // lives in the cert, and a Keychain-cached cert minted under the old name
-    // ("Exhibit A") survives the update. Same key, same storage key — when
-    // the cached subject no longer matches the current constants, fall
-    // through to the rebuild below and re-store. Old sealed files are
-    // unaffected: their certs travel embedded in the files themselves, and
-    // no verification path re-reads this cache.
+    // A cached cert whose subject no longer matches CERT_ORGANIZATION /
+    // CERT_COMMON_NAME is rebuilt and re-stored under the same key. Sealed
+    // files carry their own embedded certs and never read this cache.
     let stale = false;
     try {
       const parsed = parseCertificate(storedDer);
       stale = parsed.subjectOrg !== CERT_ORGANIZATION || parsed.subjectCN !== CERT_COMMON_NAME;
     } catch {
-      stale = false; // parse hiccup — keep the working cert, never brick it
+      stale = false; // parse failure: keep the working cert
     }
     if (!stale) {
       cachedCert = storedDer;
@@ -263,7 +247,7 @@ export async function getDeviceCertChain(): Promise<{ chain: Uint8Array[]; org: 
   return { chain: [self], org: null, orgStale: false };
 }
 
-/** Compromised or sold device? Rotate. Old attestations stay verifiable. */
+/** Rotates the device key. Attestations signed by the old key stay verifiable. */
 export async function regenerateDeviceKey(): Promise<DeviceSigner> {
   const bio = bioPreferred();
   cachedForBio = bio;
@@ -276,8 +260,8 @@ export async function regenerateDeviceKey(): Promise<DeviceSigner> {
     cached?.backend === 'secure-enclave-attested' ||
     (enclaveAvailable() && !cached)
   ) {
-    // The old attestation was bound to the old key and goes stale here;
-    // the user re-binds on demand (Settings → attest now,).
+    // The App Attest attestation was bound to the old key and goes stale
+    // here; re-bind from Settings.
     enclaveDeleteKey();
     const pub = enclaveGenerateKey();
     cached = enclaveSigner(pub);

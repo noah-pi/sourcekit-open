@@ -16,22 +16,22 @@ export interface TranscriptSegment {
   text: string;
 }
 
-/** Three-state result of the recording's IMU (gyro) sink — media parity with video. */
+/** Three-state result of the recording's IMU (gyro) sink. */
 export type SensorLogState =
   /** The gyro JSONL exists at sensorLogPath and covers the recorded window. */
   | 'recorded'
-  /** The sink was requested but failed (write error) — stated as a failure, never hidden. */
+  /** The sink was requested but failed (write error). */
   | 'failed'
-  /** No gyro on this device, or no log was requested — nothing was ever going to be recorded. */
+  /** No gyro on this device, or no log was requested. */
   | 'unavailable';
 
-/** Delivery-file sink outcome, declared natively — a truncated take is never passed off as complete. */
+/** Delivery-file sink outcome, declared natively. */
 export type AudioFileState =
   /** Every audio buffer reached the file. */
   | 'clean'
-  /** A write failed mid-take — the file is real but truncated; fileError says why. */
+  /** A write failed mid-take: the file is real but truncated; see fileError. */
   | 'partial'
-  /** Nothing durable reached disk — path is null; sealing must be refused. */
+  /** Nothing durable reached disk; path is null and sealing must be refused. */
   | 'failed';
 
 export interface AudioStopResult {
@@ -40,26 +40,24 @@ export interface AudioStopResult {
   transcript: string;
   segments: TranscriptSegment[];
   /**
-   * Delivery-file sink state. ABSENT (undefined) on pre-parity native
-   * builds — treat as 'clean' (those builds could not detect write errors).
+   * Delivery-file sink state. Undefined on native builds that cannot detect
+   * write errors; treat that as 'clean'.
    */
   fileState?: AudioFileState;
   /** The first write error's message when fileState is 'partial' or 'failed'. */
   fileError?: string | null;
   /**
    * Gyro JSONL covering exactly the recorded window (CaptureKit SensorLogger
-   * line format; media parity) — the source of the exhibit's
-   * signed com.verify.poseTrace. Present only when sensorLogState is
-   * 'recorded'. ABSENT (undefined) on pre-parity native builds.
+   * line format), the source of the signed com.verify.poseTrace. Present only
+   * when sensorLogState is 'recorded'.
    */
   sensorLogPath?: string | null;
-  /** Which IMU-sink case this recording is. ABSENT (undefined) on pre-parity native builds. */
+  /** Which IMU-sink case this recording is. */
   sensorLogState?: SensorLogState;
   /**
-   * Uncompressed LPCM master (CAF) for this take — present only when
-   * rawPcmState is 'recorded'. ABSENT (undefined) on pre-native
-   * builds; callers map that to the toggle's null (enabled-but-failed is
-   * not distinguishable there, and the path was never produced at all).
+   * Uncompressed LPCM master (CAF) for this take, present only when
+   * rawPcmState is 'recorded'. Undefined where the native side never
+   * produced one; callers map that to the toggle's null.
    */
   rawPcmPath?: string | null;
   /** Which raw-sink case this recording is ('recorded' | 'failed' | 'unavailable'). */
@@ -68,7 +66,7 @@ export interface AudioStopResult {
   rawPcmError?: string | null;
 }
 
-/** Why live transcription is off for a recording (null = it's on). */
+/** Why live transcription is off for a recording (null means it is on). */
 export type TranscriptionOffReason = 'unsupported' | 'denied' | 'restricted' | null;
 
 interface AudioCaptureNative {
@@ -128,19 +126,18 @@ export function onCaptureError(cb: (e: { message: string }) => void): EventSubsc
 /**
  * Fired when iOS seizes the audio session mid-recording (phone call, Siri,
  * alarm). The native side has already finalized the .m4a at the last good
- * frame — the payload is the same shape as stop, and the transcript may be
- * shorter than what the live partial showed (no 4s wait for a final result).
+ * frame. Payload matches stop; the transcript may be shorter than the live
+ * partial, since there is no 4s wait for a final result.
  */
 export function onInterrupted(cb: (e: AudioStopResult) => void): EventSubscription | null {
   return getEmitter()?.addListener('onInterrupted', cb) ?? null;
 }
 
 /**
- * Starts recording. `sensorLogPath` (optional) is where the native IMU sink
- * writes the gyro JSONL for this take — pass null/omit only when the capture
- * -evidence sensors toggle is off; the stop result then honestly reports
- * sensorLogState 'unavailable' (or the fields are absent on a pre-parity
- * native build, which callers must map to 'never-recorded').
+ * Starts recording. `sensorLogPath` is where the native IMU sink writes this
+ * take's gyro JSONL; omit it only when the capture-evidence sensors toggle is
+ * off, and the stop result then reports sensorLogState 'unavailable'. Absent
+ * sink fields map to 'never-recorded'.
  */
 export async function startCapture(
   path: string,
@@ -149,7 +146,7 @@ export async function startCapture(
 ): Promise<{ transcribing: boolean; transcriptionOffReason: TranscriptionOffReason }> {
   if (!native) throw new Error('Audio capture module unavailable');
   const res = await native.start(path, sensorLogPath ?? null, rawPcmPath ?? null);
-  // Older native builds don't return the reason field — degrade to null.
+  // Native builds without the reason field degrade to null.
   return { transcribing: res.transcribing, transcriptionOffReason: res.transcriptionOffReason ?? null };
 }
 

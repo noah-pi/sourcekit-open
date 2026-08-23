@@ -1,21 +1,18 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Pin the malleable byte set of the signed JPEG
- * container. C2PA signs the claim and (through it) the assertion contents
- * and the media; the JUMBF/APP11 container FRAMING is outside the hash by
- * design. That is spec-conformant — but it must be enumerated, documented,
- * and pinned so the set can never silently grow.
+ * Pins the malleable byte set of the signed JPEG container. C2PA signs the
+ * claim, and through it the assertion contents and the media; JUMBF/APP11
+ * framing sits outside the hash, so this suite enumerates that set and fails
+ * when it grows.
  *
- * The expected set is derived STRUCTURALLY (byte offsets shift with DER
- * cert-signature length), then every byte of the APP11 segment is flipped
- * empirically:
+ * The expected set is derived structurally (offsets shift with DER
+ * cert-signature length), then every byte of the APP11 segment is flipped:
  *
- *  1. No flip ever throws (clean-error contract).
- *  2. The empirical INTACT set equals the documented allowlist EXACTLY
- *     (docs/INTEGRITY.md — the 16 framing fields below).
- *  3. Claim bytes, assertion contents, and the COSE payload slot are all
- *     outside the allowlist (implied by set equality; asserted by name for
- *     readability of failures).
+ *  1. No flip throws.
+ *  2. The empirical INTACT set equals the documented allowlist exactly
+ *     (docs/INTEGRITY.md, the 16 framing fields below).
+ *  3. Claim bytes, assertion contents, and the COSE payload slot fall
+ *     outside the allowlist, asserted by name so failures read clearly.
  *
  * Allowlist (docs/INTEGRITY.md): APP11 En + Z; store jumb.length high 3
  * bytes; store jumd.uuid suffix 12 + label; manifest jumd.uuid + label;
@@ -102,11 +99,9 @@ const expected = new Set<number>();
 const addRange = (start: number, end: number) => { for (let j = start; j < end; j++) expected.add(j); };
 const addField = (name: string) => { const f = byName.get(name)!; addRange(f.start, f.end); };
 addField('APP11 En');
-// APP11 Z is fully load-bearing as of 0.18.8. The low three bytes were
-// already covered by the chain-hardening in extractC2paStore (a broken or
-// renumbered Z chain is stated absence, never a guess), and the high byte is
-// checked on read, so the whole field is outside the allowlist.
-// docs/INTEGRITY.md matches.
+// APP11 Z is fully load-bearing: extractC2paStore hardens the Z chain and
+// the high byte is checked on read, so the whole field is outside the
+// allowlist. docs/INTEGRITY.md matches.
 { const f = byName.get('store jumb.length')!; addRange(f.start, f.end - 1); }        // high 3 bytes only
 { const f = byName.get('store jumd.uuid')!; addRange(f.start + 4, f.end); }          // suffix after 'c2pa' prefix
 addField('store jumd.label');
@@ -140,11 +135,10 @@ for (let off = 0; off < segEnd - segStart; off++) {
 }
 check('no flip ever throws (clean-error contract, F7a)', threw === 0, `${threw} throws`);
 
-// Length-field low bytes are value-dependent: a flip is malleable exactly
-// when it does NOT truncate a box the parser needs (length ^ 0xff larger
-// than the remaining content clamps harmlessly; shorter amputates). The
-// length VALUES shift with cert DER sizes run to run, so low bytes are a
-// documented SWING set: allowed malleable, never required (docs/INTEGRITY.md).
+// Length-field low bytes are value-dependent: a flip is malleable only when
+// it does not truncate a box the parser needs. Length values shift with cert
+// DER sizes run to run, so low bytes are a swing set: allowed to be
+// malleable, never required (docs/INTEGRITY.md).
 const swings = new Set<number>();
 swings.add(byName.get('store jumb.length')!.end - 1);
 swings.add(byName.get('claim-cbor leaf.length')!.end - 1);
@@ -169,11 +163,10 @@ check('COSE signature content fully protected (payload slot enforced null, F3 fi
 
 // ===========================================================================
 // VIDEO (BMFF uuid box) — same JUMBF store, different transport.
-// Deterministic: fetchTimestamp overridden to [] so no network token layout
-// can shift the build. (Token-region behavior with live tokens: a flip in a
-// VALID token degrades the report to "time unverified" — stated, never
-// silent; bytes of an already-failing token are report-neutral. Characterized
-// in docs/INTEGRITY.md and reproduced by tool-malleable-map.mts.)
+// fetchTimestamp is overridden to [] so no network token layout can shift the
+// build. With live tokens, a flip inside a valid token degrades the report to
+// "time unverified" and bytes of an already-failing token are report-neutral;
+// see docs/INTEGRITY.md and tool-malleable-map.mts.
 // ===========================================================================
 console.log('\n— BMFF video path —');
 const vctx = { location: null, headingDeg: null, pressureHPa: null, altitudeM: null, motion: null } as never;
@@ -236,10 +229,10 @@ while (vr < vAssertions.end) { const a = vJumb(vr, `assertion${vi}`); vLeaf(a.co
 const vSig = vJumb(vAssertions.end, 'signature');
 vLeaf(vSig.contentStart, 'signature-cbor');
 
-// Documented video allowlist (docs/INTEGRITY.md): same framing classes as
-// JPEG plus uuid version/flags; per-path differences pinned empirically —
-// store jumb.length ALL bytes and store jumd.uuid ALL bytes are malleable
-// here (the BMFF parser scans by type; the JPEG APP11 path bounds by length).
+// Documented video allowlist (docs/INTEGRITY.md): the JPEG framing classes
+// plus uuid version/flags. All bytes of store jumb.length and store jumd.uuid
+// are malleable here, because the BMFF parser scans by type while the JPEG
+// APP11 path bounds by length.
 const vByName = new Map(vFields.map((f) => [f.name, f]));
 const vExpected = new Set<number>();
 const vAdd = (name: string, trimEnd = 0, skipStart = 0) => {
@@ -261,24 +254,23 @@ vAdd('signature jumd.uuid');
 vAdd('signature jumd.toggle');
 vAdd('signature-cbor leaf.length', 1);
 vAdd('signature-cbor leaf.type');
-// Value-dependent swing bytes (same mechanism as the JPEG path): the low
-// byte of each length field.
+// Value-dependent swing bytes, as on the JPEG path: the low byte of each
+// length field.
 const vSwings = new Set<number>();
 vSwings.add(vByName.get('store jumb.length')!.end - 1);
 vSwings.add(vByName.get('claim-cbor leaf.length')!.end - 1);
 vSwings.add(vByName.get('signature-cbor leaf.length')!.end - 1);
 
-// The COSE pad entry (deliberate slack for post-hoc TSA tokens) is allowed
-// beyond the documented fields. Locate it: 'pad' text key inside the sig
-// cbor content, through the end of its zero run. Absent pad → empty span.
+// The COSE pad entry is slack for post-hoc TSA tokens and is allowed beyond
+// the documented fields. Located by the 'pad' text key inside the sig cbor
+// content, through the end of its zero run; no pad means an empty span.
 let padStart = -1;
 for (let i3 = 0; i3 < vseg.length - 6; i3++) {
   if (vseg[i3] === 0x63 && vseg[i3 + 1] === 0x70 && vseg[i3 + 2] === 0x61 && vseg[i3 + 3] === 0x64) { padStart = i3; break; }
 }
-// Parse the pad entry's bstr header properly (0x59 = 16-bit length → THREE
-// header bytes; an earlier version of this scan assumed two and stopped one
-// byte into the length field, mislabeling 12 KB of sanctioned pad slack as
-// unprotected COSE content).
+// The pad entry's bstr header is three bytes for 0x59 (16-bit length);
+// assuming two lands inside the length field and mislabels the pad slack as
+// unprotected COSE content.
 let padEnd = -1;
 if (padStart !== -1) {
   const h = padStart + 4; // after the 'pad' text key
@@ -309,8 +301,8 @@ check('video: documented allowlist bytes are all malleable', vMissing.length ===
 const vUnexpected = [...vEmpirical].filter((o) => !vExpected.has(o) && !vSwings.has(o) && !(padStart !== -1 && o >= padStart && o < padEnd));
 check('video: no malleable byte outside documented fields + swing bytes + COSE pad', vUnexpected.length === 0,
   `malleable but undocumented: ${vUnexpected.slice(0, 12).join(',')}`);
-// Every flip in the claim/assertion/signature CONTENT must never read as
-// report-identical INTACT (they are outside the allowlist; asserted by name).
+// No flip in claim, assertion, or signature content may read as
+// report-identical INTACT; asserted by name.
 const vProtected = (name: string) => {
   const f = vByName.get(name)!;
   for (let j = f.start; j < f.end; j++) if (vEmpirical.has(j)) return false;

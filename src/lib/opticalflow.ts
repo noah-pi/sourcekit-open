@@ -2,28 +2,26 @@
 /**
  * Global motion estimation between two frames.
  *
- * Block-matching + least-squares similarity fit: samples a grid of small
- * blocks in frame A, finds each block's best SAD match in frame B, then
- * fits a 3-parameter global model (translation + rotation) to the
- * correspondences. This recovers CAMERA motion — pan (tx, ty in px/frame),
- * roll (radians/frame), and a match-quality measure — which the
- * IMU↔flow consistency check compares against the signed pose trace.
+ * Block matching plus a least-squares similarity fit: samples a grid of small
+ * blocks in frame A, finds each block's best SAD match in frame B, then fits a
+ * 3-parameter global model (translation + rotation) to the correspondences.
+ * Output is camera motion — pan (tx, ty in px/frame), roll (radians/frame),
+ * and a match-quality measure — which the IMU/flow consistency check compares
+ * against the signed pose trace.
  *
- * DESIGN CHOICES (documented, not hidden):
- *  - A single global model assumes the scene's dominant motion is the
- *    camera's. Large moving subjects pollute the fit; the median-based
- *    outlier rejection limits that, and the coverage/match-count numbers
- *    are surfaced so a person can judge reliability.
- *  - Flat blocks (sky, walls) carry no motion information and are skipped
- *    by a variance gate — no fabricated correspondences.
- *  - Roll comes out in RADIANS (rotation of the displacement field around
- *    the frame center) — directly comparable to the gyro's roll rate with
- *    no focal-length assumption. Pan stays in pixels (focal-dependent);
- *    the consistency check correlates pan SHAPE with yaw/pitch shape
- *    rather than pretending to absolute units.
+ * Constraints:
+ *  - The single global model assumes the dominant scene motion is the
+ *    camera's. Large moving subjects pollute the fit; median-based outlier
+ *    rejection limits that, and coverage/match counts are surfaced so a
+ *    reader can judge reliability.
+ *  - Flat blocks (sky, walls) are skipped by a variance gate.
+ *  - Roll is in radians (rotation of the displacement field about the frame
+ *    center), directly comparable to the gyro's roll rate with no
+ *    focal-length assumption. Pan stays in pixels and is focal-dependent, so
+ *    the consistency check correlates pan shape with yaw/pitch shape rather
+ *    than absolute units.
  *
- * HONESTY: this is evidence for a person to weigh, never a verdict. Pure
- * (no DOM): the desk feeds it downsampled grayscale planes.
+ * Pure, no DOM: the caller feeds downsampled grayscale planes.
  */
 
 export interface GlobalMotion {
@@ -38,10 +36,9 @@ export interface GlobalMotion {
   /** Fraction of sampled blocks that produced usable correspondences. */
   coverage: number;
   /**
-   * The inlier correspondences behind the numbers, in the coordinate space
-   * of the planes passed in — exposed so the desk's overlay can draw
-   * exactly the matches the fit used, for human review. Never more data
-   * than the aggregates rest on.
+   * The inlier correspondences behind the numbers, in the coordinate space of
+   * the planes passed in, so the desk's overlay can draw exactly the matches
+   * the fit used.
    */
   vectors: Correspondence[];
 }
@@ -130,12 +127,10 @@ export interface BlockMatch {
 }
 
 /**
- * Single-block SAD match — feature tracks and the global fit share ONE
- * matcher. Finds the best
- * 9x9-style block match for (ax, ay) in plane A inside plane B within
- * `searchRadius`, with the same flat-block and ambiguity gates as the global
- * estimator. Returns null when the block is flat, ambiguous, or out of
- * bounds — the honest "no correspondence", never a fabricated one.
+ * Single-block SAD match, shared by feature tracks and the global fit. Finds
+ * the best block match for (ax, ay) from plane A inside plane B within
+ * `searchRadius`, using the same flat-block and ambiguity gates as the global
+ * estimator. Null when the block is flat, ambiguous, or out of bounds.
  */
 export function matchBlock(
   a: ArrayLike<number>,
@@ -175,8 +170,8 @@ export function matchBlock(
 }
 
 /**
- * Estimate global motion A to B. Both planes are width x height grayscale.
- * Returns null when too few textured blocks match — the honest "no signal".
+ * Estimates global motion A to B; both planes are width x height grayscale.
+ * Null when too few textured blocks match.
  */
 export function estimateGlobalMotion(
   a: ArrayLike<number>,

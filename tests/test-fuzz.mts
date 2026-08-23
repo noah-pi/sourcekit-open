@@ -1,17 +1,11 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Mutation fuzz over the hand-rolled parsers.
- *
- * A single DER length-octet poison can wedge a naive TLV walker in an
- * infinite loop — on attacker-supplied files, and on the public server.
- * This suite is the standing tripwire that says the CLASS stays dead:
- * every parser must TERMINATE on every input, and must either throw or return a well-formed value — never
- * hang, never silently accept garbage.
- *
- * A hang here does not fail politely: it stalls the runner, which fails CI
- * by timeout (exit 124). Everything else is asserted explicitly.
- *
- * Deterministic seed: a red run names the seed and reproduces exactly.
+ * Mutation fuzz over the hand-rolled parsers. Every parser must terminate on
+ * every input and either throw or return a well-formed value; a single DER
+ * length-octet poison can otherwise wedge a naive TLV walker in an infinite
+ * loop. A hang does not fail politely here — it stalls the runner and fails CI
+ * by timeout (exit 124). Everything else is asserted explicitly. The PRNG seed
+ * is fixed, so a red run reproduces exactly.
  */
 import * as fs from 'node:fs';
 import { readTlv, tlvChildren, parseCertificate } from './x509.mts';
@@ -21,8 +15,8 @@ import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
 import { verifyTimestampToken } from './rfc3161.mts';
 
-// Fixed key: the minimality bug is in the ENCODER, so the key needs only to
-// be stable, not secret. A red run here reproduces exactly.
+// Fixed key: minimality is an encoder property, so the key only needs to be
+// stable, not secret.
 const FUZZ_PRIV = new Uint8Array(32).fill(0) .map((_, i) => (i * 7 + 3) & 0xff);
 const FUZZ_PUB = p256.getPublicKey(FUZZ_PRIV, false);
 
@@ -63,8 +57,8 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
     const r3 = outcome(() => parseCertificate(buf));
     const r4 = outcome(() => derToRS(buf));
     const r5 = outcome(() => derNormalizeLowS(buf));
-    // Reaching this line at all is the termination proof (a stall wedges the
-    // runner → CI timeout → red). Count dispositions for the sanity check.
+    // Reaching this line is the termination proof; a stall wedges the runner
+    // into a CI timeout. Dispositions are counted for the sanity check.
     for (const r of [r1, r2, r3, r4, r5]) r === 'threw' ? threw++ : returned++;
   }
   check('fuzz: 400 random buffers × 5 DER walkers all terminated', hung === 0);
@@ -72,11 +66,11 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
     threw / (threw + returned) > 0.9, `threw=${threw} returned=${returned}`);
 }
 
-// --- 1b. derNormalizeLowS must emit MINIMAL DER ------------------------------
+// --- 1b. derNormalizeLowS must emit minimal DER ------------------------------
 // A short r or s (value < 2^248, about 1 signature in 128) must not come back
-// out re-padded to 32 bytes, which would give an INTEGER a needless leading
-// 0x00. The r||s value survives that, so COSE still verifies — but a strict
-// DER consumer rejects the signature, and the verdict goes red at random.
+// re-padded to 32 bytes, which would give an INTEGER a needless leading 0x00.
+// COSE still verifies the r||s value, but a strict DER consumer rejects the
+// signature and the verdict goes red at random.
 {
   let nonMinimal = 0, valueChanged = 0, sampled = 0;
   for (let i = 0; i < 3000; i++) {
@@ -103,7 +97,7 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
     sampled === 0, `${sampled} of 3000 rejected`);
 }
 
-// --- 2. length-octet poisons — aimed at the throat -----
+// --- 2. length-octet poisons -------------------------------------------------
 {
   const poisons: Uint8Array[] = [];
   for (const fill of [0xFF, 0xFE, 0x80, 0x7F, 0x00]) {
@@ -124,11 +118,10 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
     terminated++;
   }
   check(`fuzz: ${poisons.length} length-octet poisons all terminated`, terminated === poisons.length);
-  // The poison class is overlong DECLARED lengths (fill !== 0x00; the
-  // zero-length forms are legal DER and may parse — they were never the
-  // bug). A poison may sit nested inside a well-formed outer TLV, where a
-  // top-level walk legitimately never reaches it — so we assert rejection
-  // at the point a real caller DESCENDS into the content.
+  // The poison class is overlong declared lengths (fill !== 0x00; the
+  // zero-length forms are legal DER and may parse). A poison can sit nested
+  // inside a well-formed outer TLV that a top-level walk never reaches, so
+  // rejection is asserted at the point a real caller descends into content.
   let unrejected = 0;
   for (let i = 0; i < poisons.length; i++) {
     if (Math.floor(i / 4) === 4) continue; // the fill=0x00 legal forms
@@ -143,7 +136,7 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
     `${unrejected} unrejected`);
 }
 
-// --- 3. single-byte mutations of a REAL certificate -------------------------
+// --- 3. single-byte mutations of a real certificate -------------------------
 {
   let terminated = 0;
   for (let i = 0; i < 300; i++) {
@@ -156,7 +149,7 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
   check('fuzz: 300 single-byte cert mutations all terminated', terminated === 300);
 }
 
-// --- 4. truncations of a REAL certificate -----------------------------------
+// --- 4. truncations of a real certificate -----------------------------------
 {
   let terminated = 0;
   for (let i = 0; i < 100; i++) {
@@ -167,7 +160,7 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
   check('fuzz: 100 cert truncations all terminated', terminated === 100);
 }
 
-// --- 5. mutations of a REAL RFC 3161 token (CMS + TSTInfo) ------------------
+// --- 5. mutations of a real RFC 3161 token (CMS + TSTInfo) ------------------
 {
   let terminated = 0;
   for (let i = 0; i < 200; i++) {
@@ -177,8 +170,8 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
     terminated++;
   }
   check('fuzz: 200 token mutations all terminated', terminated === 200);
-  // and none of them verifies — a mutated token that still validates would
-  // be a soundness bug, not a robustness one
+  // None of them may verify: a mutated token that still validates is a
+  // soundness bug, not a robustness one.
   let valid = 0;
   state = SEED; // replay the same mutations deterministically
   for (let i = 0; i < 200; i++) {
@@ -192,13 +185,12 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
   check('fuzz: no mutated token validates', valid === 0, `${valid} validated`);
 }
 
-// --- 6. base64: strict alphabet, no silent corruption -----------
+// --- 6. base64: strict alphabet, no silent corruption -----------------------
 {
   let threw = 0;
   for (let i = 0; i < 300; i++) {
-    // '!' guarantees at least one out-of-alphabet character (an empty or
-    // accidentally-valid random string would be legitimate input, not a
-    // defect).
+    // '!' guarantees at least one out-of-alphabet character; an empty or
+    // accidentally-valid random string would be legitimate input.
     const s = Array.from({ length: randLen(64) }, () =>
       String.fromCharCode(randByte())).join('') + '!';
     if (outcome(() => base64ToBytes(s)) === 'threw') threw++;

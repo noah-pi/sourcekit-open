@@ -1,29 +1,18 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Offline verification of the com.verify.app-attest assertion — the check
- * the badge always implied but nobody performed.
+ * Offline verification of the com.verify.app-attest assertion. The payload
+ * is { format, attestationBase64, challengeBase64, boundFingerprint }.
  *
- * The assertion carries everything needed (emulated key attestation):
- *   { format, attestationBase64, challengeBase64, boundFingerprint }
- *
- * We verify, fully offline:
- *   1. The x5c chain walks to the PINNED Apple App Attestation root
- *      (signatures, CA flags, validity at attestation-MINT time — Apple
- *      issues App Attest credential certificates with windows measured in
- *      days; the attestation is an enrollment-time artifact and is never
- *      re-dated by the signing time of the media it later vouches for).
- *   2. authData's rpIdHash is SHA-256 of our Apple App ID — the attestation
- *      was minted for a genuine Source Kit build, not another app.
- *   3. The nonce Apple signed into the leaf certificate's extension
- *      1.2.840.113635.100.8.2 equals
+ * Four checks, all offline:
+ *   1. The x5c chain walks to the pinned Apple App Attestation root
+ *      (signatures, CA flags, validity at attestation-mint time).
+ *   2. authData's rpIdHash is SHA-256 of the Apple App ID.
+ *   3. The nonce in leaf extension 1.2.840.113635.100.8.2 equals
  *        SHA256(authData ‖ SHA256(challenge ‖ signingPublicKey))
- *      where signingPublicKey is the key in the manifest's own signing
- *      certificate — so Apple's hardware certificate vouches for THE key
- *      that signed this file, not some other key.
+ *      where signingPublicKey comes from the manifest's signing cert.
  *   4. boundFingerprint equals SHA-256 of that same signing key.
  *
- * Anything less than all four is reported as failed with the reason — a
- * forged or foreign attestation is evidence against the file, never noise.
+ * Any failure returns valid:false with the reason.
  */
 
 import { decode } from 'cbor-x';
@@ -39,12 +28,11 @@ export interface AppAttestVerification {
   valid: boolean;
   /** Plain-English outcome for the report (null when valid). */
   reason: string | null;
-  /** What was checked — surfaced verbatim in the verbose panel. */
+  /** What was checked; surfaced verbatim in the verbose panel. */
   checksPerformed: string[];
   /**
-   * Which Apple authenticator minted the attestation — 'production' or
-   * 'development' (aaguid). Surfaced so the trust ladder can say which
-   * environment vouches; null when absent or unparseable.
+   * Which Apple authenticator minted the attestation, from the aaguid.
+   * Null when absent or unparseable.
    */
   attestationEnv: 'production' | 'development' | null;
   /**
@@ -59,9 +47,9 @@ const NOT_PRESENT: AppAttestVerification = { present: false, valid: false, reaso
 
 /** Extracts the 32-byte nonce from the Apple extension's extnValue. */
 function extractAppleNonce(extnValue: Uint8Array): Uint8Array | null {
-  // Expected shape: SEQUENCE { [1] { OCTET STRING (32) } } — but tolerate an
-  // extra SEQUENCE layer inside [1]; require EXACTLY ONE 32-byte octet
-  // string inside the extension, and only within context tag [1].
+  // Shape: SEQUENCE { [1] { OCTET STRING (32) } }, tolerating an extra
+  // SEQUENCE inside [1]. Requires exactly one 32-byte octet string, and
+  // only within context tag [1].
   const found: Uint8Array[] = [];
   const walk = (b: Uint8Array, insideA1: boolean): void => {
     let o = 0;
@@ -119,16 +107,11 @@ export function verifyAppAttestAssertion(
   if (!chain.linksValid) return fail(`Apple certificate chain broken: ${chain.reason}`);
   if (!chain.anchored) return fail('certificate chain does not reach the Apple App Attestation root');
 
-  // Chain validity is evaluated at attestation-MINT time, never at the
-  // media's signing time. Apple issues App Attest credential certificates
-  // with validity windows measured in days: the attestation is an
-  // enrollment-time artifact, verified once at mint, and Apple does not
-  // re-date it for the media it later vouches for. Checking the chain at the
-  // TSA-anchored signing time therefore false-fails every genuine file
-  // captured more than a few days after enrollment. The correct check: the
-  // chain's validity windows must have a non-empty intersection — there existed a moment when
-  // every link was simultaneously valid — and the short-lived leaf's window
-  // bounds when Apple minted this attestation.
+  // Chain validity is evaluated at attestation-mint time, not at the media's
+  // signing time: Apple's App Attest credential certs live for days, so
+  // checking at the TSA-anchored signing time false-fails any file captured
+  // after enrollment. The check is that the chain's validity windows
+  // intersect; the short-lived leaf bounds the mint window.
   let mintEarliest = -Infinity;
   let mintLatest = Infinity;
   for (const c of x5c) {
@@ -149,7 +132,7 @@ export function verifyAppAttestAssertion(
     `chain valid at attestation-mint time — the chain-wide validity intersection (${new Date(mintEarliest).toISOString().slice(0, 10)} → ${new Date(mintLatest).toISOString().slice(0, 10)}) bounds when Apple minted this attestation; an enrollment artifact is not re-dated by the media's signing time`,
   );
 
-  // 2. rpIdHash binds the attestation to THIS app.
+  // 2. rpIdHash binds the attestation to this app.
   const authData = new Uint8Array(att.authData);
   const rpIdOk = equalBytes(authData.subarray(0, 32), sha256(asciiToBytes(VERIFY_APPLE_APP_ID)));
   checks.push(`attestation minted for this app (rpIdHash = SHA-256 of ${VERIFY_APPLE_APP_ID})`);
@@ -157,11 +140,9 @@ export function verifyAppAttestAssertion(
 
   // 2b. Attested credential data:
   //   aaguid(16) | credIdLen(2) | credId | credPublicKey(COSE)
-  // The aaguid identifies a genuine Apple App Attest authenticator
-  // (production vs development); the credential ID must be SHA-256 of the
-  // credential key (Apple's construction); and the leaf certificate's key
-  // must BE that credential key — binding the x5c chain to this authData,
-  // which blocks mix-and-match of two genuine attestations.
+  // aaguid names the authenticator (production or development), credId must
+  // be SHA-256 of the credential key, and the leaf cert's key must be that
+  // credential key. The last binding blocks mixing two genuine attestations.
   if (authData.length < 55) return fail('authData too short for attested credential data');
   const flags = authData[32];
   if (!(flags & 0x40)) return fail('attested credential data flag not set in authData');
@@ -189,9 +170,9 @@ export function verifyAppAttestAssertion(
   }
   checks.push('credential ID = SHA-256 of the attested key (authData internally consistent)');
 
-  // 3. The nonce binds Apple's certificate to THE signing key of this file.
-  // base64ToBytes is strict — a garbage challenge must fail
-  // the attestation cleanly, never throw through the whole verification.
+  // 3. The nonce binds Apple's certificate to this file's signing key.
+  // base64ToBytes is strict, so a garbage challenge is caught here rather
+  // than thrown out of the whole verification.
   let clientDataHash: Uint8Array;
   try {
     clientDataHash = sha256(concatBytes(base64ToBytes(payload.challengeBase64), signerPublicKey));
