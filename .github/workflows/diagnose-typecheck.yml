@@ -1,0 +1,61 @@
+# Why does `tsc -p tsconfig.json` pass on a clean local tree and fail here?
+#
+# The failure is React Native resolving its generated "strict API" types
+# instead of the hand-written ones, which drops StyleSheet.NamedStyles and
+# changes every component ref type. Nothing in this repo's tsconfig, or in
+# expo/tsconfig.base, asks for the `react-native-strict-api` export condition,
+# and a clean install of the same react-native and expo versions resolves the
+# other branch locally.
+#
+# This job measures the runner. It never gates anything: it reports what it
+# finds and exits 0 either way.
+name: diagnose-typecheck
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Toolchain
+        run: |
+          echo "node   $(node -v)"
+          echo "npm    $(npm -v)"
+
+      - name: Install
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Resolved versions
+        run: |
+          for p in react-native expo typescript @types/react react; do
+            printf '%-16s %s\n' "$p" \
+              "$(node -p "try{require('./node_modules/$p/package.json').version}catch(e){'ABSENT'}")"
+          done
+
+      - name: Which react-native types entry
+        run: |
+          node -p "JSON.stringify(require('./node_modules/react-native/package.json').exports['.'], null, 1)"
+          ls node_modules/react-native/types/index.d.ts 2>/dev/null \
+            && echo "types/           present" || echo "types/           ABSENT"
+          ls node_modules/react-native/types_generated/index.d.ts 2>/dev/null \
+            && echo "types_generated/ present" || echo "types_generated/ ABSENT"
+          echo "--- NamedStyles is declared in: ---"
+          grep -rl "NamedStyles" node_modules/react-native/types node_modules/react-native/Libraries 2>/dev/null | head -5 || echo "  nowhere"
+
+      - name: Effective compiler options
+        run: npx tsc --showConfig -p tsconfig.json
+
+      - name: Where tsc actually reads react-native from
+        run: npx tsc --noEmit -p tsconfig.json --traceResolution 2>/dev/null
+             | grep -A3 "'react-native'" | head -40 || true
+
+      - name: Typecheck result
+        run: |
+          npx tsc --noEmit -p tsconfig.json && echo "PASS" || echo "FAIL (see above)"

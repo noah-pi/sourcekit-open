@@ -6,16 +6,9 @@
 
 ## Why vendored
 
-The SwiftPM path (RN `spm_dependency` podspec helper) COMPILED on EAS but the
-IPA export (gym / `xcodebuild -exportArchive`) failed with:
-
-```
-xcodebuild: error: "C2PAC.xcframework-ios.signature" couldn't be copied to
-"Signatures" because an item with the same name already exists
-```
-
-— the known SPM-binary-inside-static-pod export bug. This vendored copy is the
-documented P5 fallback in `docs/WS3-IOS-INTEGRATION.md`.
+An SPM binary target inside a static pod breaks at IPA export: the
+framework's signature file is copied twice and `xcodebuild -exportArchive`
+refuses. Vendoring the Swift sources sidesteps it.
 
 ## What is here
 
@@ -23,24 +16,17 @@ documented P5 fallback in `docs/WS3-IOS-INTEGRATION.md`.
 below — 55 Swift files. Licenses `LICENSE-APACHE` / `LICENSE-MIT` are copied
 alongside from the tag (Apache-2.0 OR MIT dual license).
 
-The Rust core is NOT here: it ships as the static `C2PAC.xcframework` in
-`../../Frameworks/` (see `../../Frameworks/FRAMEWORK-STORAGE.md` for its
-checksums and chunked-storage reassembly — the workspace that produced this
-commit caps files at ~100 MB, so the iOS-only zip is stored split and
-reassembled by the podspec `prepare_command`).
+The Rust core is not here. It is the static `C2PAC.xcframework` in
+`../../Frameworks/`, fetched by `scripts/fetch-c2pa-framework.sh`.
 
 ## Checksums (verified at vendor time)
 
 - Original release zip `C2PAC.xcframework.zip` (all 4 slices, 370 MB):
   SHA-256 `a038bc316f7a890d1233e156cc743854cee98e24359a6176fb107088359fe0a8`
   — matches the pin in the tagged Package.swift. Verified twice (2026-08-09).
-- Trimmed iOS-only zip actually stored in this repo
-  (`Frameworks/C2PAC-ios.xcframework.zip.part-{a,b,c}`, cat in order):
-  SHA-256 `522b65e928eacc43c9d189cb9c54e4512ef7b063f9a95469e9eca65ab399d639`.
-  Derived from the verified original; only the unused `macos-arm64_x86_64` and
-  `ios-arm64_x86_64-maccatalyst` slices were dropped and `Info.plist`'s
-  `AvailableLibraries` was trimmed accordingly. The podspec `prepare_command`
-  re-verifies this checksum before unzipping.
+`scripts/fetch-c2pa-framework.sh` verifies that checksum before installing,
+then drops the unused `macos-arm64_x86_64` and `ios-arm64_x86_64-maccatalyst`
+slices and trims `Info.plist`'s `AvailableLibraries` to match.
 
 ## Exclusions (vs upstream `Library/Sources/`)
 
@@ -59,10 +45,8 @@ over the vendored tree → no matches.
 
 ## Source edits
 
-**TWO, both applied 2026-08-10 (round 7), both confined to imports/access
-levels — zero functional-code changes.** Until this date the section read
-"NONE; every vendored `.swift` file is byte-identical to the v0.0.12 tag"
-(see git history), which was true at vendor time.
+Two, both confined to imports and access levels. No functional code differs
+from the v0.0.12 tag.
 
 1. **`import C2PAC` → `@_implementationOnly import C2PAC`** in the 11 files
    that import the clang module (Builder, C2PA, C2PASettings, Helpers,
@@ -71,11 +55,10 @@ levels — zero functional-code changes.** Until this date the section read
    clang-module dependencies as *requirements for every importer*. The app
    target's `ExpoModulesProvider.swift` does `import C2paIos` and therefore
    transitively needed module C2PAC resolvable — which only the pod target's
-   own `-Xcc -fmodule-map-file=` flags provided. EAS build b151a755 failed
-   with `missing required module 'C2PAC'` at that line (the pod itself had
-   already compiled + archived `libC2paIos.a` cleanly in the same build).
-   `@_implementationOnly` makes the C dependency private to this module, the
-   canonical fix; linking is unaffected (C2PAC is statically linked via
+   own `-Xcc -fmodule-map-file=` flags provide, and the app target's build
+   fails with `missing required module 'C2PAC'` at that import.
+   `@_implementationOnly` makes the C dependency private to this module;
+   linking is unaffected (C2PAC is statically linked via
    `s.vendored_frameworks` regardless).
 2. **Access demotions in `Stream.swift`** required by (1), since
    implementation-only types may not appear in public API:
