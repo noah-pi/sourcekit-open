@@ -127,7 +127,7 @@ export default function DisclosureScreen() {
       wont:
         'the media itself (this bundle is proofs, not pixels); ' +
         (held > 0
-          ? `the ${held} held claim${held === 1 ? '' : 's'}, stated inside the bundle as held, never included; `
+          ? `the ${held} held claim${held === 1 ? '' : 's'}, stated inside the bundle as held, not included; `
           : 'no committed claim stays held (everything committed is opened); ') +
         'anything declared never-recorded.',
     };
@@ -391,7 +391,7 @@ export default function DisclosureScreen() {
                             ) : (
                               <Text style={styles.claimNote}>
                                 Held: committed at capture, withheld in the '{profile}' bundle.
-                                Stated, not hidden: opening it takes a profile that selects it
+                                Opening it takes a profile that selects it
                                 {burned ? ', and the seed is burned, so no profile ever will again' : ''}.
                               </Text>
                             )}

@@ -113,10 +113,10 @@ export const DEFAULT_SETTINGS: Settings = {
   author: '',
   includeLocation: true,
   includeSensors: true,
-  includeByline: false, // identifying by design — opt-in, HUD-visible
+  includeByline: false, // identifying — opt-in, HUD-visible
   includeTranscript: true,
   faceCheckEnabled: false,
-  includeWifi: false, // opt-in by design — a network name is identifying
+  includeWifi: false, // opt-in — a network name is identifying
   identityMode: 'anonymous',
   saveToCameraRoll: false,
   biometricsEnabled: false,

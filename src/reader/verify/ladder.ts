@@ -102,7 +102,7 @@ function rungSeal(bundle: ProofBundle, input: CustodyInput): { result: RungResul
     rows.push({
       label: 'post-quantum layer',
       value: pq.signatureValid
-        ? 'second signature present and consistent (ML-DSA-65, software key; custody labeled, never a hardware anchor)'
+        ? 'second signature present and consistent (ML-DSA-65, software key; custody labeled, not a hardware anchor)'
         : 'second signature FAILED · the classical layer still stands; the PQ layer measures nothing here',
     });
   }
@@ -156,7 +156,7 @@ function rungDeviceCredential(bundle: ProofBundle): RungResult {
 
   if (record.deidentified?.rekeyed) {
     return rung(2, 'Device credential', 'not-applicable',
-      'not applicable to de-identified copies: sealed with a fresh one-time key by design; the fingerprint difference from the device key is the feature, not an error',
+      'not applicable to de-identified copies: sealed with a fresh one-time key, so its fingerprint differs from the device key',
       rows);
   }
 
@@ -228,7 +228,7 @@ function rungRoster(bundle: ProofBundle, rosters: Roster[] | undefined): RungRes
     const state = hit.state;
     const at = (s: MembershipState): string =>
       s === 'unknown-time'
-        ? 'no countersigned time on this exhibit, so membership at the signing moment cannot be evaluated; stated, not assumed'
+        ? 'no countersigned time on this exhibit, so membership at the signing moment cannot be evaluated'
         : `membership at signing: ${s}`;
     if (state === 'revoked' || state === 'not-yet-valid') {
       return rung(3, 'Roster', 'diverges',
@@ -250,7 +250,7 @@ function rungRoster(bundle: ProofBundle, rosters: Roster[] | undefined): RungRes
       'every supplied roster failed its editor signature; refused at the door like any other tamper', rows);
   }
   return rung(3, 'Roster', 'insufficient',
-    'no supplied roster lists this hand; nothing outside the file vouches for it, and that is neutral, never a failure',
+    'no supplied roster lists this hand; nothing outside the file vouches for it, and that is neutral',
     rows);
 }
 

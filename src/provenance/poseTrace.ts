@@ -131,7 +131,7 @@ export function verifyPoseTraceAssertion(
 ): { ok: boolean; failures: string[] } {
   const failures: string[] = [];
   if (assertion.gyroPriorAuthenticated !== false) {
-    failures.push('gyroPriorAuthenticated must be declared false — the trace is self-reported by design');
+    failures.push('gyroPriorAuthenticated must be declared false — the trace is self-reported');
   }
   const { gyro } = parseGyroJsonl(jsonl);
   if (gyro.length !== assertion.sampleCount) {

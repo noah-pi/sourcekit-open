@@ -118,7 +118,7 @@ function extractTrack(b: Uint8Array, trak: SubBox): TrackStream | null {
   if (hc + 12 > b.length) return null;
   const handler = type4(b, hc + 8);
   const trackId: StreamedChunksTrackId | null = handler === 'vide' ? 'video' : handler === 'soun' ? 'audio' : null;
-  if (!trackId) return null; // hint/meta tracks are not elementary media — ignored, honestly
+  if (!trackId) return null; // hint/meta tracks are not elementary media — ignored.
   const stbl = child(b, minf, 'stbl');
   if (!stbl) return null;
   const stsd = child(b, stbl, 'stsd');

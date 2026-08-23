@@ -610,7 +610,7 @@ async function storeExhibitArtifacts(
         await writeFileBytes(`${dir}${file}`, await sealVaultBytes(f.bytes));
         stored[f.id] = file;
       } catch {
-        // Stated below via the section entries; never a seal failure.
+        // Stated below via the section entries, not a seal failure.
       }
     }
     // Vault-sealed like every other exhibit byte,
@@ -624,7 +624,7 @@ async function storeExhibitArtifacts(
         await writeFileBytes(`${dir}${sealedName}`, await sealVaultBytes(ex.bytes));
         stored[ex.name] = sealedName;
       } catch {
-        sealedName = null; // stated in the summary; never a seal failure
+        sealedName = null; // stated in the summary, not a seal failure
       }
       extraSummary[ex.name] = { sha256: ex.sha256, bytes: ex.bytes.length, stored: sealedName, nativeSha256: ex.nativeSha256 };
     }

@@ -404,7 +404,7 @@ export class VaultIndexCorruptedError extends Error {
 
 async function readIndex(): Promise<VaultIndexEntry[]> {
   const info = await FileSystem.getInfoAsync(INDEX_FILE);
-  if (!info.exists) return []; // fresh vault — missing is empty, never an error
+  if (!info.exists) return []; // fresh vault — missing is empty, not an error
   let raw: string;
   try {
     raw = await FileSystem.readAsStringAsync(INDEX_FILE);

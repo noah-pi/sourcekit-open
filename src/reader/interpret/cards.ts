@@ -149,7 +149,7 @@ export function makeInsufficient(
   return makeCard({
     id, title, state: 'insufficient', prediction, measurement,
     gap: `undecidable: ${reason}`,
-    interpretation: `the evidence at hand is consistent with both outcomes (${reason}); stated, never assumed`,
+    interpretation: `the evidence at hand is consistent with both outcomes (${reason})`,
     ...extra,
   });
 }
@@ -164,7 +164,7 @@ export function makeNotApplicable(
   return makeCard({
     id, title, state: 'not-applicable',
     gap: `not applicable: ${reason}`,
-    interpretation: `this exhibit structurally cannot carry this check (${reason}); the rung is absent by design, not by failure`,
+    interpretation: `this exhibit structurally cannot carry this check (${reason}); the rung is absent, not failed`,
     ...extra,
   });
 }

@@ -1395,7 +1395,7 @@ export default function AssetScreen() {
                   {/* The BSSID is the corroboratable claim; the network name
                       stays off this page. */}
                   {ctx.wifi.bssid ? <NlRow label="Wi-Fi BSSID" value={ctx.wifi.bssid} mono /> : (
-                    <NlRow label="Wi-Fi" value={ctx.wifi.ssid ?? '(none reported)'} detail="A lead, never proof of place." />
+                    <NlRow label="Wi-Fi" value={ctx.wifi.ssid ?? '(none reported)'} detail="A lead, not proof of place." />
                   )}
                 </>
               ) : null}

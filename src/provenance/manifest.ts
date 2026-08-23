@@ -217,7 +217,7 @@ export interface PoseTraceAssertion {
 export const POSE_TRACE_NOTE =
   'Gyro trace committed at seal: existence and content are bound by this root, but the device ' +
   'motion claims remain self-reported — no hardware-attested IMU path exists on this platform. ' +
-  'Evidence for desk parallax, never a verdict.';
+  'Evidence for desk parallax, not a verdict.';
 
 /**
  * com.verify.captureIntegrity: evidence-completeness and biometric-gate facts,

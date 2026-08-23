@@ -292,7 +292,7 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   if (input.hardwareNotApplicable === 'deidentified') {
     hardware = {
       id: 'hardware', label: 'Key attested by Apple hardware', state: 'not-applicable',
-      detail: 'Not applicable to de-identified copies: they are signed with a fresh one-time key by design.',
+      detail: 'Not applicable to de-identified copies: they are signed with a fresh one-time key.',
     };
   } else if (input.appAttest.valid && input.appAttest.attestationEnv === 'development') {
     // A genuine development attestation is not a failure and is not

@@ -356,7 +356,7 @@ async function c2paReport(
   const recordPq = inner?.pq ?? null;
   if (!claimPq && !recordPq) {
     notPerformed.push(
-      'post-quantum layer — none carried (capture predates 0.10.0, or a de-identified copy: deID omits the PQ layer by design, since the device\'s long-lived PQ key would re-link an anonymised copy)',
+      'post-quantum layer — none carried (capture predates 0.10.0, or a de-identified copy: deID omits the PQ layer, since the device\'s long-lived PQ key would re-link an anonymised copy)',
     );
   } else {
     // The PQ signature rides on the record and signs the record's canonical
@@ -470,7 +470,7 @@ async function c2paReport(
   }
   if (uncheckedTokens.length > 0) {
     notPerformed.push(
-      `${uncheckedTokens.length} attached timestamp token(s) could not be evaluated by this verifier (${uncheckedTokens[0].reason ?? 'unsupported structure'}) — disclosed, never counted as failures`,
+      `${uncheckedTokens.length} attached timestamp token(s) could not be evaluated by this verifier (${uncheckedTokens[0].reason ?? 'unsupported structure'}) — disclosed; not counted as failures`,
     );
   }
 
@@ -508,7 +508,7 @@ async function c2paReport(
       });
       performed.push(`signer trust resolved through outside anchors: ${signerTrust.tier}${signerTrust.tier === 'unknown' ? ' (nothing outside the file vouches for this key — the amber is in the data, not just the UI)' : ''}`);
     } catch {
-      notPerformed.push('signer trust resolution FAILED (resolver threw) — stated, not hidden; treat the signer as unresolved');
+      notPerformed.push('signer trust resolution FAILED (resolver threw); treat the signer as unresolved');
     }
   } else if (signerFingerprint && !opts?.trustResolver) {
     notPerformed.push('signer trust — no resolver supplied by the caller; who vouches for this key is UNRESOLVED (the app supplies one; scripting callers should too)');
@@ -519,7 +519,7 @@ async function c2paReport(
       notPerformed.push('the top of the chain is self-asserted — a valid chain proves structure, not that the named organization vouches for this key; confirm the CA out of band');
     } else if (!certChain.checked) {
       notPerformed.push(
-        `certificate chain could not be evaluated by this verifier (${certChain.reason ?? 'unsupported structure'}) — disclosed, never counted as a failure`,
+        `certificate chain could not be evaluated by this verifier (${certChain.reason ?? 'unsupported structure'}) — disclosed; not counted as a failure`,
       );
     } else {
       performed.push('certificate chain verification FAILED — see warning');

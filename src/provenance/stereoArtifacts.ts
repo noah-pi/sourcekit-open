@@ -140,7 +140,7 @@ export const STEREO_BUNDLE_NOTE =
   'Stereo-capture artifacts (Spec-Camera-Module-0.13): the desk-side planarity signal recomputes ' +
   'geometry from these committed INPUTS — never from a device-computed verdict. Three states per ' +
   'artifact: recorded (hash + inline bytes; rawDng is hash-only, vault-held), error (the committed ' +
-  'native failure string), never-recorded (an unreached state — never suspicion, never red). The ' +
+  'native failure string), never-recorded (an unreached state). The ' +
   'same states are committed as context.stereo-* claim values in the capture\'s context tree ' +
   '(com.verify.contextTree), so the signed root binds them.';
 
@@ -193,7 +193,7 @@ export function commitStereoArtifacts(
       contextClaims.push({ claimId: STEREO_CLAIM_IDS[id], family: 'context', rung: 0, value: claimValueFor(id, input, digest) });
     } else if (path === null) {
       if (typeof input.error !== 'string' || input.error.length === 0) {
-        throw new Error(`stereoArtifacts: artifact '${id}' is null (enabled-but-failed) but carries no error string — the failure must be stated, not implied`);
+        throw new Error(`stereoArtifacts: artifact '${id}' is null (enabled-but-failed) but carries no error string`);
       }
       entries[id] = { state: 'error', error: input.error.slice(0, MAX_ERROR_CHARS), mime: ARTIFACT_MIME[id] };
       contextClaims.push({ claimId: STEREO_CLAIM_IDS[id], family: 'context', rung: 0, value: claimValueFor(id, input) });
@@ -424,7 +424,7 @@ export function stereoMetadataFromBlock(block: CameraMetadataBlock): StereoMetad
     throw new Error(`stereo metadata: controlsReportedBy must be 'device' (got '${String(block.controlsReportedBy)}') — control values are device read-backs, labeled`);
   }
   if (block.focusDistanceMeters !== null && (typeof block.focusDistanceMeters !== 'number' || !Number.isFinite(block.focusDistanceMeters))) {
-    throw new Error('stereo metadata: focusDistanceMeters must be null or a finite number — stated, never fabricated');
+    throw new Error('stereo metadata: focusDistanceMeters must be null or a finite number');
   }
   const num = (v: unknown, label: string): number => {
     if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error(`stereo metadata: ${label} must be a finite number (or the field stays null upstream)`);
@@ -465,7 +465,7 @@ export function buildStereoCommitment(section: StereoBundleSection): StereoCommi
   for (const id of ['secondaryFrame', 'calibration', 'timestamps', 'metadata'] as const) {
     const state = section.artifacts[id]?.state;
     if (state !== 'recorded') {
-      throw new Error(`stereo commitment cannot be built: artifact '${id}' is ${state ?? 'absent'} — its state is stated, never patched over`);
+      throw new Error(`stereo commitment cannot be built: artifact '${id}' is ${state ?? 'absent'} — its state cannot be patched over`);
     }
   }
   const integrity = checkStereoSectionIntegrity(section);
@@ -520,7 +520,7 @@ export interface StereoIntegrityResult {
     photo section and the per-pair video entries. */
 function stereoEntryIntegrity(id: string, e: StereoArtifactBundleEntry): StereoIntegrityResult {
   if (e.state === 'never-recorded') {
-    return { integrity: 'never-recorded', detail: `never-recorded${e.reason ? ` (${e.reason})` : ''} — an unreached state, not suspicion` };
+    return { integrity: 'never-recorded', detail: `never-recorded${e.reason ? ` (${e.reason})` : ''} — an unreached state` };
   }
   if (e.state === 'error') {
     return { integrity: 'record-error', detail: `record error, committed verbatim: ${e.error}` };
@@ -536,7 +536,7 @@ function stereoEntryIntegrity(id: string, e: StereoArtifactBundleEntry): StereoI
         detail:
           `PROVEN TAMPER — the embedded bytes hash to sha256:${actual} but the committed value is sha256:${e.sha256}. ` +
           'The bundle\'s own commitment is violated: bytes or hash were altered after commitment. ' +
-          'This is a proven mismatch (red-class), distinct from absence, which is never suspicion.',
+          'This is a proven mismatch (red-class), distinct from absence.',
       };
 }
 
@@ -660,7 +660,7 @@ export const STEREO_VIDEO_BUNDLE_NOTE =
   'recording. Each pair carries the two artifacts the module writes (secondary frame + calibration) ' +
   'in the same three-state contract as the photo path, plus the PTS anchors from the pair event, ' +
   'verbatim. pairsCommitted / pairsMissed / hardwareCost are the native stop result, restated as ' +
-  'signed context.stereo-video-* claims; a missed pair is a declared count, never suspicion, never ' +
+  'signed context.stereo-video-* claims; a missed pair is a declared count, never ' +
   'silently absent. The pairs-root claim binds every entry\'s committed states and hashes.';
 
 function isFiniteOrNull(v: unknown): v is number | null {
@@ -746,7 +746,7 @@ export function commitStereoVideoArtifacts(
         };
       } else if (input.path === null) {
         if (typeof input.error !== 'string' || input.error.length === 0) {
-          throw new Error(`stereoArtifacts: pair ${p.pairIndex} artifact '${id}' is null (enabled-but-failed) but carries no error string — the failure must be stated, not implied`);
+          throw new Error(`stereoArtifacts: pair ${p.pairIndex} artifact '${id}' is null (enabled-but-failed) but carries no error string`);
         }
         artifacts[id] = { state: 'error', error: input.error.slice(0, MAX_ERROR_CHARS), mime: ARTIFACT_MIME[id] };
       } else if (input.path === 'never-recorded') {
@@ -820,7 +820,7 @@ export function buildStereoVideoPairCommitment(
   for (const id of STEREO_VIDEO_ARTIFACT_IDS) {
     const state = pair.artifacts[id]?.state;
     if (state !== 'recorded') {
-      throw new Error(`stereo commitment cannot be built for pair ${pairIndex}: artifact '${id}' is ${state ?? 'absent'} — its state is stated, never patched over`);
+      throw new Error(`stereo commitment cannot be built for pair ${pairIndex}: artifact '${id}' is ${state ?? 'absent'} — its state cannot be patched over`);
     }
   }
   const integrity = checkVideoStereoSectionIntegrity(section).find((r) => r.pairIndex === pairIndex)!;
@@ -829,7 +829,7 @@ export function buildStereoVideoPairCommitment(
     throw new Error(`stereo commitment refused for pair ${pairIndex}: PROVEN TAMPER on ${tampered.join(', ')} — embedded bytes do not match the committed hash`);
   }
   if (pair.anchors.synchronizedDeltaMs === null) {
-    throw new Error(`stereo commitment cannot be built for pair ${pairIndex}: the pair event reported no sync delta — a stated gap, never a number to invent`);
+    throw new Error(`stereo commitment cannot be built for pair ${pairIndex}: the pair event reported no sync delta — a stated gap, not a number to invent`);
   }
   const calibration = parseStereoCalibration(bytesToUtf8(stereoEntryBytes(pair.artifacts.calibration, 'calibration')));
   return {

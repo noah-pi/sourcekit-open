@@ -586,7 +586,7 @@ export default function SettingsScreen() {
             autoCapitalize="words"
           />
           <Text style={styles.rowDetail}>
-            Self-declared: a name, never proof of identity. Sealed into captures when the Byline toggle below is on.
+            Self-declared: a name, not proof of identity. Sealed into captures when the Byline toggle below is on.
           </Text>
 
           <Divider />

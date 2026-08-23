@@ -362,7 +362,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
 
           {/* The whole take's second camera — every
               committed pair frame as a strip, labeled by its capture-side
-              sequence number (never a time claim: the anchors are host
+              sequence number (not a time claim: the anchors are host
               clock, not take-relative). */}
           {kind === 'video' && videoFrames && videoFrames.length > 1 ? (
             <View style={styles.stripBlock}>

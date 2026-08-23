@@ -69,7 +69,7 @@ export interface TimestampVerification {
 const FAIL = (reason: string, tsaFingerprints: string[] = []): TimestampVerification =>
   ({ tokenValid: false, reason, genTimeUtc: null, tsaName: null, tsaChainLinksValid: null, tsaFingerprints, checked: true });
 
-/** A gap in this parser's coverage. Neutral, never a red rung. */
+/** A gap in this parser's coverage. Neutral, not a red rung. */
 const UNCHECKED = (reason: string): TimestampVerification =>
   ({ tokenValid: false, reason, genTimeUtc: null, tsaName: null, tsaChainLinksValid: null, tsaFingerprints: [], checked: false });
 

@@ -65,13 +65,13 @@ export function deriveAltViewSink(record: AttestationRecord | null): AltViewSink
         state: 'recorded',
         detail:
           `${vs.pairsCommitted} synchronized second-camera views committed` +
-          (vs.pairsMissed > 0 ? ` · ${vs.pairsMissed} missed (a declared count, never suspicion)` : '') +
-          '. Scene geometry from these is a lead for later review, never a verdict.',
+          (vs.pairsMissed > 0 ? ` · ${vs.pairsMissed} missed (a declared count)` : '') +
+          '. Scene geometry from these is a lead for later review, not a verdict.',
       };
     }
     return {
       state: 'never-recorded',
-      detail: 'No paired views were committed: unsupported on this device, toggled off, or detached under thermal pressure. Absence is not suspicion.',
+      detail: 'No paired views were committed: unsupported on this device, toggled off, or detached under thermal pressure.',
     };
   }
 
@@ -86,7 +86,7 @@ export function deriveAltViewSink(record: AttestationRecord | null): AltViewSink
   if (frame?.state === 'recorded') {
     return {
       state: 'recorded',
-      detail: 'A synchronized second-camera frame is committed. Scene geometry from it is a lead for later review, never a verdict.',
+      detail: 'A synchronized second-camera frame is committed. Scene geometry from it is a lead for later review, not a verdict.',
     };
   }
   if (frame?.state === 'error') {
@@ -99,8 +99,8 @@ export function deriveAltViewSink(record: AttestationRecord | null): AltViewSink
   return {
     state: 'never-recorded',
     detail: frame?.reason
-      ? `Not recorded: ${frame.reason}. Absence is not suspicion.`
-      : 'Not recorded: unsupported on this device, toggled off, or unreached. Absence is not suspicion.',
+      ? `Not recorded: ${frame.reason}.`
+      : 'Not recorded: unsupported on this device, toggled off, or unreached.',
   };
 }
 

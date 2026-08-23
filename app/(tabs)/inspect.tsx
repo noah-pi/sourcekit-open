@@ -571,7 +571,7 @@ function SealRows({ report }: { report: VerificationReport }) {
   const pqText = !pqAny
     ? 'None on this file'
     : pqOk
-      ? 'ML-DSA-65 dual signature valid · software-key custody, never a hardware anchor'
+      ? 'ML-DSA-65 dual signature valid · software-key custody, not a hardware anchor'
       : 'ML-DSA-65 layer FAILED · the raw manifest has the bytes';
   return (
     <View>
@@ -649,7 +649,7 @@ function VerdictCard({ report, identity, ladder }: { report: VerificationReport;
   if (failedRung && copy.tone !== 'bad') {
     copy = {
       headline: `A check failed: ${failedRung.label.charAt(0).toLowerCase()}${failedRung.label.slice(1)}`,
-      subline: `${failedRung.detail} The media itself ${report.checks.assetHashMatches === true ? 'still matches the seal' : 'could not be confirmed against the seal'} — the failure is stated, not folded into a verdict.`,
+      subline: `${failedRung.detail} The media itself ${report.checks.assetHashMatches === true ? 'still matches the seal' : 'could not be confirmed against the seal'} `,
       tone: 'bad',
       icon: 'warning-outline',
     };
@@ -1559,7 +1559,7 @@ export default function InspectScreen() {
                         record.context.wifi.bssid ? (
                           <LabelRow label="Wi-Fi BSSID" value={record.context.wifi.bssid} mono />
                         ) : (
-                          <LabelRow label="Wi-Fi" value={record.context.wifi.ssid ?? '(none reported)'} detail="A lead, never proof of place." />
+                          <LabelRow label="Wi-Fi" value={record.context.wifi.ssid ?? '(none reported)'} detail="A lead, not proof of place." />
                         )
                       ) : null}
                     </View>

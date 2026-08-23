@@ -109,7 +109,7 @@ export function validateClaim(claim: ContextClaim): void {
     }
   }
   if (claim.claimId === INVENTORY_META_CLAIM_ID) {
-    throw new Error('inventory: the inventory meta-leaf is reserved; it is never a claim');
+    throw new Error('inventory: the inventory meta-leaf is reserved and is not a claim');
   }
   if (!CLAIM_FAMILIES.includes(claim.family)) {
     throw new Error(`inventory: claim '${claim?.claimId}' has unknown family '${claim?.family}'`);

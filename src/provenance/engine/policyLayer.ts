@@ -206,10 +206,10 @@ async function compose(
           : null,
       });
     } catch {
-      notPerformed.push('signer trust resolution FAILED (resolver threw) — stated, not hidden; treat the signer as unresolved');
+      notPerformed.push('signer trust resolution FAILED (resolver threw); treat the signer as unresolved');
     }
   } else if (!opts?.trustResolver) {
-    notPerformed.push('signer trust — no resolver supplied; who vouches for this key is UNRESOLVED (never silently green)');
+    notPerformed.push('signer trust — no resolver supplied; who vouches for this key is UNRESOLVED');
   }
 
   const result: PolicyResult = {
