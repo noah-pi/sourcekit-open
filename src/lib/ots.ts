@@ -1,55 +1,44 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * OpenTimestamps (OTS) — ledger-anchored time, separate from authority time.
- *
- * RFC 3161 (src/lib/timestamp.ts, rfc3161.ts) binds a signature to an
- * authority's clock. OTS binds a digest to the Bitcoin blockchain: a free
- * public calendar aggregates many digests into a Merkle tree and embeds the
- * root in a Bitcoin transaction. No account, no cost, no keys held by us.
- *
- * What an OTS receipt proves: the digest existed no later than the block it
- * is anchored in. What it does NOT prove: the exact moment (block time is
- * coarse, ~10 minutes, and miner-set within consensus limits), or anything
- * about the TSA quorum — the two are independent claims and the UI must
- * never merge them.
+ * OpenTimestamps (OTS): ledger-anchored time, independent of the RFC 3161
+ * authority time in timestamp.ts / rfc3161.ts. A receipt bounds the digest's
+ * existence to no later than its Bitcoin block; block time is coarse
+ * (~10 min, miner-set), and it says nothing about the TSA quorum.
  *
  * Receipt lifecycle:
  *   1. submit  — POST digest to public calendars; each returns a receipt
  *                whose attestation is "pending" (a calendar URI promise).
- *   2. upgrade — later, GET the same calendar for the digest; once the
- *                calendar's tree is confirmed in a block, the receipt's
- *                attestation becomes a Bitcoin block height. We replace the
- *                pending receipt with the upgraded one.
+ *   2. upgrade — GET the same calendar for the digest; once its tree is
+ *                confirmed in a block the attestation becomes a block
+ *                height, and the upgraded receipt replaces the pending one.
  *   3. verify  — walk the receipt's op chain from the digest, then check the
  *                final message equals the Merkle-root field of the block
  *                header at the attested height (bytes 36..68). Fetching that
- *                header requires network; without it we verify the receipt's
- *                internal consistency only and say so.
+ *                header needs network; offline, only internal consistency is
+ *                checked, and the report says so.
  *
  * Format reference: opentimestamps.org — DetachedTimestampFile:
  *   MAGIC || version(0x01) || hash-op tag (0x08 = sha256) || raw file_digest
  *   || Timestamp
- * Timestamp node: (0x00 attestation)* (op (sub)...)* — an attestation is
- *   tag(8 raw bytes) || varbytes(payload); binary ops are tag || varbytes(arg).
+ * Timestamp node: (0x00 attestation)* (op (sub)...)*; an attestation is
+ *   tag(8 raw bytes) || varbytes(payload), binary ops are tag || varbytes(arg).
  * Ops used by calendars: 0xf0 append, 0xf1 prepend, 0x08 sha256.
  * Attestation tags (8 raw bytes): pending = 83dfe30d2ef90c8e (payload:
  *   varbytes calendar URI), bitcoin = 0588960d73d71901 (payload: varuint
  *   block height).
  * Calendar endpoints (opentimestamps-server): POST /digest and
- *   GET /timestamp/{commitment} both return a BARE Timestamp (no MAGIC
- *   header) — the caller wraps it. The GET is keyed by the commitment the
+ *   GET /timestamp/{commitment} both return a bare Timestamp with no MAGIC
+ *   header; the caller wraps it. The GET is keyed by the commitment the
  *   pending attestation sits on (the msg after walking the receipt's ops),
  *   not by the originally submitted digest.
- * Forked trees (0xff sibling marker) are never produced by calendars; we
- * refuse them rather than guess.
+ * Forked trees (0xff sibling marker) are refused; calendars never emit them.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
 import { concatBytes, equalBytes, bytesToHex, bytesToUtf8, utf8ToBytes, base64ToBytes, bytesToBase64 } from './bytes';
 
-// Reference wire constants (python-opentimestamps op.py / notary.py /
-// timestamp.py — checked against live calendar responses,):
-//   MAGIC tail is bf89e2e884e89294 (a wrong tail rejects every real .ots).
+// Wire constants from python-opentimestamps (op.py, notary.py,
+// timestamp.py). MAGIC tail is bf89e2e884e89294.
 export const OTS_MAGIC = concatBytes(
   new Uint8Array([0x00]),
   utf8ToBytes('OpenTimestamps'),
@@ -59,19 +48,19 @@ export const OTS_MAGIC = concatBytes(
 );
 const OTS_VERSION = 1;
 
-// Op tags: 0xf0 APPEND, 0xf1 PREPEND (reference OpAppend.TAG / OpPrepend.TAG
-// — the two are easy to swap, and a swapped walk yields a wrong Merkle root).
+// Op tags: 0xf0 append, 0xf1 prepend (OpAppend.TAG / OpPrepend.TAG).
+// Swapping the two yields a wrong Merkle root.
 const OP_SHA256 = 0x08;
 const OP_APPEND = 0xf0;
 const OP_PREPEND = 0xf1;
 
-// Attestation tags are 8 RAW bytes on the wire (TimeAttestation.TAG_SIZE =
-// 8, written verbatim — NOT varuint-encoded).
+// Attestation tags are 8 raw bytes on the wire (TimeAttestation.TAG_SIZE),
+// written verbatim, not varuint-encoded.
 const ATTEST_PENDING = new Uint8Array([0x83, 0xdf, 0xe3, 0x0d, 0x2e, 0xf9, 0x0c, 0x8e]);
 const ATTEST_BITCOIN = new Uint8Array([0x05, 0x88, 0x96, 0x0d, 0x73, 0xd7, 0x19, 0x01]);
 
-/** Free public calendars — no signup, no key, no bill. Order = preference;
- * all are asked to witness every digest; one success is enough to anchor. */
+/** Free public calendars, in preference order. All are asked to witness
+ * every digest; one success anchors. */
 export const OTS_CALENDARS = [
   'https://alice.btc.calendar.opentimestamps.org',
   'https://bob.btc.calendar.opentimestamps.org',
@@ -136,8 +125,8 @@ class Cursor {
 
 /**
  * Reads one attestation from the main cursor: tag(8 raw bytes) ||
- * varbytes(payload). Payloads are self-delimiting and read strictly —
- * trailing bytes inside the payload mean an altered/corrupt receipt.
+ * varbytes(payload). Read strictly: trailing bytes inside the payload mean
+ * a corrupt receipt.
  */
 function parseAttestation(c: Cursor, msgHex: string): OtsAttestation {
   const tag = c.take(8);
@@ -155,9 +144,8 @@ function parseAttestation(c: Cursor, msgHex: string): OtsAttestation {
 }
 
 /**
- * Parses a DetachedTimestampFile receipt. Never throws on malformed input —
- * returns null. Throws only programmer errors. Forked trees are refused:
- * no public calendar produces them, and guessing would be worse than failing.
+ * Parses a DetachedTimestampFile receipt. Returns null on malformed input;
+ * throws only on programmer errors. Forked trees are refused.
  */
 export function parseOtsReceipt(raw: Uint8Array): OtsReceipt | null {
   try {
@@ -165,8 +153,7 @@ export function parseOtsReceipt(raw: Uint8Array): OtsReceipt | null {
     const magic = c.take(OTS_MAGIC.length);
     if (!equalBytes(magic, OTS_MAGIC)) return null;
     if (c.byte() !== OTS_VERSION) return null;
-    // Header: hash-op tag (1 byte) || raw digest — NOT varbytes. Only sha256
-    // digests are produced or accepted here.
+    // Header: hash-op tag (1 byte) || raw digest, not varbytes. sha256 only.
     if (c.byte() !== OP_SHA256) return null;
     const digest = c.take(32);
 
@@ -186,11 +173,11 @@ export function parseOtsReceipt(raw: Uint8Array): OtsReceipt | null {
       } else if (tag === OP_SHA256) {
         msg = sha256(msg);
       } else if (tag === 0xff) {
-        // Fork marker — calendars never emit this. Refuse, don't guess.
+        // Fork marker; calendars never emit this.
         return null;
       } else {
-        // Unknown op (ripemd160, sha1, keccak, reverse, hexlify...) —
-        // not produced by the calendars we use.
+        // Unknown op (ripemd160, sha1, keccak, reverse, hexlify), not
+        // produced by the calendars used here.
         return null;
       }
     }
@@ -213,9 +200,9 @@ function detachedHeader(digest: Uint8Array): Uint8Array {
 }
 
 /**
- * Wraps a calendar's BARE Timestamp response (what POST /digest and
- * GET /timestamp/{commitment} return on the wire) into a full
- * DetachedTimestampFile for `digest` — the shape we store, share, and parse.
+ * Wraps a calendar's bare Timestamp response (from POST /digest or
+ * GET /timestamp/{commitment}) into a full DetachedTimestampFile for
+ * `digest`, the stored and shared shape.
  */
 export function wrapBareTimestamp(digest: Uint8Array, timestamp: Uint8Array): Uint8Array {
   return concatBytes(detachedHeader(digest), timestamp);
@@ -236,10 +223,9 @@ export function ensureDetachedReceipt(digest: Uint8Array, body: Uint8Array): Uin
 }
 
 /**
- * Splits a stored (linear, fork-free) detached receipt into the op-chain
- * prefix — everything up to the first attestation marker — and the rest.
- * Used to splice a calendar's upgraded continuation onto our receipt.
- * Returns null when the receipt isn't the linear shape calendars produce.
+ * Splits a stored linear receipt into the op-chain prefix (up to the first
+ * attestation marker) and the rest, for splicing a calendar's upgraded
+ * continuation on. Returns null when the receipt is not that linear shape.
  */
 function splitLinearOpsPrefix(detached: Uint8Array): { headerOps: Uint8Array } | null {
   try {
@@ -256,7 +242,7 @@ function splitLinearOpsPrefix(detached: Uint8Array): { headerOps: Uint8Array } |
       } else if (tag === OP_SHA256) {
         // no payload
       } else {
-        return null; // fork or unknown op — not the linear calendar shape
+        return null; // fork or unknown op: not the linear calendar shape
       }
     }
   } catch {
@@ -265,12 +251,11 @@ function splitLinearOpsPrefix(detached: Uint8Array): { headerOps: Uint8Array } |
 }
 
 /**
- * Merges a calendar's upgraded continuation (bare Timestamp whose initial
- * msg is the commitment the pending attestation sits on) into our stored
- * detached receipt: our op chain (digest → commitment) spliced onto the
- * upgraded chain (commitment → Bitcoin attestation). The merged file is
- * re-parsed and must commit to `digest` and carry a Bitcoin attestation,
- * or null comes back and the stored pending receipt stays.
+ * Merges a calendar's upgraded continuation (bare Timestamp starting at the
+ * commitment the pending attestation sits on) into the stored receipt:
+ * digest → commitment spliced onto commitment → Bitcoin attestation. The
+ * merged file is re-parsed; if it does not commit to `digest` and carry a
+ * Bitcoin attestation, null is returned and the pending receipt stays.
  */
 export function mergeUpgradedTimestamp(
   storedDetached: Uint8Array,
@@ -288,10 +273,8 @@ export function mergeUpgradedTimestamp(
 
 /**
  * Builds a minimal receipt for `digest` carrying a pending attestation for
- * `calendarUri` — the shape calendars return at submit time (wrapped as a
- * DetachedTimestampFile, the way we store it). Used by tests and as a
- * documented model of the wire format; real receipts always come from the
- * calendars themselves.
+ * `calendarUri`: the submit-time shape, wrapped as a DetachedTimestampFile.
+ * Used by tests; real receipts come from the calendars.
  */
 export function buildPendingReceipt(digest: Uint8Array, calendarUri: string): Uint8Array {
   // attestation node: 0x00 || tag(8 raw bytes) || varbytes(varbytes(uri))
@@ -316,7 +299,7 @@ function varuint(v: bigint): Uint8Array {
 /**
  * Verifies a receipt against the digest it should commit to. Internal checks
  * always run; the block-header binding check runs only when a header is
- * provided (it requires network to fetch — see otsClient.fetchBlockHeader).
+ * provided (fetching one needs network: otsClient.fetchBlockHeader).
  */
 export interface OtsVerification {
   /** Receipt parses and its op chain starts at our digest. */
@@ -373,11 +356,10 @@ export function verifyOtsReceipt(
     };
   }
   if (blockHeader.length !== 80) return fail('block header must be exactly 80 bytes');
-  // The header arrives in Bitcoin WIRE format (esplora /block/{hash}/header),
-  // and its Merkle-root field (bytes 36..68) equals the receipt's final msg
-  // byte-for-byte — verified empirically against the OTS docs' receipt and
-  // real block 428648. (The reference JS library reverses the msg
-  // only because its parsed header object stores the root pre-reversed.)
+  // Header is Bitcoin wire format (esplora /block/{hash}/header); its
+  // Merkle-root field (bytes 36..68) equals the receipt's final msg
+  // byte-for-byte. No reversal: the reference JS library reverses only
+  // because its parsed header object stores the root pre-reversed.
   const merkleRoot = blockHeader.subarray(36, 68);
   const ok = bytesToHex(merkleRoot) === btc.msgHex;
   return {

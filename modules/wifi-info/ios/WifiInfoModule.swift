@@ -3,13 +3,11 @@ import ExpoModulesCore
 import NetworkExtension
 
 /**
- * Current Wi-Fi network identity: the SSID/BSSID iOS reports. SELF-REPORTED by
- * the OS — SSIDs and MACs are trivially spoofable — so it is signed as a claim
- * for a desk to weigh, never proof of place. Returns nil unless all iOS gates
- * hold: wifi-info entitlement, location when-in-use (SSID is location data
- * since iOS 14), and an actual Wi-Fi association. Opt-in only (default off),
- * stripped on de-identify; BSSID→location lookup happens desk-side only.
- * API: currentWifi -> [String: String]? — { ssid, bssid } or nil.
+ * Current Wi-Fi identity as iOS reports it. SSIDs and BSSIDs are spoofable,
+ * so this is signed as a claim, not as location. Returns nil unless the
+ * wifi-info entitlement, location when-in-use (SSID counts as location since
+ * iOS 14), and a live association all hold. Opt-in, default off, stripped on
+ * de-identify. API: currentWifi -> [String: String]? — { ssid, bssid } or nil.
  */
 public class WifiInfoModule: Module {
   public func definition() -> ModuleDefinition {

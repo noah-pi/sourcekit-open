@@ -1,16 +1,11 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * ExportSheet — two cards up front, plain words:
+ * ExportSheet. Two cards up front: the de-identified re-sealed copy (top,
+ * default) and the original as sealed. Proof-without-media and per-field
+ * disclosure sit under "More ways to share"; the encrypted desk handoff
+ * renders below the share options when a desk key is configured.
  *
- *   Share without identifying details  TOP + DEFAULT. A re-sealed copy with
- *                                      name, organization and location redacted.
- *   Share original                     The file exactly as sealed.
- *
- * Everything else — proof without the media, per-field disclosure — sits
- * under "More ways to share". The encrypted desk handoff, when configured,
- * renders below — visibly NOT one of the share options.
- *
- * Same bottom-sheet pattern: Modal + scrim + grabber, Animated slide-in.
+ * Bottom-sheet pattern: Modal + scrim + grabber, Animated slide-in.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -42,21 +37,21 @@ export function ExportSheet({ visible, name, kind, pii, deskNewsroom, onBasic, o
   pii: ExportPii;
   /** When a desk key is configured, the encrypted handoff renders below the share options. */
   deskNewsroom?: string | null;
-  /** Share without identifying details — de-identified, re-sealed copy. */
+  /** Share without identifying details: de-identified, re-sealed copy. */
   onBasic: (format: 'jpeg' | 'png') => void;
-  /** Share original — the file exactly as sealed. */
+  /** Share original: the file exactly as sealed. */
   onFull: () => void;
-  /** Proof without the media — the JSON proof bundle. */
+  /** Proof without the media: the JSON proof bundle. */
   onProofOnly: () => void;
-  /** Choose what to open — the per-field disclosure toggles. */
+  /** Choose what to open: the per-field disclosure toggles. */
   onCustom: () => void;
   onDesk?: () => void;
   onCancel: () => void;
 }) {
   const styles = useThemedStyles(buildStyles);
   const slide = useRef(new Animated.Value(1)).current; // 1 = parked below, 0 = shown
-  // The private copy carries a format choice for photos — it opens the
-  // segment and a Share button rather than firing on first tap.
+  // The private copy carries a photo format choice, so its first tap opens
+  // the segment and a Share button instead of firing.
   const [privateOpen, setPrivateOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [format, setFormat] = useState<'jpeg' | 'png'>('jpeg');
@@ -100,8 +95,8 @@ export function ExportSheet({ visible, name, kind, pii, deskNewsroom, onBasic, o
               <Ionicons name={kind === 'photo' ? (privateOpen ? 'chevron-up' : 'chevron-down') : 'chevron-forward'} size={15} color={colors.textFaint} />
             </Pressable>
 
-            {/* The photo format choice belongs to the private copy: JPEG
-                keeps the pixels; PNG re-encodes (which also drops EXIF). */}
+            {/* Photo format for the private copy: JPEG keeps the pixels,
+                PNG re-encodes and drops EXIF. */}
             {privateOpen && kind === 'photo' ? (
               <View style={styles.privateBody}>
                 <View style={styles.segment}>
@@ -164,8 +159,8 @@ export function ExportSheet({ visible, name, kind, pii, deskNewsroom, onBasic, o
             ) : null}
           </ScrollView>
 
-          {/* The encrypted desk handoff is transport, not a share option —
-              visibly separated, and only present when configured. */}
+          {/* Encrypted desk handoff: transport, not a share option. Only
+              present when a desk key is configured. */}
           {deskNewsroom && onDesk ? (
             <>
               <View style={styles.handoffRule} />

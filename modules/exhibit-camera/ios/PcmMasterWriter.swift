@@ -3,37 +3,25 @@ import Foundation
 import AVFoundation
 
 /**
- * PcmMasterWriter — raw LPCM master writer.
+ * PcmMasterWriter — raw LPCM master writer for the ExhibitCamera video
+ * session. Thread confinement: session queue only.
  *
- * Ported 2026-08-10 from the retired CaptureKit module (verbatim logic) so
- * the ExhibitCamera video session can tee a raw audio master — see
- * AudioMasterConverter.swift's header for the why.
- *
- * Receives canonical-format PCM buffers from AudioMasterConverter: on iOS,
- * AVCaptureAudioDataOutput ALWAYS delivers the device-native audio format
- * (its `audioSettings` property is macOS-only), so the module converts each
- * native buffer to LPCM mono 16 kHz 16-bit and hands the converted frames
- * here. The delivery AAC writer consumes the native buffers independently —
- * one mic session, one buffer source, two sinks (rule 4: evidence degrades,
- * delivery never dies).
+ * Takes canonical-format PCM buffers from AudioMasterConverter. On iOS
+ * AVCaptureAudioDataOutput delivers the device-native audio format (its
+ * `audioSettings` property is macOS-only), so the converter downmixes to LPCM
+ * mono 16 kHz 16-bit and hands the frames here; the delivery AAC writer
+ * consumes the native buffers independently.
  *
  * Output: evidenceDir/master-<sessionId>.caf — LPCM, mono, 16 kHz, 16-bit,
- * little-endian — 16 kHz ≫ Nyquist for the 120/180/240 Hz ENF harmonics.
+ * little-endian. 16 kHz is well above Nyquist for the 120/180/240 Hz ENF
+ * harmonics.
  *
- * (a) the append-time format check no longer compares the
- * interleaved flag for the mono master — a settings-derived vs
- * commonFormat-derived AVAudioFormat can disagree on that flag for
- * 1-channel formats, and the strict comparison made every append throw
- * (a master that never records); (b) the ENF anchor + integrity summary
- * (firstSampleWallClockUtcMs / sampleCount / sampleRate / fileSha256)
- * are assembled by the module at tee/stop and exposed as rawPcmInfo on
- * the stopVideo payload.
+ * The ENF anchor and integrity summary (firstSampleWallClockUtcMs /
+ * sampleCount / sampleRate / fileSha256) are assembled by the module at
+ * tee/stop and exposed as rawPcmInfo on the stopVideo payload.
  *
- * Fail-fast sink: any failure throws; the module surfaces
- * onError E_SINK and reports rawPcmPath: null. The delivery
- * video is unaffected.
- *
- * Thread confinement: session queue only.
+ * Fail-fast sink: any failure throws, the module surfaces onError E_SINK and
+ * reports rawPcmPath: null, and the delivery video is unaffected.
  */
 final class PcmMasterWriter {
 
@@ -65,8 +53,7 @@ final class PcmMasterWriter {
   let url: URL
   private(set) var failed = false
   /// Total frames written. Checked at stopVideo: a zero-frame master is
-  /// not evidence and must be reported via the failed/empty path, not as a
-  /// recorded file.
+  /// reported via the failed/empty path, not as a recorded file.
   private(set) var framesWritten: AVAudioFrameCount = 0
 
   init(url: URL) throws {
@@ -107,14 +94,11 @@ final class PcmMasterWriter {
     // Structural format check — AVAudioFormat inherits NSObject identity
     // equality, so `==` would reject every buffer.
     let bufFmt = pcmBuffer.format
-    // Do NOT compare isInterleaved for the MONO master. The writer's
-    // format is settings-derived and the converter's output format is
-    // commonFormat-derived; the two initializers can legitimately disagree
-    // on the interleaved flag for a 1-channel format, where interleaving
-    // is semantically meaningless (one sample stream either way). With the
-    // old strict comparison a disagreement made EVERY append throw
-    // badBuffer — a raw audio master that never records. Sample rate,
-    // channel count, and common format still pin the canonical layout.
+    // Do not compare isInterleaved for the mono master: the writer's format
+    // is settings-derived and the converter's is commonFormat-derived, and the
+    // two can disagree on that flag for 1-channel formats, where interleaving
+    // means nothing. Sample rate, channel count, and common format still pin
+    // the canonical layout.
     let interleaveMatches = bufFmt.channelCount > 1
       ? bufFmt.isInterleaved == format.isInterleaved
       : true
@@ -139,6 +123,6 @@ final class PcmMasterWriter {
   }
 
   /// Marks the sink failed after a caught error so later appends fail fast
-  /// instead of writing a silently truncated master (degrade honestly).
+  /// instead of writing a silently truncated master.
   func markFailed() { failed = true }
 }

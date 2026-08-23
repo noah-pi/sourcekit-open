@@ -5,27 +5,24 @@
  * Layout (app sandbox, additionally encrypted by iOS Data Protection):
  *   vault/
  *     index.json          item metadata (ids, kinds, hashes, signer fingerprint,
- *                         capture timestamps, hasLocation, phash — no media,
- *                         no coordinates). Plaintext by design: sealing it
- *                         without atomic writes risks an empty-read overwrite
- *                         destroying the index — a worse failure than the
- *                         exposure. A sealed+AAD-bound v2 format is the
- *                         intended successor.
+ *                         capture timestamps, hasLocation, phash; no media, no
+ *                         coordinates). Plaintext: sealing it without atomic
+ *                         writes risks an empty-read overwrite destroying the
+ *                         index. A sealed, AAD-bound v2 format is the intended
+ *                         successor.
  *     {id}.bin            AES-256-GCM encrypted media bytes
  *     {id}.att.json       attestation record, AES-256-GCM encrypted (it carries
  *                         location/byline, so it gets the same protection as media)
  *
  * The 256-bit vault key is random, lives only in the OS keychain, and is
- * unrelated to the passcode — see passcode.ts for why. Viewing an item
- * decrypts it to a cache folder that is wiped on lock and on background.
+ * unrelated to the passcode (see passcode.ts). Viewing an item decrypts it to
+ * a cache folder wiped on lock and on background.
  *
- * Sibling store: documentDirectory/disclosure/ holds the
- * per-item disclosure state ({id}.json — sealed; master seed until burn)
- * and chunk maps ({id}.chunks.json — sealed). It is NOT under vault/ —
- * deleteItem and destroyVault are responsible for it:
- * an item delete that strands its disclosure state would leave the master
- * seed — the one thing that can open withheld rungs — behind after the
- * item itself is gone.
+ * Sibling store: documentDirectory/disclosure/ holds the per-item disclosure
+ * state ({id}.json, sealed, master seed until burn) and chunk maps
+ * ({id}.chunks.json, sealed). It sits outside vault/, so deleteItem and
+ * destroyVault must clear it: a delete that strands the disclosure state
+ * leaves behind the master seed that can open withheld rungs.
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
@@ -43,28 +40,21 @@ import type { AttestationRecord } from '../provenance/manifest';
 
 const KEY_STORE = 'verify_vault_key_v1';
 /**
- * When the app lock is set, the vault key moves
- * behind the OS keychain's own access control (requireAuthentication →
- * kSecAccessControlUserPresence). iOS itself then demands Face ID / device
- * passcode before ANY process can read the key — enforcement by the OS
- * keychain ACL, not app logic. The app-layer PIN + escalating lockout stay
- * as the first gate; this is the second, enforced one.
+ * With the app lock set, the vault key moves behind the OS keychain's access
+ * control (requireAuthentication → kSecAccessControlUserPresence), so iOS
+ * demands Face ID or the device passcode before any process can read it. The
+ * app-layer PIN and escalating lockout are the first gate; this is the second.
  *
- * Two storage keys, never one: expo-secure-store cannot distinguish
- * "no item" from "user cancelled the auth prompt" (both read null), so a
- * single-key design could regenerate over a locked key and brick the vault.
- * The ACL flag decides which key is authoritative, and a missing ACL key is
- * a hard lock, never a regeneration.
+ * Two storage keys, not one: expo-secure-store cannot tell "no item" from
+ * "user cancelled the prompt" (both read null), so a single-key design could
+ * regenerate over a locked key and brick the vault. The ACL flag decides which
+ * key is authoritative, and a missing ACL key is a hard lock.
  *
- * Precision note: the OS presence prompt gates the
- * keychain READ. After the first authenticated read the key is cached in
- * process memory (keyCache) — deliberately: background sealing work (the
- * seal queue) must run in windows where no Face ID prompt can appear. The
- * cache is dropped on background/lock as soon as no seal is mid-write
- * (releaseVaultKeyIfIdle + the in-flight counter below), so a locked app
- * does not hold a live key in heap beyond the work already in progress.
- * The ACL guarantees a process that never authenticated gets nothing; it is
- * not a per-decrypt prompt, and nothing here claims it is.
+ * The presence prompt gates the keychain read only. After the first
+ * authenticated read the key is cached in process memory (keyCache) so
+ * background sealing can run in windows where no prompt can appear; the cache
+ * is dropped on background/lock once no seal is mid-write
+ * (releaseVaultKeyIfIdle and the in-flight counter below).
  */
 const KEY_STORE_ACL = 'verify_vault_key_acl_v1';
 const ACL_FLAG = 'verify_vault_key_aclflag_v1';
@@ -72,8 +62,8 @@ const ACL_FLAG = 'verify_vault_key_aclflag_v1';
 const VAULT_DIR = `${FileSystem.documentDirectory}vault/`;
 const INDEX_FILE = `${VAULT_DIR}index.json`;
 const PLAIN_CACHE = `${FileSystem.cacheDirectory}verify-plain/`;
-// sealQueue.DISC_DIR — inlined to avoid a circular import (sealQueue
-// imports us). The disclosure store's per-item state + chunk maps.
+// sealQueue.DISC_DIR, inlined to avoid a circular import (sealQueue imports
+// us). The disclosure store's per-item state and chunk maps.
 const DISCLOSURE_DIR = `${FileSystem.documentDirectory}disclosure/`;
 
 const KEY_OPTIONS: SecureStore.SecureStoreOptions = {
@@ -83,20 +73,17 @@ const KEY_OPTIONS: SecureStore.SecureStoreOptions = {
 const ACL_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   requireAuthentication: true,
-  // A cold-cache ACL read can happen at any moment (a grid
-  // thumbnail decrypt, the background seal pump). Without a message the
-  // system Face ID prompt appeared with no context at all — users ignored
-  // or cancelled it, and the read then wedged or threw mid-seal (field
-  // report: "face ID results in errors if it's on").
+  // A cold-cache ACL read can happen at any moment (a grid thumbnail decrypt,
+  // the background seal pump), so the prompt carries a message: an unexplained
+  // system Face ID prompt gets ignored or cancelled, wedging the read.
   authenticationPrompt: 'Unlock your Source Kit vault',
 };
 
 /**
- * The one canonical vault-lock failure. expo-secure-store surfaces
- * a cancelled/system-cancelled presence prompt as either a null read OR a
- * rejection, depending on the OS path — both are normalized to this error
- * at the single read site so callers (the seal pump especially) can match
- * on one stable signature instead of guessing at keychain error strings.
+ * The canonical vault-lock failure. expo-secure-store surfaces a cancelled or
+ * system-cancelled presence prompt as either a null read or a rejection, so
+ * both are normalized to this error at the single read site and callers (the
+ * seal pump especially) match one stable signature.
  */
 export const VAULT_LOCKED_MESSAGE =
   'Vault is locked; device authentication is required to read the vault key.';
@@ -114,9 +101,9 @@ async function aclEnabled(): Promise<boolean> {
 }
 
 /**
- * Moves the vault key behind OS user-presence access control. Call right
- * after a successful unlock or passcode set — the user just authenticated,
- * so the one ACL write/read happens under their presence.
+ * Moves the vault key behind OS user-presence access control. Call right after
+ * a successful unlock or passcode set, so the ACL write and read happen while
+ * the user is present.
  */
 export async function upgradeVaultKeyAcl(): Promise<void> {
   if (await aclEnabled()) return;
@@ -151,27 +138,26 @@ export interface VaultIndexEntry {
   motionVerdict: string | null;
   hasLocation: boolean;
   /**
- * Grid badge flags — what's embedded, visible at a glance on
-   * the exhibits grid. Computed at seal time; legacy entries gain it on
-   * first grid read via ensureEntryFlags (backfilled from the record, never
-   * by decrypting media). Optional for data compat with pre-0.11.1 indexes.
-   *   sealed      — always true for vault items (the lock is the default state)
+   * Grid badge flags: what is embedded, shown on the exhibits grid. Computed at
+   * seal time; older entries get them on first grid read via ensureEntryFlags,
+   * backfilled from the record without decrypting media. Optional, for indexes
+   * written before the field existed.
+   *   sealed      — always true for vault items
    *   location    — GPS coordinates embedded
-   *   identifying — byline OR sensor log OR transcript OR face-check flag OR wifi claim
+   *   identifying — byline, sensor log, transcript, face-check flag, or wifi claim
    */
   flags?: VaultFlags;
   /**
-   * DCT perceptual hash — 16 hex chars, 8 bytes. Stored ONLY
-   * here in the index (never signed, never transmitted) for near-duplicate
-   * detection and sidecar re-association. A match is a lead, never a
-   * verdict. Null for videos/audio and when the best-effort compute failed.
-   * Note the index is app-sandbox plaintext — same exposure class as the
-   * exact sha256 already stored above.
+   * DCT perceptual hash, 16 hex chars. Stored only in the index (never signed,
+   * never transmitted) for near-duplicate detection and sidecar
+   * re-association; a match is a lead, not a verdict. Null for video and audio
+   * and when the best-effort compute failed. The index is app-sandbox
+   * plaintext, the same exposure class as the sha256 above.
    */
   phash: string | null;
 }
 
-/** Grid badge flags — see VaultIndexEntry.flags. */
+/** Grid badge flags; see VaultIndexEntry.flags. */
 export interface VaultFlags {
   sealed: true;
   location: boolean;
@@ -179,27 +165,24 @@ export interface VaultFlags {
 }
 
 /**
- * Computes the badge flags from an attestation record — pure projection of
- * what the record itself declares, never a guess. `hints.transcript` carries
- * the one fact the record does NOT hold (the transcript lives in the
- * embedded manifest, and badges never decrypt media); backfill of legacy
- * entries simply can't see it, which stays honest — the badge under-reports
- * for those, never over-reports.
+ * Computes the badge flags from an attestation record: a projection of what
+ * the record declares. `hints.transcript` carries the one fact the record does
+ * not hold, since the transcript lives in the embedded manifest and badges
+ * never decrypt media; a backfilled entry cannot see it and under-reports.
  */
 export function computeFlags(record: AttestationRecord | null, hints?: { transcript?: boolean }): VaultFlags {
   const identity = record?.identity;
   const ctx = record?.context;
   const byline = !!(identity && identity !== 'redacted' && (identity.author || identity.organization));
   const evidence = ctx?.captureEvidence;
-  // EvidencePath's third state is the STRING literal 'never-recorded' (no
-  // sink was opened), so the typeof-string check alone would wrongly match
-  // it — exclude the sentinel explicitly.
+  // EvidencePath's third state is the string 'never-recorded', which the
+  // typeof-string check would match, so exclude the sentinel explicitly.
   const sensorLog =
     (typeof evidence?.sensorLogPath === 'string' && evidence.sensorLogPath !== 'never-recorded') ||
     !!(ctx && (ctx.motion != null || ctx.poseTrace != null || ctx.pressureHPa != null || ctx.altitudeM != null || ctx.headingDeg != null));
   const faceCheck = record?.captureIntegrity?.biometricGatePassed != null;
-  // Wifi: an object claim only — the strings 'redacted' /
-  // 'unavailable' / 'never-recorded' (and null/undefined) all mean ABSENT.
+  // Wifi counts only as an object claim: 'redacted', 'unavailable',
+  // 'never-recorded', null and undefined all mean absent.
   const wifi = !!(ctx && typeof ctx.wifi === 'object' && ctx.wifi != null);
   return {
     sealed: true,
@@ -209,10 +192,10 @@ export function computeFlags(record: AttestationRecord | null, hints?: { transcr
 }
 
 /**
- * Index write mutex: index.json is rewritten whole by
- * save/delete/backfill, and concurrent read-modify-write cycles could lose an
- * entry. Every index mutation below funnels through this single promise
- * chain, so the read that feeds a write always sees the previous write.
+ * Index write mutex: index.json is rewritten whole by save/delete/backfill,
+ * and concurrent read-modify-write cycles could lose an entry. Every mutation
+ * funnels through this promise chain, so a read that feeds a write sees the
+ * previous write.
  */
 let indexQueue: Promise<unknown> = Promise.resolve();
 
@@ -222,21 +205,20 @@ function withIndexLock<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-/** In-memory backfill cache — one record read + one index write per entry. */
+/** In-memory backfill cache: one record read and one index write per entry. */
 const flagsCache = new Map<string, VaultFlags>();
 
 /**
- * Session-scope negative cache: ids whose record read
- * failed or is missing/corrupt. Without it every grid remount re-ran the
- * vault-key decrypt against a record that can never parse. Cleared with the
- * vault (destroyVault) and on deleteItem.
+ * Session-scope negative cache: ids whose record read failed or is missing or
+ * corrupt, so a grid remount does not re-run the vault-key decrypt against a
+ * record that cannot parse. Cleared by destroyVault and deleteItem.
  */
 const recordMissCache = new Set<string>();
 
 /**
- * Lazy backfill: entries sealed before flags existed get them
- * computed ONCE from the record on grid render, persisted into the index and
- * cached in memory. Media is never decrypted for a badge.
+ * Lazy backfill: an entry with no flags gets them computed once from the
+ * record on grid render, persisted into the index and cached in memory. Media
+ * is never decrypted for a badge.
  */
 export async function ensureEntryFlags(entry: VaultIndexEntry): Promise<VaultFlags | null> {
   if (entry.flags) return entry.flags;
@@ -251,8 +233,8 @@ export async function ensureEntryFlags(entry: VaultIndexEntry): Promise<VaultFla
   const flags = computeFlags(rec);
   flagsCache.set(entry.id, flags);
   try {
-    // Read-modify-write INSIDE the index lock: the merge must see the newest
-    // index and its write must land before the next mutation reads.
+    // Read-modify-write inside the index lock: the merge must see the newest
+    // index, and its write must land before the next mutation reads.
     await withIndexLock(async () => {
       const items = await readIndex();
       const i = items.findIndex((x) => x.id === entry.id);
@@ -262,7 +244,7 @@ export async function ensureEntryFlags(entry: VaultIndexEntry): Promise<VaultFla
       }
     });
   } catch {
-    // Persisting is best-effort — the in-memory cache still serves this session.
+    // Persisting is best-effort; the in-memory cache still serves this session.
   }
   return flags;
 }
@@ -270,37 +252,32 @@ export async function ensureEntryFlags(entry: VaultIndexEntry): Promise<VaultFla
 let keyCache: Uint8Array | null = null;
 
 /**
- * In-flight seal counter (D2): the cached vault key may be dropped on
- * background/lock ONLY when no seal is mid-write. Otherwise the seal
- * queue's next getVaultKey() would need a fresh keychain read — under ACL
- * that is a user-presence prompt — in a background window where no prompt
- * can appear, and work already in progress would fail instead of finish.
- * Incremented/decremented INSIDE the seal entry points (sealVaultJson,
- * sealVaultBytes, saveItem) so callers need no changes.
+ * In-flight seal counter: the cached vault key is dropped on
+ * background/lock only when no seal is mid-write. Otherwise the seal queue's
+ * next getVaultKey() would need a fresh keychain read, which under ACL is a
+ * user-presence prompt, in a background window where no prompt can appear.
+ * Incremented and decremented inside the seal entry points (sealVaultJson,
+ * sealVaultBytes, saveItem).
  */
 let inFlightSeals = 0;
 
 /**
  * Drops the cached vault key when no seal is in flight. Called from the
- * lock/background path (app/_layout.tsx). If a seal is running, the key
- * stays until that work finishes — the lock screen says exactly that.
+ * lock/background path (app/_layout.tsx); with a seal running the key stays
+ * until that work finishes, which the lock screen states.
  */
 export function releaseVaultKeyIfIdle(): void {
   if (inFlightSeals === 0) keyCache = null;
 }
 
 /**
- * Primes keyCache under FRESH user presence (0.18.6 — call it from the
- * unlock path, where the user just authenticated). Without this, the first
- * vault read of a session happened wherever it happened — a grid thumbnail
- * decrypt or a background seal job — and the OS user-presence prompt
- * appeared at that arbitrary moment. Ignored prompts wedged the seal pump
- * (cancels only land at checkpoints, so a cancelled-then-stuck job
- * "reappeared as loading until a timeout"); cancelled prompts threw and
- * burned seal attempts until jobs failed (field report: "face ID results
- * in errors if it's on", "the exhibit grid gets stuck on certain images").
- * Best-effort: a cancelled warm leaves the vault cold and the next real
- * read prompts again — exactly the pre-0.18.6 behavior, never worse.
+ * Primes keyCache under fresh user presence; call it from the unlock path,
+ * where the user just authenticated. Otherwise the session's first vault read
+ * lands wherever it happens — a grid thumbnail decrypt, a background seal job
+ * — and the OS presence prompt appears at that arbitrary moment, where an
+ * ignored prompt wedges the seal pump and a cancelled one burns seal attempts.
+ * Best-effort: a cancelled warm leaves the vault cold and the next real read
+ * prompts again.
  */
 export async function warmVaultKey(): Promise<boolean> {
   try {
@@ -314,11 +291,10 @@ export async function warmVaultKey(): Promise<boolean> {
 async function getVaultKey(): Promise<Uint8Array> {
   if (keyCache) return keyCache;
   if (await aclEnabled()) {
-    // Every failure of this read — user cancel, system cancel,
-    // interaction-not-allowed in a background window — is the SAME state
-    // (the key is unreadable right now) and becomes the canonical
-    // VAULT_LOCKED_MESSAGE, so the seal pump can defer without burning a
-    // retry attempt instead of dying on a raw keychain error string.
+    // Every failure of this read (user cancel, system cancel,
+    // interaction-not-allowed in a background window) is the same state: the
+    // key is unreadable now. All become VAULT_LOCKED_MESSAGE so the seal pump
+    // can defer instead of dying on a raw keychain error string.
     let aclExisting: string | null = null;
     try {
       aclExisting = await SecureStore.getItemAsync(KEY_STORE_ACL, ACL_OPTIONS);
@@ -326,8 +302,8 @@ async function getVaultKey(): Promise<Uint8Array> {
       aclExisting = null;
     }
     if (!aclExisting) {
-      // Auth cancelled or item unreadable — a HARD LOCK. Never regenerate:
-      // regenerating over a locked key would brick the existing vault.
+      // Auth cancelled or item unreadable: a hard lock. Do not regenerate;
+      // regenerating over a locked key bricks the existing vault.
       throw new Error(VAULT_LOCKED_MESSAGE);
     }
     const key = base64ToBytes(aclExisting);
@@ -354,11 +330,10 @@ async function getVaultKey(): Promise<Uint8Array> {
 }
 
 /**
- * At-rest privacy for metadata that identifies the signer. The media bytes are
- * AES-encrypted; the sidecar JSON (location, byline, transcript) deserves the
- * same protection rather than sitting plaintext in a backup-able directory.
- * Sealed with the same keychain-held vault key. Reads fall back to plaintext
- * so vaults written by ≤0.6 keep working.
+ * At-rest privacy for metadata that identifies the signer: the sidecar JSON
+ * (location, byline, transcript) is sealed with the same keychain-held vault
+ * key as the media rather than sitting plaintext in a backup-able directory.
+ * Reads fall back to plaintext for vaults written before sealing.
  */
 export async function sealVaultJson(value: unknown): Promise<Uint8Array> {
   inFlightSeals++;
@@ -378,7 +353,7 @@ export async function unsealVaultJson<T>(bytes: Uint8Array): Promise<T | null> {
   }
 }
 
-/** Raw-bytes variants — for media drafts (seal queue), where JSON is wrong. */
+/** Raw-bytes variants, for media drafts (seal queue) where JSON is wrong. */
 export async function sealVaultBytes(bytes: Uint8Array): Promise<Uint8Array> {
   inFlightSeals++;
   try {
@@ -398,8 +373,8 @@ export async function unsealVaultBytes(blob: Uint8Array): Promise<Uint8Array | n
 }
 
 /**
- * A path inside the plain cache — the directory _layout wipes on lock,
- * background, and cold start. For transient working copies only.
+ * A path inside the plain cache, the directory _layout wipes on lock,
+ * background, and cold start. Transient working copies only.
  */
 export function plainWorkUri(name: string): string {
   return `${PLAIN_CACHE}${name}`;
@@ -413,13 +388,12 @@ export async function ensureVaultDirs(): Promise<void> {
 }
 
 /**
- * Thrown when index.json exists but cannot be read or parsed — a torn
- * write, truncation, or a format this build does not understand. Distinct
- * from a MISSING index (a fresh vault), which reads as empty. Every save
- * path funnels its read-modify-write through readIndex, so this error
- * refuses the write: persisting an empty-looking read over a corrupted
- * index would orphan every record already in the vault. The recovery path
- * is rebuildIndexFromRecords().
+ * Thrown when index.json exists but cannot be read or parsed (a torn write,
+ * truncation, or an unknown format). Distinct from a missing index, which
+ * reads as empty. Every save path funnels its read-modify-write through
+ * readIndex, so this error refuses the write; persisting an empty-looking read
+ * over a corrupted index would orphan every record in the vault. Recovery is
+ * rebuildIndexFromRecords().
  */
 export class VaultIndexCorruptedError extends Error {
   constructor(message: string) {
@@ -430,7 +404,7 @@ export class VaultIndexCorruptedError extends Error {
 
 async function readIndex(): Promise<VaultIndexEntry[]> {
   const info = await FileSystem.getInfoAsync(INDEX_FILE);
-  if (!info.exists) return []; // fresh vault — missing is empty, never an error
+  if (!info.exists) return []; // fresh vault — missing is empty, not an error
   let raw: string;
   try {
     raw = await FileSystem.readAsStringAsync(INDEX_FILE);
@@ -441,26 +415,24 @@ async function readIndex(): Promise<VaultIndexEntry[]> {
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed.items)) return parsed.items;
   } catch {
-    // Fall through — an unparseable index is corruption, not emptiness.
+    // Fall through: an unparseable index is corruption, not emptiness.
   }
   throw new VaultIndexCorruptedError('vault index is corrupted; refusing to read it as empty');
 }
 
 async function writeIndex(items: VaultIndexEntry[]): Promise<void> {
-  // Atomic write: serialize to a temp file, then rename. Rename is atomic
-  // on APFS, so a crash mid-save strands a leftover .tmp (harmless —
-  // overwritten by the next save) instead of tearing index.json. Paired
-  // with readIndex failing closed above, a crash can no longer make a whole
-  // vault look empty.
+  // Atomic write: serialize to a temp file, then rename. Rename is atomic on
+  // APFS, so a crash mid-save strands a leftover .tmp, overwritten by the next
+  // save, instead of tearing index.json.
   const tmp = `${INDEX_FILE}.tmp`;
   await FileSystem.writeAsStringAsync(tmp, JSON.stringify({ items }));
   await FileSystem.moveAsync({ from: tmp, to: INDEX_FILE });
 }
 
 /**
- * Brief-notice subscription: fires when the vault repaired itself
- * — currently the only case is an automatic index rebuild after a
- * VaultIndexCorruptedError. The tab chrome renders it as a short banner.
+ * Brief-notice subscription: fires when the vault repaired itself, currently
+ * only an automatic index rebuild after a VaultIndexCorruptedError. The tab
+ * chrome renders it as a short banner.
  */
 type VaultNoticeListener = (message: string) => void;
 const vaultNoticeListeners = new Set<VaultNoticeListener>();
@@ -477,12 +449,10 @@ export async function listItems(): Promise<VaultIndexEntry[]> {
     items = await readIndex();
   } catch (e) {
     if (!(e instanceof VaultIndexCorruptedError)) throw e;
-    // Self-repair, replacing the manual "Rebuild index" row. A
-    // corrupted index fails the vault CLOSED (reads throw, writes refuse),
-    // so waiting for a user to find a recovery button in Settings meant a
-    // permanently empty-looking collection. Rebuild from the sealed
-    // records on disk and re-read; if the rebuild fails, the original
-    // corruption error stands and nothing is written over it.
+    // Self-repair: a corrupted index fails the vault closed (reads throw,
+    // writes refuse), so rebuild from the sealed records on disk and re-read.
+    // If the rebuild fails, the original corruption error stands and nothing
+    // is written over it.
     await rebuildIndexFromRecords();
     items = await readIndex();
     vaultNoticeListeners.forEach((l) => l('Collection index repaired from sealed records.'));
@@ -500,38 +470,37 @@ export interface SaveItemParams {
   audioUri?: string;
   record: AttestationRecord;
   /**
- * Seal-time hint for the badge flags: an audio transcript lives
-   * in the embedded manifest, not the record — the seal queue is the one
-   * place that knows it exists. Never re-derived from media later.
+   * Seal-time hint for the badge flags: an audio transcript lives in the
+   * embedded manifest, not the record, so the seal queue is the only place
+   * that knows it exists. Not re-derived from media later.
    */
   transcriptPresent?: boolean;
   /**
- * Audio "thumbnail": the first ~140 chars of the on-device
-   * transcript, sealed beside the media so the grid can show words instead
-   * of a bare mic icon. Absent when transcription was off — never invented.
+   * Audio "thumbnail": the first ~140 chars of the on-device transcript,
+   * sealed beside the media so the grid can show words instead of a mic icon.
+   * Absent when transcription was off.
    */
   transcriptSnippet?: string;
   /**
- * D1: the capture-side depth artifact, sealed beside the media
-   * as `${id}.depth.bin` with the same vault key — the exact privacy
-   * contract the media has. Its sha256 is committed pre-signing in the
-   * record (context.depth) and in c2pa.hash.collection.data; this is the
-   * storage half of that commitment. Best-effort like the thumbnail: a
-   * write failure degrades to no depth artifact, never a failed save (the
-   * collection-hash entry then reads 'missing' at verification — stated).
+   * The capture-side depth artifact, sealed beside the media as
+   * `${id}.depth.bin` with the same vault key, so it carries the media's
+   * privacy contract. Its sha256 is committed pre-signing in the record
+   * (context.depth) and in c2pa.hash.collection.data; this is the storage half
+   * of that commitment. Best-effort: a write failure degrades to no depth
+   * artifact and the collection-hash entry reads 'missing' at verification.
    */
   depthArtifact?: { path: string; mime: 'image/jpeg' | 'image/png'; sha256: string } | null;
 }
 
 export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry> {
-  // In-flight for the whole save (D2): a background/lock arriving
-  // mid-save must not drop the key out from under the writes below.
+  // In-flight for the whole save: a background/lock arriving mid-save
+  // must not drop the key out from under the writes below.
   inFlightSeals++;
   try {
     await ensureVaultDirs();
-    // Fail closed BEFORE writing any bytes: if the index is corrupted this
-    // save can never commit, so refuse here — never write media/record
-    // files for an entry the index will refuse to record.
+    // Fail closed before writing any bytes: with a corrupted index this save
+    // cannot commit, so do not write media or record files for an entry the
+    // index will refuse.
     await readIndex();
     const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const key = await getVaultKey();
@@ -543,20 +512,17 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
 
     const sealed = encryptBytes(key, mediaBytes);
     await writeFileBytes(`${VAULT_DIR}${id}.bin`, sealed);
-    // The attestation record carries location/byline — encrypt it like the media.
+    // The attestation record carries location/byline, so encrypt it like the media.
     await writeFileBytes(`${VAULT_DIR}${id}.att.json`, await sealVaultJson(params.record));
 
-    // Grid thumbnail: a small JPEG sealed with the same vault key. Without it
-    // every vault cell would have to decrypt the full multi-MB frame just to
-    // show a ~120 pt square — that was the vault lag. A thumbnail failure must
-    // never fail a save, so this whole block is best-effort.
+    // Grid thumbnail: a small JPEG sealed with the same vault key, so a vault
+    // cell does not decrypt a multi-MB frame to show a ~120 pt square. The
+    // whole block is best-effort; a thumbnail failure must not fail a save.
     let phash: string | null = null;
     if (params.kind === 'video' && uri) {
- // Video grid thumbnail: a frame ~0.5 s in, resized small,
-      // sealed with the same vault key — the exact privacy contract photos
-      // already had. The frame extraction reads the still-on-disk draft at
-      // seal time; a failure degrades to the placeholder icon, never a
-      // failed save.
+      // Video grid thumbnail: a frame ~0.5 s in, resized small and sealed with
+      // the same vault key as photos use. Extraction reads the still-on-disk
+      // draft at seal time; a failure degrades to the placeholder icon.
       try {
         const frame = await VideoThumbnails.getThumbnailAsync(uri, { time: 500 });
         const thumb = await ImageManipulator.manipulateAsync(frame.uri, [{ resize: { width: 512 } }], {
@@ -570,12 +536,12 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
         }
         await FileSystem.deleteAsync(frame.uri, { idempotent: true }).catch(() => {});
       } catch {
-        // Placeholder icon in the grid — an optimization, never a failure.
+        // Placeholder icon in the grid; this path is an optimization.
       }
     }
-    // D1: seal the depth artifact beside the media (same key, same
-    // contract). Cross-check its claimed hash before sealing — the vault
-    // stores what the signature describes, or nothing.
+    // Seal the depth artifact beside the media (same key, same contract).
+    // Its claimed hash is cross-checked first, so the vault stores what the
+    // signature describes or nothing.
     if (params.kind === 'photo' && params.depthArtifact) {
       try {
         const d = params.depthArtifact;
@@ -586,14 +552,14 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
         }
         await writeFileBytes(`${VAULT_DIR}${id}.depth.bin`, encryptBytes(key, bytes));
       } catch {
-        // No depth artifact in the vault — the collection-hash entry for
-        // 'depth.*' will read as missing at verification. Stated, not hidden.
+        // No depth artifact in the vault: the collection-hash entry for
+        // 'depth.*' reads as missing at verification.
       }
     }
     if (params.kind === 'audio' && params.transcriptSnippet) {
-      // The audio "thumbnail" is words, not pixels: the first breath of the
- // on-device transcript, sealed like the media. Best-effort —
-      // the grid falls back to the mic icon.
+      // The audio "thumbnail" is words, not pixels: the start of the on-device
+      // transcript, sealed like the media. Best-effort; the grid falls back to
+      // the mic icon.
       try {
         await writeFileBytes(
           `${VAULT_DIR}${id}.snippet.bin`,
@@ -604,14 +570,12 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
       }
     }
     if (params.kind === 'photo') {
-      // The working copy is FULL-RESOLUTION PLAINTEXT. expo-image-manipulator
-      // only resizes from a file URI — it cannot take in-memory bytes, and
-      // the in-memory decode path here (jpeg-js) reads baseline JPEG only,
-      // not the HEIC/PNG sources that legitimately arrive — so the file
-      // round-trip stays. The exposure window is kept to this try block:
-      // the copy lives inside the plain cache (shredded on
-      // lock/background/cold start) and is deleted in `finally` — a throw
-      // mid-thumbnail must not strand it.
+      // The working copy is full-resolution plaintext. The file round-trip is
+      // required: expo-image-manipulator resizes only from a file URI, and the
+      // in-memory decode path (jpeg-js) reads baseline JPEG only, not the
+      // HEIC/PNG sources that arrive. The copy lives in the plain cache
+      // (shredded on lock/background/cold start) and is deleted in `finally`,
+      // so a throw mid-thumbnail cannot strand it.
       const tmp = plainWorkUri(`thumb-src-${id}.jpg`);
       try {
         await writeFileBytes(tmp, mediaBytes);
@@ -620,14 +584,11 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
           format: ImageManipulator.SaveFormat.JPEG,
           base64: true,
         });
-        // pHash: a 32×32 grayscale reduction → DCT hash → 8
-        // bytes in the index. Lossy JPEG at 32×32 is exactly what pHash is
-        // robust against. Best-effort like the thumbnail — null, never fatal.
-        // Since 0.16.0 (C3) the pHash is ALSO computed pre-signing in the
-        // attest path (attest.ts photoPhashHex) and committed under the
-        // COSE claim as c2pa.soft-binding — this post-embed computation is
-        // now at most a cross-check of that signed value plus the vault
-        // index's near-duplicate key; the signed copy is the durable one.
+        // pHash: a 32×32 grayscale reduction, DCT hash, 8 bytes in the index.
+        // Best-effort, null on failure. The durable copy is the one computed
+        // pre-signing in the attest path (attest.ts photoPhashHex) and
+        // committed under the COSE claim as c2pa.soft-binding; this one is a
+        // cross-check plus the vault index's near-duplicate key.
         const tiny = await ImageManipulator.manipulateAsync(tmp, [{ resize: { width: 32, height: 32 } }], {
           compress: 0.9,
           format: ImageManipulator.SaveFormat.JPEG,
@@ -639,9 +600,8 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
         }
         if (tiny.base64) {
           const tinyBytes = base64ToBytes(tiny.base64);
-          // 32×32 RGBA is 4 KB of output — 1 MB of decode headroom is
-          // generous, and a hostile/oversized JPEG dies here instead of
-          // ballooning memory during a save.
+          // 32×32 RGBA is 4 KB, so 1 MB of decode headroom is ample and an
+          // oversized JPEG dies here instead of ballooning memory mid-save.
           // useTArray: jpeg-js otherwise allocates via Buffer.alloc, which
           // does not exist under Hermes.
           const decoded = jpegDecode(tinyBytes, { maxMemoryUsageInMB: 1, useTArray: true });
@@ -650,15 +610,15 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
             const gray = new Uint8Array(32 * 32);
             for (let i = 0; i < gray.length; i++) {
               const o = i * 4;
-              // ITU-R 601 luma — what the reference pHash implementations use.
+              // ITU-R 601 luma, as the reference pHash implementations use.
               gray[i] = Math.round(rgba[o] * 0.299 + rgba[o + 1] * 0.587 + rgba[o + 2] * 0.114);
             }
             phash = pHashFromGray32(gray);
           }
         }
       } catch {
-        // Thumbnail and pHash are optimizations — the grid falls back to the
-        // full frame, and the index simply records phash: null.
+        // Thumbnail and pHash are optimizations: the grid falls back to the
+        // full frame and the index records phash: null.
       } finally {
         await FileSystem.deleteAsync(tmp, { idempotent: true }).catch(() => {});
       }
@@ -677,10 +637,9 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
       flags: computeFlags(params.record, { transcript: params.transcriptPresent === true }),
       phash,
     };
-    // Index mutation serialized through the lock — the
-    // media/record/thumbnail writes above are per-id files and race-free.
-    // If the index is corrupted, readIndex throws VaultIndexCorruptedError
-    // and this save REFUSES to write — never persisting over a torn index.
+    // Index mutation serialized through the lock; the media/record/thumbnail
+    // writes above are per-id files and race-free. On a corrupted index
+    // readIndex throws VaultIndexCorruptedError and this save refuses.
     await withIndexLock(async () => {
       const items = await readIndex();
       items.push(entry);
@@ -695,7 +654,7 @@ export async function saveItem(params: SaveItemParams): Promise<VaultIndexEntry>
 export async function getRecord(id: string): Promise<AttestationRecord | null> {
   try {
     const bytes = await readFileBytes(`${VAULT_DIR}${id}.att.json`);
-    // New format is encrypted; fall back to plaintext for ≤0.6 vaults.
+    // Sealed format first, plaintext fallback for older vaults.
     const sealed = await unsealVaultJson<AttestationRecord>(bytes);
     let parsed: unknown = sealed;
     if (!parsed) {
@@ -708,11 +667,10 @@ export async function getRecord(id: string): Promise<AttestationRecord | null> {
 }
 
 /**
- * Re-writes an item's encrypted record through `mutate`. Used for data that
- * legitimately arrives after sealing — OTS receipt upgrades, which
- * are excluded from the signed payload precisely so this can happen without
- * breaking the signature. Returns the updated record, or null if the item
- * is gone. Never throws.
+ * Re-writes an item's encrypted record through `mutate`. For data that arrives
+ * after sealing, such as OTS receipt upgrades, which are excluded from the
+ * signed payload so this cannot break the signature. Returns the updated
+ * record, or null if the item is gone. Never throws.
  */
 export async function updateRecord(
   id: string,
@@ -730,16 +688,13 @@ export async function updateRecord(
 }
 
 /**
- * Rebuilds index.json from the vault's encrypted records — the recovery
- * path for a corrupted index (VaultIndexCorruptedError). Every
- * `{id}.att.json` in the vault dir is decrypted with the vault key and its
- * entry re-derived from the record itself — nothing is guessed. A record
- * that fails to decrypt/parse, or whose media file is gone, is skipped and
- * counted, so the caller sees exactly how much could not be recovered. The
- * rebuilt index is written atomically (write-then-rename, like every index
- * write). One honest loss: the pHash lives ONLY in the index (never in the
- * signed record), so rebuilt entries carry phash: null — near-duplicate
- * leads for those items are gone, the items themselves are not.
+ * Rebuilds index.json from the vault's encrypted records: the recovery path
+ * for a corrupted index (VaultIndexCorruptedError). Every `{id}.att.json` is
+ * decrypted with the vault key and its entry re-derived from the record; one
+ * that fails to decrypt or parse, or whose media file is gone, is skipped and
+ * counted for the caller. Written atomically, like every index write. The
+ * pHash lives only in the index, so rebuilt entries carry phash: null and lose
+ * their near-duplicate leads.
  */
 export async function rebuildIndexFromRecords(): Promise<{ rebuilt: number; skipped: number }> {
   await ensureVaultDirs();
@@ -747,7 +702,7 @@ export async function rebuildIndexFromRecords(): Promise<{ rebuilt: number; skip
   try {
     names = await FileSystem.readDirectoryAsync(VAULT_DIR);
   } catch {
-    // No vault dir at all — nothing to rebuild from; the count says so.
+    // No vault dir at all: nothing to rebuild from, and the count says so.
   }
   const items: VaultIndexEntry[] = [];
   let skipped = 0;
@@ -808,17 +763,16 @@ export async function decryptItemToCache(id: string): Promise<string> {
 }
 
 /**
- * In-memory map of id → decrypted thumbnail URI. Cells remount constantly
- * while scrolling; without this every remount re-ran the decrypt pipeline,
- * which is why grid images kept "reloading". A hit is validated against the
- * filesystem because the plain cache is shredded on lock/background.
+ * In-memory map of id → decrypted thumbnail URI, so a cell remounting during a
+ * scroll does not re-run the decrypt pipeline. A hit is validated against the
+ * filesystem, since the plain cache is shredded on lock/background.
  */
 const thumbUriCache = new Map<string, string>();
 
 /**
- * Decrypts only the small sealed thumbnail (~25 KB) for grid display. Items
- * sealed before thumbnails existed fall back to the full frame once, which
- * is then cached like any other.
+ * Decrypts only the small sealed thumbnail (~25 KB) for grid display. An item
+ * with no sealed thumbnail falls back to the full frame once, then caches like
+ * any other.
  */
 export async function decryptThumbToCache(id: string, opts?: { fallbackToFull?: boolean }): Promise<string> {
   const cached = thumbUriCache.get(id);
@@ -837,10 +791,9 @@ export async function decryptThumbToCache(id: string, opts?: { fallbackToFull?: 
 
   const sealedThumb = await FileSystem.getInfoAsync(`${VAULT_DIR}${id}.thumb.bin`);
   if (!sealedThumb.exists) {
-    // The full-frame fallback exists for legacy PHOTOS. A video has no
-    // image-renderable full item — decrypting 200 MB to render nothing is
-    // the worst of both worlds, so video callers pass fallbackToFull:false
-    // and take the placeholder icon.
+    // The full-frame fallback is for photos only: a video has no
+    // image-renderable full item, so video callers pass fallbackToFull:false
+    // and take the placeholder icon rather than decrypt 200 MB.
     if (opts?.fallbackToFull === false) throw new Error('no sealed thumbnail');
     const full = await decryptItemToCache(id);
     thumbUriCache.set(id, full);
@@ -854,14 +807,12 @@ export async function decryptThumbToCache(id: string, opts?: { fallbackToFull?: 
 }
 
 /**
- * Legacy-video thumbnail backfill (0.14.0 — "videos still need
- * thumbnails"): videos sealed before grid thumbnails existed have no
- * .thumb.bin and would show the bare icon forever. This generates one
- * lazily, on first grid view: the media decrypts into the plain cache
- * (shredded on lock/background like every plaintext), one frame is grabbed
- * ~0.5 s in, resized, and sealed beside the media — from then on it is a
- * normal sealed thumbnail. Returns the display URI, or null when any step
- * fails (the cell keeps its placeholder icon). Best-effort: never throws.
+ * Video thumbnail backfill: a video with no .thumb.bin gets one generated
+ * lazily on first grid view. The media decrypts into the plain cache (shredded
+ * on lock/background), one frame is grabbed ~0.5 s in, resized, and sealed
+ * beside the media, becoming a normal sealed thumbnail. Returns the display
+ * URI, or null when any step fails and the cell keeps its placeholder icon.
+ * Never throws.
  */
 export async function ensureVideoThumb(id: string): Promise<string | null> {
   try {
@@ -884,7 +835,7 @@ export async function ensureVideoThumb(id: string): Promise<string | null> {
       const thumbBytes = base64ToBytes(thumb.base64);
       await writeFileBytes(`${VAULT_DIR}${id}.thumb.bin`, encryptBytes(key, thumbBytes));
     } finally {
-      // The plaintext video copy dies here even when the frame grab fails.
+      // The plaintext video copy is deleted here even if the frame grab failed.
       await FileSystem.deleteAsync(tmp, { idempotent: true }).catch(() => {});
     }
     return await decryptThumbToCache(id, { fallbackToFull: false });
@@ -893,13 +844,12 @@ export async function ensureVideoThumb(id: string): Promise<string | null> {
   }
 }
 
-/** In-memory snippet cache — same remount economics as the thumbnail cache. */
+/** In-memory snippet cache; same remount economics as the thumbnail cache. */
 const snippetCache = new Map<string, string>();
 
 /**
  * Decrypts the sealed audio transcript snippet for the grid. Null when the
- * item has none (transcription off, or sealed before snippets existed) —
- * the cell renders the mic icon, an honest absence.
+ * item has none, and the cell renders the mic icon.
  */
 export async function decryptAudioSnippet(id: string): Promise<string | null> {
   const cached = snippetCache.get(id);
@@ -924,7 +874,7 @@ export async function wipePlainCache(): Promise<void> {
       await FileSystem.makeDirectoryAsync(PLAIN_CACHE, { intermediates: true });
     }
   } catch {
-    // Best effort — iOS clears cacheDirectory under pressure anyway.
+    // Best effort; iOS clears cacheDirectory under pressure anyway.
   }
 }
 
@@ -945,13 +895,13 @@ export async function deleteItem(id: string): Promise<void> {
   await FileSystem.deleteAsync(`${PLAIN_CACHE}${id}.jpg`, { idempotent: true });
   await FileSystem.deleteAsync(`${PLAIN_CACHE}${id}.mp4`, { idempotent: true });
   await FileSystem.deleteAsync(`${PLAIN_CACHE}${id}.m4a`, { idempotent: true });
-  // Disclosure store: the item's disclosure state AND chunk maps go
-  // with it — idempotent, since either may legitimately be absent.
+  // Disclosure store: the item's disclosure state and chunk maps go with it.
+  // Idempotent, since either may be absent.
   await FileSystem.deleteAsync(`${DISCLOSURE_DIR}${id}.json`, { idempotent: true });
   await FileSystem.deleteAsync(`${DISCLOSURE_DIR}${id}.chunks.json`, { idempotent: true });
 }
 
-/** Nuclear option: vault contents, index, plain cache, seal-queue drafts, the disclosure store, and the vault key. */
+/** Wipes vault contents, index, plain cache, seal-queue drafts, the disclosure store, and the vault key. */
 export async function destroyVault(): Promise<void> {
   keyCache = null;
   thumbUriCache.clear();
@@ -960,11 +910,11 @@ export async function destroyVault(): Promise<void> {
   recordMissCache.clear();
   await FileSystem.deleteAsync(VAULT_DIR, { idempotent: true });
   await wipePlainCache();
-  // sealQueue.DIR — inlined to avoid a circular import (sealQueue imports us).
-  // Pending seal drafts are PLAINTEXT media; they must not survive the wipe.
+  // sealQueue.DIR, inlined to avoid a circular import (sealQueue imports us).
+  // Pending seal drafts are plaintext media and must not survive the wipe.
   await FileSystem.deleteAsync(`${FileSystem.documentDirectory}seal-queue/`, { idempotent: true });
-  // Disclosure store: every item's disclosure state + chunk maps
-  // (including any unburned master seeds) die with the vault.
+  // Disclosure store: every item's disclosure state and chunk maps, including
+  // any unburned master seeds, die with the vault.
   await FileSystem.deleteAsync(DISCLOSURE_DIR, { idempotent: true });
   await SecureStore.deleteItemAsync(KEY_STORE, KEY_OPTIONS);
   await SecureStore.deleteItemAsync(KEY_STORE_ACL, KEY_OPTIONS);

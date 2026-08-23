@@ -1,17 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * The TSA signer cert MUST carry the id-kp-timeStamping
- * extended key usage (RFC 3161 §2.3). Without the check, any general-purpose
- * cert (TLS, email) could mint timestamps we'd report as genuine.
+ * The TSA signer cert must carry the id-kp-timeStamping extended key usage
+ * (RFC 3161 §2.3); without the check, a general-purpose cert (TLS, email)
+ * could mint timestamps reported as genuine.
  *
- *  1. Token signed by a cert WITH critical EKU timeStamping → tokenValid.
+ *  1. Token signed by a cert with critical EKU timeStamping → tokenValid.
  *  2. Same token shape, cert EKU is emailProtection (C2PA device profile) →
- *     FAIL naming the missing EKU.
- *  3. Same again, cert carries NO extensions at all → FAIL the same way.
- *  4. The EKU failure fires even when every other check would pass (the
- *     tokens in 2/3 are cryptographically genuine — rejected on purpose).
- *  5. hasKeyPurpose unit behavior: wrong purpose / missing EKU → false
- *     (purpose checks fail closed).
+ *     fail, naming the missing EKU.
+ *  3. Same again, cert carries no extensions → same failure.
+ *  4. The EKU failure fires even when every other check passes; the tokens in
+ *     2 and 3 are cryptographically genuine.
+ *  5. hasKeyPurpose: wrong purpose or missing EKU → false (fails closed).
  */
 import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
@@ -79,7 +78,7 @@ function buildToken(certDer: Uint8Array, message: Uint8Array, sign: (signedBytes
     seq(oid(OID.contentType), set(oid(OID.tstInfo))),
     seq(oid(OID.messageDigest), set(octet(sha256(tst)))),
   );
-  // IMPLICIT [0] carries the attributes WITHOUT the SET OF tag; the CMS
+  // IMPLICIT [0] carries the attributes without the SET OF tag; the CMS
   // signature covers the same bytes with the universal 0x31 (RFC 5652 §5.4).
   const signerInfo = seq(
     int1(1),
@@ -106,9 +105,9 @@ const notBefore = new Date(Date.now() - 60_000);
 
 // (a) RFC-conformant TSA cert: critical EKU id-kp-timeStamping.
 const tsaCert = await buildSelfSignedCert(pub, signDigest, notBefore, { eku: 'timeStamping' });
-// (b) C2PA device profile: critical EKU emailProtection — wrong purpose.
+// (b) C2PA device profile: critical EKU emailProtection, the wrong purpose.
 const emailCert = await buildSelfSignedCert(pub, signDigest, notBefore, { eku: 'emailProtection' });
-// (c) same key, hand-rolled cert with NO extensions at all.
+// (c) Same key, hand-rolled cert with no extensions.
 const later = new Date(notBefore.getTime() + 5 * 365 * 24 * 3600 * 1000);
 const bareTbs = seq(
   tlv(0xa0, int1(2)),

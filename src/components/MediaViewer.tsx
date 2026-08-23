@@ -1,12 +1,8 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Fullscreen media viewer.
- *
- * Opened deliberately (the expand badge on the asset page), dismissed three
- * ways so nobody can ever get trapped: the close button (its own top layer,
- * above the media), a tap on the black backdrop for photos, and the system
- * back gesture. Video uses the native player controls, which include the
- * system fullscreen/rotate handling.
+ * Fullscreen media viewer. Opened from the expand badge on the asset page.
+ * Three dismiss paths: the close button, a backdrop tap (photos), and the
+ * system back gesture. Video uses native player controls.
  */
 
 import React from 'react';
@@ -31,14 +27,14 @@ export function MediaViewer({ uri, kind, onClose }: { uri: string; kind: 'photo'
       <View style={styles.backdrop}>
         <StatusBar hidden />
         {kind === 'photo' ? (
-          // The whole surface dismisses — the single most forgiving exit.
+          // Whole surface dismisses.
           <Pressable style={styles.fill} onPress={onClose} accessibilityLabel="Close viewer">
             <Image source={{ uri }} style={styles.fill} contentFit="contain" transition={80} pointerEvents="none" />
           </Pressable>
         ) : (
           <FullscreenVideo uri={uri} />
         )}
-        {/* Close control lives in its own layer, above the media, always tappable. */}
+        {/* Close control: own layer above the media. */}
         <View style={[styles.closeWrap, { top: insets.top + 8 }]} pointerEvents="box-none">
           <Pressable style={styles.close} onPress={onClose} hitSlop={20} accessibilityLabel="Close viewer">
             <Ionicons name="close" size={22} color="#fff" />

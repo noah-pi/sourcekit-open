@@ -5,22 +5,22 @@ import CoreMotion
 import Speech
 
 /**
- * Audio capture with on-device live transcription — the Voice Memos
- * architecture: ONE AVAudioEngine whose input tap fans out to two sinks:
+ * Audio capture with on-device live transcription. One AVAudioEngine whose
+ * input tap fans out to two sinks:
  *
  *   1. AVAudioFile  → the signed .m4a (AAC), written in real time
  *   2. SFSpeechAudioBufferRecognitionRequest → partial transcripts streamed
  *      to JS as `onTranscript` events
  *
- * Privacy stance: when the device supports on-device speech recognition we
- * require it (requiresOnDeviceRecognition = true) — audio never leaves the
- * phone for transcription. When unsupported, recording still works and the
- * caller is told transcription is off.
+ * On-device speech recognition is required where supported
+ * (requiresOnDeviceRecognition = true), so audio never leaves the phone for
+ * transcription. Where unsupported, recording still works and the caller is
+ * told transcription is off.
  *
  * While recording, a CoreMotion gyro log (AudioMotionLog, 100 Hz target,
- * CaptureKit SensorLogger line format, anchor line first) covers exactly
- * the recorded window — the IMU sink behind the audio exhibit's signed
- * com.verify.poseTrace assertion (media parity with video).
+ * CaptureKit SensorLogger line format, anchor line first) covers exactly the
+ * recorded window. It is the IMU sink behind the audio exhibit's signed
+ * com.verify.poseTrace assertion.
  *
  * API:
  *   requestPermissions        -> { microphone: Bool, speech: Bool }
@@ -29,25 +29,22 @@ import Speech
  *   stop                      -> { path, durationMs, transcript, segments,
  *                                    fileState, fileError,
  *                                    sensorLogPath, sensorLogState }
- *
- * fileState is the delivery-file sink's three-state honesty: "clean" (every
- * buffer landed), "partial" (a write failed mid-take — file real but
- * truncated, fileError carries the first error), "failed" (nothing durable
- * reached disk — path is null and JS must refuse to seal). A truncated file
- * is never passed off as a complete one.
  *   events: onTranscript { text, isFinal }, onLevel { db }, onError { message }
  *
- * sensorLogState is three-state honesty for the IMU sink: "recorded"
- * (sensorLogPath holds the JSONL path), "failed" (the sink was requested
- * but died — sensorLogPath is null), "unavailable" (no gyro on this device
- * or no log requested — nothing was ever going to be recorded).
+ * fileState is the delivery-file sink's three states: "clean" (every buffer
+ * landed), "partial" (a write failed mid-take, the file is real but truncated
+ * and fileError carries the first error), "failed" (nothing durable reached
+ * disk, path is null and JS must refuse to seal).
+ *
+ * sensorLogState is the IMU sink's three states: "recorded" (sensorLogPath
+ * holds the JSONL path), "failed" (requested but the sink died, path null),
+ * "unavailable" (no gyro or no log requested).
  */
 /**
- * promise.reject(code, description) silently DROPS the description on SDK 57:
- * the JS-visible message is built from `reason` (which the convenience init
- * never sets), so every rejection arrived as "CODE: undefined reason" and
- * real failures were undiagnosable. This subclass carries the message in
- * `reason`, so actionable errors reach JS.
+ * promise.reject(code, description) drops the description on SDK 57: the
+ * JS-visible message is built from `reason`, which the convenience init never
+ * sets, so rejections arrive as "CODE: undefined reason". This subclass
+ * carries the message in `reason`.
  */
 final class NamedException: Exception {
   private let message: String
@@ -62,10 +59,10 @@ public class AudioCaptureModule: Module {
   private var engine: AVAudioEngine?
   private var audioFile: AVAudioFile?
   private var converter: AVAudioConverter?
-  // Delivery-file sink honesty: a failed AVAudioFile.write must never become
-  // a silently truncated exhibit. The first error is remembered, surfaced
-  // live via onError, and declared in the stop payload; buffersWritten == 0
-  // at stop means nothing durable exists and the take fails closed.
+  // Delivery-file sink state. The first AVAudioFile.write error is remembered,
+  // surfaced live via onError, and declared in the stop payload;
+  // buffersWritten == 0 at stop means nothing durable exists and the take fails
+  // closed.
   private var firstWriteError: String?
   private var buffersWritten = 0
   private var recognizer: SFSpeechRecognizer?
@@ -83,21 +80,18 @@ public class AudioCaptureModule: Module {
   private var stopResolved = false
   private var interruptionObserver: NSObjectProtocol?
 
-  // IMU sink (WS2 Phase 2 §3 media parity): gyro JSONL covering exactly the
-  // recorded window, in the CaptureKit SensorLogger line format, so audio
-  // exhibits carry a signed com.verify.poseTrace like video. Honest absence:
-  // "unavailable" (no gyro / not requested) and "failed" (sink died) are
-  // distinct states — the log is never fabricated, never silently empty.
+  // IMU sink: gyro JSONL covering the recorded window in the
+  // CaptureKit SensorLogger line format, backing the signed
+  // com.verify.poseTrace. "unavailable" (no gyro or not requested) and "failed"
+  // (sink died) are distinct states.
   private var motionLog: AudioMotionLog?
   private var motionLogState = "unavailable" // "recorded" | "failed" | "unavailable"
   private var motionLogPath: String?
 
-  // Raw-audio sink for audio takes: the uncompressed LPCM master
-  // (CAF), same three-state contract as the video session's raw sink. The
-  // tap delivers hardware-format LPCM buffers, so the master writes with
-  // NO converter — the exact frames the AAC delivery file sees. Until this
-  // existed the sink was structurally 'never-recorded' for audio captures
-  // even with the Raw audio toggle on (TestFlight field report).
+  // Raw-audio sink: the uncompressed LPCM master (CAF), same three-state
+  // contract as the video session's raw sink. The tap delivers hardware-format
+  // LPCM buffers, so the master writes with no converter, giving the exact
+  // frames the AAC delivery file sees.
   private var rawFile: AVAudioFile?
   private var rawFileURL: URL?
   private var rawState = "unavailable" // "recorded" | "failed" | "unavailable"
@@ -136,11 +130,10 @@ public class AudioCaptureModule: Module {
 
   // MARK: - Recording
 
-  /// Callers hand us expo-file-system paths, which may be file:// URI
-  /// strings. URL(fileURLWithPath:) would treat "file:///var/…" as a literal
-  /// relative path and AVAudioFile then fails with the opaque
-  /// kAudioFileUnspecifiedError ('wht?'). Parse URIs as URLs, plain paths as
-  /// paths. Shared by the .m4a and the IMU JSONL.
+  /// Callers pass expo-file-system paths, which may be file:// URI strings.
+  /// URL(fileURLWithPath:) treats "file:///var/…" as a literal relative path
+  /// and AVAudioFile then fails with kAudioFileUnspecifiedError, so parse URIs
+  /// as URLs and plain paths as paths. Shared by the .m4a and the IMU JSONL.
   private static func fileURL(for path: String) -> Result<URL, NamedException> {
     if path.hasPrefix("file://") {
       guard let parsed = URL(string: path) else {
@@ -182,9 +175,8 @@ public class AudioCaptureModule: Module {
       promise.reject(error)
       return
     }
-    // Defense in depth: JS creates this directory, but AVAudioFile fails with
-    // an opaque error if it is absent — create it natively right before use
-    // so a missed/migrated directory can never kill a recording.
+    // JS creates this directory, but AVAudioFile fails with an opaque error if
+    // it is absent, so create it natively right before use.
     try? FileManager.default.createDirectory(
       at: url.deletingLastPathComponent(),
       withIntermediateDirectories: true
@@ -203,10 +195,10 @@ public class AudioCaptureModule: Module {
     }
     converter = AVAudioConverter(from: hwFormat, to: audioFile!.processingFormat)
 
-    // Raw LPCM master (the "Raw audio" toggle, audio takes): a parallel CAF
-    // in the tap's hardware format — no conversion, so the waveform/hash a
-    // reader recomputes are of the very samples the microphone delivered.
-    // A create failure degrades the sink ("failed"), never the recording.
+    // Raw LPCM master (the "Raw audio" toggle): a parallel CAF in the tap's
+    // hardware format, unconverted, so a recomputed waveform or hash covers the
+    // samples the microphone delivered. A create failure degrades the sink to
+    // "failed" and leaves the recording running.
     rawFile = nil
     rawFileURL = nil
     rawState = "unavailable"
@@ -240,11 +232,10 @@ public class AudioCaptureModule: Module {
       }
     }
 
-    // Speech: on-device when supported AND authorized. A recognizer without
-    // speech permission starts a task that dies instantly with an opaque
-    // error — from the user's seat, "transcription isn't working" with no
-    // explanation. Gate on BOTH and report a machine-readable reason so JS
-    // can say exactly why transcription is off.
+    // Speech: on-device, and only when both supported and authorized. A
+    // recognizer without speech permission starts a task that dies instantly
+    // with an opaque error, so gate on both and report a machine-readable
+    // reason for JS.
     finalText = ""
     finalSegments = []
     stopResolved = false
@@ -281,7 +272,7 @@ public class AudioCaptureModule: Module {
           }
         }
         if let error = error {
-          // Recognition hiccups must never kill the recording itself.
+          // Recognition failures leave the recording running.
           self.sendEvent("onError", ["message": error.localizedDescription])
           self.resolveStop()
         }
@@ -310,11 +301,10 @@ public class AudioCaptureModule: Module {
     let startWall = Date()
     self.startTime = startWall
 
-    // IMU sink (media parity): the gyro log starts at the recording clock
-    // anchor — the anchor line binds the sensor clock to startWall — and
-    // runs until finalizeMotionLog at the exact end of the take (manual
-    // stop or interruption). A sink failure degrades the evidence, never
-    // the recording (same rule as CaptureKit SensorLogger).
+    // IMU sink: the gyro log starts at the recording clock anchor (the anchor
+    // line binds the sensor clock to startWall) and runs until
+    // finalizeMotionLog at the end of the take, manual stop or interruption. A
+    // sink failure degrades the evidence, not the recording.
     motionLog = nil
     motionLogPath = nil
     motionLogState = "unavailable"
@@ -339,15 +329,13 @@ public class AudioCaptureModule: Module {
           sendEvent("onError", ["message": "IMU log failed to start: \(error.reason)"])
         }
       }
-      // No gyro hardware: motionLogState stays "unavailable" — the exhibit
-      // will honestly show the device could not provide motion data.
+      // No gyro hardware: motionLogState stays "unavailable".
     }
 
-    // A phone call (or Siri, or an alarm) seizes the audio session without
-    // asking. Rather than losing the take, finalize the file at the last good
-    // frame and tell JS — it seals the partial recording exactly like a
-    // manual stop. Closing audioFile finalizes the m4a moov atom, so the
-    // partial take is a complete, playable file.
+    // A phone call, Siri, or an alarm seizes the audio session. Finalize the
+    // file at the last good frame and tell JS, which seals the partial
+    // recording like a manual stop. Closing audioFile writes the m4a moov atom,
+    // so the partial take is a complete, playable file.
     interruptionObserver = NotificationCenter.default.addObserver(
       forName: AVAudioSession.interruptionNotification,
       object: nil,
@@ -364,7 +352,7 @@ public class AudioCaptureModule: Module {
   }
 
   private func handleInterruption() {
-    guard let engine = engine else { return } // already stopped — nothing to save
+    guard let engine = engine else { return } // already stopped
     engine.inputNode.removeTap(onBus: 0)
     engine.stop()
     self.engine = nil
@@ -374,11 +362,10 @@ public class AudioCaptureModule: Module {
   }
 
   /**
-   * Closes the IMU log at the exact end of the take — called where the
-   * engine stops (manual stop AND interruption), NOT in finishStop: a
-   * manual stop waits up to 4s for the final transcript before finishStop
-   * runs, and the gyro window must cover the recorded audio, not the
-   * transcript wait. Idempotent.
+   * Closes the IMU log at the end of the take. Called where the engine stops
+   * (manual stop and interruption), not in finishStop: a manual stop waits up
+   * to 4s for the final transcript first, and the gyro window must cover the
+   * recorded audio, not that wait. Idempotent.
    */
   private func finalizeMotionLog() {
     guard let log = motionLog else { return }
@@ -393,8 +380,8 @@ public class AudioCaptureModule: Module {
   }
 
   private func writeRaw(_ buffer: AVAudioPCMBuffer) {
-    // The raw master shares the delivery file's honesty rule: a failed
-    // write is remembered and declared, never silently dropped.
+    // The raw master follows the delivery file's rule: a failed write is
+    // remembered and declared in the stop payload.
     guard let file = rawFile else { return }
     do {
       try file.write(from: buffer)
@@ -427,8 +414,7 @@ public class AudioCaptureModule: Module {
         try file.write(from: outBuffer)
         buffersWritten += 1
       } catch {
-        // Elegant fail, in the user's favor: remember the first error, tell
-        // JS immediately (the take may be incomplete), and keep trying —
+        // Remember the first error, tell JS immediately, and keep writing:
         // later buffers may still land. stop declares the outcome.
         if firstWriteError == nil {
           firstWriteError = error.localizedDescription
@@ -460,8 +446,8 @@ public class AudioCaptureModule: Module {
     engine.inputNode.removeTap(onBus: 0)
     engine.stop()
     self.engine = nil
-    // The recorded window ends HERE — close the gyro log now so it covers
-    // exactly the take, not the up-to-4s wait for the final transcript.
+    // The recorded window ends here; close the gyro log now so it covers the
+    // take, not the up-to-4s wait for the final transcript.
     finalizeMotionLog()
 
     if task != nil {
@@ -502,10 +488,10 @@ public class AudioCaptureModule: Module {
 
   private func stopPayload() -> [String: Any] {
     let durationMs = startTime.map { Int(Date().timeIntervalSince($0) * 1000) } ?? 0
-    // Delivery-file sink, three-state honesty: "clean" (every buffer landed)
-    // / "partial" (a write failed mid-take — the file is real but truncated,
-    // and the error rides along) / "failed" (nothing durable — path is null,
-    // the empty shell is removed, and JS must refuse to seal it).
+    // Delivery-file sink states: "clean" (every buffer landed), "partial" (a
+    // write failed mid-take, the file is real but truncated and the error rides
+    // along), "failed" (nothing durable; path is null, the empty shell is
+    // removed, and JS must refuse to seal).
     let fileState: String
     if buffersWritten == 0 {
       fileState = "failed"
@@ -520,23 +506,21 @@ public class AudioCaptureModule: Module {
       "segments": finalSegments,
       "fileState": fileState,
       "fileError": firstWriteError ?? NSNull(),
-      // IMU sink, three-state honesty: "recorded" + path / "failed" + null /
-      // "unavailable" + null. JS maps these onto the EvidencePath vocabulary
-      // (path / enabled-but-failed null / 'never-recorded').
+      // IMU sink states: "recorded" + path, "failed" + null, "unavailable" +
+      // null. JS maps these onto the EvidencePath vocabulary (path /
+      // enabled-but-failed null / 'never-recorded').
       "sensorLogPath": motionLogPath ?? NSNull(),
       "sensorLogState": motionLogState,
-      // Raw-master sink, the same three-state vocabulary: "recorded" +
-      // path / "failed" + null / "unavailable" + null (toggle off). Zero
-      // durable buffers means nothing to keep — the empty shell is removed
-      // and the take reports the sink failed.
+      // Raw-master sink, same three states. Zero durable buffers means the
+      // empty shell is removed and the take reports the sink failed.
       "rawPcmPath": rawSinkState().path ?? NSNull(),
       "rawPcmState": rawSinkState().state,
       "rawPcmError": rawWriteError ?? NSNull(),
     ]
   }
 
-  /// The raw sink's stop-time state, computed once per payload (stop and
-  /// interruption both read it). A requested master with zero buffers is
+  /// The raw sink's stop-time state, computed once per payload; stop and
+  /// interruption both read it. A requested master with zero buffers is
   /// "failed" and its empty file is removed.
   private func rawSinkState() -> (state: String, path: String?) {
     guard rawFileURL != nil else { return (rawState, nil) }

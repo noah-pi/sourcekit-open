@@ -1,24 +1,23 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Disclosure — what this capture committed to, what is
- * open, what is held, and the burn schedule.
+ * Disclosure screen: what this capture committed to, what is open, what is
+ * held, and the burn schedule.
  *
  * Reads the per-item disclosure state (documentDirectory/disclosure/{id}.json,
  * vault-sealed) through the same DisclosureStore the scheduler uses. Every
- * claim the capture accounted for is listed in exactly one of three states,
- * in plain language:
+ * claim is listed in one of three states:
  *
- *   open           — the selected profile opens this claim into the bundle
- *                    (its value is shown: that is what would leave the phone)
- *   held           — committed at capture, WITHHELD in the selected bundle.
- *                    Held is stated, never hidden: the row is right there.
- *   never-recorded — declared at commit time, immutable under the signed
- *                    root. Nothing to open, ever — not withheld.
+ *   open           — the selected profile opens this claim into the bundle,
+ *                    and its value is shown.
+ *   held           — committed at capture, withheld from the selected bundle;
+ *                    the row is still listed.
+ *   never-recorded — declared at commit time and immutable under the signed
+ *                    root. Nothing to open, as distinct from withheld.
  *
- * Export derives the bundle from the master seed via exportForItem (salts
- * re-derived at open time — there is no salt table), runs the full
- * bundle verification, and renders its residual failures LITERALLY. After
- * a burn, opening throws the locked 'burned:' wording — shown verbatim.
+ * Export derives the bundle from the master seed via exportForItem (salts are
+ * re-derived at open time; there is no salt table), runs the full bundle
+ * verification, and renders residual failures verbatim. After a burn, opening
+ * throws the locked 'burned:' wording, shown as-is.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -53,13 +52,11 @@ const PROFILE_LABELS: { profile: DisclosureProfile; title: string; detail: strin
 ];
 
 /**
- * The disclosure categories: identity /
- * location / device attestation / timestamps / auxiliary evidence. The committed
- * context claims map onto four of the five; DEVICE ATTESTATION has no claims in
- * the context tree at all — hardware-attestation identifiers live in the file's
- * credential layer, are handled as a block by the Basic/Full exports, and are
- * honestly not a per-field toggle here. The group renders with that note
- * instead of pretending a toggle exists.
+ * Disclosure categories: identity, location, device attestation, timestamps,
+ * auxiliary evidence. Committed context claims map onto four of the five;
+ * device attestation has no context-tree claims, since hardware-attestation
+ * identifiers live in the file's credential layer and travel as a block with
+ * the Basic/Full exports. That group renders a note instead of a toggle.
  */
 const CATEGORY_ORDER: { key: string; title: string; families: ClaimFamily[] }[] = [
   { key: 'identity', title: 'Identity', families: ['identity'] },
@@ -96,7 +93,7 @@ export default function DisclosureScreen() {
 
   const burned = state != null && state.masterSeedHex === undefined;
 
-  /** The exact selection the chosen profile will open — same function the core uses. */
+  /** The exact selection the chosen profile opens; the core uses this function too. */
   const selected = useMemo(() => {
     if (!state) return new Set<string>();
     const sel = profileSelection(profile, profile === 'custom' ? customIds : undefined);
@@ -104,11 +101,10 @@ export default function DisclosureScreen() {
   }, [state, profile, customIds]);
 
   /**
-   * The live bundle summary: what the bundle produced by the
-   * current selection WILL and WON'T contain, recomputed on every toggle.
-   * Literal to the bundle format — opened leaves + proofs + root + inventory
-   * + withheld count + never-recorded declaration; never the media, never a
-   * held value.
+   * Live summary of what the current selection's bundle will and will not
+   * contain, recomputed on every toggle: opened leaves, proofs, root,
+   * inventory, withheld count, never-recorded declaration. No media, no held
+   * values.
    */
   const bundleSummary = useMemo(() => {
     if (!state) return null;
@@ -131,7 +127,7 @@ export default function DisclosureScreen() {
       wont:
         'the media itself (this bundle is proofs, not pixels); ' +
         (held > 0
-          ? `the ${held} held claim${held === 1 ? '' : 's'}, stated inside the bundle as held, never included; `
+          ? `the ${held} held claim${held === 1 ? '' : 's'}, stated inside the bundle as held, not included; `
           : 'no committed claim stays held (everything committed is opened); ') +
         'anything declared never-recorded.',
     };
@@ -162,7 +158,7 @@ export default function DisclosureScreen() {
     try {
       await persist(applyBurn(state, new Date()));
     } catch (e) {
-      // Literal — never paraphrased.
+      // Shown verbatim, not paraphrased.
       setFailure(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
@@ -177,7 +173,7 @@ export default function DisclosureScreen() {
     try {
       const ids = profile === 'custom' ? [...customIds].sort() : undefined;
       const out = exportForItem(state, profile, ids);
-      // Opening is an action too — persist the state carrying the 'open' event.
+      // Opening is an action: persist the state carrying the 'open' event.
       await persist(out.state);
       setResiduals(out.residuals);
       const name = `verify-disclosure-${id}-${profile}.json`;
@@ -185,7 +181,7 @@ export default function DisclosureScreen() {
       await FileSystem.writeAsStringAsync(path, JSON.stringify(out.bundle, null, 2) + '\n');
       if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType: 'application/json' });
     } catch (e) {
-      // The burned-open error wording is locked and literal ("burned: …").
+      // The burned-open error wording is locked ("burned: …").
       setFailure(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
@@ -346,9 +342,9 @@ export default function DisclosureScreen() {
             <Card>
               <Text style={styles.sectionTitle}>Every claim, in its state</Text>
               {CATEGORY_ORDER.map((cat) => {
-                // Device attestation carries no committed context claims: the
-                // group renders its honest note instead of an empty header or
-                // a fake toggle (see CATEGORY_ORDER above).
+                // Device attestation carries no committed context claims, so
+                // the group renders a note rather than a header or a toggle
+                // (see CATEGORY_ORDER above).
                 if (cat.families.length === 0) {
                   return (
                     <View key={cat.key} style={{ marginTop: spacing.sm }}>
@@ -395,7 +391,7 @@ export default function DisclosureScreen() {
                             ) : (
                               <Text style={styles.claimNote}>
                                 Held: committed at capture, withheld in the '{profile}' bundle.
-                                Stated, not hidden: opening it takes a profile that selects it
+                                Opening it takes a profile that selects it
                                 {burned ? ', and the seed is burned, so no profile ever will again' : ''}.
                               </Text>
                             )}
@@ -427,7 +423,7 @@ export default function DisclosureScreen() {
           </>
         )}
 
-        {/* ---- Residual surface: evidence sinks --------------------------- */}
+        {/* ---- evidence sinks ------------------------------------------- */}
         <Card>
           <Text style={styles.sectionTitle}>Capture evidence sinks</Text>
           <Text style={styles.body}>

@@ -533,7 +533,7 @@ app id in `src/lib/appleAttestRoot.ts`.
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
 [Security](docs/SECURITY.md) · [Integrity](docs/INTEGRITY.md) ·
 [Network](docs/NETWORK.md) · [Settings](docs/SETTINGS.md) ·
-[Decisions](docs/DECISIONS.md) · [Recovery](docs/RECOVERY.md) ·
+[Recovery](docs/RECOVERY.md) ·
 [Provenance](docs/PROVENANCE.md)
 
 ## Acknowledgements

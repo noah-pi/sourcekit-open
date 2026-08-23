@@ -37,8 +37,8 @@ list and point here.
   recorded window). The seal commits the trimmed line bytes under the same
   `com.verify.poseTrace` Merkle assertion as video, with
   `gyroPriorAuthenticated: false` locked — the device's motion claims
-  remain self-reported. Absence is honest and only residual: the assertion
-  is missing ONLY when the device could not provide motion data (no gyro
+  remain self-reported. The assertion is missing only when the device could
+  not provide motion data (no gyro
   hardware, or the capture-evidence sensors toggle off) or the sink
   failed — and the exhibit record's three-state
   `captureEvidence.sensorLogPath` (path / enabled-but-failed `null` /

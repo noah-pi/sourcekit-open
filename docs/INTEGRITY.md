@@ -168,8 +168,8 @@ it.
 
 ## The signed byte boundary
 
-Not every byte of a signed file is covered by the signature, and it's worth
-being exact about which ones aren't.
+Not every byte of a signed file is covered by the signature. Exactly which
+bytes are, and which are not:
 
 ### What the signature covers
 
@@ -185,8 +185,8 @@ Three nested commitments:
    breaks the hash.
 
 Everything outside those three is container framing. C2PA, JUMBF and COSE all
-leave framing unsigned deliberately, so manifests can be transported,
-re-wrapped and padded without re-signing.
+leave framing unsigned, so manifests can be transported, re-wrapped and
+padded without re-signing.
 
 ### The malleable set — JPEG (APP11/JUMBF)
 
@@ -314,7 +314,7 @@ Burn is all-or-nothing. Per-claim custody isn't implemented.
 
 ### Tree conventions
 
-The tree matches the capture-side streaming tree in `StreamingHasher.swift`:
+The tree matches the capture-side streaming tree:
 raw 32-byte digests as leaves, an odd leaf promoted unchanged, parent =
 `SHA-256(left ‖ right)` over pairs of the claimId-sorted leaf set, empty tree =
 SHA-256 of the empty input, lowercase-hex root.

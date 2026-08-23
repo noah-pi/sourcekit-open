@@ -2,12 +2,10 @@
 /**
  * Bridge to the native Wi-Fi info module (modules/wifi-info).
  *
- * Returns the network iOS reports the device is connected to — a SELF-REPORT
- * (network names and MACs are spoofable), signed as a lead for a desk, never
- * proof of place. Null on web, Expo Go, Android, old builds, missing Wi-Fi
- * Information entitlement, missing location permission, or no Wi-Fi
- * association — callers record 'unavailable' and move on; a null here never
- * blocks a capture.
+ * Returns the network iOS reports, a self-report signed as a lead rather than
+ * proof of place. Null on web, Expo Go, Android, a missing Wi-Fi Information
+ * entitlement, missing location permission, or no association; callers record
+ * 'unavailable' and continue, and a null never blocks a capture.
  */
 
 import { Platform } from 'react-native';
@@ -33,8 +31,8 @@ export function wifiInfoAvailable(): boolean {
 }
 
 /**
- * The network the phone reports right now, or null when iOS won't say.
- * Never throws — capture must survive a missing module or a denied entitlement.
+ * The network the phone reports right now, or null when iOS will not say.
+ * Never throws: capture must survive a missing module or denied entitlement.
  */
 export async function getCurrentWifi(): Promise<WifiClaim | null> {
   if (!native) return null;
@@ -42,12 +40,10 @@ export async function getCurrentWifi(): Promise<WifiClaim | null> {
     const net = await native.currentWifi();
     if (!net) return null;
     return {
-      // The SSID is deliberately NOT embedded anymore. Anyone can
-      // name a network anything (unreliable as evidence) and a network name
-      // is a privacy leak ("Starbucks Wi-Fi" places you). The BSSID is the
-      // corroboratable claim — a desk can look it up; the app never does.
-      // Records sealed before may still carry a name: history,
-      // stated as it was claimed then.
+      // SSID is not embedded: a network name is freely chosen and leaks
+      // location. The BSSID is the corroboratable claim, which a desk can
+      // look up; the app never does. Older sealed records may still carry a
+      // name.
       ssid: null,
       bssid: typeof net.bssid === 'string' && net.bssid.length > 0 ? net.bssid : null,
     };

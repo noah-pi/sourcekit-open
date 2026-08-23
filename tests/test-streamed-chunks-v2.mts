@@ -1,15 +1,13 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * streamedChunks v2 — per-track Merkle commitments.
+ * streamedChunks v2 — per-track Merkle commitments. The seal path emits v2
+ * only. This suite pins that:
  *
  *   - v2 round-trips through a real attestVideo seal;
  *   - truncation localizes to a chunk index;
- *   - the missing chunk map reports the locked honest string;
+ *   - a missing chunk map reports the locked string;
  *   - the super-root binds a multi-track asset;
- *   - audio-only uses the identical structure with one entry.
- *
- * v1 (capture-stream) acceptance was removed: old-version compatibility was
- * dropped, and the seal path emits v2-only.
+ *   - audio-only uses the same structure with one entry.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-streamed-chunks-v2.mts
  */
@@ -45,14 +43,14 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 const section = (t: string) => console.log(`\n— ${t} —`);
 
-// Repo-relative default: stage.mjs copies this suite INTO tests/.staged, so
-// the staged dir is this file's own directory. VERIFY_STAGED_DIR overrides
-// when running the un-staged source against a lab staged elsewhere.
+// stage.mjs copies this suite into tests/.staged, so the staged dir is this
+// file's own directory. VERIFY_STAGED_DIR overrides it when running the
+// un-staged source against a lab staged elsewhere.
 const STAGED = process.env.VERIFY_STAGED_DIR ?? fileURLToPath(new URL('.', import.meta.url));
 
 // ---------------------------------------------------------------------------
 // Minimal monolithic MP4 builder (ftyp + moov + mdat) with real sample
-// tables — enough structure for the demuxer, no codec validity needed.
+// tables. Enough structure for the demuxer; codec validity is not needed.
 // ---------------------------------------------------------------------------
 
 function u32(n: number): Uint8Array {
@@ -120,7 +118,7 @@ const nativeChunks = chunkEsStream('video', extractTrackStreams(cleanMp4)[0].es)
 const sealed = await attestVideo({
   videoUri: `${STAGED}/clean.mp4`,
   context: { location: { lat: 37.7749, lon: -122.4194 } } as any,
-  identity: { author: 'WS2 P2', organization: null },
+  identity: { author: 'Test Author', organization: null },
   key,
 });
 check('attestVideo produced signed bytes', !!sealed.signedVideoBytes);
@@ -134,7 +132,8 @@ check('chunk digest wire format matches the native recomputation',
   bytesToHex(sealed.chunkMaps!.video!.chunks.map((c) => c.sha256Hex).join('')) ===
   bytesToHex(nativeChunks.map((c) => c.sha256Hex).join('')));
 {
-  // Verify the SIGNED bytes (uuid insert + stco patch must not disturb the ES streams).
+  // Verify the signed bytes: the uuid insert and stco patch must not disturb
+  // the ES streams.
   const v = verifyStreamedChunksAssertion(sealed.signedVideoBytes!, v2, { chunkMaps: sealed.chunkMaps });
   check('v2 verifies against the signed file (stco patch preserved ES bytes)', v.ok, JSON.stringify(v.failures));
   const rootOnly = verifyStreamedChunksAssertion(sealed.signedVideoBytes!, v2, {});
@@ -147,9 +146,9 @@ section('truncation localizes to a chunk index — both versions');
 {
   // One video track whose ES spans 3 chunks (2.5 MiB + tail).
   const es = sampleBytes(7, 2 * STREAM_CHUNK_BYTES + STREAM_CHUNK_BYTES / 2);
-  // Sample sizes chosen so dropping the last sample leaves a complete-sample
-  // prefix that reaches into chunk 2 (the demuxer truncates at sample
-  // granularity — as real files do).
+  // Sample sizes are chosen so dropping the last sample leaves a
+  // complete-sample prefix reaching into chunk 2; the demuxer truncates at
+  // sample granularity.
   const samples = [es.subarray(0, 1100000), es.subarray(1100000, 2200000), es.subarray(2200000)];
   const mp4 = buildTestMp4([{ trackId: 'video', codec: 'avc1', samples }]);
   const built = buildStreamedChunksV2(mp4);
@@ -159,8 +158,8 @@ section('truncation localizes to a chunk index — both versions');
     check('3 chunks over 2.5 MiB', map.chunks.length === 3, String(map.chunks.length));
     const whole = verifyStreamedChunksAssertion(mp4, built.build.assertion, { chunkMaps: built.build.maps });
     check('untruncated file verifies', whole.ok, JSON.stringify(whole.failures));
-    // Cut the file exactly after the second sample: the ES prefix reaches
-    // 2 200 000 bytes — inside chunk 2 (the third 1 MiB chunk).
+    // Cut the file after the second sample: the ES prefix reaches 2 200 000
+    // bytes, inside chunk 2 (the third 1 MiB chunk).
     const cutAt = mp4.length - samples[2].length;
     const truncated = mp4.subarray(0, cutAt);
     const v = verifyStreamedChunksAssertion(truncated, built.build.assertion, { chunkMaps: built.build.maps });
@@ -192,7 +191,7 @@ section('super-root binds a multi-track asset');
     tampered[tampered.length - 42] ^= 0x01;
     const bad = verifyStreamedChunksAssertion(tampered, a, { chunkMaps: built.build.maps });
     check('audio tamper is caught and localized', !bad.ok && bad.truncation?.trackId === 'audio', JSON.stringify(bad));
-    // Super-root tamper: structural failure even before media recomputation.
+    // Super-root tamper: structural failure before media recomputation.
     const forged = { ...a, superRoot: a.tracks[0].root };
     const forgedV = verifyStreamedChunksAssertion(mp4, forged, { chunkMaps: built.build.maps });
     check('a forged superRoot fails structurally', !forgedV.ok && forgedV.failures.some((f) => f.includes('superRoot')));
@@ -218,8 +217,8 @@ section('proof-bundle chunk-map sidecar: export → desk range-verify (B-I-1)');
 
 {
   const store = extractC2paStoreBmff(sealed.signedVideoBytes!)!;
-  // The app's shareProofJson wires exactly this: the vault's stored maps +
-  // the sha256 of the SIGNED delivery bytes the desk will hash.
+  // Matches what shareProofJson wires: the vault's stored maps and the
+  // sha256 of the signed delivery bytes the desk will hash.
   const sidecar = buildChunkMapSidecar(bytesToHex(sha256(sealed.signedVideoBytes!)), sealed.chunkMaps!);
   const bundle = buildProofBundle(sealed.record, bytesToBase64(store.payload), sidecar);
   check('the proof bundle export includes the chunk-map sidecar',
@@ -239,13 +238,13 @@ section('proof-bundle chunk-map sidecar: export → desk range-verify (B-I-1)');
   const tv = verifyChunkMapSidecar(sealed.signedVideoBytes!, deskV2, tampered.chunkMaps);
   check('a tampered chunk map fails the range verification', !tv.ok, JSON.stringify(tv.failures));
 
-  // A sidecar bound to a DIFFERENT asset is refused before any range check.
+  // A sidecar bound to a different asset is refused before any range check.
   const foreign = { ...desk.chunkMaps, assetSha256: 'ff'.repeat(32) };
   const fv = verifyChunkMapSidecar(sealed.signedVideoBytes!, deskV2, foreign);
   check('a sidecar for a different asset is refused',
     !fv.ok && fv.failures.some((f) => f.includes('different asset')), JSON.stringify(fv.failures));
 
-  // Absent sidecar → honest root-only (locked string), never a failure.
+  // An absent sidecar gives root-only (the locked string), not a failure.
   const av = verifyChunkMapSidecar(sealed.signedVideoBytes!, deskV2, null);
   check('absent sidecar degrades to root-only honestly',
     av.ok && av.notes.includes(`video: ${MISSING_CHUNK_MAP_NOTE}`), JSON.stringify(av.notes));
@@ -255,9 +254,9 @@ section('proof-bundle chunk-map sidecar: export → desk range-verify (B-I-1)');
 section('type-malformed sidecar maps fail NAMED, never throw');
 
 {
-  // The sidecar crosses the wire as JSON — its shape is untrusted. A
+  // The sidecar crosses the wire as JSON, so its shape is untrusted. A
   // type-malformed map must come back as a named failure; a throw here
-  // (e.g. 'map.chunks.map is not a function') IS the bug.
+  // (e.g. 'map.chunks.map is not a function') is the bug.
   const store = extractC2paStoreBmff(sealed.signedVideoBytes!)!;
   const v2 = parseManifest(store.payload)!.customAssertions['com.verify.streamedChunks']?.data as StreamedChunksAssertionV2;
   const good = buildChunkMapSidecar(bytesToHex(sha256(sealed.signedVideoBytes!)), sealed.chunkMaps!);

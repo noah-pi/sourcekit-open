@@ -1,16 +1,14 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * The Apple App Attestation Root CA, pinned at build time (DER, base64).
+ * Apple App Attestation Root CA, pinned at build time (DER, base64).
  *
  * Source: https://www.apple.com/certificateauthority/Apple_App_Attestation_Root_CA.pem
  * Serial: 0BF3BE0EF1CDD2E0FB8C6E721F621798 · valid 2020-03-18 → 2045-03-15 ·
- * P-384 self-signed root.
- *
- * Pinning matters: fetching the root over the network at verify time would
- * let a network attacker substitute their own "Apple" root and validate
- * anything. This is a trust anchor — it ships in the binary and is never
- * fetched. DER SHA-256:
+ * P-384 self-signed root. DER SHA-256:
  * 1cb9823ba28ba6ad2d33a006941de2ae4f513ef1d4e831b9f7e0fa7b6242c932
+ *
+ * Trust anchor: it ships in the binary and is never fetched, so a network
+ * attacker cannot substitute their own root at verify time.
  */
 
 import { base64ToBytes } from './bytes';
@@ -29,8 +27,11 @@ export const APPLE_ATTEST_ROOT_DER = base64ToBytes(
 );
 
 /**
- * The Apple App ID attestation is bound to (TEAM_ID.BUNDLE_ID) — the
- * rpIdHash in every genuine attestation's authData is SHA-256 of this
- * string. Not a secret: it appears in every attestation we produce.
+ * App ID that attestation is bound to, as `TEAM_ID.BUNDLE_ID`. rpIdHash in a
+ * genuine attestation's authData is SHA-256 of this string, so a build must
+ * set its own 10-character Apple Team ID here. Not a secret; it appears in
+ * every receipt. Left empty in this repository: with no value set, App Attest
+ * verification reports that the app id is unconfigured rather than checking
+ * against someone else's.
  */
-export const VERIFY_APPLE_APP_ID = '7L49FYJH6Q.com.verify.camera';
+export const VERIFY_APPLE_APP_ID = '';

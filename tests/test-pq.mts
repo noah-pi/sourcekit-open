@@ -1,15 +1,11 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Post-quantum dual signature.
- *
- * One commitment, two signatures — and the honest limits, pinned:
- *   - both layers verify on a dual-signed capture (record AND COSE claim)
- *   - tampering fails BOTH layers; a PQ failure never flips the verdict
- *     (the classical layer is load-bearing; PQ is additive assurance)
- *   - stripping the PQ signature is DETECTABLE: the committed key lives
+ * Post-quantum dual signature — one commitment, two signatures:
+ *   - both layers verify on a dual-signed capture (record and COSE claim)
+ *   - tampering fails both layers; a PQ failure never flips the verdict
+ *   - stripping the PQ signature is detectable: the committed key lives
  *     inside the signed payload and cannot leave it silently
- *   - custody is literal: alg 'ML-DSA-65', custody 'software', forever —
- *     this layer hedges P-256 cryptanalysis, it is NOT a hardware anchor
+ *   - custody labels are literal: alg 'ML-DSA-65', custody 'software'
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-pq.mts
  */
@@ -50,18 +46,17 @@ check('wrong message rejected', !pqVerify(kp.publicKey, utf8ToBytes('one commitm
 check('wrong key rejected', !pqVerify(generatePqKeyPair().publicKey, msg, sig));
 check('truncated signature rejected (length guard)', !pqVerify(kp.publicKey, msg, sig.subarray(0, 100)));
 check('public key derives from secret key', bytesToHex(pqPublicKeyFromSecret(kp.secretKey)) === bytesToHex(kp.publicKey));
-// A signature made WITHOUT our FIPS 204 context string is not ours.
+// A signature made without the app's FIPS 204 context string must not verify.
 import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
 const foreignSig = new Uint8Array(ml_dsa65.sign(msg, kp.secretKey));
 check('foreign-context signature rejected (domain separation)', !pqVerify(kp.publicKey, msg, foreignSig));
 // Seed storage: the app keeps 32 bytes in the keychain, derives the rest.
 const seed = randomBytes(32);
 const fromSeed = pqKeyPairFromSeed(seed);
-// FIPS 204 known-answer pin: keygen from the fixed seed
-// 00 01 02 … 1f must always yield the same ML-DSA-65 public key. This pins
-// the shipped library to FIPS 204 final (not a draft parameter set) and
-// catches any silent dependency drift — a library that fails this KAT is
-// not the ML-DSA-65 this layer claims to be.
+// FIPS 204 known-answer pin: keygen from the fixed seed 00 01 02 … 1f must
+// always yield the same ML-DSA-65 public key. Pins the shipped library to
+// FIPS 204 final rather than a draft parameter set, and catches dependency
+// drift.
 const KAT_SEED = new Uint8Array(32); for (let i = 0; i < 32; i++) KAT_SEED[i] = i;
 check('FIPS 204 known-answer: fixed seed → pinned public-key fingerprint',
   pqKeyPairFromSeed(KAT_SEED).fingerprint === 'd666806e11cee19a7c989f7445f90dd419cf4d2d51db8c0fdb4c0f0a542238c9',
@@ -155,10 +150,9 @@ check('the record signature is a full ML-DSA-65 signature bound to the committed
 
 // ---------- strip detection (record layer) ----------
 console.log('— strip detection —');
-// A "stripped" file: the record still commits a PQ key inside its signed
-// payload, but pqSignature is gone. That is exactly what a stripper leaves
-// behind, and the commitment cannot be removed without breaking the classical
-// signature — so the gap is visible. The classical layer still verifies.
+// A stripped file: the record still commits a PQ key inside its signed
+// payload, but pqSignature is gone. The commitment cannot be removed without
+// breaking the classical signature, so the gap is visible.
 {
   const insertOffset = 2;
   const clean = fs.readFileSync('/tmp/lab/clean.jpg');
@@ -192,9 +186,8 @@ console.log('— strip detection —');
 
 // ---------- the PQ signature lives in the record ----------
 console.log('— record-carried PQ layer —');
-// The record carries the signature. pqSignature signs the record, the record
-// commits asset.sha256, and the verifier compares that against the bytes it
-// read.
+// pqSignature signs the record, the record commits asset.sha256, and the
+// verifier compares that against the bytes it read.
 {
   const insertOffset = 2;
   const clean = fs.readFileSync('/tmp/lab/clean.jpg');
@@ -241,10 +234,10 @@ console.log('— forgery resistance —');
       mime: 'image/jpeg',
       title: 'forged.jpg',
       instanceId: 'xmp:iid:' + bytesToHex(randomBytes(16)),
-      telemetry: photo.record as unknown as Record<string, unknown>, // commits OUR key
+      telemetry: photo.record as unknown as Record<string, unknown>, // commits our key
       signDigest: key.signDigest,
       signPayload: key.signPayload,
-      pq: pqClaimSigner({ ...forger, enrolledAt }), // …but signed with THE FORGER's key
+      pq: pqClaimSigner({ ...forger, enrolledAt }), // but signed with the forger's key
       certChain: [devCert],
       cleanFileSha256: new Uint8Array(sha256(clean)),
     },
@@ -262,8 +255,8 @@ console.log('— forgery resistance —');
 
 // ---------- APP11 budget ----------
 console.log('— APP11 64 KB budget —');
-// Mock ECDSA TSA (minimal, mirrors test-roundtrip's plumbing) so the budget
-// is measured WITH witness tokens, not in the cheap case.
+// Mock ECDSA TSA (mirrors test-roundtrip's plumbing) so the budget is
+// measured with witness tokens attached.
 function derLen(n: number): Uint8Array {
   if (n < 128) return new Uint8Array([n]);
   const b: number[] = []; let v = n;
@@ -333,9 +326,9 @@ const twoTokens = async (message: Uint8Array) => [
   const noPq = await mk(false);
   const withPq = await mk(true);
   console.log(`  info APP11 segment: no-PQ ${noPq.length} B · dual-signed ${withPq.length} B · delta ${withPq.length - noPq.length} B · wall 65535 B`);
-  // NOTE: the no-PQ run still carries the committed pqKey block (telemetry is
-  // the same signed record) — the delta measures the COSE entry + record
-  // pqSignature, i.e. the marginal cost of the layer, ~7.9 KB.
+  // The no-PQ run still carries the committed pqKey block (same signed
+  // record), so the delta measures the COSE entry plus the record
+  // pqSignature: the marginal cost of the layer, about 7.9 KB.
   check('dual-signed + 2 witness tokens stays inside the APP11 wall', withPq.length <= 65535, `${withPq.length}`);
   check('headroom canary: ≥ 8 KB spare for TSA variance and future assertions', withPq.length <= 65535 - 8192, `${withPq.length}`);
 }

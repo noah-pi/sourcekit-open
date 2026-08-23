@@ -1,24 +1,20 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * IOS binding (
- * §2/§7a). Wraps the native module `modules/c2pa-ios` (c2pa-swift v0.0.12,
- * C2PAC.xcframework, iOS 16+) and returns the SAME NORMALIZED result shape
- * as the desk engine (src/provenance/engine/upstreamEngine.ts),
- * so the shared policy layer (policyLayer.ts — THE verdict authority) is fed
- * identical facts on device and on desk. NO VERDICTS HERE — normalization
- * only.
+ * iOS binding (§2/§7a). Wraps the native module `modules/c2pa-ios` (c2pa-swift
+ * v0.0.12, C2PAC.xcframework, iOS 16+) and returns the same normalized result
+ * shape as the desk engine (src/provenance/engine/upstreamEngine.ts), so
+ * policyLayer.ts gets identical facts on device and on desk. No verdicts here.
  *
- * Normalization code (status-code classes, thrown-error classifier, store
- * JSON summarization, container gate) is deliberately VERBATIM from the desk
- * engine — the two engines must sort engine output into facts identically,
- * or the differential oracle's agreement claim is meaningless. The only
- * parts replaced are the runtime-specific ones: package loading (→ native
- * module), Blob/FileReaderSync shims (→ temp-file staging via
- * expo-file-system), and the engine call itself.
+ * The normalization code (status-code classes, thrown-error classifier, store
+ * JSON summarization, container gate) is verbatim from the desk engine, since
+ * the differential oracle's agreement claim requires both to sort engine output
+ * identically. Only the runtime-specific parts differ: package loading becomes
+ * the native module, the Blob/FileReaderSync shims become temp-file staging via
+ * expo-file-system, and the engine call itself.
  *
- * Offline invariant: remote manifest fetch and OCSP are disabled in the
- * loaded settings; no TSA URL is ever used by the sign path. Trust material
- * is only what the caller pins.
+ * Offline invariant: remote manifest fetch and OCSP are disabled in the loaded
+ * settings, and the sign path uses no TSA URL. Trust material is only what the
+ * caller pins.
  */
 
 import { Platform } from 'react-native';
@@ -27,16 +23,16 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { base64ToBytes, bytesToBase64 } from '../../lib/bytes';
 
 // ---------------------------------------------------------------------------
-// Normalized result shape — IDENTICAL to the desk engine's.
-// policyLayer.ts consumes this and only this.
+// Normalized result shape, identical to the desk engine's. policyLayer.ts
+// consumes this and only this.
 // ---------------------------------------------------------------------------
 
-/** Which C2PA trust list the signer chained to, as far as THIS run knows. */
+/** Which C2PA trust list the signer chained to, as far as this run knows. */
 export type TrustListHit =
   | 'official'  // chained to anchors the caller pinned as the official C2PA Trust List
   | 'interim'   // chained to anchors the caller pinned as the frozen ITL (2026-01-01)
-  | 'none'      // trust WAS evaluated against pinned anchors; signer is on neither list
-  | 'unknown';  // trust not evaluated against caller-pinned anchors — never claimed
+  | 'none'      // trust was evaluated against pinned anchors; signer is on neither list
+  | 'unknown';  // trust not evaluated against caller-pinned anchors
 
 export type EngineId =
   | 'upstream-c2pa-node'
@@ -72,20 +68,20 @@ export interface NormalizedEngineResult {
   engine: EngineId;
   /** Human-pinned engine version string (package version, recorded for reproducibility). */
   engineVersion: string;
-  /** False when the engine could not run at all — rawErrors says why. */
+  /** False when the engine could not run; rawErrors says why. */
   engineAvailable: boolean;
   /** Container gate facts: the caller's flow rejected this container. */
   containerRejected: 'NOT_JPEG' | 'NOT_BMFF' | null;
   manifestFound: boolean;
   manifests: EngineManifestSummary[];
- /** The active (most recent) manifest's claim summary — the active claim. */
+ /** The active (most recent) manifest's claim summary. */
   activeClaim: EngineManifestSummary | null;
   validationStatus: EngineStatus[];
-  // --- verdict facts (never verdicts) -------------------------------
+  // --- inputs the policy layer turns into verdicts -------------------
   signatureValid: boolean | null;
   claimAssertionsMatch: boolean | null;
   assetHashMatches: boolean | null;
-  /** 'void-binding' = the signed claim honors no usable binding → integrity UNPROVEN. */
+  /** 'void-binding' = the signed claim honors no usable binding; integrity unproven. */
   assetHashFailure: 'mismatch' | 'void-binding' | null;
   /** Structure the engine cannot evaluate (merkle-aux BMFF, unknown algorithms…). */
   unsupported: boolean;
@@ -99,7 +95,7 @@ export interface NormalizedEngineResult {
   raw?: unknown;
 }
 
-/** Trust material the caller pins for THIS run (offline; never fetched). */
+/** Trust material the caller pins for this run. Offline; never fetched. */
 export interface EngineTrustOptions {
   /** PEM anchor bundle. `kind` declares which list the caller says this is. */
   anchorsPem: string;
@@ -111,16 +107,16 @@ export interface UpstreamReadOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Native module loading — optional, honest about what loaded.
+// Native module loading: optional; the result reports what loaded.
 // ---------------------------------------------------------------------------
 
-/** c2pa-swift package version this binding is written against (pinned, ). */
+/** c2pa-swift package version this binding is written against (pinned). */
 const C2PA_SWIFT_VERSION = '0.0.12';
 
 interface C2paIosNative {
   /** Upstream c2pa-rs core version string. */
   getVersion(): string;
-  /** Process-global c2pa-rs settings (JSON). Pinned once per process — see initSettings. */
+  /** Process-global c2pa-rs settings (JSON). Pinned once per process; see initSettings. */
   loadSettings(settingsJSON: string): Promise<void>;
   /** Embedded manifest store JSON (format inferred from the path's extension). */
   readManifest(path: string): Promise<string>;
@@ -145,7 +141,7 @@ try {
     try {
       nativeCoreVersion = native.getVersion();
     } catch {
-      nativeCoreVersion = null; // version string is diagnostic only — never gates the engine
+      nativeCoreVersion = null; // diagnostic only; does not gate the engine
     }
   } else {
     nativeLoadError = 'c2pa-ios native module is iOS-only';
@@ -155,12 +151,12 @@ try {
   nativeLoadError = e instanceof Error ? e.message : String(e);
 }
 
-/** True when the native c2pa-swift binding is present (dev build / TestFlight — never Expo Go). */
+/** True when the native c2pa-swift binding is present (dev build or TestFlight, not Expo Go). */
 export function iosEngineAvailable(): boolean {
   return native !== null;
 }
 
-/** Pinned versions this module targets — recorded in reports/lockfiles. */
+/** Pinned versions this module targets; recorded in reports and lockfiles. */
 export const UPSTREAM_IOS_PINS = {
   c2paSwift: C2PA_SWIFT_VERSION,
   c2paSwiftBinaryTarget: 'C2PAC.xcframework',
@@ -170,10 +166,10 @@ export const UPSTREAM_IOS_PINS = {
 } as const;
 
 /**
- * Engine settings are process-global in c2pa-rs — load once, then pin.
- * Offline by construction: no remote manifest fetch, no OCSP. Trust anchors
- * are only what the caller supplies. (Verbatim desk semantics; the native
- * call is Signer.loadSettings.)
+ * Engine settings are process-global in c2pa-rs: load once, then pin. Offline
+ * by construction (no remote manifest fetch, no OCSP), and trust anchors are
+ * only what the caller supplies. Desk semantics; the native call is
+ * Signer.loadSettings.
  */
 let settingsLoaded = false;
 let settingsFingerprint: string | null = null;
@@ -196,8 +192,8 @@ async function initSettings(opts?: UpstreamReadOptions): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Temp-file staging — the native reader works on file paths (and infers the
-// container format from the EXTENSION), so bytes are staged to the cache
+// Temp-file staging. The native reader works on file paths and infers the
+// container format from the extension, so bytes are staged to the cache
 // directory with a real extension and always cleaned up.
 // ---------------------------------------------------------------------------
 
@@ -233,8 +229,8 @@ async function withStagedFile<T>(
 }
 
 // ---------------------------------------------------------------------------
-// Container sniffing — the photo flow accepts JPEG/PNG, the video flow BMFF.
-// (Verbatim from the desk engine.)
+// Container sniffing: the photo flow accepts JPEG/PNG, the video flow BMFF.
+// Same rule as the desk engine.
 // ---------------------------------------------------------------------------
 
 type Container = 'jpeg' | 'png' | 'bmff-mp4' | 'bmff-mov' | 'bmff-m4a' | 'unknown';
@@ -262,9 +258,8 @@ function mimeFor(c: Container): string {
 }
 
 // ---------------------------------------------------------------------------
-// Status-code classes — see policyLayer.ts for the verdict mapping that
-// consumes these facts. This section only SORTS engine output into facts.
-// (Verbatim from the desk engine.)
+// Status-code classes. This section sorts engine output into facts; the
+// verdict mapping is in policyLayer.ts. Same rules as the desk engine.
 // ---------------------------------------------------------------------------
 
 /** Failure codes that mean "the manifest/signature itself is bad". */
@@ -277,38 +272,36 @@ const ASSET_MISMATCH_CODES = new Set([
   'assertion.dataHash.mismatch', 'assertion.bmffHash.mismatch', 'assertion.boxesHash.mismatch',
 ]);
 /**
- * A-1 binding-guard classes: the claim references no usable hard
- * binding, or references one outside/unresolvable — the binding is VOID
- * (integrity unproven, defective credentials), never proven tamper.
+ * A-1 binding-guard classes: the claim references no usable hard binding, or
+ * one that is unresolvable. The binding is void, meaning integrity unproven
+ * rather than proven tamper.
  */
 const VOID_BINDING_CODES = new Set([
   'assertion.undeclared', 'assertion.missing', 'assertion.outsideManifest',
 ]);
-/** Structure classes this policy declines to evaluate — the UNSUPPORTED tri-state. */
+/** Structure classes this policy declines to evaluate: the unsupported tri-state. */
 const UNSUPPORTED_CODES = new Set([
   'algorithm.unsupported', 'assertion.bmffHash.malformed', 'assertion.boxesHash.unknownBox',
 ]);
-/** Informational trust codes — inputs to OUR trust tiers, never verdict failures. */
+/** Informational trust codes: inputs to the trust tiers, not verdict failures. */
 const TRUST_INFO_CODES = new Set([
   'signingCredential.untrusted', 'signingCredential.trusted', 'timeStamp.untrusted', 'timeStamp.trusted',
 ]);
 
 /**
- * Ordered thrown-error classification chain:
- * thrown messages are free text — an unstable engine API surface — so the
- * order is load-bearing and documented:
+ * Ordered thrown-error classification chain. Thrown messages are free text, so
+ * the order is load-bearing:
  *
- *   1. POSITIVE TAMPER SIGNALS FIRST. Any message asserting a signature or
- *      hash MISMATCH is a failed-rung fact and must NOT be captured by the
- *      neutral classes below.
+ *   1. Positive tamper signals first: a signature or hash mismatch is a
+ *      failed-rung fact and must not fall into the neutral classes below.
  *   2. Absence classes (noManifest), exact-ish engine variant names only.
- *   3. UNSUPPORTED classes — deliberately NARROW.
- *   4. UNREADABLE (container/parse failure, never a claim decode failure).
- *   5. EVERYTHING ELSE fails CLOSED: manifestFound + signatureValid=false.
+ *   3. Unsupported classes, kept narrow.
+ *   4. Unreadable: container or parse failure, not a claim decode failure.
+ *   5. Everything else fails closed: manifestFound with signatureValid=false.
  *
- * The native side guarantees the raw c2pa-rs error text reaches this chain
- * (NamedException carries C2PAError.errorDescription =
- * "C2PA API error: <raw message>" — see C2paIosModule.mapError).
+ * The native side passes the raw c2pa-rs error text through to this chain:
+ * NamedException carries C2PAError.errorDescription
+ * ("C2PA API error: <raw message>"); see C2paIosModule.mapError.
  */
 function classifyThrown(message: string): { tamper: boolean; noManifest: boolean; unsupported: boolean; unreadable: boolean } {
   const m = message;
@@ -320,7 +313,7 @@ function classifyThrown(message: string): { tamper: boolean; noManifest: boolean
 }
 
 // ---------------------------------------------------------------------------
-// Normalization of the upstream store JSON. (Verbatim from the desk engine.)
+// Normalization of the upstream store JSON. Same as the desk engine.
 // ---------------------------------------------------------------------------
 
 function summarizeManifest(label: string | null, m: Record<string, unknown>): EngineManifestSummary {
@@ -355,7 +348,7 @@ function summarizeManifest(label: string | null, m: Record<string, unknown>): En
   };
 }
 
-/** Blank normalized result — same shape as both desk engine adapters. */
+/** Blank normalized result; same shape as the desk engine adapters. */
 export function baseResultLike(engine: EngineId, version: string): NormalizedEngineResult {
   return {
     engine, engineVersion: version, engineAvailable: true,
@@ -385,9 +378,9 @@ function unavailableResult(reason: string): NormalizedEngineResult {
 
 /**
  * Shared normalization: given a thunk that produces the upstream store JSON
- * string (or throws an engine error), fill in the normalized result. This is
- * the desk engine's post-read logic, verbatim — store shape, code sorting,
- * fail-closed on unknown failure classes, and trust inputs are identical.
+ * string or throws an engine error, fill in the normalized result. Store shape,
+ * code sorting, fail-closed handling of unknown failure classes, and trust
+ * inputs match the desk engine's post-read logic.
  */
 async function normalizeRead(
   r: NormalizedEngineResult,
@@ -416,7 +409,7 @@ async function normalizeRead(
       r.manifestFound = true;
       r.unreadable = true;
     } else {
-      // Manifest present but undecodable — tampered-manifest fact.
+      // Manifest present but undecodable: a tampered-manifest fact.
       r.manifestFound = true;
       r.signatureValid = false;
     }
@@ -494,15 +487,15 @@ async function normalizeRead(
     }
   }
 
-  // --- trust inputs (never verdicts) ---
+  // --- trust inputs ---
   if (opts?.trust) {
     const trusted = statuses.some((s) => s.code === 'signingCredential.trusted') || state === 'Trusted';
     const untrusted = statuses.some((s) => s.code === 'signingCredential.untrusted');
     r.trustListHit = trusted ? opts.trust.kind : untrusted ? 'none' : 'unknown';
   } else {
-    // No caller-pinned anchors: we cannot attribute an engine trust report
-    // to the official TL vs the frozen ITL — so we claim nothing
- // (disclose WHICH list a verdict used).
+    // No caller-pinned anchors: an engine trust report cannot be attributed to
+    // the official TL versus the frozen ITL, so nothing is claimed. The report
+    // must name which list a verdict used.
     r.trustListHit = 'unknown';
   }
 
@@ -516,7 +509,7 @@ async function normalizeRead(
   return r;
 }
 
-/** Container gate shared by verify and readIosAsset (verbatim desk rule). */
+/** Container gate shared by verify and readIosAsset; same rule as the desk. */
 function gateContainer(r: NormalizedEngineResult, bytes: Uint8Array, flow: 'photo' | 'video'): Container | null {
   const container = sniffContainer(bytes);
   if (flow === 'photo' && container !== 'jpeg' && container !== 'png') {
@@ -535,11 +528,10 @@ function gateContainer(r: NormalizedEngineResult, bytes: Uint8Array, flow: 'phot
 }
 
 /**
- * PRIMARY READ PATH — verify an asset's embedded C2PA manifest and return
- * the normalized result for the policy layer. `mime` must be the asset's
- * real MIME type (image/jpeg, image/png, video/mp4, video/quicktime,
- * audio/mp4); it selects the flow's container gate exactly as the desk
- * engine's photo/video flows do.
+ * Primary read path: verify an asset's embedded C2PA manifest and return the
+ * normalized result for the policy layer. `mime` must be the asset's real MIME
+ * type (image/jpeg, image/png, video/mp4, video/quicktime, audio/mp4); it
+ * selects the flow's container gate as the desk engine's flows do.
  */
 export async function verify(
   bytes: Uint8Array,
@@ -550,16 +542,16 @@ export async function verify(
     ? 'photo'
     : mime === 'video/mp4' || mime === 'video/quicktime' || mime === 'audio/mp4'
       ? 'video'
-      // Unrecognized caller MIME: derive the flow from the bytes themselves —
-      // the gate then rejects honestly instead of trusting a wrong label.
+      // Unrecognized caller MIME: derive the flow from the bytes, so the gate
+      // rejects rather than trusting a wrong label.
       : sniffContainer(bytes) === 'jpeg' || sniffContainer(bytes) === 'png' ? 'photo' : 'video';
   return readIosAsset(bytes, flow, opts);
 }
 
 /**
- * Read an asset with the upstream iOS engine and normalize. `flow` mirrors
- * the desk entry points: 'photo' accepts JPEG/PNG, 'video' accepts BMFF —
- * a wrong container is a FACT (containerRejected) for the policy layer.
+ * Read an asset with the upstream iOS engine and normalize. `flow` mirrors the
+ * desk entry points: 'photo' accepts JPEG/PNG, 'video' accepts BMFF. A wrong
+ * container is reported as containerRejected for the policy layer.
  */
 export async function readIosAsset(
   bytes: Uint8Array,
@@ -582,9 +574,8 @@ export async function readIosAsset(
 }
 
 /**
- * DETACHED path — validate a sidecar manifest (application/c2pa bytes)
- * against its asset (; the app's existing detached.ts
- * flow). Same normalized result as the embedded path.
+ * Detached path: validate a sidecar manifest (application/c2pa bytes) against
+ * its asset, as in detached.ts. Same normalized result as the embedded path.
  */
 export async function readIosDetached(
   manifestData: Uint8Array,
@@ -610,12 +601,11 @@ export async function readIosDetached(
 }
 
 // ---------------------------------------------------------------------------
-// SIGN — embed a signed manifest. Second-priority deliverable: the native
-// APIs are verified against c2pa-swift v0.0.12 source, but no compiler
-// exists on this desk — EAS is the compiler, and the first signed artifact
-// must round-trip through verify on device before this path is trusted
-// for captures. Certificate issuance for the Secure Enclave key is the
-// app's existing identity flow — this module NEVER mints certificates.
+// Sign: embed a signed manifest. The native APIs are verified against the
+// c2pa-swift v0.0.12 source but not compiled here, so the first signed artifact
+// must round-trip through verify on device before this path is used for
+// captures. Certificate issuance for the Secure Enclave key belongs to the
+// app's identity flow; this module never mints certificates.
 // ---------------------------------------------------------------------------
 
 /** The app's standard Secure Enclave signing key (modules/secure-enclave). */
@@ -626,12 +616,12 @@ export type IosSigner =
       kind: 'pem';
       certificatePEM: string;
       privateKeyPEM: string;
-      /** es256/es384/es512/ps256/ps384/ps512/ed25519 — default es256. */
+      /** es256/es384/es512/ps256/ps384/ps512/ed25519; default es256. */
       algorithm?: string;
     }
   | {
       kind: 'secure-enclave';
-      /** Chain whose LEAF public key corresponds to the enclave key (caller-supplied). */
+      /** Caller-supplied chain whose leaf public key corresponds to the enclave key. */
       certificateChainPEM: string;
       /** Keychain tag of the enclave key; created by c2pa-swift if absent. */
       keyTag?: string;
@@ -653,9 +643,9 @@ export interface IosSignResult {
 }
 
 /**
- * Sign `bytes` (JPEG/PNG/MP4/MOV/M4A per `mime`) with a C2PA manifest.
- * Offline: no TSA. Throws on any engine error — signing failures are never
- * swallowed (a half-signed artifact is worse than none).
+ * Sign `bytes` (JPEG/PNG/MP4/MOV/M4A per `mime`) with a C2PA manifest. Offline:
+ * no TSA. Throws on any engine error rather than emitting a half-signed
+ * artifact.
  */
 export async function sign(
   bytes: Uint8Array,

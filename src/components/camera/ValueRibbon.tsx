@@ -1,37 +1,25 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Value Ribbon — the camera's ONE adjustment surface. Every pro
- * param, ladder or continuous, is edited HERE and nowhere else: a capsule
- * tap docks the ribbon with that param, a horizontal drag scrubs it, and
- * the ribbon's own AUTO pill returns the param to auto. There are no
- * per-capsule gestures, no hidden long-press ladders, no second dial
- * widget — one surface, one pattern.
+ * Value Ribbon — the camera's single adjustment surface. A capsule tap docks
+ * the ribbon with that param, a horizontal drag scrubs it, and the AUTO pill
+ * returns it to auto.
  *
- * Interaction spec:
- *  - Center needle is fixed; the tick scale slides under it. Horizontal
- *    drag anywhere on the track scrubs the value (relative, so the finger
- *    never has to hunt for the current position). Ladder params ride the
- *    same track as integer indices with a detent per rung (snap 1).
- *  - The AUTO pill (right of the track) is the ONLY auto/manual toggle;
- *    it is filled clay while the param is in auto. Double-tap on the
- *    track does the same reset — both are documented in the hint line.
- *  - Floating value pill floats above the needle while dragging.
- *  - Light haptic tick at each detent crossed; a stronger pulse at the
- *    range ends.
- *  - Gestures are classified by classifyGesture (gestureClassify.ts —
- *    the same pure function the screen's mode swipe consults): scrub on
- *    clear horizontal intent, close on a clearly-vertical-from-the-start
- *    swipe down (commit at CLOSE_COMMIT_DY), and the intent is locked for
- *    the life of the gesture, so a diagonal drift mid-scrub can never
- *    dismiss the ribbon.
- *  - Dragging a manual param (focus/WB/ISO/SHTR) puts the device in the
- *    corresponding manual mode; AUTO returns it. The value shown is what
- *    the bridge applies — device clamping is reported back on commit by
- *    the screen.
+ * Interaction:
+ *  - The center needle is fixed; the tick scale slides under it. Drag is
+ *    relative, anywhere on the track. Ladder params ride the same track as
+ *    integer indices with a detent per rung (snap 1).
+ *  - The AUTO pill right of the track is the auto/manual toggle, filled clay
+ *    while in auto. Double-tap on the track does the same reset.
+ *  - Value pill floats above the needle while dragging.
+ *  - Light haptic at each detent crossed, stronger at the range ends.
+ *  - classifyGesture (gestureClassify.ts) picks scrub vs close, and the
+ *    intent is locked for the gesture, so diagonal drift mid-scrub cannot
+ *    dismiss the ribbon. Close commits at CLOSE_COMMIT_DY.
+ *  - Dragging a manual param (focus/WB/ISO/SHTR) puts the device in that
+ *    manual mode; AUTO returns it. Device clamping comes back on commit.
  *
- * Perf: the ribbon is a leaf. Drag state lives here (never in the screen),
- * so scrubbing re-renders only this strip; the screen hears throttled
- * `onLive` (native apply, no React state) and a single `onCommit`.
+ * Drag state lives here, not in the screen, so scrubbing re-renders only
+ * this strip; the screen gets throttled `onLive` and one `onCommit`.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -40,8 +28,8 @@ import * as Haptics from 'expo-haptics';
 import { colors, radii, spacing, type, fontSize } from '../../theme';
 import { classifyGesture, CLOSE_COMMIT_DY } from './gestureClassify';
 
-/** The landed palette's clay — "chosen by hand" (matches index.tsx's
- *  HUD_IDENT_ON; the camera chrome is scheme-independent dark glass). */
+/** Clay accent, matching index.tsx's HUD_IDENT_ON. Camera chrome is
+ *  scheme-independent dark glass. */
 const CLAY = '#C08552';
 
 export interface RibbonConfig {
@@ -49,8 +37,8 @@ export interface RibbonConfig {
   title: string;
   min: number;
   max: number;
-  /** Committed value the ribbon opens at (and returns to after a reset
-   *  while still open — the screen pushes it back through this prop). */
+  /** Committed value the ribbon opens at. A reset pushes the new value back
+   *  through this prop. */
   value: number;
   /** Snap quantum (EV: 0.1 stops; ladders: 1 — one index per rung). Omit
    *  for fully continuous. */
@@ -60,16 +48,16 @@ export interface RibbonConfig {
   /** Tick values to draw (subset near the live value is rendered). */
   ticks?: number[];
   format: (v: number) => string;
-  /** True while the param is in auto — the AUTO pill renders filled. */
+  /** True while the param is in auto; the AUTO pill renders filled. */
   isAuto?: boolean;
-  /** The ONE auto/manual toggle: the ribbon's AUTO pill. Omit only for a
-   *  param with no meaningful auto (none today). */
+  /** Auto/manual toggle behind the AUTO pill. Omit for a param with no
+   *  meaningful auto. */
   onAuto?: () => void;
 }
 
 interface Props {
   config: RibbonConfig;
-  /** Throttled by the caller — native apply only, no React state. */
+  /** Throttled by the caller. Native apply only, no React state. */
   onLive: (v: number) => void;
   /** Gesture finished: persist/state-sync this value. */
   onCommit: (v: number) => void;
@@ -96,9 +84,8 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
   const lastTapAt = useRef(0);
   const dismissed = useRef(false);
   const lastHapticAt = useRef(0);
-  // Latest config/callbacks — the PanResponder is created once and reads
-  // these refs, so a param switch (new range/snap/detents) and the
-  // measured track width reach the gesture closures.
+  // The PanResponder is created once and reads these refs, so a param switch
+  // and the measured track width reach the gesture closures.
   const cb = useRef({ onLive, onCommit, onReset, onDismiss });
   cb.current = { onLive, onCommit, onReset, onDismiss };
   const configRef = useRef(config);
@@ -106,18 +93,18 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
   const pxPerUnitRef = useRef(1);
   pxPerUnitRef.current = trackWidth > 0 ? (trackWidth * 1.5) / (max - min) : 1;
 
-  // Entrance: fade + rise, native driver, one shot.
+  // Entrance: fade and rise, native driver, one shot.
   useEffect(() => {
     Animated.timing(enter, { toValue: 1, duration: 180, useNativeDriver: true }).start();
   }, [enter]);
 
-  // External value changes (reset, AUTO, a capsule re-tap) re-seat the
-  // dial whenever the user isn't holding it.
+  // External value changes (reset, AUTO, capsule re-tap) re-seat the dial
+  // when the user is not holding it.
   useEffect(() => {
     if (!draggingRef.current) setLive(config.value);
   }, [config.value]);
 
-  /** Full range spans ~1.5 track widths — fine control without endless travel. */
+  /** Full range spans ~1.5 track widths. */
   const pxPerUnit = pxPerUnitRef.current;
 
   const scrubTo = (raw: number) => {
@@ -146,17 +133,15 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
     }
   };
 
-  // Gesture intent is classified by the shared pure function and locked on
-  // the first non-'none' answer: one gesture, one behavior. A scrub can
-  // never turn into a close mid-drag, and a touch that hasn't declared
-  // itself moves nothing.
+  // Intent locks on the first non-'none' classification and holds for the
+  // gesture, so a scrub cannot become a close mid-drag.
   const intent = useRef<'undecided' | 'scrub' | 'close'>('undecided');
 
   const pan = useRef(
     PanResponder.create({
-      // The ribbon owns every touch that lands on it (taps included — the
-      // double-tap reset needs them) — including horizontal scrubs the
-      // root responder would otherwise read as a mode swipe.
+      // The ribbon owns every touch that lands on it, taps included (the
+      // double-tap reset needs them) and horizontal scrubs the root responder
+      // would otherwise read as a mode swipe.
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_evt, g) =>
         classifyGesture(g.dx, g.dy, 'ribbon') === 'scrub',
@@ -169,9 +154,8 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
         if (dismissed.current) return;
         if (intent.current === 'undecided') {
           const cls = classifyGesture(g.dx, g.dy, 'ribbon');
-          // 'none': intent not yet clear, value holds still. 'mode-swipe'
-          // is unreachable in the ribbon zone — the guard just narrows the
-          // type for the intent lock below.
+          // 'none' means intent is not yet clear and the value holds still.
+          // 'mode-swipe' is unreachable here; the guard narrows the type.
           if (cls === 'none' || cls === 'mode-swipe') return;
           intent.current = cls;
           if (cls === 'scrub') {
@@ -180,7 +164,7 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
           }
         }
         if (intent.current === 'close') {
-          // Swipe down dismisses (decisive vertical travel).
+          // Swipe down dismisses, on decisive vertical travel.
           if (g.dy > CLOSE_COMMIT_DY && g.dy > Math.abs(g.dx) * 1.5) {
             dismissed.current = true;
             intent.current = 'undecided';
@@ -198,9 +182,8 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
         draggingRef.current = false;
         setDragging(false);
         if (dismissed.current) return;
-        // A gesture that actually scrubbed always commits — even when it
-        // drifted back near its origin (that is not a tap; the live value
-        // moved and the committed value must catch up).
+        // A gesture that scrubbed always commits, even when it drifted back
+        // near its origin: the live value moved, so the committed value must.
         if (wasScrubbing) {
           cb.current.onCommit(liveRef.current);
           return;
@@ -211,13 +194,12 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
           if (now - lastTapAt.current < 300) {
             lastTapAt.current = 0;
             cb.current.onReset();
-            return; // the reset owns the value now — no commit of the old one
+            return; // the reset owns the value; do not commit the old one
           }
           lastTapAt.current = now;
           return; // a lone tap changes nothing
         }
-        // An abandoned close swipe (or an intent-less flick) leaves the
-        // committed value untouched.
+        // An abandoned close swipe or intent-less flick commits nothing.
       },
       onPanResponderTerminate: () => {
         const wasScrubbing = intent.current === 'scrub';
@@ -229,8 +211,8 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
     }),
   ).current;
 
-  // Ticks: draw only the window around the live value; positions derive
-  // from (tick - live), so the scale slides under the fixed needle.
+  // Draw only the tick window around the live value; positions derive from
+  // (tick - live), so the scale slides under the fixed needle.
   const half = trackWidth / 2;
   const visibleTicks = (config.ticks ?? []).filter(
     (t) => Math.abs(t - live) * pxPerUnit <= half + 8,
@@ -249,7 +231,7 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
         },
       ]}
     >
-      {/* Floating value pill — above the needle, always the live value. */}
+      {/* Floating value pill, above the needle, showing the live value. */}
       <View style={styles.pill} pointerEvents="none">
         <Text style={styles.pillTitle}>{config.title}</Text>
         <Text style={styles.pillValue}>{config.format(live)}</Text>
@@ -258,9 +240,8 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
       <View style={styles.trackRow}>
         <View
           style={styles.track}
-          // Generous touch target: the track sits between the tray and the
-          // mode row — the slop keeps a slightly-high or slightly-low
-          // finger on the slider.
+          // The track sits between the tray and the mode row; the slop keeps
+          // a slightly high or low finger on the slider.
           hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
           onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
           {...pan.panHandlers}
@@ -280,8 +261,8 @@ export function ValueRibbon({ config, onLive, onCommit, onReset, onDismiss }: Pr
           <View style={styles.needle} pointerEvents="none" />
         </View>
 
-        {/* The ONE auto/manual toggle: filled clay while the param is in
-            auto, a quiet outline while manual — tap returns to auto. */}
+        {/* Auto/manual toggle: filled clay in auto,
+            outline while manual. */}
         {config.onAuto ? (
           <TouchableOpacity
             style={[styles.autoPill, config.isAuto && styles.autoPillActive]}
@@ -337,8 +318,7 @@ const styles = StyleSheet.create({
     height: 10,
     backgroundColor: 'rgba(237,241,244,0.35)',
   },
-  // Detents are told by the ONE accent color plus their diamond shape —
-  // never color alone.
+  // Detents are marked by shape as well as the accent color, not color alone.
   detent: {
     position: 'absolute',
     top: 26,

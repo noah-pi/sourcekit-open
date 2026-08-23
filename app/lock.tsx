@@ -30,23 +30,20 @@ export default function LockScreen() {
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
-  // Lockout: timestamp until which the keypad is locked; countdown
-  // ticks once a second while active. Persisted in SecureStore, so restarting
-  // the app does not clear it.
+  // Lockout: timestamp until which the keypad is locked, counted down once a
+  // second. Persisted in SecureStore, so an app restart does not clear it.
   const [lockUntilMs, setLockUntilMs] = useState(0);
   const [lockSecondsLeft, setLockSecondsLeft] = useState(0);
   const isLocked = lockSecondsLeft > 0;
 
   const unlock = async () => {
-    // The user just authenticated — move the vault key behind the OS
-    // keychain's user-presence access control while that presence is fresh.
+    // Presence is fresh here, so move the vault key behind the OS keychain's
+    // user-presence access control.
     await upgradeVaultKeyAcl().catch(() => {});
-    // Prime the key HERE, at the moment of presence, so no grid
-    // cell or background seal job ever pops the OS presence prompt at an
-    // arbitrary moment later (an ignored prompt wedged the pump; a
-    // cancelled one threw mid-seal — the "face ID results in errors"
-    // field report). Best-effort: a cancelled warm just leaves the vault
-    // cold, and the next real read prompts with a proper message.
+    // Prime the key at the moment of presence so a grid cell or background
+    // seal job never pops the OS presence prompt later: an ignored prompt
+    // wedges the pump, a cancelled one throws mid-seal. Best-effort; a
+    // cancelled warm leaves the vault cold and the next read prompts again.
     await warmVaultKey();
     setUnlocked(true);
     router.replace('/');

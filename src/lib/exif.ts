@@ -2,19 +2,10 @@
 /**
  * EXIF sanitization for the signed com.verify.exif assertion.
  *
- * The camera pipeline reports exposure and lens facts alongside every frame.
- * Signed into the manifest, they give a desk cross-checks that are awkward
- * to fake (does the claimed focal length match the scene's perspective? the
- * claimed exposure the lighting?) — self-reported metadata, stated as such,
- * never a verdict.
- *
- * The allowlist is CLOSED and privacy-first. EXIF can carry GPS
- * coordinates, maker notes, serial numbers, and free-text user fields —
- * none of those may ever enter a signed assertion: location is governed by
- * the record's own location claim (with its redaction path), and free text
- * is an unbounded identifier. Anything not explicitly listed is dropped;
- * values are normalized (finite numbers, short plain strings) so a hostile
- * camera app can't smuggle payloads through a field we do keep.
+ * Closed allowlist: anything not listed below is dropped, so GPS, maker
+ * notes, serial numbers, and free-text fields never reach a signed
+ * assertion (location is carried by the record's own location claim).
+ * Kept values are normalized — finite numbers, short printable strings.
  */
 
 /** Numeric EXIF fields worth signing (exposure + optics + dimensions). */
@@ -42,7 +33,7 @@ const MAX_STRING_LEN = 80;
 
 /**
  * Returns the signed-assertion-safe subset of a camera EXIF object. Never
- * throws; unknown/odd values are dropped, not guessed at.
+ * throws; unknown or malformed values are dropped.
  */
 export function sanitizeExif(raw: unknown): Record<string, number | string> {
   const out: Record<string, number | string> = {};
@@ -51,7 +42,7 @@ export function sanitizeExif(raw: unknown): Record<string, number | string> {
     if (NUMERIC_FIELDS.has(k) && typeof v === 'number' && Number.isFinite(v)) {
       out[k] = v;
     } else if (STRING_FIELDS.has(k) && typeof v === 'string' && v.length > 0 && v.length <= MAX_STRING_LEN) {
-      // Printable ASCII only — no control bytes riding a signed field.
+      // Printable ASCII only: no control bytes in a signed field.
       if (/^[\x20-\x7e]+$/.test(v)) out[k] = v;
     }
   }

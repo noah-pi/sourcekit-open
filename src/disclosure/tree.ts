@@ -3,24 +3,18 @@
  * Merkle tree over committed leaf digests
  * (docs/INTEGRITY.md — selective disclosure).
  *
- * Conventions MATCHED with the capture-side streaming tree
- * (exhibit-app CaptureKit StreamingHasher.swift), so the disclosure tree
- * and the streamed-media tree speak one language:
+ * Conventions match the capture-side streaming tree:
  *
- *   - leaves are RAW 32-byte digests, never hex, inside the tree
- *   - an odd leaf is PROMOTED unchanged to the next level
+ *   - leaves are raw 32-byte digests, never hex, inside the tree
+ *   - an odd leaf is promoted unchanged to the next level
  *   - the root is emitted as lowercase hex
- *   - zero leaves → SHA-256 of the empty input (documented degenerate
- *     case, same as StreamingHasher)
+ *   - zero leaves gives SHA-256 of the empty input
  *   - a single leaf is its own root
  *
- * "Sorted-pair" means the pairs are formed over the SORTED
- * leaf set: leaves are sorted by claimId upstream (inventory.ts) and
- * paired in that order. Parents are positional, exactly like
- * StreamingHasher — parent = SHA-256(left || right) — so a leaf's slot
- * is fully bound: an inclusion proof presented for the WRONG index
- * (within-pair or cross-pair) or the wrong tree size fails, which the
- * suite pins.
+ * Leaves are sorted by claimId upstream (inventory.ts) and paired in that
+ * order; parents are positional, parent = SHA-256(left || right). That
+ * binds a leaf's slot, so a proof presented for the wrong index or the
+ * wrong tree size fails.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
@@ -33,7 +27,7 @@ export interface MerkleTree {
   layers: Uint8Array[][];
 }
 
-/** parent = SHA-256(left || right) — positional, StreamingHasher-identical. */
+/** parent = SHA-256(left || right), positional. Matches StreamingHasher. */
 export function hashPair(left: Uint8Array, right: Uint8Array): Uint8Array {
   return sha256(concatBytes(left, right));
 }
@@ -68,8 +62,8 @@ export function buildTree(leaves: Uint8Array[]): MerkleTree {
 
 /**
  * Sibling digests (raw, bottom-up) proving the leaf at `leafIndex`.
- * A promoted odd leaf contributes NO sibling at that level — the proof
- * carries exactly one digest per level where the node was paired.
+ * A promoted odd leaf contributes no sibling at that level; the proof
+ * carries one digest per level where the node was paired.
  */
 export function inclusionProof(tree: MerkleTree, leafIndex: number): Uint8Array[] {
   const leafCount = tree.layers.length === 0 ? 0 : tree.layers[0].length;
@@ -90,8 +84,7 @@ export function inclusionProof(tree: MerkleTree, leafIndex: number): Uint8Array[
 /**
  * Recompute the root from a leaf digest, its proof, and its slot, and
  * compare against `root` (lowercase hex). `index` and `treeSize` pin the
- * slot: a valid proof presented for the WRONG index fails, because the
- * promotion/pairing path no longer lines up.
+ * slot, so a valid proof presented for the wrong index fails.
  */
 export function verifyInclusion(
   root: string,
@@ -124,7 +117,7 @@ export function verifyInclusion(
   return bytesToHex(node) === root.toLowerCase();
 }
 
-/** Hex helper for bundle (de)serialization — proofs travel as hex arrays. */
+/** Hex helpers for bundle (de)serialization: proofs travel as hex arrays. */
 export function proofToHex(proof: Uint8Array[]): string[] {
   return proof.map(bytesToHex);
 }

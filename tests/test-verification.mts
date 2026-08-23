@@ -6,12 +6,12 @@
  * against the staged flat modules. Identical to the app suite except for
  * the import paths (stage.mjs generates the media fixtures).
  *
- * Forgery attacks, encoded as permanent regression tests:
- *   - a junk x5chain must NOT produce a green chain badge
- *   - a junk/forged attestation must NOT produce a green attestation badge
- *   - junk/tampered RFC 3161 tokens must NOT count as trusted time
- * Every negative case uses WELL-FORMED cryptography (real certs, real CMS)
- * so the verifiers — not the parser's error handling — do the rejecting.
+ * Forgery attacks, encoded as regression tests:
+ *   - a junk x5chain must not produce a green chain badge
+ *   - a junk or forged attestation must not produce a green attestation badge
+ *   - junk or tampered RFC 3161 tokens must not count as trusted time
+ * Every negative case uses well-formed cryptography (real certs, real CMS) so
+ * the verifiers do the rejecting, not the parser's error handling.
  *
  * Fixtures (scripts/fixtures/) were generated once with openssl:
  *   ca.crt.der            P-256 test root CA
@@ -119,11 +119,10 @@ check('token does not countersign a different message', !tsWrong.tokenValid, tsW
 
 const tsTampered = verifyTimestampToken(tokenTamperedDer, message);
 check('one flipped byte in the SIGNER cert invalidates the token', !tsTampered.tokenValid, tsTampered.reason ?? '');
-// A flip in a NON-SIGNER embedded chain cert does NOT
-// invalidate — the corrupted cert is dropped, and validity is decided by
-// the cryptography over the surviving signer cert (CMS signature, EKU,
-// genTime), never by parser error handling. We never anchored the chain to
-// a root anyway, so nothing the verifier claims depended on the dropped cert.
+// A flip in a non-signer embedded chain cert does not invalidate: the
+// corrupted cert is dropped and validity comes from the cryptography over the
+// surviving signer cert (CMS signature, EKU, genTime). The chain is not
+// anchored to a root, so nothing the verifier reports used the dropped cert.
 {
   const tam = new Uint8Array(tokenDer);
   tam[200] ^= 0x01; // inside the embedded CA cert, which the fixture token does not sign with
@@ -137,9 +136,9 @@ check('junk bytes fail cleanly (no throw, no green)', !tsJunk.tokenValid && tsJu
 
 console.log('\n— TSA trust pinning —');
 
-// The lab fixture TSA is self-made: its token is cryptographically genuine
-// but the authority is on NOBODY's trust list — the exact "valid but
-// unpinned" state the UI must render without green.
+// The lab fixture TSA is self-made: the token is cryptographically genuine
+// but the authority is on no trust list, which is the valid-but-unpinned
+// state the UI must render without green.
 check('genuine token surfaces chain fingerprints (signer first)',
   tsGood.tsaFingerprints.length > 0 && /^[0-9a-f]{64}$/.test(tsGood.tsaFingerprints[0]));
 check('valid token from an unpinned authority is NOT trusted',
@@ -195,8 +194,7 @@ check('junk attestation object fails cleanly', junkAtt.present && !junkAtt.valid
 const wrongFmt = verifyAppAttestAssertion(utf8ToBytes('{"format":"verify-app-attest/1"}'), signerPub);
 check('old attestation format is not grandfathered into green', wrongFmt.present && !wrongFmt.valid);
 
-// The pre-rename 'verify-app-attest/2' tag is no longer accepted — old-version
-// compatibility was dropped; only 'exhibit-app-attest/2' passes the format gate.
+// Only 'exhibit-app-attest/2' passes the format gate.
 const legacyTagPayload = utf8ToBytes(JSON.stringify({
   format: 'verify-app-attest/2',
   attestationBase64: bytesToBase64(new Uint8Array([0xff, 0x00, 0xff])),
@@ -207,14 +205,12 @@ const legacyTag = verifyAppAttestAssertion(legacyTagPayload, signerPub);
 check('pre-rename attestation tag is rejected at the format gate',
   legacyTag.present && !legacyTag.valid && (legacyTag.reason ?? '').includes('unrecognized format'), legacyTag.reason ?? '');
 
-// Regression pin (false red on genuine files): Apple issues App Attest
-// credential certificates with windows measured in DAYS, so an attestation
-// verified at the media's TSA-anchored signing time false-fails every file
-// captured more than a few days after enrollment. Chain validity is
+// Apple issues App Attest credential certificates with windows measured in
+// days, so validating at the media's TSA-anchored signing time false-fails
+// files captured more than a few days after enrollment. Chain validity is
 // evaluated at attestation-mint time (non-empty intersection of the chain's
-// windows). A chain of genuine, well-formed certs that anchors to the pinned
-// Apple root must NOT fail on validity grounds regardless of when "now" is —
-// it must proceed past the chain stage and fail later (here: junk authData).
+// windows), so a genuine chain anchoring to the pinned Apple root must pass
+// the chain stage regardless of "now" and fail later, here on junk authData.
 const rootOnlyPayload = utf8ToBytes(JSON.stringify({
   format: 'exhibit-app-attest/2',
   attestationBase64: bytesToBase64(new Uint8Array(encode({
@@ -235,10 +231,9 @@ check('genuine-cert chain is never failed on signing-time validity (mint-time se
 
 console.log('\n— parser hardening: parser DoS, NaN dates, strict base64 —');
 
-// The 32-bit signed-shift length overflow: a 4-byte length of
-// 0xFFFFFFFA wraps to -6, the overrun guard passes, and `next` points
-// backwards — every while-walker hangs, client and public server. These
-// buffers must throw, immediately.
+// 32-bit signed-shift length overflow: a 4-byte length of 0xFFFFFFFA wraps to
+// -6, the overrun guard passes, and `next` points backwards, hanging every
+// while-walker. These buffers must throw.
 const stallTlv = new Uint8Array([0x30, 0x84, 0xff, 0xff, 0xff, 0xfa, 0x05, 0x00]);
 let stallThrew = false;
 try { readTlv(stallTlv, 0); } catch { stallThrew = true; }
@@ -248,9 +243,8 @@ let walkThrew = false;
 try { tlvChildren(stallTlv); } catch { walkThrew = true; }
 check('walker over a stall TLV terminates (throws), never wedges', walkThrew);
 
-// Fuzz: thousands of random mutations of real DER must always terminate —
-// parse or reject. If any walker ever regresses to non-advancing, this
-// suite wedges right here, loudly, instead of in a reviewer's hands.
+// Fuzz: thousands of random mutations of real DER must terminate, parsing or
+// rejecting. A non-advancing walker wedges the suite here.
 {
   const corpus = [leafDer, caDer, tokenDer, evilDer, APPLE_ATTEST_ROOT_DER];
   let rng = 0x12345678;
@@ -266,11 +260,10 @@ check('walker over a stall TLV terminates (throws), never wedges', walkThrew);
   check('4000 mutated DER buffers always terminate (parse or reject)', true);
 }
 
-// The same fuzz treatment for the CONTAINER and CBOR entry
-// points — parseJumb (via parseManifest/parseManifestChain), extractC2paStore,
-// parseRootBoxes, extractC2paStoreBmff, extractCaBx, and raw cbor-x decode.
-// Seeds are genuine signed structures so mutations explore real parse paths;
-// any non-advancing walker wedges this suite loudly instead of shipping.
+// The same fuzz treatment for the container and CBOR entry points: parseJumb
+// (via parseManifest/parseManifestChain), extractC2paStore, parseRootBoxes,
+// extractC2paStoreBmff, extractCaBx, and raw cbor-x decode. Seeds are genuine
+// signed structures so mutations explore real parse paths.
 {
   const fzPriv = p256.utils.randomPrivateKey();
   const fzSign = async (d: Uint8Array) => p256.sign(d, fzPriv, { lowS: true }).toDERRawBytes();
@@ -315,10 +308,10 @@ check('walker over a stall TLV terminates (throws), never wedges', walkThrew);
   check('4000 mutated container/CBOR buffers always terminate (parse or reject)', true);
 }
 
-// Garbage validity dates parse to NaN, and every NaN comparison is false
-// — the validity window would silently pass. Corrupt both time fields in
-// the real leaf (UTCTime 0x17 len-13, GeneralizedTime 0x18 len-15) and
-// the cert must be refused as malformed.
+// Garbage validity dates parse to NaN and every NaN comparison is false, so
+// the validity window would pass. Corrupt both time fields in the real leaf
+// (UTCTime 0x17 len-13, GeneralizedTime 0x18 len-15): the cert must be
+// refused as malformed.
 {
   const nanCert = new Uint8Array(leafDer);
   let patched = 0;
@@ -372,9 +365,9 @@ const spliceStore = (segA: Uint8Array, segB: Uint8Array): Uint8Array => {
   return concatBytes(head, childA, childB);
 };
 
-// C2PA's rule: the active manifest is the LAST in the store. Build two real
-// manifests, splice both children into one store, and the verifier must
-// read the last — matching a reference validator, not diverging from it.
+// C2PA rule: the active manifest is the last in the store. Build two real
+// manifests, splice both children into one store; the verifier must read the
+// last.
 {
   const priv = p256.utils.randomPrivateKey();
   const signDigest = async (d: Uint8Array) => p256.sign(d, priv, { lowS: true }).toDERRawBytes();
@@ -400,10 +393,10 @@ const spliceStore = (segA: Uint8Array, segB: Uint8Array): Uint8Array => {
 
 console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
 
-// Every manifest in an update chain is parsed and individually verified —
-// earlier manifests are reported, never silently skipped. A self-signed cert
-// built in-test makes the signatures genuinely verifiable (a random key
-// against leaf.crt.der would only exercise the reject path).
+// Every manifest in an update chain is parsed and verified individually, and
+// earlier manifests are reported. The in-test self-signed cert makes the
+// signatures verifiable; a random key against leaf.crt.der would only exercise
+// the reject path.
 {
   const privC = p256.utils.randomPrivateKey();
   const pubC = p256.getPublicKey(privC, false);
@@ -439,23 +432,23 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
     !!vA && vA.signatureValid && vA.assetHashMatches && !!vB && vB.signatureValid && vB.assetHashMatches,
     `A=${JSON.stringify(vA)} B=${JSON.stringify(vB)}`);
 
-  // The update-chain semantics: media edited AFTER manifest A no longer
-  // matches A's asset hash — the report says so without condemning the file.
+  // Update-chain semantics: media edited after manifest A no longer matches
+  // A's asset hash, and the report states that.
   const edited = new Uint8Array(message); edited[0] ^= 0xff;
   const vAedited = chain?.manifests[0] ? verifyManifest(concatBytes(segA, edited), chain.manifests[0]) : null;
   check('earlier manifest honestly reports an asset edited after it',
     !!vAedited && vAedited.signatureValid && !vAedited.assetHashMatches);
 }
 
-// Multi-exclusion c2pa.hash.data: foreign signers (Leica, Adobe) emit
-// several exclusion ranges; verifying only the first false-reds genuine
-// media. Crafted manifests exercise the range math directly (signatures are
-// expected to fail here — only the hash path is under test).
+// Multi-exclusion c2pa.hash.data: foreign signers (Leica, Adobe) emit several
+// exclusion ranges, and verifying only the first false-reds genuine media.
+// Crafted manifests exercise the range math directly; signatures fail here, as
+// only the hash path is under test.
 {
   const file = new Uint8Array(1000);
   for (let i = 0; i < file.length; i++) file[i] = (i * 7) & 0xff;
-  // The claim references the binding assertion, as required —
-  // an unreferenced binding proves nothing (attach attack).
+  // The claim must reference the binding assertion; an unreferenced binding
+  // proves nothing (attach attack).
   const fakeManifest = (exclusions: { start: number; length: number }[], hash: Uint8Array) => ({
     claim: { assertions: [{ url: 'self#jumbf=c2pa.assertions/c2pa.hash.data' }] },
     claimBytes: new Uint8Array(0),
@@ -508,8 +501,8 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
 
 // ---------------------------------------------------------------------------
 // Signed newsroom roster (portable trust). The editor signature is
-// load-bearing; membership is evaluated at the VERIFIED signing time, so the
-// departed-photographer case stays honest.
+// load-bearing and membership is evaluated at the verified signing time, which
+// is what the departed-photographer case depends on.
 // ---------------------------------------------------------------------------
 {
   const { roster, editorPrivateKeyHex } = await createRoster({
@@ -560,10 +553,9 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   try { await resignRoster(roster, '00'.repeat(32), roster.entries); } catch { wrongKeyThrew = true; }
   check('roster: re-signing with the wrong editor key is refused', wrongKeyThrew);
 
-  // Revocation (the desk/web roster editor's core admin op): the
-  // departed-photographer case, end to end. Revoke marks the entry as of
-  // now; the re-signed roster verifies; past captures stay genuine while
-  // anything signed after the revocation reads as a red flag.
+  // Revocation, end to end: revoke marks the entry as of now, the re-signed
+  // roster verifies, past captures stay genuine, and anything signed after the
+  // revocation reads as a red flag.
   const revokedEntries = revokeEntry(roster.entries, 'a'.repeat(64));
   check('roster: revocation marks only the named member',
     revokedEntries.find((e) => e.fingerprint === 'a'.repeat(64))?.revokedAt !== null &&
@@ -599,12 +591,10 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   check('ots: receipt for a different digest is refused',
     !verifyOtsReceipt(pending, sha256(utf8ToBytes('some other signature'))).receiptValid);
 
-  // Confirmed receipt, built by hand in the REAL wire format (the
-  // old fixtures encoded the framing bug): header is
-  // MAGIC || version(0x01) || hash-op tag(0x08) || raw 32-byte digest; ops
-  // are 0xf0 append / 0xf1 prepend; an attestation is
-  // 0x00 || tag(8 raw bytes) || varbytes(payload). Chain:
-  // digest → append 0xAA×4 → sha256 → root.
+  // Confirmed receipt, hand-built in the real wire format: header is
+  // MAGIC || version(0x01) || hash-op tag(0x08) || raw 32-byte digest; ops are
+  // 0xf0 append / 0xf1 prepend; an attestation is 0x00 || tag(8 raw bytes) ||
+  // varbytes(payload). Chain: digest → append 0xAA×4 → sha256 → root.
   const vu = (v: number | bigint) => { const o = []; let x = BigInt(v); do { let b = Number(x & 0x7fn); x >>= 7n; if (x > 0n) b |= 0x80; o.push(b); } while (x > 0n); return new Uint8Array(o); };
   const vb = (b: Uint8Array) => concatBytes(vu(b.length), b);
   const arg = new Uint8Array([0xaa, 0xaa, 0xaa, 0xaa]);
@@ -642,8 +632,8 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   const tamperedDigest = confirmed.slice(); tamperedDigest[OTS_MAGIC.length + 2] ^= 0xff;
   check('ots: a receipt pointing at different bytes is rejected',
     !verifyOtsReceipt(tamperedDigest, digest).receiptValid);
-  // Flip one byte of the 8-byte attestation tag → unknown attestation → no
-  // usable attestation, refused (never misread as a plausible height).
+  // Flip one byte of the 8-byte attestation tag: unknown attestation, refused
+  // rather than read as a plausible height.
   const tamperedAtt = confirmed.slice(); tamperedAtt[tamperedAtt.length - 13] ^= 0xff;
   check('ots: a tampered attestation is refused, never misread',
     !verifyOtsReceipt(tamperedAtt, digest).receiptValid);
@@ -654,8 +644,8 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
 
 
 // ---------------------------------------------------------------------------
-// Detachable proof: hash-only (source protection), proof bundle,
-// desk index export. Disclosure discipline is tested, not just structure.
+// Detachable proof: hash-only (source protection), proof bundle, desk index
+// export. Covers disclosure discipline as well as structure.
 // ---------------------------------------------------------------------------
 {
   const priv = p256.utils.randomPrivateKey();
@@ -683,15 +673,15 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   check('proof: bundled record signature still verifies after the round trip',
     verifyRecordSignature(JSON.parse(JSON.stringify(bundle)).record).signatureValid);
 
-  // Desk export: injection guards and honest location handling.
+  // Desk export: injection guards and location handling.
   const entries: ExportEntry[] = [
     { id: 'a', createdAt: '2026-08-01T12:00:00Z', kind: 'photo', sha256: 'ab'.repeat(32), bytes: 1,
-      fingerprint: 'cd'.repeat(32), motionVerdict: 'handheld', lat: 40.7, lon: -74.0,
-      locationState: 'present', otsState: 'confirmed', otsBlockHeight: 800000,
-      assignment: '=HYPERLINK("https://evil.example","x")' },
+      fingerprint: 'cd'.repeat(32), motionVerdict: '=HYPERLINK("https://evil.example","x")',
+      lat: 40.7, lon: -74.0,
+      locationState: 'present', otsState: 'confirmed', otsBlockHeight: 800000 },
     { id: 'b', createdAt: '2026-08-01T13:00:00Z', kind: 'photo', sha256: 'ef'.repeat(32), bytes: 2,
       fingerprint: 'cd'.repeat(32), motionVerdict: null, lat: null, lon: null,
-      locationState: 'redacted', otsState: 'pending', otsBlockHeight: null, assignment: null },
+      locationState: 'redacted', otsState: 'pending', otsBlockHeight: null },
   ];
   const csv = exportEntriesToCsv(entries);
   check('proof: CSV neutralizes spreadsheet formula injection',
@@ -701,7 +691,7 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   const geo = JSON.parse(exportEntriesToGeoJson(entries));
   check('proof: GeoJSON carries only located items, [lon, lat] order',
     geo.features.length === 1 && geo.features[0].geometry.coordinates[0] === -74.0 && geo.features[0].geometry.coordinates[1] === 40.7);
-  const kml = exportEntriesToKml([{ ...entries[0], assignment: 'R&D <unit> "A"' }]);
+  const kml = exportEntriesToKml([{ ...entries[0], kind: 'R&D <unit> "A"' }]);
   check('proof: KML escapes XML-hostile labels', kml.includes('R&amp;D') && kml.includes('&lt;unit&gt;'));
 }
 
@@ -722,7 +712,7 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
 }
 
 // ---------------------------------------------------------------------------
-// The signed pose trace (gyro evidence replacing the parallax clip).
+// The signed pose trace (gyro evidence).
 // ---------------------------------------------------------------------------
 {
   // 4 s of synthetic 100 Hz DeviceMotion; shutter at t=3500.
@@ -789,7 +779,7 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
     LensModel: 'iPhone 15 Pro back triple camera 6.86mm f/1.78',
     Orientation: 1, PixelXDimension: 4032, PixelYDimension: 3024,
     DateTimeOriginal: '2026:08:03 14:22:10',
-    // --- everything below must NEVER be signed ---
+    // --- everything below must not be signed ---
     GPSLatitude: 37.7749, GPSLongitude: -122.4194, GPSAltitude: 15,
     MakerNote: { secret: 'stuff' },
     UserComment: 'safehouse visit with source',
@@ -873,11 +863,10 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   resetBeaconForTests();
 }
 
-// --- DCT pHash: near-duplicate leads, never verdicts ---
+// --- DCT pHash: near-duplicate leads ---
 {
-  // Image-like synthetic texture (smoothed noise): a pure gradient has its
-  // coefficients degenerately clustered at the median, which is not what
-  // pHash is designed for — natural images have wide coefficient spreads.
+  // Image-like synthetic texture (smoothed noise). A pure gradient clusters
+  // its coefficients at the median; natural images spread them wide.
   const texture = (seed: number): Uint8Array => {
     let s = seed;
     const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
@@ -912,13 +901,13 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
     hammingDistanceHex('nothex', hHash) === null);
 }
 
-// --- Screen re-photography analyzers: evidence, never verdicts ---
+// --- Screen re-photography analyzers ---
 {
   const W = 128;
   const H = 128;
   const flat = new Float64Array(W * H).fill(128);
 
-  // Flat-subject guard, BY CONSTRUCTION: no residual energy → no detection.
+  // Flat-subject guard: no residual energy, no detection.
   check('rephoto: a flat image yields insufficient-signal from every spectral analyzer',
     analyzeBanding(flat, W, H).strength === 'insufficient-signal' &&
     analyzeMoire(flat, W, H).strength === 'insufficient-signal');
@@ -935,7 +924,7 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
     band.strength === 'strong' && Math.abs(band.peakFreq - 9 / 128) < 2 / 128,
     `strength=${band.strength} peakFreq=${band.peakFreq.toFixed(4)} snr=${band.snrDb.toFixed(1)}dB`);
 
-  // A smooth luminance gradient is NOT banding (detrended by construction).
+  // A smooth luminance gradient is not banding; it is detrended out.
   const gradient = new Float64Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) gradient[y * W + x] = 64 + y;
   check('rephoto: a smooth gradient is not flagged as banding',
@@ -989,7 +978,7 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
     snrStrength(12) === 'moderate' && snrStrength(20) === 'strong');
 }
 
-// --- ROC tooling: no signal without measured error rates ---
+// --- ROC tooling: measured error rates ---
 {
   // Deterministic gaussian-ish samples (sum of uniforms) around two means.
   const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
@@ -1033,7 +1022,7 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   const FW = 96;
   const FH = 64;
   const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-  // Textured base frame (smoothed noise — block matching needs real texture).
+  // Textured base frame; block matching needs real texture.
   const base = new Float64Array(FW * FH);
   const r0 = lcg(11);
   for (let i = 0; i < base.length; i++) base[i] = r0() * 255;
@@ -1127,9 +1116,9 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
 
 console.log('\n— void-binding guards (the exclusion attack) —');
 
-// The attack: a manifest whose hash.data exclusions exempt the hash INPUT
-// itself. The byte-range walk alone would "match" such a hash — the guards
-// prove the input is the media. Void = absence of proof, NEVER "modified".
+// The attack: a manifest whose hash.data exclusions exempt the hash input
+// itself. The byte-range walk alone would match such a hash; the guards prove
+// the input is the media. Void means absence of proof, not 'modified'.
 {
   const privV = p256.utils.randomPrivateKey();
   const signV = async (d: Uint8Array) => p256.sign(d, privV, { lowS: true }).toDERRawBytes();
@@ -1149,8 +1138,8 @@ console.log('\n— void-binding guards (the exclusion attack) —');
   check('genuine manifest passes the binding guards',
     genuine.assetHashMatches === true && genuine.assetHashFailure === null);
 
-  // Whole-file exclusion: hash input is sha256(nothing) — matches by
-  // construction, binds no media.
+  // Whole-file exclusion: the hash input is sha256(nothing), which matches by
+  // construction and binds no media.
   const hostileWhole = {
     ...mV,
     hashData: { exclusions: [{ start: 0, length: fileV.length }], alg: 'sha256', hash: sha256(new Uint8Array(0)) },
@@ -1159,9 +1148,9 @@ console.log('\n— void-binding guards (the exclusion attack) —');
   check('whole-file exclusion is VOID, not a match',
     vWhole.assetHashMatches === false && vWhole.assetHashFailure === 'void-binding');
 
-  // Exclusion omitting the manifest's own range: the walk matches a real
-  // hash (file minus a tail slice), but the credentials sit inside the hash
-  // input — the binding is circular and void.
+  // Exclusion omitting the manifest's own range: the walk matches a real hash
+  // (file minus a tail slice), but the credentials sit inside the hash input,
+  // so the binding is circular and void.
   const tailRange = { start: fileV.length - 32, length: 32 };
   const tailHash = sha256ExcludingRanges(fileV, [tailRange])!;
   const hostileTail = { ...mV, hashData: { exclusions: [tailRange], alg: 'sha256', hash: tailHash } };
@@ -1175,7 +1164,7 @@ console.log('\n— void-binding guards (the exclusion attack) —');
   check('unknown manifest range: coverage guard skipped, walk honored',
     vTailNoRange.assetHashMatches === true && vTailNoRange.assetHashFailure === null);
 
-  // A real tamper still reads 'mismatch' (proven tamper), never 'void-binding'.
+  // A real tamper reads 'mismatch', not 'void-binding'.
   const editedV = new Uint8Array(fileV); editedV[editedV.length - 1] ^= 0xff;
   const vEdit = verifyManifest(editedV, mV, rangeV);
   check('genuine tamper is mismatch (proven tamper), never void',

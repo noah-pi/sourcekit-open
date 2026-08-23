@@ -3,26 +3,19 @@ import Foundation
 import AVFoundation
 
 /**
- * AudioMasterConverter — native-format → canonical PCM master conversion.
+ * AudioMasterConverter: native format to canonical PCM master, backing the
+ * settings "raw audio master" toggle.
  *
- * Ported 2026-08-10 from the retired CaptureKit module (verbatim logic) so
- * the ExhibitCamera video session can tee a raw audio master: the settings
- * "raw audio master" toggle was reachable but no sink existed in this
- * module, so the exhibit record could only ever say 'never-recorded' —
- * a dead control. Now the toggle drives a real sink.
+ * `AVCaptureAudioDataOutput.audioSettings` is macOS-only, so on iOS the
+ * audio data output always delivers the device's native format (typically
+ * Float32 LPCM at 44.1/48 kHz, mono or stereo). The PCM master is specified
+ * as LPCM mono 16 kHz 16-bit little-endian (16 kHz is well above Nyquist
+ * for the 120/180/240 Hz ENF harmonics), so each native buffer is converted
+ * once with AVAudioConverter (sample-rate conversion, downmix, float to
+ * int16) before the master writer sees it.
  *
- * Why this exists: `AVCaptureAudioDataOutput.audioSettings`
- * is macOS-only; on iOS the audio data output ALWAYS delivers the device's
- * native format (typically Float32 LPCM at 44.1/48 kHz, mono or stereo).
- * The PCM master is specified as LPCM mono 16 kHz 16-bit little-endian
- * (16 kHz ≫ Nyquist for the 120/180/240 Hz ENF harmonics),
- * so every native buffer is converted once with AVAudioConverter (sample-rate
- * conversion + downmix + float→int16) before the master writer sees it.
- *
- * Honest architecture note: the delivery AAC writer consumes the NATIVE
- * buffers (no coupling to this converter — rule 4: delivery never dies);
- * the PCM master consumes the converted canonical representation. Both
- * derive from the same mic session and the same buffer source.
+ * The delivery AAC writer consumes the native buffers and is not coupled to
+ * this converter; both derive from the same mic session.
  *
  * Thread confinement: session queue only (same as PcmMasterWriter).
  */
@@ -63,7 +56,7 @@ final class AudioMasterConverter {
     self.outputFormat = fmt
   }
 
-  /// Structural stream-format comparison — AVAudioFormat inherits NSObject
+  /// Structural stream-format comparison. AVAudioFormat inherits NSObject
   /// identity equality, which cannot detect a mid-stream format change.
   static func sameStreamFormat(_ a: AVAudioFormat?, _ b: AVAudioFormat) -> Bool {
     guard let a = a else { return false }
@@ -75,10 +68,9 @@ final class AudioMasterConverter {
 
   /**
    * Convert one native CMSampleBuffer into the canonical master format.
-   * Returns nil for not-ready buffers AND for benign zero-output conversions
-   * (frames parked in the SRC delay line — they emerge on a later call or at
-   * drain); callers skip nil silently. Throws only for real conversion
-   * failures (callers fail the PCM sink honestly).
+   * Returns nil for not-ready buffers and for zero-output conversions, where
+   * frames sit in the SRC delay line and emerge on a later call or at drain;
+   * callers skip nil. Throws only on real conversion failures.
    */
   func convert(_ sampleBuffer: CMSampleBuffer) throws -> AVAudioPCMBuffer? {
     guard CMSampleBufferDataIsReady(sampleBuffer) else { return nil }
@@ -149,10 +141,10 @@ final class AudioMasterConverter {
     }
     switch status {
     case .haveData, .inputRanDry, .endOfStream:
-      // Zero output is BENIGN, not an error: with the single-shot input
-      // closure above, the frames just absorbed sit in the SRC delay line
-      // and emerge on the NEXT convert call (or at drain). Throwing here
-      // would permanently kill the PCM master sink for the whole take.
+      // Zero output is not an error: with the single-shot input closure
+      // above, absorbed frames sit in the SRC delay line and emerge on the
+      // next convert call or at drain. Throwing would kill the PCM master
+      // sink for the whole take.
       return outBuf.frameLength > 0 ? outBuf : nil
     case .error:
       throw ConvertError.conversionFailed(error?.localizedDescription ?? "unknown")
@@ -162,13 +154,11 @@ final class AudioMasterConverter {
   }
 
   /**
-   * Flush the SRC delay line at session end. The single-shot input closure
-   * in convert(_:) can leave tail frames absorbed inside the converter;
-   * signalling .endOfStream makes it emit whatever remains. Returns nil when
-   * nothing remains (or no converter was ever built this session). Throws
-   * only for genuine converter errors. The converter is torn down afterward
-   * so the next session rebuilds it fresh (a converter that has seen
-   * .endOfStream must not be reused without reset).
+   * Flush the SRC delay line at session end: signalling .endOfStream makes
+   * the converter emit the tail frames convert(_:) left absorbed. Returns
+   * nil when nothing remains or no converter was built this session. The
+   * converter is torn down afterward, since one that has seen .endOfStream
+   * must not be reused without reset.
    */
   func drain() throws -> AVAudioPCMBuffer? {
     guard let converter = converter else { return nil }
@@ -176,9 +166,9 @@ final class AudioMasterConverter {
       self.converter = nil
       self.inputFormat = nil
     }
-    // SRC latency is a few dozen output frames; 1024 covers it with a wide
-    // margin. One call suffices: with .endOfStream signalled, the converter
-    // flushes everything that fits — and the residue always fits.
+    // SRC latency is a few dozen output frames, so 1024 is ample. One call
+    // suffices: with .endOfStream signalled the converter flushes whatever
+    // fits, and the residue always fits.
     guard let outBuf = AVAudioPCMBuffer(
       pcmFormat: outputFormat,
       frameCapacity: 1024

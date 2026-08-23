@@ -1,40 +1,25 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * App Attest — Apple certifies that this device is genuine Apple hardware
- * running a genuine, unmodified Source Kit build, and the attestation is
- * cryptographically BOUND to this device's Secure Enclave signing key.
+ * App Attest — Apple certifies that this is genuine Apple hardware running an
+ * unmodified build, bound to this device's Secure Enclave signing key.
  *
- * Why the binding indirection: Apple deliberately gives apps no SecKey
- * access to App Attest keys — they can only produce counter-tracked
- * assertions via DCAppAttestService, never arbitrary signatures, so an
- * App Attest key can never sign our manifests. Instead we use the
- * industry-standard "emulated key attestation": the App Attest
- * clientDataHash is computed as
+ * Apps get no SecKey access to App Attest keys, so those keys can never sign
+ * manifests. The binding uses emulated key attestation instead:
  *
  *   clientDataHash = SHA256(challenge ‖ signingPublicKey)
  *
- * so Apple's hardware attestation vouches for OUR Enclave signing key.
- * The registry server verifies the same construction, and the binding is
- * embedded in every C2PA manifest as the com.verify.app-attest assertion,
- * which any verifier can re-check offline against Apple's App Attest root:
+ * The binding is embedded in every C2PA manifest as the com.verify.app-attest
+ * assertion and re-checks offline against Apple's App Attest root:
  *
  *   nonce (attestation leaf cert, extension 1.2.840.113635.100.8.2)
  *     == SHA256(authData ‖ SHA256(challenge ‖ signingPublicKey))
  *
- * Signing itself always happens with the Enclave key (non-extractable,
- * on-chip). Attestation upgrades the key's public credibility; it is never
- * a gate on signing.
+ * Signing always uses the Enclave key; attestation never gates it.
  *
- * The app ships with no registry address and never
- * contacts one on its own. (set-and-forget): attestation runs
- * AUTOMATICALLY on first launch and silently retries on later launches while
- * absent — with a LOCALLY generated challenge, so no network or registry is
- * needed at all. The local challenge changes nothing a verifier checks:
- * clientDataHash = SHA256(challenge ‖ signingPublicKey) still binds Apple's
- * hardware attestation to this device's Enclave signing key, and the
- * embedded assertion still re-checks offline against Apple's pinned root.
- * An org registry (Settings → advanced) remains as an upgrade path: a
- * server-issued, single-use challenge verified by that registry.
+ * No registry address ships with the app. Attestation runs on first launch
+ * with a locally generated challenge and retries on later launches while
+ * absent, so no network is required. An org registry (Settings → advanced) is
+ * an upgrade path: a server-issued, single-use challenge it verifies itself.
  */
 
 import { Platform } from 'react-native';
@@ -67,10 +52,9 @@ const OPTIONS: SecureStore.SecureStoreOptions = {
 };
 
 /**
- * The configured registry, or null when none was ever set. There is NO
- * bundled default: Source Kit does not phone any server home. Any
- * registry speaking the open format in server/ works — self-hosted or
- * public — and the user chooses it explicitly in Settings.
+ * The configured registry, or null when none was set. No default is bundled.
+ * Any registry speaking the open format in server/ works; the user picks one
+ * in Settings.
  */
 export async function getAttestServerUrl(): Promise<string | null> {
   const stored = await SecureStore.getItemAsync(SERVER_URL_KEY, OPTIONS).catch(() => null);
@@ -92,7 +76,7 @@ export interface AttestState {
   /** SHA-256 of the bound Secure Enclave signing public key, hex. */
   boundFingerprint: string;
   registeredAt: string;
-  /** Where the challenge came from — absent on pre-states (registry). */
+  /** Where the challenge came from. Absent means registry. */
   origin?: 'local' | 'registry';
 }
 
@@ -169,9 +153,8 @@ export async function attestThisDevice(
   const { challenge } = (await chRes.json()) as { challenge: string };
 
   // 2. App Attest key + Apple attestation, with the signing key bound into
-  //    the clientDataHash. Apple signs SHA256(authData ‖ clientDataHash)
-  //    into the attestation's nonce extension, so the binding is hardware-
-  //    enforced and publicly verifiable.
+  //    the clientDataHash. Apple signs SHA256(authData ‖ clientDataHash) into
+  //    the attestation's nonce extension.
   const keyId = await native.generateAttestKey();
   const clientDataHash = sha256(concatBytes(base64ToBytes(challenge), pubBytes));
   const attestationBase64 = await native.attestKey(keyId, bytesToBase64(clientDataHash));
@@ -201,11 +184,9 @@ export async function attestThisDevice(
 }
 
 /**
- * Registry-free attestation: the challenge is 32 fresh random bytes
- * generated on-device — no server round-trip, nothing to configure. The
- * verifier's math is identical (nonce = SHA256(authData ‖ SHA256(challenge ‖
- * signingPublicKey)) against Apple's root); what a registry adds is ITS
- * independent check, not the binding itself.
+ * Registry-free attestation: the challenge is 32 fresh random bytes generated
+ * on-device, no server round-trip. Verifier math is identical; a registry adds
+ * only its own independent check.
  */
 export async function attestThisDeviceLocally(
   signingPublicKeyBase64?: string,
@@ -239,13 +220,11 @@ export async function attestThisDeviceLocally(
 }
 
 /**
- * Set-and-forget entry point: called at every launch. Returns the
- * current state immediately when one is bound to the active signing key;
- * otherwise attests silently — via the configured registry when one is set,
- * else with a local challenge. Key rotation invalidates the old binding, so
- * a stale state is replaced, not kept. NEVER throws: any failure (no
- * hardware support, offline registry, user-cancelled prompt) resolves null
- * and is retried at the next launch.
+ * Launch entry point. Returns the current state when it is bound to the active
+ * signing key; otherwise attests silently, via the configured registry when
+ * one is set, else with a local challenge. Key rotation invalidates the old
+ * binding, so a stale state is replaced. Never throws: any failure resolves
+ * null and is retried at the next launch.
  */
 export async function ensureAttestation(): Promise<AttestState | null> {
   try {

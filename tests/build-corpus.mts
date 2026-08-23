@@ -1,25 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Reference corpus builder.
- *
- * Produces tests/corpus/: a set of real files with EXPECTED verdicts, the
- * artifact nobody else publishes. Signed fresh with a random lab key on
- * every build — nothing is canned. The corpus serves three masters:
- *   1. test-corpus.mts runs our verifier against it and demands the
- *      expected verdicts (CI);
- *   2. the comparison harness runs c2patool / ProofCheck against
- *      the same files;
- *   3. an engine swap must produce identical verdicts before and
- *      after — the corpus is the oracle.
+ * Reference corpus builder. Produces tests/corpus/: real files paired with
+ * expected verdicts, signed fresh with a random lab key on every build.
+ * Consumed by test-corpus.mts in CI, by the c2patool / ProofCheck
+ * comparison harness, and as the before/after oracle for an engine swap.
  *
  * Run from tests/.staged:  ../node_modules/.bin/tsx ../build-corpus.mts
  * (paths below resolve relative to .staged; output lands in ../corpus).
  *
- * Categories: signed, tampered, stripped, hostile,
- * recaptured. "Recaptured" = a photo OF a photo — the analog hole; the
- * corpus includes one to pin the honest behavior: it verifies INTACT,
- * because custody is all a signature can prove. Its expectation file says
- * exactly that, so nobody ever "fixes" it into a false negative.
+ * Categories: signed, tampered, stripped, hostile, recaptured. A recapture
+ * (photo of a photo) verifies INTACT because a signature covers custody only;
+ * its expectation file pins that verdict.
  */
 import * as fs from 'node:fs';
 import { attestPhoto, attestPng } from './attest.mts';
@@ -29,7 +20,7 @@ import { labSigner } from './deviceKey-shim.mts';
 const OUT = new URL('../corpus/', import.meta.url).pathname;
 fs.mkdirSync(OUT, { recursive: true });
 
-// 1×1 white JPEG + PNG — lab media; the cryptography doesn't care about pixels.
+// 1×1 white JPEG and PNG. Lab media; the pixels are irrelevant.
 const JPEG_1PX = Buffer.from(
   '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQBAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAc//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAs//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/ASf/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/ASf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/As//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IV//2gAMAwEAAgADAAAAEP/EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQMBAT8QH//EABQRAQAAAAAAAAAAAAAAAAAAABD/2gAIAQIBAT8QH//EABQQAQAAAAAAAAAAAAAAAAAAABD/2gAIAQEAAT8QH//Z',
   'base64'
@@ -90,7 +81,7 @@ const hostile = new Uint8Array(signed.signedPhotoBytes!);
 const marker = Buffer.from('com.verify.telemetry', 'utf8');
 const idx = Buffer.from(hostile).indexOf(marker);
 if (idx < 0) throw new Error('telemetry marker not found — corpus builder drifted');
-hostile[idx + marker.length + 4] ^= 0xff; // corrupt claim content → COSE no longer verifies
+hostile[idx + marker.length + 4] ^= 0xff; // corrupt claim content so COSE fails
 write('hostile-claim.jpg', hostile);
 expectations.push({
   file: 'hostile-claim.jpg', category: 'hostile',
@@ -99,9 +90,8 @@ expectations.push({
 });
 
 // --- 5. recaptured (the analog hole, pinned behavior) ---
-// A "recapture" is just another genuine signing pass — cryptographically
-// indistinguishable from the original, which is precisely the point. The
-// note carries the lesson: INTACT here is custody, never reality.
+// A recapture is another genuine signing pass, cryptographically
+// indistinguishable from the original.
 const recaptured = await attestPhoto({ photoUri: tmpClean, context: ctx, identity, key });
 write('recaptured-screen.jpg', recaptured.signedPhotoBytes!);
 expectations.push({
@@ -119,12 +109,12 @@ expectations.push({
   note: 'PNG path — caBX chunk, same hard binding.',
 });
 const tamperedPng = new Uint8Array(signedPng.signedPngBytes);
-// Flip a byte inside the IDAT pixel data — located dynamically: a fixed
-// offset lands inside the caBX manifest chunk (where a flip may hit a
-// timestamp token and change nothing the verdict depends on).
+// Flip a byte inside the IDAT pixel data, located dynamically: a fixed
+// offset lands in the caBX manifest chunk, where a flip may hit a
+// timestamp token and leave the verdict unchanged.
 const idatAt = Buffer.from(tamperedPng).indexOf('IDAT');
 if (idatAt < 0) throw new Error('IDAT not found — corpus builder drifted');
-tamperedPng[idatAt + 8] ^= 0xff; // +4 length, +4 type → inside the data
+tamperedPng[idatAt + 8] ^= 0xff; // +4 length, +4 type: inside the data
 write('tampered-pixel.png', tamperedPng);
 expectations.push({
   file: 'tampered-pixel.png', category: 'tampered',

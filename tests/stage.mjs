@@ -3,10 +3,9 @@
 /**
  * Stages a runnable validation lab into tests/.staged/.
  *
- * The app's provenance/crypto code is plain TypeScript with no build step, but
- * a few modules import expo/react-native for device services (keychain,
- * filesystem, device model). For lab runs we rewire exactly those imports to
- * tiny shims (tests/shims/) — everything cryptographic runs as the real code.
+ * Provenance and crypto code is plain TypeScript with no build step; the few
+ * modules importing expo/react-native for device services are rewired to the
+ * shims in tests/shims/. Everything cryptographic runs as the real code.
  *
  * Usage:
  *   node tests/stage.mjs
@@ -28,21 +27,19 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
 const STAGE = [
-  // Hand-rolled verification core — ARCHIVED but still wired as the
-  // differential oracle and the desk's current engine. Staged from
-  // src/c2pa/ under flat basenames, so the suites
-  // import './verifyAsset.mts' etc.
+  // Hand-rolled verification core, staged from src/c2pa/ under flat
+  // basenames, so the suites import './verifyAsset.mts' etc.
   'src/c2pa/verifyAsset.ts', 'src/c2pa/verifyAppAttest.ts',
   'src/c2pa/c2pa.ts', 'src/c2pa/bmff.ts',
   'src/c2pa/jpegApp11.ts', 'src/c2pa/png.ts',
   'src/provenance/attest.ts', 'src/provenance/manifest.ts',
   'src/provenance/detached.ts',
   // Stereo-capture artifact ingestion (Spec-Camera-Module-0.13): three-state
-  // commit → proof-bundle section + context.stereo-* claims + the
+  // commit, proof-bundle section, context.stereo-* claims, and the
   // StereoCommitment builder the desk verifier consumes.
   'src/provenance/stereoArtifacts.ts',
-  // The seal-side glue (native-shape JSON → committed desk shape; pair
-  // events → three-state pair inputs) — exercised by test-stereo-video.mts.
+  // Seal-side glue: native-shape JSON to committed desk shape, pair events
+  // to three-state pair inputs. Exercised by test-stereo-video.mts.
   'src/provenance/stereoGlue.ts',
   // Per-track streamedChunks v2 (delivery-file demux) + signed poseTrace.
   'src/provenance/trackChunks.ts', 'src/provenance/poseTrace.ts',
@@ -56,60 +53,36 @@ const STAGE = [
   'src/lib/roster.ts', 'src/lib/ots.ts', 'src/lib/proofBundle.ts',
   'src/lib/seal.ts', 'src/lib/shamir.ts', 'src/lib/pq.ts',
   'src/lib/trustLadder.ts', 'src/lib/trustProvider.ts', 'src/lib/rosterStore.ts',
-  // Persistent on-device diagnostics log — attest.ts appends to it
-  // at seal time, so the lab stages it too (filesystem via shim-fs).
+  // Persistent on-device diagnostics log; attest.ts appends to it at seal
+  // time, so the lab stages it too (filesystem via shim-fs).
   'src/lib/diagnosticsLog.ts',
-  // The vault itself — staged for the disclosure-store hygiene suite:
-  // deleteItem/destroyVault must take the disclosure
-  // state + chunk maps with them. cipher.ts is vaultFs's encryption core.
+  // Vault, staged for the disclosure-store hygiene suite: deleteItem and
+  // destroyVault must take the disclosure state and chunk maps with them.
+  // cipher.ts is vaultFs's encryption core.
   'src/lib/cipher.ts', 'src/vault/vaultFs.ts',
-  // passcode is vaultFs's PIN verifier (staged so the strict typecheck
-  // covers it; the lockout path is exercised via the real pinLockout.ts).
+  // passcode is vaultFs's PIN verifier, staged for typecheck coverage; the
+  // lockout path runs through the real pinLockout.ts.
   'src/vault/passcode.ts',
-  // Device-integrity signal collector + its Enclave bridge — staged for
-  // typecheck coverage; attest.mts imports the SIGNALS TYPE only, and the
+  // Device-integrity signal collector and its Enclave bridge, staged for
+  // typecheck coverage. attest.mts imports the signals type only, and the
   // Enclave bridge resolves to the absent-module case via shim-modules-core.
   'src/lib/integrity.ts', 'src/lib/enclave.ts',
   'src/sensors/motion.ts',
-  // desk-side analyzers staged so the lab exercises the SAME code the desk
-  // ships (parallax; display-beat / ENF-extract / onset
-  // A/V desync / rolling-shutter skew; @exhibit/lib/* imports rewired below).
-  // rephoto + videoMotion are raster.ts/avExtract.ts's desk-core
-  // dependencies (type-level for avExtract, runtime for raster).
-  // NOTE: desk/src/core/rephoto.ts collides on basename with
-  // src/lib/rephoto.ts — it is staged below as deskRephoto.mts instead.
-  // Stereo planarity verifier (P4) — committed-input types, LUT
-  // undistortion, pure-TS homography RANSAC, the distance-gated signal,
-  // and the public entry point. Zero external deps by design.
-  // Feature-extraction front end for the stereo verifier: FAST-9/Harris
-  // corners, oriented rBRIEF descriptors, Hamming matching with ratio +
-  // cross-check, epipolar pre-filter from the committed calibration.
-  // Desk stereo bundle command (exhibit-desk stereo): extraction, integrity,
-  // planarity signal. Imports @exhibit/provenance/stereoArtifacts and
-  // ../stereo/index — rewired below.
-  // Multi-baseline (three-lens: ultra-wide/wide/tele) stereo verifier —
-  // per-pair two-view pipeline reuse + the over-determined
-  // composition-consistency check. Sibling './x' imports flatten via the
-  // same rewrite rules as the other stereo modules.
-  // P5 single-image physics checks (Lumethic-derived): radial CA structure,
-  // JPEG-grid-in-RAW with a provenance gate, Poisson–PRNU profile. The
-  // orchestrator index.ts is staged separately at the end of this file as
-  // singleimageIndex.mts (basename collision with desk/stereo/index.ts).
 ];
 
 function rewrite(src, fname) {
   src = src
-    // Longest prefixes FIRST: engine/ modules are one level deeper than
-    // provenance/ modules, and archived modules reach back into src/ —
-    // everything flattens to './x.mts' here.
+    // Longest prefixes first: engine/ modules sit one level deeper than
+    // provenance/ modules, and some modules reach back into src/. Everything
+    // flattens to './x.mts'.
     .replace(/from '\.\.\/\.\.\/c2pa\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/c2pa\/(\w+)'/g, "from './$1.mts'")
-    // engine/ modules reach src/lib as '../../lib/x' (policyLayer → trustProvider).
+    // engine/ modules reach src/lib as '../../lib/x' (policyLayer to trustProvider).
     .replace(/from '\.\.\/\.\.\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/\.\.\/src\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/\.\.\/src\/provenance\/(\w+)'/g, "from './$1.mts'")
-    // desk/cli modules reach desk/src/core as '../src/core/x' (avExtract, raster).
-    // rephoto is the basename-collision exception: it lands at deskRephoto.mts.
+    // desk/cli modules reach desk/src/core as '../src/core/x'. rephoto is the
+    // basename-collision exception and lands at deskRephoto.mts.
     .replace(/from '\.\.\/src\/core\/rephoto'/g, "from './deskRephoto.mts'")
     .replace(/from '\.\.\/src\/core\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/lib\/(\w+)'/g, "from './$1.mts'")
@@ -118,11 +91,11 @@ function rewrite(src, fname) {
     .replace(/from '\.\.\/stereo\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/provenance\/(\w+)'/g, "from './$1.mts'")
-    // provenance/disclosure cross-imports flatten to the disclosure-*.mts names below.
+    // provenance/disclosure cross-imports flatten to the disclosure-*.mts names.
     .replace(/from '\.\.\/disclosure\/(\w+)'/g, "from './disclosure-$1.mts'")
     .replace(/from '\.\/(\w+)'/g, "from './$1.mts'")
-    // Inline TYPE imports (import('./x')) flatten by the same rules — the
-    // 'from'-anchored rules above never see them (manifest → stereoArtifacts).
+    // Inline type imports (import('./x')) need their own rules; the
+    // 'from'-anchored rules above never match them.
     .replace(/import\('\.\.\/\.\.\/lib\/(\w+)'\)/g, "import('./$1.mts')")
     .replace(/import\('\.\/(\w+)'\)/g, "import('./$1.mts')")
     .replace("from 'expo-device'", "from './shim-device.mts'")
@@ -147,10 +120,9 @@ for (const rel of STAGE) {
   fs.writeFileSync(path.join(out, `${name}.mts`), rewrite(src, name));
 }
 
-// Disclosure engine (core + commit-at-capture/burn):
-// staged as disclosure-*.mts — the SAME flattening test-disclosure.mts
-// applies, so both paths produce byte-identical modules. In-disclosure
-// imports ('./tree') map to the disclosure- prefixed names.
+// Disclosure engine, staged as disclosure-*.mts under the same flattening
+// test-disclosure.mts applies, so both paths produce identical modules.
+// In-disclosure imports ('./tree') map to the disclosure- prefixed names.
 const DISCLOSURE_STAGE = ['ladder', 'inventory', 'salts', 'tree', 'bundle', 'commit', 'captureCommit', 'burn'];
 for (const name of DISCLOSURE_STAGE) {
   const src = fs.readFileSync(path.join(root, 'src/disclosure', `${name}.ts`), 'utf8')
@@ -166,9 +138,8 @@ for (const f of fs.readdirSync(path.join(here, 'shims'))) {
   s = s.replaceAll('/tmp/lab/fs/', path.join(out, 'fs') + '/').replaceAll('/tmp/lab/fs', path.join(out, 'fs'));
   fs.writeFileSync(path.join(out, f), s);
 }
-// The withheld camera bridge's CONTRACT types land under the name the
-// staged code imports: './exhibitCamera.mts'. Type-only; see the shim's
-// header for the boundary rationale.
+// The camera bridge's contract types land under the name the staged code
+// imports, './exhibitCamera.mts'. Type-only; see the shim's header.
 fs.copyFileSync(path.join(out, 'exhibitCamera-types-shim.mts'), path.join(out, 'exhibitCamera.mts'));
 
 // test suites — media paths point at the staged dir; c2patool from env/PATH
@@ -199,15 +170,11 @@ if (hasFfmpeg) {
   console.log('NOTE: ffmpeg not found — generate clean.{jpg,png,mp4,mov,m4a} in', out, 'yourself');
 }
 
-// EXACT versions matching the app's package-lock.json:
-// the lab must test the crypto the app SHIPS, not whatever the ranges
-// resolve to on the day the lab is staged. tsx stays a range — it is the
-// runner, not the code under test.
-// @contentauth/c2pa-wasm is the upstream C2PA engine pinned EXACTLY. The
-// target binding is @contentauth/c2pa-node@, but it declares
-// engines: node>=22 and the harness runs node 20 — the wasm build
-// (same c2pa-rs core) is the documented fallback. upstreamEngine
-// prefers c2pa-node automatically on node>=22 hosts.
+// Versions pinned to the app's package-lock.json so the lab tests the crypto
+// the app ships. tsx stays a range: it is the runner, not code under test.
+// @contentauth/c2pa-wasm is the upstream C2PA engine; the c2pa-node binding
+// needs node>=22 while the harness runs node 20, and upstreamEngine prefers
+// c2pa-node automatically on node>=22 hosts.
 fs.writeFileSync(path.join(out, 'package.json'), JSON.stringify({
   name: 'verify-lab', private: true, type: 'module',
   dependencies: {

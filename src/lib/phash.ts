@@ -1,26 +1,15 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * DCT perceptual hash.
- *
- * The classic pHash: 32×32 grayscale → DCT-II → the 8×8 lowest-frequency
+ * DCT perceptual hash: 32×32 grayscale → DCT-II → the 8×8 lowest-frequency
  * coefficients → one bit per coefficient against their median (DC excluded
  * from the median, per the reference algorithm) → 64 bits, 8 bytes.
- *
  * Used for near-duplicate detection and for re-associating a sidecar with its
- * media. Two photos of the same scene — or one photo and its recompressed or
- * cropped derivative — land within a few bits of each other; unrelated photos
- * sit around 32 bits apart.
- *
- * A pHash match is a lead, not a verdict. It says these look alike and nothing
- * more: cropping, collages and coincidence all produce matches, and an
- * adversary can engineer one. Thresholds need corpus calibration before any UI
- * leans on them.
- *
- * Two copies exist per photo. The capture-time hash is computed pre-signing and
- * embedded in the manifest as a c2pa.soft-binding assertion, so it travels with
- * the file under the claim signature. The vault index keeps its own copy
- * alongside the exact sha256, as a cross-check and for local search. Anyone
- * holding a list of known-image hashes can approximate-match either one.
+ * media; similar images land within a few bits, unrelated ones around 32.
+ * A match means "these look alike" — cropping, collages and coincidence all
+ * produce matches, and thresholds need corpus calibration before UI leans on
+ * them. Each photo has two copies: the capture-time hash embedded in the
+ * manifest as a c2pa.soft-binding assertion, and the vault index's own copy
+ * alongside the exact sha256.
  */
 
 export const PHASH_SIZE = 32;

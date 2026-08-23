@@ -1,20 +1,15 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Motion-signature analysis of the accelerometer stream captured while the
- * shutter was open.
- *
- * Honest framing: this is a *context signal*, not a biometric. It can tell a
- * desk editor "the phone was moving the way a handheld phone moves" or "the
- * phone was perfectly still" — useful color alongside a photo. It cannot
- * prove who held the phone, and it is not presented as proof anywhere in
- * the product.
+ * shutter was open. A context signal, not a biometric: it distinguishes
+ * handheld from still, and identifies nobody.
  *
  * Method: remove gravity with an exponential moving average, take the
  * magnitude of the residual, compute RMS, and find the dominant frequency
- * between 1–25 Hz with a small radix-2 FFT (hand tremor typically clusters
- * around 8–12 Hz; that band is reported as telemetry, not adjudicated).
+ * between 1–25 Hz with a small radix-2 FFT. Hand tremor clusters around
+ * 8–12 Hz; that band is reported as telemetry.
  *
- * Pure module — no React Native dependencies.
+ * Pure module: no React Native dependencies.
  */
 
 import type { MotionSummary, PoseTrace } from '../provenance/manifest';
@@ -77,9 +72,9 @@ export interface SensorTiming {
   /** Raw samples observed in the window. */
   samples: number;
   /**
-   * Coefficient of variation of inter-sample intervals (stddev/mean; 0 =
-   * perfectly regular). A synthetic feed tends to be TOO regular or too
-   * bursty — a bounded signal, never a verdict (docs/INTEGRITY.md).
+   * Coefficient of variation of inter-sample intervals (stddev/mean; 0 is
+   * perfectly regular). Synthetic feeds tend to be too regular or too
+   * bursty. A bounded signal, not a verdict (docs/INTEGRITY.md).
    */
   intervalCv: number;
 }
@@ -116,7 +111,7 @@ export function analyzeMotion(raw: MotionSample[]): MotionSummary {
   }
 
   const mag = new Float64Array(n);
-  const sigX = new Float64Array(n); // signed residual — FFT needs sign to preserve tremor frequency
+  const sigX = new Float64Array(n); // signed residual; the FFT needs the sign to preserve tremor frequency
   let idx = 0;
   // 2. Gravity removal via EMA (~0.5 s time constant).
   const alpha = 0.5 / (0.5 + dt / 1000);
@@ -184,14 +179,13 @@ export function analyzeMotion(raw: MotionSample[]): MotionSummary {
 
 
 // ---------------------------------------------------------------------------
-// The signed pose trace — gyro evidence replacing the parallax clip
+// Signed pose trace.
 // ---------------------------------------------------------------------------
 
 /**
- * One fused DeviceMotion sample. CoreMotion fuses the gyro, accelerometer
- * and magnetometer on-device; we record its rotation rate (true gyro),
- * attitude and gravity-free user acceleration — each optional on paper, so
- * a missing component skips the sample rather than fabricating zeros.
+ * One fused DeviceMotion sample: CoreMotion's rotation rate, attitude, and
+ * gravity-free user acceleration. A sample missing any component is skipped
+ * rather than zero-filled.
  */
 export interface PoseSample {
   /** Milliseconds epoch. */
@@ -213,7 +207,7 @@ export interface PoseSample {
 export interface PoseTraceOptions {
   /** Window before the shutter moment, ms (default 3000). */
   beforeMs?: number;
-  /** Window after the shutter moment, ms (default 500 — covers shutter lag). */
+  /** Window after the shutter moment, ms (default 500, covering shutter lag). */
   afterMs?: number;
   /** Decimated sample rate, Hz (default 20). */
   hz?: number;
@@ -226,14 +220,13 @@ const clampI16 = (v: number) => Math.max(-32768, Math.min(32767, Math.round(v)))
 
 /**
  * Decimates and quantizes a raw pose buffer into the signed PoseTrace that
- * rides in the attestation record. Returns null — honestly — when the
- * window holds too little data. Deterministic pure function: same buffer in,
- * same trace out, which is what makes it desk-reproducible evidence.
+ * rides in the attestation record. Returns null when the window holds too
+ * little data. Deterministic, so a desk can reproduce the trace.
  *
  * Decimation buckets samples onto the hz grid anchored at the first sample
- * in the window and keeps the sample nearest each bucket center (nearest-
- * neighbour, no interpolation — interpolating would invent data). The
- * shutter anchor is the emitted sample nearest capturedAtMs.
+ * in the window and keeps the sample nearest each bucket center; no
+ * interpolation. The shutter anchor is the emitted sample nearest
+ * capturedAtMs.
  */
 export function buildPoseTrace(
   samples: PoseSample[],

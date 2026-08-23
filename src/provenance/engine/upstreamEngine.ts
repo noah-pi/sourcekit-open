@@ -1,48 +1,39 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Wraps the official C2PA reader and returns a
- * NORMALIZED result. No verdicts here — normalization only.
- * Verdicts are composed exclusively by policyLayer.ts.
+ * Wraps the official C2PA reader and returns a normalized result. No verdicts
+ * here; policyLayer.ts composes those.
  *
- * Binding:
- *   - TARGET:  @contentauth/c2pa-node@ (napi over c2pa-rs) —
- *     requires **node >= 22** (its `engines` field). The staged harness
- *     and CI run node 20, so this binding cannot load there.
- *   - FALLBACK (documented in for node < 22):
- *     @contentauth/c2pa-wasm@ — the SAME c2pa-rs core compiled to
- *     wasm, pinned exactly, runs on node 20. This module prefers c2pa-node
- *     on node >= 22 and uses the wasm build otherwise; `engine` in the
- *     result says which one actually ran, so reports stay honest.
+ * Binding: @contentauth/c2pa-node (napi over c2pa-rs) requires node >= 22, and
+ * the staged harness and CI run node 20, so this module falls back to
+ * @contentauth/c2pa-wasm, the same c2pa-rs core compiled to wasm and pinned
+ * exactly. `engine` in the result says which one ran.
  *
- * Node gaps in the wasm build that this module shims, explicitly:
- *   - wasm-bindgen glue uses FileReaderSync (a Web Worker API) to read
- *     Blobs. In Node we install a FileReaderSync polyfill backed by a
- *     WeakMap — every Blob handed to the engine is created by blobFrom
- *     below, so the bytes are always tracked. A foreign Blob throws rather
- *     than guessing.
- *   - Engine settings are process-global (c2pa-rs settings model). We load
- *     them ONCE per process from the first call's options; changing trust
- *     material mid-process is rejected loudly (see initSettings).
+ * Node gaps in the wasm build shimmed here:
+ *   - wasm-bindgen glue uses FileReaderSync (a Web Worker API) to read Blobs.
+ *     The polyfill is backed by a WeakMap; every Blob handed to the engine
+ *     comes from blobFrom below, and a foreign Blob throws.
+ *   - Engine settings are process-global (c2pa-rs settings model), loaded once
+ *     per process from the first call's options; changing trust material
+ *     mid-process is rejected (see initSettings).
  *
- * Offline invariant: remote manifest fetch and OCSP are disabled in the
- * loaded settings. Trust material is only what the caller pins.
+ * Offline invariant: remote manifest fetch and OCSP are disabled in the loaded
+ * settings. Trust material is only what the caller pins.
  */
 
 import { createRequire } from 'node:module';
 
 // ---------------------------------------------------------------------------
-// Normalized result shape (shared by both engines — minimum fields
-// are manifests / activeClaim / validationStatus / signerChain / trustListHit
-// / rawErrors — the rest are the facts policyLayer needs to compose OUR
-// verdicts without either engine emitting one).
+// Normalized result shape, shared by both engines. Minimum fields: manifests,
+// activeClaim, validationStatus, signerChain, trustListHit, rawErrors. The rest
+// are the facts policyLayer needs to compose verdicts.
 // ---------------------------------------------------------------------------
 
-/** Which C2PA trust list the signer chained to, as far as THIS run knows. */
+/** Which C2PA trust list the signer chained to, as far as this run knows. */
 export type TrustListHit =
   | 'official'  // chained to anchors the caller pinned as the official C2PA Trust List
   | 'interim'   // chained to anchors the caller pinned as the frozen ITL (2026-01-01)
-  | 'none'      // trust WAS evaluated against pinned anchors; signer is on neither list
-  | 'unknown';  // trust not evaluated against caller-pinned anchors — never claimed
+  | 'none'      // trust was evaluated against pinned anchors; signer is on neither list
+  | 'unknown';  // trust not evaluated against caller-pinned anchors
 
 export type EngineId = 'upstream-c2pa-node' | 'upstream-c2pa-wasm' | 'handrolled' | 'unavailable';
 
@@ -73,20 +64,20 @@ export interface NormalizedEngineResult {
   engine: EngineId;
   /** Human-pinned engine version string (package version, recorded for reproducibility). */
   engineVersion: string;
-  /** False when the engine package could not load at all — rawErrors says why. */
+  /** False when the engine package could not load; rawErrors says why. */
   engineAvailable: boolean;
   /** Container gate facts: the caller's flow rejected this container. */
   containerRejected: 'NOT_JPEG' | 'NOT_BMFF' | null;
   manifestFound: boolean;
   manifests: EngineManifestSummary[];
- /** The active (most recent) manifest's claim summary — the active claim. */
+ /** The active (most recent) manifest's claim summary. */
   activeClaim: EngineManifestSummary | null;
   validationStatus: EngineStatus[];
-  // --- verdict facts (never verdicts) -------------------------------
+  // --- inputs the policy layer turns into verdicts -------------------
   signatureValid: boolean | null;
   claimAssertionsMatch: boolean | null;
   assetHashMatches: boolean | null;
-  /** 'void-binding' = the signed claim honors no usable binding → integrity UNPROVEN. */
+  /** 'void-binding' = the signed claim honors no usable binding; integrity unproven. */
   assetHashFailure: 'mismatch' | 'void-binding' | null;
   /** Structure the engine cannot evaluate (merkle-aux BMFF, unknown algorithms…). */
   unsupported: boolean;
@@ -100,7 +91,7 @@ export interface NormalizedEngineResult {
   raw?: unknown;
 }
 
-/** Trust material the caller pins for THIS run (offline; never fetched). */
+/** Trust material the caller pins for this run. Offline; never fetched. */
 export interface EngineTrustOptions {
   /** PEM anchor bundle. `kind` declares which list the caller says this is. */
   anchorsPem: string;
@@ -112,11 +103,11 @@ export interface UpstreamReadOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Engine loading — dynamic, optional, honest about what loaded.
+// Engine loading: dynamic and optional; the result reports what loaded.
 // ---------------------------------------------------------------------------
 
-const C2PA_NODE_VERSION = '0.8.1';   // pinned target — node>=22 only
-const C2PA_WASM_VERSION = '0.11.1';  // pinned fallback — node 20 harness
+const C2PA_NODE_VERSION = '0.8.1';   // pinned target; node>=22 only
+const C2PA_WASM_VERSION = '0.11.1';  // pinned fallback; node 20 harness
 
 interface WasmBindings {
   initSync: (m: { module: Uint8Array }) => unknown;
@@ -142,8 +133,8 @@ export function blobFrom(bytes: Uint8Array): Blob {
 
 function installNodePolyfills(): void {
   // FileReaderSync exists only in Web Workers; c2pa-wasm's glue calls it to
-  // slurp Blobs synchronously. Our polyfill reads the tracked bytes. It
-  // throws on untracked Blobs rather than silently returning wrong bytes.
+  // read Blobs synchronously. This polyfill reads the tracked bytes and throws
+  // on an untracked Blob rather than returning wrong bytes.
   const g = globalThis as Record<string, unknown>;
   if (typeof g.FileReaderSync === 'undefined') {
     g.FileReaderSync = class {
@@ -167,8 +158,8 @@ async function importOptionalPackage(spec: string): Promise<unknown> {
   const { pathToFileURL } = await import('node:url');
   // Resolution bases, in order: this module's own location (staged harness,
   // where node_modules sits at the package root), then the process cwd (the
-  // desk CLI, whose node_modules holds the pinned engine while this file
-  // lives OUTSIDE the desk package — walk-up from here never finds it).
+  // desk CLI, whose node_modules holds the pinned engine while this file lives
+  // outside the desk package, so walk-up from here does not find it).
   const bases = [import.meta.url, pathToFileURL(process.cwd() + '/').href];
   let lastErr: unknown;
   for (const base of bases) {
@@ -189,14 +180,14 @@ async function loadEngine(): Promise<{ id: EngineId; version: string; wasm?: Was
     ? Number(process.versions.node.split('.')[0]) : 0;
   if (nodeMajor >= 22) {
     try {
-      // Specifier built at runtime: c2pa-node is an OPTIONAL binding that is
-      // absent on node<22 harnesses — a static import would break typecheck
-      // and bundlers for a package that must not be installed there.
+      // Specifier built at runtime: c2pa-node is an optional binding absent on
+      // node<22 harnesses, where a static import would break typecheck and
+      // bundlers.
       const mod = (await importOptionalPackage('@contentauth/c2pa-node')) as Record<string, unknown>;
       return { id: 'upstream-c2pa-node', version: C2PA_NODE_VERSION, nodeReader: mod };
     } catch {
-      // fall through to wasm — the fallback is a supported configuration,
-      // not a failure; it is disclosed via the returned engine id.
+      // Fall through to wasm; the fallback is a supported configuration and is
+      // disclosed via the returned engine id.
     }
   }
   if (wasmBindings) return { id: 'upstream-c2pa-wasm', version: C2PA_WASM_VERSION, wasm: wasmBindings };
@@ -228,9 +219,9 @@ async function loadEngine(): Promise<{ id: EngineId; version: string; wasm?: Was
 }
 
 /**
- * Engine settings are process-global in c2pa-rs — load once, then pin.
- * Offline by construction: no remote manifest fetch, no OCSP. Trust anchors
- * are only what the caller supplies.
+ * Engine settings are process-global in c2pa-rs: load once, then pin. Offline
+ * by construction (no remote manifest fetch, no OCSP), and trust anchors are
+ * only what the caller supplies.
  */
 function initSettings(mod: WasmBindings | Record<string, unknown>, opts?: UpstreamReadOptions): void {
   const settings = {
@@ -251,7 +242,7 @@ function initSettings(mod: WasmBindings | Record<string, unknown>, opts?: Upstre
 }
 
 // ---------------------------------------------------------------------------
-// Container sniffing — the photo flow accepts JPEG/PNG, the video flow BMFF.
+// Container sniffing: the photo flow accepts JPEG/PNG, the video flow BMFF.
 // ---------------------------------------------------------------------------
 
 type Container = 'jpeg' | 'png' | 'bmff-mp4' | 'bmff-mov' | 'bmff-m4a' | 'unknown';
@@ -279,8 +270,8 @@ function mimeFor(c: Container): string {
 }
 
 // ---------------------------------------------------------------------------
-// Status-code classes — see policyLayer.ts for the verdict mapping that
-// consumes these facts. This section only SORTS engine output into facts.
+// Status-code classes. This section sorts engine output into facts; the
+// verdict mapping that consumes them is in policyLayer.ts.
 // ---------------------------------------------------------------------------
 
 /** Failure codes that mean "the manifest/signature itself is bad". */
@@ -293,40 +284,35 @@ const ASSET_MISMATCH_CODES = new Set([
   'assertion.dataHash.mismatch', 'assertion.bmffHash.mismatch', 'assertion.boxesHash.mismatch',
 ]);
 /**
- * A-1 binding-guard classes: the claim references no usable hard
- * binding, or references one outside/unresolvable — the binding is VOID
- * (integrity unproven, defective credentials), never proven tamper.
+ * A-1 binding-guard classes: the claim references no usable hard binding, or
+ * one that is unresolvable. The binding is void, meaning integrity unproven
+ * rather than proven tamper.
  */
 const VOID_BINDING_CODES = new Set([
   'assertion.undeclared', 'assertion.missing', 'assertion.outsideManifest',
 ]);
-/** Structure classes this policy declines to evaluate — the UNSUPPORTED tri-state. */
+/** Structure classes this policy declines to evaluate: the unsupported tri-state. */
 const UNSUPPORTED_CODES = new Set([
   'algorithm.unsupported', 'assertion.bmffHash.malformed', 'assertion.boxesHash.unknownBox',
 ]);
-/** Informational trust codes — inputs to OUR trust tiers, never verdict failures. */
+/** Informational trust codes: inputs to the trust tiers, not verdict failures. */
 const TRUST_INFO_CODES = new Set([
   'signingCredential.untrusted', 'signingCredential.trusted', 'timeStamp.untrusted', 'timeStamp.trusted',
 ]);
 
 /**
- * ORDERED thrown-error classification chain:
- * thrown messages are free text — an unstable engine API surface — so the
- * order is load-bearing and documented:
+ * Ordered thrown-error classification chain. Thrown messages are free text, so
+ * the order is load-bearing:
  *
- *   1. POSITIVE TAMPER SIGNALS FIRST. Any message asserting a signature or
- *      hash MISMATCH is a failed-rung fact and must NOT be captured by the
- *      neutral classes below — loose substring classes ('merkle',
- *      'algorithm', 'no claim') would route a merkle-aux hash mismatch to
- *      UNSUPPORTED or a tampered claim to NO_ATTESTATION, laundering
- *      "proven bad" into "unchecked".
+ *   1. Positive tamper signals first: any message asserting a signature or hash
+ *      mismatch is a failed-rung fact, and loose substring classes below would
+ *      route it to unsupported or no-attestation instead.
  *   2. Absence classes (noManifest), exact-ish engine variant names only.
- *   3. UNSUPPORTED classes — deliberately NARROW: 'algorithm' and 'merkle'
- *      as bare substrings are gone (an unreadable-class parse error merely
- *      mentioning an algorithm is not "unsupported structure").
- *   4. UNREADABLE (container/parse failure, never a claim decode failure —
- *      a claim that fails to decode is a tampered-manifest fact).
- *   5. EVERYTHING ELSE fails CLOSED: manifestFound + signatureValid=false.
+ *   3. Unsupported classes, kept narrow: bare 'algorithm' and 'merkle'
+ *      substrings do not qualify.
+ *   4. Unreadable: container or parse failure, not a claim decode failure,
+ *      which is a tampered-manifest fact.
+ *   5. Everything else fails closed: manifestFound with signatureValid=false.
  */
 function classifyThrown(message: string): { tamper: boolean; noManifest: boolean; unsupported: boolean; unreadable: boolean } {
   const m = message;
@@ -373,7 +359,7 @@ function summarizeManifest(label: string | null, m: Record<string, unknown>): En
   };
 }
 
-/** Blank normalized result — shared by both engine adapters. */
+/** Blank normalized result, shared by both engine adapters. */
 export function baseResultLike(engine: EngineId, version: string): NormalizedEngineResult {
   return {
     engine, engineVersion: version, engineAvailable: true,
@@ -388,8 +374,8 @@ export function baseResultLike(engine: EngineId, version: string): NormalizedEng
 
 /**
  * Read an asset with the upstream engine and normalize. `flow` mirrors the
- * handrolled entry points: 'photo' accepts JPEG/PNG, 'video' accepts BMFF —
- * a wrong container is a FACT (containerRejected) for the policy layer.
+ * handrolled entry points: 'photo' accepts JPEG/PNG, 'video' accepts BMFF. A
+ * wrong container is reported as containerRejected for the policy layer.
  */
 export async function readUpstreamAsset(
   bytes: Uint8Array,
@@ -429,8 +415,8 @@ export async function readUpstreamAsset(
       // node>=22 path: Reader.fromAsset(buffer | {format, buffer}).
       const mod = engine.nodeReader as { Reader?: { fromAsset: (asset: unknown) => Promise<{ json: () => string } | { json: () => string }> } };
       initSettings(mod, opts);
-      // Buffer is Node-only; under Hermes this branch never runs (the iOS
-      // native engine serves the device), but stay total just in case.
+      // Buffer is Node-only; under Hermes this branch does not run, since the
+      // iOS native engine serves the device.
       const buf = typeof Buffer !== 'undefined' ? Buffer.from(bytes) : bytes;
       const reader = await mod.Reader!.fromAsset({ format: mimeFor(container), buffer: buf });
       storeJson = reader.json();
@@ -458,7 +444,7 @@ export async function readUpstreamAsset(
       r.manifestFound = true;
       r.unreadable = true;
     } else {
-      // Manifest present but undecodable — tampered-manifest fact.
+      // Manifest present but undecodable: a tampered-manifest fact.
       r.manifestFound = true;
       r.signatureValid = false;
     }
@@ -524,12 +510,10 @@ export async function readUpstreamAsset(
     r.claimAssertionsMatch = r.claimAssertionsMatch ?? true;
     r.assetHashMatches = r.assetHashMatches ?? true;
   } else if (r.signatureValid === null && failures.length > 0) {
-    // Fail closed on UNKNOWN failure classes: an unrecognized failure is a
-    // signature-invalid fact, never quietly ignored (rawErrors keeps it).
-    // This runs even when `unsupported` is also set: an
-    // unknown failure class riding alongside an unsupported one is still a
-    // positive tamper fact, and the policy layer ranks those above the
-    // decline-to-evaluate tri-state.
+    // Fail closed on unknown failure classes: an unrecognized failure becomes a
+    // signature-invalid fact and rawErrors keeps it. Runs even when
+    // `unsupported` is set, since the policy layer ranks a positive tamper fact
+    // above the decline-to-evaluate tri-state.
     const unknown = failures.filter((c) => !TRUST_INFO_CODES.has(c) && !UNSUPPORTED_CODES.has(c)
       && !SIGNATURE_FAILURE_CODES.has(c) && !ASSET_MISMATCH_CODES.has(c) && !VOID_BINDING_CODES.has(c)
       && c !== 'assertion.hashedURI.mismatch');
@@ -539,16 +523,16 @@ export async function readUpstreamAsset(
     }
   }
 
-  // --- trust inputs (never verdicts) ---
+  // --- trust inputs ---
   if (opts?.trust) {
     const trusted = statuses.some((s) => s.code === 'signingCredential.trusted') || state === 'Trusted';
     const untrusted = statuses.some((s) => s.code === 'signingCredential.untrusted');
     r.trustListHit = trusted ? opts.trust.kind : untrusted ? 'none' : 'unknown';
   } else {
     // No caller-pinned anchors: the engine may still report
-    // signingCredential.untrusted against its built-in list, but we cannot
-    // attribute that to the official TL vs the frozen ITL — so we claim
- // nothing (disclose WHICH list a verdict used).
+    // signingCredential.untrusted against its built-in list, but that cannot be
+    // attributed to the official TL versus the frozen ITL, so nothing is
+    // claimed. The report must name which list a verdict used.
     r.trustListHit = 'unknown';
   }
 
@@ -562,7 +546,7 @@ export async function readUpstreamAsset(
   return r;
 }
 
-/** Pinned versions this module targets — recorded in reports/lockfiles. */
+/** Pinned versions this module targets; recorded in reports and lockfiles. */
 export const UPSTREAM_ENGINE_PINS = {
   c2paNode: C2PA_NODE_VERSION,
   c2paNodeRequires: 'node>=22',

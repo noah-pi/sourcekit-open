@@ -1,20 +1,16 @@
-// UNBUILT — rides EAS build 2; validated by on-device soak checklist, not CI.
+// Not exercised by CI; validated by the on-device soak checklist.
 /**
- * Bridge to the native ExhibitCamera module (modules/exhibit-camera) — the
- * app's ONE camera session: native preview, chrome, synchronized stereo
- * pair capture with committed calibration + timestamps + metadata, periodic
- * stereo pairs during video, and true Bayer RAW opt-in.
+ * Bridge to the native ExhibitCamera module (modules/exhibit-camera): the
+ * app's single camera session — native preview, chrome, synchronized stereo
+ * pair capture with committed calibration, timestamps and metadata,
+ * periodic stereo pairs during video, and true Bayer RAW opt-in.
  *
- * The camera commits, it never concludes (Spec-Camera-Module-0.13): this
- * module emits commit inputs, never computed answers. Absent on web,
- * Android, simulators, or old builds — callers check
- * `isExhibitCameraAvailable()` first; the fallback path is stated, never
- * faked.
+ * Emits commit inputs, not computed answers (Spec-Camera-Module-0.13).
+ * Absent on web, Android, simulators, and old builds, so callers check
+ * `isExhibitCameraAvailable()` first and take the stated fallback path.
  *
- * Honesty vocabulary used throughout:
- *  - 'unsupported' hardware = UNREACHED — gray, informative, never red.
- *  - absence is stated, never suspicion.
- *  - nothing here is a verdict; signals carry their bounds in their text.
+ * Vocabulary: 'unsupported' hardware means unreached and renders gray, not
+ * red; absence is stated rather than omitted.
  *
  * No network I/O.
  */
@@ -27,58 +23,58 @@ import type { ComponentType } from 'react';
 // Enums / literals
 // ---------------------------------------------------------------------------
 
-/** Physical lens stack selection — genuine optical devices, never a crop. */
+/** Physical lens stack selection: optical devices, not a crop. */
 export type ExhibitLens = 'ultraWide' | 'wide' | 'telephoto';
 export type ExhibitFacing = 'back' | 'front';
 export type ExhibitTorch = 'off' | 'on';
 
 /**
- * Photo-strobe preference: AVCapturePhotoSettings.flashMode on the
- * photo output for stills. Distinct from ExhibitTorch — the torch is the
- * video-only continuous light and is never driven by this preference.
+ * Photo-strobe preference: AVCapturePhotoSettings.flashMode on the photo
+ * output for stills. Separate from ExhibitTorch, the video-only continuous
+ * light, which this preference never drives.
  */
 export type PhotoFlashMode = 'auto' | 'on' | 'off';
 
 /**
  * Hardware probe result (spec §7). 'unsupported' and 'unreached' share one
- * visual treatment (gray, informative): unreached is not suspicion.
- *  - 'available'   — multicam + both back devices + permission granted
- *  - 'unsupported' — this device cannot do stereo (unreached, never red)
- *  - 'unreached'   — not probed / no permission / module absent
+ * gray visual treatment.
+ *  - 'available'   — multicam, both back devices, permission granted
+ *  - 'unsupported' — this device cannot do stereo
+ *  - 'unreached'   — not probed, no permission, or module absent
  */
 export type StereoAvailability = 'available' | 'unsupported' | 'unreached';
 
 /**
- * Per-session stereo state: adds 'degraded-thermal' — a stated mid-session
- * event (thermal policy detached the secondary, spec §6), distinct from
- * both 'available' and the never-red 'unsupported'.
+ * Per-session stereo state. 'degraded-thermal' is a mid-session event
+ * (thermal policy detached the secondary, spec §6), distinct from both
+ * 'available' and 'unsupported'.
  */
 export type StereoSessionState = 'available' | 'degraded-thermal' | 'unsupported';
 
 /**
- * Three-state result of the capture's IMU (accel+gyro) sink — the same
- * honesty vocabulary as the audio module's SensorLogState (media parity).
- * Own copy: this library stays self-contained, like the Swift pods.
+ * Three-state result of the capture's IMU (accel+gyro) sink. Mirrors the
+ * audio module's SensorLogState; kept as its own copy so this library stays
+ * self-contained.
  */
 export type SensorLogState =
   /** The JSONL exists at sensorLogPath and covers the capture window. */
   | 'recorded'
-  /** The sink was requested but failed (write error) — stated as a failure, never hidden. */
+  /** The sink was requested but failed (write error). */
   | 'failed'
-  /** No IMU on this device, thermal pressure parked the sink, or no log was
-   * requested — nothing was ever going to be recorded. */
+  /** No IMU on this device, thermal pressure parked the sink, or no log
+   * was requested. */
   | 'unavailable';
 
 /**
- * IMU evidence-sink fields carried by BOTH photo and video results (native
- * 0.15+; frozen contract). The JSONL file uses the CaptureKit SensorLogger
- * line format: accel+gyro at the 100 Hz target sliced from a 60 s ring —
- * [-2 s, +0.5 s] around the shutter for a still, the recording window
- * (tail-truncated beyond 60 s, stated in the file's `window` line) for
- * video. A failed or absent log NEVER blocks the capture.
+ * IMU evidence-sink fields carried by both photo and video results. The
+ * JSONL uses the CaptureKit SensorLogger line format: accel+gyro at the
+ * 100 Hz target sliced from a 60 s ring — [-2 s, +0.5 s] around the shutter
+ * for a still, the recording window (tail-truncated beyond 60 s, stated in
+ * the file's `window` line) for video. A failed or absent log never blocks
+ * the capture.
  *
- * All fields are ABSENT (undefined) on pre-0.15 native builds — callers
- * map undefined to 'never-recorded', exactly like the audio sink.
+ * Older native builds omit these fields; callers map undefined to
+ * 'never-recorded', as with the audio sink.
  */
 export interface SensorLogEvidence {
   /** Plain filesystem path; non-null only when sensorLogState is 'recorded'. */
@@ -106,14 +102,13 @@ export type ExhibitCameraErrorCode =
 // ---------------------------------------------------------------------------
 
 /**
- * Every artifact the module commits reports exactly one of three states.
- * There is no silent middle state:
+ * Every artifact the module commits reports exactly one of three states:
  *  - { state: 'path', path }               — the file exists on disk
- *  - { state: 'error', code, message }     — attempted, failed; stated
+ *  - { state: 'error', code, message }     — attempted and failed
  *  - { state: 'never-recorded', reason }   — not attempted (toggle off,
- *                                            unsupported hardware, not
- *                                            requested); unreached, never red
- * All paths are PLAIN filesystem paths (url.path), never file:// URIs.
+ *                                            unsupported hardware, or not
+ *                                            requested)
+ * All paths are plain filesystem paths (url.path), never file:// URIs.
  */
 export type EvidencePath =
   | { state: 'path'; path: string }
@@ -121,10 +116,9 @@ export type EvidencePath =
   | { state: 'never-recorded'; reason: string };
 
 /**
- * Maps an EvidencePath onto the store's sink-state vocabulary. Returns the
- * path when recorded; otherwise a compact, display-safe explanation. The
- * caller records 'never-recorded' vs 'enabled-but-failed' distinctly —
- * they are different facts (rule 4b).
+ * Maps an EvidencePath onto the store's sink-state vocabulary: the path when
+ * recorded, otherwise a display-safe explanation. Callers record
+ * 'never-recorded' and 'enabled-but-failed' as distinct facts (rule 4b).
  */
 export function describeEvidencePath(
   ep: EvidencePath,
@@ -135,10 +129,10 @@ export function describeEvidencePath(
 }
 
 // ---------------------------------------------------------------------------
-// Committed blocks (spec §4.2 / §5 — inputs, never computed answers)
+// Committed blocks (spec §4.2 / §5): inputs, not computed answers.
 // ---------------------------------------------------------------------------
 
-/** Anti-banding state: region-derived, NEVER measured flicker (iOS has no
+/** Anti-banding state: region-derived, not measured flicker (iOS has no
  * flicker query API). The literal note is part of the contract. */
 export interface ExhibitAntiBanding {
   mainsHz: 50 | 60;
@@ -147,22 +141,20 @@ export interface ExhibitAntiBanding {
 }
 
 /**
- * Per-device camera metadata block. Every field is literally true or an
- * explicit null. Nothing here says what the scene WAS.
+ * Per-device camera metadata block. Every field is a device read-back or an
+ * explicit null.
  *
- * The pro-control fields (spec §14) are DEVICE-REPORTED applied values —
- * manual decisions become signed evidence — and are labeled via
- * `controlsReportedBy: 'device'`. Device enums are emitted both mapped
- * (stable string) and raw (Int) so nothing is lost in translation. Note:
- * the device cannot distinguish 'locked' from 'manual' for focus/WB —
- * both report 'locked'; the manual intent is visible via lensPosition /
- * whiteBalanceTemperatureTint alongside the locked mode.
+ * The pro-control fields (spec §14) are device-reported applied values,
+ * labeled `controlsReportedBy: 'device'`. Device enums are emitted both
+ * mapped (stable string) and raw (Int). The device cannot distinguish
+ * 'locked' from 'manual' for focus and WB — both report 'locked' — so
+ * manual intent shows up in lensPosition / whiteBalanceTemperatureTint.
  */
 export interface CameraMetadataBlock {
-  /** AVCaptureDevice.DeviceType raw value — which physical device fired. */
+  /** AVCaptureDevice.DeviceType raw value: which physical device fired. */
   physicalDevice: string;
   modelID: string;
-  // ---- pro controls (spec §14): ACTUAL applied values, device-reported ----
+  // ---- pro controls (spec §14): applied values, device-reported ----
   /** 'auto' | 'locked' | 'custom' (mapped; raw enum in exposureModeRaw). */
   exposureMode: 'auto' | 'locked' | 'custom' | 'unknown';
   exposureModeRaw: number;
@@ -178,23 +170,23 @@ export interface CameraMetadataBlock {
   whiteBalanceMode: 'auto' | 'continuous' | 'locked' | 'unknown';
   whiteBalanceModeRaw: number;
   whiteBalanceGains: { r: number; g: number; b: number } | null;
-  /** Only when the device reports WB mode-locked: temperature/tint
-   * computed FROM device-reported gains via the OS converter. */
+  /** Only when the device reports WB mode-locked: temperature and tint
+   * computed from device-reported gains via the OS converter. */
   whiteBalanceTemperatureTint: { temperature: number; tint: number; note: string } | null;
   /** 0 when off; null on devices with no torch hardware. */
   torchLevel: number | null;
-  /** "<deviceType.rawValue>:<index>" — stable per device model + OS. */
+  /** "<deviceType.rawValue>:<index>", stable per device model and OS. */
   formatID: string | null;
   /** Connection read-back: 'off' | 'standard' | 'cinematic' | 'auto'. */
   stabilizationMode: string | null;
   /** Connection read-back; null when the active format has no HDR. */
   hdrEnabled: boolean | null;
   /** Literal label: every pro-control field is read back from the device
-   * or connection, never from the module's request log. */
+   * or connection, not from the module's request log. */
   controlsReportedBy: 'device';
   /**
-   * ALWAYS null: iOS exposes no public focus-distance-in-meters API.
-   * Stated, never fabricated from lensPosition.
+   * Always null: iOS exposes no public focus-distance-in-meters API, and it
+   * is not derived from lensPosition.
    */
   focusDistanceMeters: null;
   /** Pixel focal lengths from committed calibration; null when absent. */
@@ -203,14 +195,14 @@ export interface CameraMetadataBlock {
   apertureFNumber: number;
   antiBanding: ExhibitAntiBanding;
   activeFormat: { width: number; height: number; fps: number };
-  /** session.hardwareCost at capture time — committed so later thermal
-   * disputes have a number. */
+  /** session.hardwareCost at capture time, committed so thermal questions
+   * have a number. */
   hardwareCost: number;
-  /** Inter-frame PTS delta — the sync measurement, uninterpreted. */
+  /** Inter-frame PTS delta: the sync measurement, uninterpreted. */
   synchronizedDeltaMs: number | null;
   droppedPairCount: number;
   /** Every iOS frame passes the platform's computational pipeline; stated
- * so no manifest implies "unprocessed sensor data" for a JPEG. */
+   * so no manifest implies unprocessed sensor data for a JPEG. */
   platformProcessing: 'apple-default-pipeline';
 }
 
@@ -224,8 +216,8 @@ export interface CalibrationFile {
    * one-shot photo capture; null when unsupported. */
   primaryFull: SerializedCalibrationData | null;
   secondaryFull: SerializedCalibrationData | null;
-  /** Which path produced which numbers — the desk distinguishes per-frame
-   * from session-fixed, full from intrinsics-only. */
+  /** Which path produced which numbers, so a desk can tell per-frame from
+   * session-fixed and full from intrinsics-only. */
   calibrationSource: {
     intrinsics: 'frame-attachments' | 'unavailable';
     full: 'session-photo-capture' | 'unavailable';
@@ -258,10 +250,9 @@ export interface SyncTimestampsFile {
 // ---------------------------------------------------------------------------
 
 /**
- * White-balance temperature/tint computed by the OS's OWN converter from
- * the device-reported gains (temperatureAndTintValues(for:)) — never our
- * estimate. Transient unless the device reports WB mode-locked; the note
- * states this verbatim.
+ * White-balance temperature and tint computed by the OS's own converter from
+ * the device-reported gains (temperatureAndTintValues(for:)). Transient
+ * unless the device reports WB mode-locked; the note states this verbatim.
  */
 export interface WhiteBalanceTemperatureTint {
   temperature: number;
@@ -270,18 +261,16 @@ export interface WhiteBalanceTemperatureTint {
 }
 
 /**
- * The full camera state committed at shutter time. Every value traces to
- * an actual AVCaptureDevice / AVCapturePhotoOutput read at commit time —
- * `controlsReportedBy: 'device'` — or is an explicit null stating absence.
- * Nothing is synthesized; in particular `photoExif` carries ONLY the EXIF
- * numbers the OS itself wrote into the full-res photo's metadata (null
- * when no full-res photo ran this shutter), and `flashFired` comes from
- * that same metadata (null = no photo strobe capture happened — no strobe
- * claim at all).
+ * The full camera state committed at shutter time. Every value is an
+ * AVCaptureDevice or AVCapturePhotoOutput read at commit time
+ * (`controlsReportedBy: 'device'`) or an explicit null. `photoExif` carries
+ * only the EXIF the OS wrote into the full-res photo's metadata, and
+ * `flashFired` comes from that same metadata; both are null when no
+ * full-res photo ran this shutter.
  */
 export interface CaptureSettings {
-  /** Honesty note: the DELIVERY still's pixels are a video-frame encode at
-   * session resolution — resampled, not a full-sensor readout. The
+  /** The delivery still's pixels are a video-frame encode at session
+   * resolution, resampled rather than a full-sensor readout. The
    * full-sensor still is the separate fullResStill artifact. */
   deliveryStillSource: string;
   iso: number;
@@ -297,25 +286,25 @@ export interface CaptureSettings {
   exposureMode: 'auto' | 'locked' | 'custom' | 'unknown';
   focusMode: 'auto' | 'continuous' | 'locked' | 'unknown';
   whiteBalanceMode: 'auto' | 'continuous' | 'locked' | 'unknown';
-  /** AVCaptureDevice.DeviceType raw value — the lens stack in use. */
+  /** AVCaptureDevice.DeviceType raw value: the lens stack in use. */
   physicalDevice: string;
  /** The strobe preference written into the photo settings. */
   photoFlashMode: PhotoFlashMode;
   photoFlashHardware: boolean;
   /** Device-reported supported flash modes ([] = unknown, no session). */
   photoFlashSupportedModes: string[];
-  /** null = no full-res photo ran (or its metadata carried no Flash tag) —
-   * stated, never inferred. */
+  /** null means no full-res photo ran, or its metadata carried no Flash
+   * tag. Not inferred. */
   flashFired: boolean | null;
   /** EXIF numbers exactly as the OS wrote them into the full-res photo
    * (ISOSpeedRatings, ExposureTime, FNumber, ExposureBiasValue, FocalLength,
-   * FocalLengthIn35mmFilm, Flash, WhiteBalance — subset; absent tags are
-   * absent). null when no full-res photo ran. NEVER synthesized. */
+   * FocalLengthIn35mmFilm, Flash, WhiteBalance; absent tags stay absent).
+   * null when no full-res photo ran. Never synthesized. */
   photoExif: Record<string, number> | null;
   /** What the strobe request became on the photo output. */
   photoFlashApplied?: {
     requested: PhotoFlashMode;
-    /** false = the requested mode was not in supportedFlashModes; the
+    /** false means the requested mode was not in supportedFlashModes; the
      * capture went strobe-free and the note says why. */
     applied: boolean;
     note: string | null;
@@ -338,40 +327,38 @@ export interface ConfigureSessionOptions {
   facing?: ExhibitFacing;
   /** Default true. False runs single-cam even on capable hardware. */
   stereo?: boolean;
-  /** IMU evidence sink (native 0.15+): when true, accel+gyro stream into a
-   * 60 s ring for the session so stills and video commit a signed sensor
-   * log (sensorLog* fields on the results). Default false. Older native
-   * builds ignore the flag and omit the fields — stated via absence. */
+  /** IMU evidence sink: accel+gyro stream into a 60 s ring for the session
+   * so stills and video commit a signed sensor log (sensorLog* fields on
+   * the results). Default false. Older native builds ignore the flag and
+   * omit the fields. */
   sensorLog?: boolean;
-  /** Shutter-burst sink (native 0.17.2+): when true, each still commits the
-   * 3 pre-shutter + 4 post-shutter frames it was cut from into
-   * evidenceDir/ring-<captureId>/ (ringBufferDir + ringFrameCount on the
-   * result). A sink failure is an 'error' EvidencePath state — the capture
-   * itself never rejects for the burst. Default false. Older builds ignore
-   * the flag and omit the fields. */
+  /** Shutter-burst sink: each still commits the 3 pre-shutter and 4
+   * post-shutter frames it was cut from into evidenceDir/ring-<captureId>/
+   * (ringBufferDir and ringFrameCount on the result). A sink failure is an
+   * 'error' EvidencePath; the capture never rejects for it. Default false.
+   * Older builds ignore the flag and omit the fields. */
   ring?: boolean;
-  /** Selectable stereo partner stack (native 0.17.2+): 'auto' (default —
-   * the UW↔W/T pairing) or an explicit rear stack. Applies at session
-   * build; live swaps go through setSecondaryLens. Older builds ignore
-   * the flag. */
+  /** Selectable stereo partner stack: 'auto' (the UW↔W/T pairing, default)
+   * or an explicit rear stack. Applies at session build; live swaps go
+   * through setSecondaryLens. Older builds ignore the flag. */
   secondaryLens?: SecondaryLensPreference;
 }
 
-/** The selectable secondary stack vocabulary. 'auto' = the
- * native UW↔W/T pairing chosen by the primary lens. */
+/** Selectable secondary stack vocabulary. 'auto' is the native UW↔W/T
+ * pairing chosen by the primary lens. */
 export type SecondaryLensPreference = 'auto' | 'ultraWide' | 'wide' | 'telephoto';
 
 export interface SessionStart {
   sessionId: string;
   startedAtMs: number;
-  /** 'available' | 'unsupported' at session start (never 'unreached' —
-   * the session started, so the probe ran). */
+  /** 'available' or 'unsupported' at session start. Never 'unreached':
+   * the session started, so the probe ran. */
   stereo: 'available' | 'unsupported';
   hardwareCost: number | null;
-  /** 0.18.4 (additive; absent on older builds): which rear-stereo graph the
-   * session runs — 'virtual-dual-wide' (one input, constituent ports,
-   * hardware-synced; the 0.18.4 default) or 'multi-input' (two device
-   * inputs, the pre-0.18.4 graph, restorable via Diagnostics A/B). */
+  /** Which rear-stereo graph the session runs: 'virtual-dual-wide' (one
+   * input, constituent ports, hardware-synced; the default) or
+   * 'multi-input' (two device inputs, restorable via Diagnostics A/B).
+   * Absent on older builds. */
   graph?: 'virtual-dual-wide' | 'multi-input';
 }
 
@@ -380,19 +367,18 @@ export interface CaptureOptions {
   deliveryPath: string;
   /** Directory for secondary/calibration/timestamps/metadata/RAW. */
   evidenceDir: string;
-  /** True Bayer RAW opt-in (spec §9). ProRAW is NOT this path — ProRAW is
-   * computationally processed by the platform. */
+  /** True Bayer RAW opt-in (spec §9). Not ProRAW, which the platform
+   * processes computationally. */
   raw?: boolean;
 }
 
 /**
- * The native depth artifact's committed facts (D1, 0.16.0). Every field is
- * a capture-side claim, verbatim — nothing is derived JS-side. The artifact
- * is a 16-bit grayscale PNG, min/max-normalized over
- * [normalizationMin, normalizationMax]; non-finite pixels were written as 0
- * and counted. accuracy/accuracyRaw/note/cameraCalibration are typed
- * unknown — their Swift-side types weren't stated in the contract review;
- * consumers pass them through, never interpret.
+ * The native depth artifact's committed facts. Every field is a
+ * capture-side claim; nothing is derived JS-side. The artifact is a 16-bit
+ * grayscale PNG, min/max-normalized over [normalizationMin,
+ * normalizationMax], with non-finite pixels written as 0 and counted.
+ * accuracy, accuracyRaw, note and cameraCalibration are typed unknown
+ * because their Swift-side types are unspecified; pass them through.
  */
 export interface DepthArtifactMetadata {
   mime: 'image/png';
@@ -400,7 +386,7 @@ export interface DepthArtifactMetadata {
   filtered: boolean;
   width: number;
   height: number;
-  /** The COLOR image's dimensions — what the map gets stretched to fit. */
+  /** The color image's dimensions; the map is stretched to fit these. */
   photoWidth: number;
   photoHeight: number;
   accuracy?: unknown;
@@ -424,87 +410,81 @@ export interface CaptureResult extends SensorLogEvidence {
   calibration: EvidencePath;
   timestamps: EvidencePath;
   metadata: EvidencePath;
-  /** True Bayer RAW DNG — 'never-recorded' with reason 'not-requested' or
-   * 'raw-unsupported' when absent. Both are gray states, never red. */
+  /** True Bayer RAW DNG. When absent, 'never-recorded' with reason
+   * 'not-requested' or 'raw-unsupported'; both render gray. */
   rawDng: EvidencePath;
   synchronizedDeltaMs: number | null;
   droppedPairCount: number;
   hardwareCost: number | null;
   physicalDevices: { primary: string | null; secondary: string | null };
-  // ---- full-sensor stills (additive; ABSENT on older native builds —
-  // callers treat undefined as "not committed this capture") ----
-  /** Full-sensor-resolution JPEG from the primary photo output. Distinct
-   * from deliveryPath, whose pixels are a video-frame encode (see
-   * captureSettings.deliveryStillSource). 'never-recorded' in video mode
-   * or without a photo output; 'error' states the failure verbatim. */
+  // ---- full-sensor stills. Absent on older native builds; callers treat
+  // undefined as "not committed this capture". ----
+  /** Full-sensor-resolution JPEG from the primary photo output, distinct
+   * from deliveryPath (a video-frame encode; see
+   * captureSettings.deliveryStillSource). 'never-recorded' in video mode or
+   * without a photo output; 'error' states the failure verbatim. */
   fullResStill?: EvidencePath;
   /** SHA-256 (hex) of the exact fullResStill bytes on disk; null when the
    * artifact is not in the 'path' state. */
   fullResStillSha256?: string | null;
   /** Resolved photo dimensions (iOS 16+); null when unavailable. */
   fullResStillDimensions?: { width: number; height: number } | null;
-  /** Stereo partner's full-sensor still — 'never-recorded' with the same
-   * reason vocabulary as secondaryFrame when stereo is off/detached. */
+  /** Stereo partner's full-sensor still. 'never-recorded' with the same
+   * reason vocabulary as secondaryFrame when stereo is off or detached. */
   fullResSecondary?: EvidencePath;
   fullResSecondarySha256?: string | null;
   fullResSecondaryDimensions?: { width: number; height: number } | null;
   // ---- every camera setting, device-read at the commit instant ----
-  /** The committed settings block. The { unavailable: true } shape is the
-   * honest degradation when the session died mid-capture (the device
-   * reference was gone at commit time) — stated, never omitted silently. */
+  /** The committed settings block. { unavailable: true } means the session
+   * died mid-capture and the device reference was gone at commit time. */
   captureSettings?: CaptureSettings | { unavailable: true; note: string };
-  // ---- degraded single-lens fallback + mirroring truth (additive;
-  // ABSENT on pre-0.15.1 native builds — callers treat undefined as "not
-  // committed this capture") ----
-  /** Stereo evidence state for THIS capture: 'ok' = a synchronized
-   * secondary frame was committed; 'unavailable' = the capture degraded —
-   * no fresh synchronized pair at shutter (single-lens fallback: the
-   * delivery still is the photo output's full-sensor still) or the
-   * secondary half dropped at shutter — stereoUnavailableReason states why,
-   * verbatim. Absent on single-cam sessions (the `stereo` capability
-   * string already says unsupported) and pre-0.15.1 builds. */
+  // ---- degraded single-lens fallback and mirroring state. Absent on older
+  // native builds; callers treat undefined as "not committed". ----
+  /** Stereo evidence state for this capture. 'ok' means a synchronized
+   * secondary frame was committed; 'unavailable' means no fresh
+   * synchronized pair at shutter (single-lens fallback, where the delivery
+   * still is the photo output's full-sensor still) or the secondary half
+   * dropped, with stereoUnavailableReason stating which. Absent on
+   * single-cam sessions and older builds. */
   stereoStatus?: 'ok' | 'unavailable';
-  /** Machine-checkable reason when stereoStatus is 'unavailable' — e.g.
+  /** Machine-checkable reason when stereoStatus is 'unavailable', e.g.
    * 'no fresh synchronized frame within 900ms at shutter (dropped pairs:
-   * N, …)'. A fact, never a euphemism. */
+   * N, …)'. */
   stereoUnavailableReason?: string;
-  /** The primary connection's ACTUAL mirroring state at capture. Preview
-   * layers auto-mirror the front camera; data/photo outputs do NOT — the
-   * native side sets it explicitly (front mirrors, so evidence matches the
-   * preview the user composed on) and commits the read-back value. null
-   * when no connection existed to read. */
+  /** The primary connection's mirroring state at capture. Preview layers
+   * auto-mirror the front camera but data and photo outputs do not, so the
+   * native side sets it explicitly (front mirrors, matching the preview the
+   * user composed on) and commits the read-back. null when no connection
+   * existed to read. */
   frontMirrored?: boolean | null;
- // ---- D1: depth artifacts (additive; ABSENT on pre-D1 native
-  // builds AND on some early-exit branches — callers treat undefined as
-  // "not committed this capture") ----
+  // ---- Depth artifacts. Absent on older native builds and on some
+  // early-exit branches; callers treat undefined as "not committed". ----
   /** Primary photo output's depth map: 16-bit grayscale PNG, min/max-
    * normalized with the window committed in fullResStillDepthMetadata.
    * 'never-recorded' reasons: depth-disabled / depth-unsupported /
    * depth-not-delivered / photo-capture-failed / photo-write-failed. */
   fullResStillDepth?: EvidencePath;
-  /** SHA-256 (hex) of the exact depth bytes on disk; ABSENT (not null) on
-   * some early-exit branches — undefined means "not committed". */
+  /** SHA-256 (hex) of the exact depth bytes on disk. Undefined (not null)
+   * on some early-exit branches, meaning "not committed". */
   fullResStillDepthSha256?: string | null;
   fullResStillDepthMetadata?: DepthArtifactMetadata | null;
-  /** Stereo partner's depth map — same vocabulary. */
+  /** Stereo partner's depth map, same vocabulary. */
   fullResSecondaryDepth?: EvidencePath;
   fullResSecondaryDepthSha256?: string | null;
   fullResSecondaryDepthMetadata?: DepthArtifactMetadata | null;
-  /** Degraded (video-frame) path's depth map — same vocabulary. */
+  /** Degraded (video-frame) path's depth map, same vocabulary. */
   depth?: EvidencePath;
   depthSha256?: string | null;
   depthMetadata?: DepthArtifactMetadata | null;
-  // ---- shutter-burst sink (additive; ABSENT on older builds
-  // and on sessions configured without `ring` — callers treat undefined as
-  // "not committed this capture") ----
-  /** Directory holding the 3 pre-shutter + 4 post-shutter frames the
+  // ---- shutter-burst sink. Absent on older builds and on sessions
+  // configured without `ring`. ----
+  /** Directory holding the 3 pre-shutter and 4 post-shutter frames the
    * delivery still was cut from, plus a JSON index. 'never-recorded'
-   * reasons: not-requested / no-synchronized-pair-at-shutter /
-   * not-available-during-video-recording; 'error' states a sink failure
-   * verbatim (the capture still succeeded — the burst is evidence-only). */
+   * reasons: not-requested, no-synchronized-pair-at-shutter,
+   * not-available-during-video-recording. 'error' states a sink failure
+   * verbatim; the capture itself still succeeded. */
   ringBufferDir?: EvidencePath;
-  /** Frames actually committed into ringBufferDir (0 on the
-   * never-recorded/error states). */
+  /** Frames committed into ringBufferDir; 0 on never-recorded and error. */
   ringFrameCount?: number;
 }
 
@@ -512,13 +492,12 @@ export interface StartVideoOptions {
   deliveryPath: string;
   evidenceDir: string;
   /** Seconds between committed stereo pairs (spec §8). Default 5, min 2.
-   * Periodic pairs, not continuous — thermal/power headroom is real, and
-   * a burst of timestamped pairs is enough geometry. */
+   * Periodic rather than continuous, for thermal and power headroom. */
   pairIntervalSec?: number;
-  /** Raw-audio-master sink (settings toggle → startVideo): tee the mic
-   * buffers to an LPCM mono 16 kHz 16-bit CAF in the evidence dir while
-   * the delivery writer consumes the same native buffers (rule 4 tee —
-   * a sink failure never touches delivery). Default false. */
+  /** Raw-audio-master sink: tee the mic buffers to an LPCM mono 16 kHz
+   * 16-bit CAF in the evidence dir while the delivery writer consumes the
+   * same native buffers, so a sink failure never touches delivery.
+   * Default false. */
   rawPcm?: boolean;
 }
 
@@ -532,35 +511,31 @@ export interface VideoStart {
 export interface VideoResult extends SensorLogEvidence {
   deliveryPath: string;
   durationMs: number;
-  /** false = the delivery file has no audio track (mic never delivered) —
-   * a structural fact, stated. Never a silently missing track. */
+  /** false means the delivery file has no audio track: the mic never
+   * delivered. */
   audioTrack: boolean;
   pairsCommitted: number;
   pairsMissed: number;
-  /** Raw-audio-master sink, three states carried by the seal record:
-   * string path = recorded; null = enabled but failed. The disabled case
-   * never arrives here — the caller owns the toggle and states
-   * 'never-recorded' itself. */
+  /** Raw-audio-master sink: a string path means recorded, null means
+   * enabled but failed. The disabled case never reaches here; the caller
+   * owns the toggle and states 'never-recorded' itself. */
   rawPcmPath: string | null;
-  /** ENF anchor + integrity summary for the committed master (0.17.2;
-   * present only when rawPcmPath is a string). firstSampleWallClockUtcMs
-   * anchors the first WRITTEN sample to wall clock (mach-PTS → wall, or
-   * the append instant — firstSampleAnchor states which, verbatim), so a
-   * desk can cross-correlate the 50/60 Hz mains trace against a reference
-   * ENF series in absolute time. fileSha256 binds the analysis to the
-   * exact committed bytes. All nullable fields are stated null, never
-   * omitted. */
+  /** ENF anchor and integrity summary for the committed master; present
+   * only when rawPcmPath is a string. firstSampleWallClockUtcMs anchors the
+   * first written sample to wall clock (mach-PTS converted, or the append
+   * instant — firstSampleAnchor says which), so a desk can cross-correlate
+   * the 50/60 Hz mains trace against a reference ENF series in absolute
+   * time. fileSha256 binds the analysis to the exact committed bytes. */
   rawPcmInfo?: {
     firstSampleWallClockUtcMs: number | null;
     firstSampleAnchor: string | null;
     sampleCount: number;
     sampleRate: number;
     fileSha256: string | null;
-    /** The finalized CAF's own container facts,
-     *  read back at stop and committed alongside the writer's counters —
-     *  framesMatchContainer:false would state a writer/container divergence
-     *  as sealed data (a build-40 field master showed an unexplained exact
-     *  2×; the readback exists so the record answers, not the guesser). */
+    /** The finalized CAF's own container facts, read back at stop and
+     *  committed alongside the writer's counters.
+     *  framesMatchContainer:false records a writer/container divergence as
+     *  sealed data. */
     containerSampleRate?: number;
     containerFormatFlags?: number;
     containerBytesPerFrame?: number;
@@ -570,9 +545,9 @@ export interface VideoResult extends SensorLogEvidence {
     containerFrames?: number;
     framesMatchContainer?: boolean;
   } | null;
-  /** Audio tap liveness counter for the take. 0 while
-   * the master was requested = the tap never delivered — an audio-session/
-   * permission fact, stated, not a conversion failure. */
+  /** Audio tap liveness counter for the take. 0 with the master requested
+   * means the tap never delivered: an audio-session or permission fact,
+   * not a conversion failure. */
   audioBufferCount?: number;
   hardwareCost: number | null;
 }
@@ -604,21 +579,21 @@ export interface StereoPairCapturedEvent {
 }
 
 /**
- * Fired ONCE per session when the frame pipeline stalls (preview keeps
- * painting but synchronized frames stop) AND a cheap synchronizer rebind
- * did not recover it. The honest response is a session rebuild — the
- * capture screen's lifecycle effect owns configure/stop.
+ * Fired once per session when the frame pipeline stalls (preview keeps
+ * painting but synchronized frames stop) and a synchronizer rebind did not
+ * recover it. The response is a session rebuild, owned by the capture
+ * screen's lifecycle effect.
  */
 export interface SyncStalledEvent {
   ageSeconds: number;
   droppedPairCount: number;
   droppedPrimaryCount?: number;
   droppedSecondaryHalfCount?: number;
-  /** 0.17.2 diagnostics split (additive; absent on older builds):
-   * secondary-absent = synchronizer returned NO secondary data object;
-   * secondary-dropped = an object was present but failed the sync window;
-   * complete-pairs / stale-shutters / reseat state isolate a dead
-   * secondary stream from shutter-timing rejection. */
+  /** Diagnostics split, absent on older builds. secondaryAbsent means the
+   * synchronizer returned no secondary data object; secondaryDropped means
+   * an object was present but failed the sync window. Complete pairs, stale
+   * shutters and reseat state separate a dead secondary stream from
+   * shutter-timing rejection. */
   secondaryAbsentCount?: number;
   secondaryDroppedCount?: number;
   completePairCount?: number;
@@ -626,14 +601,14 @@ export interface SyncStalledEvent {
   secondaryReseatDone?: boolean;
 }
 
-/** Preview-readiness (view event). `signal` states WHICH readiness signal
- * fired — never an ambiguous "ready". */
+/** Preview-readiness (view event). `signal` names which readiness signal
+ * fired. */
 export interface PreviewReadyEvent {
   signal: 'first-synchronized-frame' | string;
 }
 
 // ---------------------------------------------------------------------------
-// Chrome result payloads (all honest no-ops when hardware lacks support)
+// Chrome result payloads. No-ops when hardware lacks support.
 // ---------------------------------------------------------------------------
 
 export interface ChromeResult {
@@ -643,9 +618,9 @@ export interface ChromeResult {
 }
 
 // ---------------------------------------------------------------------------
-// Pro controls (spec §14). Every setter no-ops safely ({ applied: false,
-// reason }) on hardware lacking the capability — they never throw into JS
-// for capability absence. Availability comes from capabilities().
+// Pro controls (spec §14). Every setter returns { applied: false, reason }
+// on hardware lacking the capability rather than throwing. Availability
+// comes from capabilities().
 // ---------------------------------------------------------------------------
 
 export type ExposureModeSetting = 'auto' | 'locked' | 'custom';
@@ -665,8 +640,8 @@ export interface SetExposureModeOptions {
 
 export interface ExposureModeResult extends ChromeResult {
   exposureMode?: ExposureModeSetting;
-  /** Requested-clamped values (custom mode). The device-SETTLED values
-   * are committed per capture in the metadata block, device-reported. */
+  /** Requested values after clamping (custom mode). The device-settled
+   * values are committed per capture in the metadata block. */
   iso?: number;
   durationSeconds?: number;
   isoClamped?: boolean;
@@ -676,7 +651,7 @@ export interface ExposureModeResult extends ChromeResult {
 export interface SetFocusModeOptions {
   mode: FocusModeSetting;
   /** Required when mode === 'manual'. Unitless, 0–1, clamped. iOS has no
-   * focus-distance API — lensPosition is the honest manual control. */
+   * focus-distance API, so lensPosition is the manual control. */
   lensPosition?: number;
 }
 
@@ -698,8 +673,8 @@ export interface WhiteBalanceModeResult extends ChromeResult {
   whiteBalanceMode?: WhiteBalanceModeSetting;
   gains?: { r: number; g: number; b: number };
   gainsClamped?: boolean;
-  /** Round-tripped temperature/tint of the CLAMPED gains — what the
-   * hardware actually accepted. */
+  /** Round-tripped temperature and tint of the clamped gains: what the
+   * hardware accepted. */
   appliedTemperature?: number;
   appliedTint?: number;
   maxWhiteBalanceGain?: number;
@@ -713,7 +688,7 @@ export interface TorchLevelResult extends ChromeResult {
 }
 
 export interface FormatInfo {
-  /** "<deviceType.rawValue>:<index>" — stable per device model + OS. */
+  /** "<deviceType.rawValue>:<index>", stable per device model and OS. */
   formatID: string;
   width: number;
   height: number;
@@ -736,7 +711,7 @@ export interface LensFormatList {
 export interface ListFormatsResult {
   lenses: Record<'ultraWide' | 'wide' | 'telephoto' | 'frontWide', LensFormatList>;
   multiCamSupported: boolean;
-  /** null = unknown without a running session — NOT unsupported. */
+  /** null means unknown without a running session, not unsupported. */
   rawSupported: boolean | null;
   rawNote: string;
 }
@@ -753,7 +728,7 @@ export interface SetFormatResult extends ChromeResult {
   height?: number;
   frameRate?: number;
   frameRateClamped?: boolean;
-  /** Device format feeds both paths — always 'photo-and-video'. */
+  /** Device format feeds both paths; always 'photo-and-video'. */
   appliesTo?: string;
   hardwareCost?: number;
 }
@@ -789,10 +764,10 @@ export interface ZoomSmoothResult extends ChromeResult {
 }
 
 /**
- * Per-constituent-device zoom ceilings. `qualityCap` is a
- * conservative APP-CHOSEN digital-quality ceiling — NOT a hardware limit
- * (see zoomQualityNote); `hardwareMax` is the device's own
- * maxAvailableVideoZoomFactor. Absent lenses are omitted entirely.
+ * Per-constituent-device zoom ceilings. `qualityCap` is an app-chosen
+ * digital-quality ceiling, not a hardware limit (see zoomQualityNote);
+ * `hardwareMax` is the device's own maxAvailableVideoZoomFactor. Absent
+ * lenses are omitted.
  */
 export interface LensZoomCap {
   lens: ExhibitLens;
@@ -802,15 +777,13 @@ export interface LensZoomCap {
 }
 
 /**
- * The active device's zoom contract. min/max are the device's own
- * supported range (unchanged hardware semantics). The additions are
- * optional — ABSENT on older native builds:
- *  - qualityCap: app-chosen digital-quality ceiling for THIS device (a
- *    quality choice, not a hardware limit); the UI clamps to
- *    min(max, qualityCap).
+ * The active device's zoom contract. min/max are the device's own supported
+ * range. Two optional fields, absent on older native builds:
+ *  - qualityCap: app-chosen digital-quality ceiling for this device, not a
+ *    hardware limit; the UI clamps to min(max, qualityCap).
  *  - switchOverFactors: the containing virtual device's
- *    virtualDeviceSwitchOverVideoZoomFactors — the exact hardware hand-off
- *    points the UI's optical stops should match.
+ *    virtualDeviceSwitchOverVideoZoomFactors, the hardware hand-off points
+ *    the UI's optical stops should match.
  */
 export interface ZoomRange {
   min: number;
@@ -820,10 +793,9 @@ export interface ZoomRange {
 }
 
 /**
- * What this hardware can do — the UI hides controls that report false.
- * null fields mean "unknown without a session" (stated, never guessed);
- * absent lenses in listFormats() report present:false (unreached, never
- * red).
+ * What this hardware can do; the UI hides controls that report false. null
+ * fields mean unknown without a session, and absent lenses in listFormats()
+ * report present:false.
  */
 export interface ExhibitCameraCapabilities {
   sessionActive: boolean;
@@ -844,25 +816,24 @@ export interface ExhibitCameraCapabilities {
   activeFormatISO?: { min: number; max: number };
   activeFormatExposureDurationSec?: { min: number; max: number };
   zoomRange?: ZoomRange;
- /** Per-constituent-device ceilings; absent on older builds. */
+  /** Per-constituent-device ceilings; absent on older builds. */
   lensZoomCaps?: LensZoomCap[];
-  /** States verbatim that qualityCap is a quality choice, not a
-   * hardware limit. Part of the contract. */
+  /** States that qualityCap is a quality choice, not a hardware limit.
+   * Part of the contract. */
   zoomQualityNote?: string;
-  /** 0.17.2 (additive): the selectable secondary stack — every rear stack
-   * present on this hardware in the bridge's lens vocabulary, and the
-   * current preference ('auto' when unset). */
+  /** The selectable secondary stack: every rear stack present on this
+   * hardware in the bridge's lens vocabulary, plus the current preference
+   * ('auto' when unset). */
   secondaryLensOptions?: string[];
   secondaryLens?: string;
-  /** Hardware probe for an opportunistic third synchronized view.
-   * The view itself is gated behind the thirdViewEnabled debug flag
-   * (UNTESTED ON HARDWARE — off by default); this only states what the
-   * hardware could do. */
+  /** Hardware probe for an opportunistic third synchronized view. The view
+   * itself is gated behind the thirdViewEnabled debug flag, which is
+   * untested on hardware and off by default. */
   thirdViewCapable?: boolean;
 }
 
-/** KVO-driven focus-settling signal (spec §14). The UI should avoid
- * capturing while adjusting is true. */
+/** KVO-driven focus-settling signal (spec §14). Avoid capturing while
+ * adjusting is true. */
 export interface AdjustingFocusEvent {
   adjusting: boolean;
 }
@@ -919,9 +890,8 @@ function getEmitter(): InstanceType<typeof EventEmitter> | null {
 }
 
 /**
- * Graceful absence (simulator / web / Android / older builds): when false,
- * callers use the fallback path and stereoAvailability() reports
- * 'unreached' — disclosed, never faked, never red.
+ * False on simulator, web, Android and older builds: callers take the
+ * fallback path and stereoAvailability() reports 'unreached'.
  */
 export function isExhibitCameraAvailable(): boolean {
   return native !== null;
@@ -937,17 +907,16 @@ export async function requestExhibitCameraPermissions(): Promise<ExhibitCameraPe
 }
 
 /**
- * Hardware probe; starts nothing. Module absence maps to 'unreached' —
- * the same gray treatment as 'unsupported', because unreached is not
- * suspicion (spec §7).
+ * Hardware probe; starts nothing. Module absence maps to 'unreached', which
+ * gets the same gray treatment as 'unsupported' (spec §7).
  */
 export async function stereoAvailability(): Promise<StereoAvailability> {
   if (!native) return 'unreached';
   return native.stereoAvailability();
 }
 
-/** Starts the one session (preview mode). Watchdog: rejects after 10 s
- * without frames — never hangs the UI. */
+/** Starts the one session (preview mode). Watchdog rejects after 10 s
+ * without frames rather than hanging the UI. */
 export async function configureSession(opts: ConfigureSessionOptions): Promise<SessionStart> {
   if (!native) throw new Error('ExhibitCamera module unavailable');
   return native.configureSession(opts);
@@ -959,8 +928,8 @@ export async function stopSession(): Promise<{ stopped: boolean; reason?: string
 }
 
 /**
- * Stereo pair capture (spec §4/§5). The delivery still always lands or the
- * call rejects; every evidence artifact is a three-state EvidencePath.
+ * Stereo pair capture (spec §4/§5). The delivery still lands or the call
+ * rejects; every evidence artifact is a three-state EvidencePath.
  */
 export async function capture(opts: CaptureOptions): Promise<CaptureResult> {
   if (!native) throw new Error('ExhibitCamera module unavailable');
@@ -985,13 +954,11 @@ export async function setLens(lens: ExhibitLens): Promise<ChromeResult> {
 }
 
 /**
- * Selectable stereo partner: 'auto' restores the native UW↔W/T
- * pairing; an explicit rear stack (e.g. 'telephoto' on a triple-lens Pro)
- * pins the partner. Applies live on a running back session, else stored
- * for the next configureSession. A conflict with the primary lens or an
- * absent stack resolves applied:false with a stated reason — the partner
- * never swaps silently. Older native builds lack the method entirely:
- * reported applied:false, never a thrown wedge.
+ * Selectable stereo partner: 'auto' restores the native UW↔W/T pairing, an
+ * explicit rear stack pins the partner. Applies live on a running back
+ * session, otherwise stored for the next configureSession. A conflict with
+ * the primary lens or an absent stack returns applied:false with a reason,
+ * as do older native builds lacking the method.
  */
 export async function setSecondaryLens(lens: SecondaryLensPreference): Promise<ChromeResult> {
   if (!native || typeof native.setSecondaryLens !== 'function') {
@@ -1006,11 +973,10 @@ export async function setZoom(factor: number): Promise<ChromeResult> {
 }
 
 /**
- * Ramped device zoom: ramp(toVideoZoomFactor:withRate:) for
- * UI-driven scrub ramps. Lens jumps stay on the instant setZoom. `rate`
- * defaults to 8 (the previous default) and is clamped natively to [1, 60].
- * On older native builds the function is absent — the caller's fallback
- * is setZoom (an instant set is a degenerate ramp).
+ * Ramped device zoom: ramp(toVideoZoomFactor:withRate:) for UI-driven scrub
+ * ramps; lens jumps use the instant setZoom. `rate` defaults to 8 and is
+ * clamped natively to [1, 60]. Absent on older native builds, where the
+ * caller falls back to setZoom.
  */
 export async function setZoomSmooth(factor: number, rate = 8): Promise<ZoomSmoothResult> {
   if (!native) return { applied: false, reason: 'module-unavailable' };
@@ -1021,11 +987,10 @@ export async function setZoomSmooth(factor: number, rate = 8): Promise<ZoomSmoot
 }
 
 /**
- * Photo-strobe preference: sets the flashMode used by the photo
- * output's stills captures. Torch is untouched — it stays the video-only
- * continuous light. No session required: the preference persists natively
- * and is validated against supportedFlashModes at capture time. On older builds
- * native builds: honest no-op.
+ * Photo-strobe preference: sets the flashMode used by the photo output's
+ * stills captures. Leaves the torch (video-only continuous light) alone. No
+ * session required; the preference persists natively and is validated
+ * against supportedFlashModes at capture time. No-op on older builds.
  */
 export async function setPhotoFlashMode(mode: PhotoFlashMode): Promise<PhotoFlashResult> {
   if (!native) return { applied: false, reason: 'module-unavailable' };
@@ -1052,9 +1017,9 @@ export async function setExposureBias(bias: number): Promise<ChromeResult> {
 }
 
 // ---- pro controls (spec §14) ----
-// All no-op safely ({ applied: false, reason }) when the module or the
-// hardware capability is absent. Check capabilities() first to hide
-// controls the device doesn't have.
+// All return { applied: false, reason } when the module or the hardware
+// capability is absent. Check capabilities() first to hide controls the
+// device does not have.
 
 export async function setExposureMode(opts: SetExposureModeOptions): Promise<ExposureModeResult> {
   if (!native) return { applied: false, reason: 'module-unavailable' };
@@ -1077,7 +1042,7 @@ export async function setWhiteBalanceMode(opts: SetWhiteBalanceModeOptions): Pro
   return native.setWhiteBalanceMode(opts);
 }
 
-/** Torch with level: null → off; clamped to maxTorchLevel natively. */
+/** Torch with level: null turns it off; clamped to maxTorchLevel natively. */
 export async function setTorchLevel(level: number | null): Promise<TorchLevelResult> {
   if (!native) return { applied: false, reason: 'module-unavailable' };
   return native.setTorchLevel(level);
@@ -1100,13 +1065,13 @@ export async function setVideoStabilizationMode(mode: StabilizationModeSetting):
   return native.setVideoStabilizationMode(mode);
 }
 
-/** Explicit HDR — never a silent system default (spec §14). */
+/** Explicit HDR, not the system default (spec §14). */
 export async function setHDREnabled(enabled: boolean): Promise<HDRResult> {
   if (!native) return { applied: false, reason: 'module-unavailable' };
   return native.setHDREnabled(enabled);
 }
 
-/** Capability inventory for the UI. Module absence → null (unreached). */
+/** Capability inventory for the UI. Module absence returns null. */
 export async function capabilities(): Promise<ExhibitCameraCapabilities | null> {
   if (!native) return null;
   return native.capabilities();
@@ -1115,11 +1080,10 @@ export async function capabilities(): Promise<ExhibitCameraCapabilities | null> 
 // ---- wave-7 isolation debug flags ----
 
 /**
- * Wave-7 isolation switches (native UserDefaults suite "exhibit.debug",
- * BOTH DEFAULT FALSE, persisted across relaunches). A flipped flag takes
- * effect at the NEXT configureSession — photo connections and policies
- * are constructed at session build, so the already-running session is
- * unaffected. Settings states this honestly beside the switches.
+ * Wave-7 isolation switches, in the native UserDefaults suite
+ * "exhibit.debug" and persisted across relaunches. A flipped flag takes
+ * effect at the next configureSession, since photo connections and policies
+ * are constructed at session build; the running session is unaffected.
  */
 export type ExhibitDebugFlagKey =
   | 'photoConnectionRotation'
@@ -1131,16 +1095,17 @@ export type ExhibitDebugFlagKey =
 export interface ExhibitDebugFlags {
   photoConnectionRotation: boolean;
   photoMaxDimensionsPolicy: boolean;
-  /** 0.17.2 keys (native returns them from getDebugFlags; absent on older
-   * builds — consumers default them off). */
+  /** Returned by getDebugFlags; absent on older builds, where consumers
+   * default them off. */
   depthCapture?: boolean;
-  /** UNTESTED third-view extension-point gate. OFF by default; MUST stay
-   * off in shipping builds. Intentionally has no settings row. */
+  /** Untested third-view extension-point gate. Off by default, must stay
+   * off in shipping builds, and has no settings row. */
   thirdViewEnabled?: boolean;
-  /** 0.18.4 A/B: ON restores the pre-0.18.4 two-device-input rear-stereo
-   * graph. OFF (default) runs the dual-wide virtual-device graph — one
-   * input, constituent ports, hardware-synced — the fix path for the
-   * iPhone 17 dead-secondary-stream failure. Takes effect at the next
+  /** A/B switch: on runs the two-device-input rear-stereo graph, off (the
+   * default) runs the dual-wide virtual-device graph — one input,
+   * constituent ports, hardware-synced. The legacy graph delivered zero
+   * secondary frames on iPhone 17 with no error callback, which is why the
+   * virtual-device graph is the default. Takes effect at the next
    * configureSession. */
   legacyMultiInputGraph?: boolean;
 }
@@ -1149,15 +1114,14 @@ interface SetDebugFlagResult {
   applied: boolean;
   key?: string;
   value?: boolean;
-  /** 'unknown-key' (with acceptedKeys) when the key isn't one of the two. */
+  /** 'unknown-key', with acceptedKeys, when the key is not recognized. */
   reason?: string;
   acceptedKeys?: string[];
 }
 
 /**
- * Flip one isolation flag. Graceful absence like the other chrome setters:
- * a missing module or a pre-wave-7 build without the method reports
- * applied:false — never a thrown wedge into a settings toggle.
+ * Flip one isolation flag. A missing module or a build without the method
+ * returns applied:false rather than throwing into a settings toggle.
  */
 export async function setExhibitDebugFlag(
   key: ExhibitDebugFlagKey,
@@ -1170,8 +1134,8 @@ export async function setExhibitDebugFlag(
   return { applied: res.applied, reason: res.reason };
 }
 
-/** Current flag states. Module absence = the native defaults: the 12 MP
- * clamp defaults TRUE; the other flags default false. */
+/** Current flag states. Module absence returns the native defaults: the
+ * 12 MP clamp true, the other flags false. */
 export async function getExhibitDebugFlags(): Promise<ExhibitDebugFlags> {
   if (!native || typeof native.getDebugFlags !== 'function') {
     return { photoConnectionRotation: false, photoMaxDimensionsPolicy: true };
@@ -1186,13 +1150,12 @@ export async function getExhibitDebugFlags(): Promise<ExhibitDebugFlags> {
 export interface ExhibitCameraPreviewProps {
   lens?: ExhibitLens;
   torch?: ExhibitTorch;
-  /** 1.0 = no zoom; clamped natively to the device's supported range. */
+  /** 1.0 is no zoom; clamped natively to the device's supported range. */
   zoom?: number;
   /**
-   * Alt-view PiP (transparency): when true AND a second camera is actually
-   * attached, its live feed renders in a corner inset — bound natively to
-   * the secondary input's video port, so the inset shows exactly what the
-   * evidence pipeline sees. No partner, no feed (never a fabricated inset).
+   * Alt-view PiP: with a second camera attached, its live feed renders in a
+   * corner inset, bound natively to the secondary input's video port so the
+   * inset shows what the evidence pipeline sees. No partner, no inset.
    */
   altPreview?: boolean;
   onPreviewReady?: (event: { nativeEvent: PreviewReadyEvent }) => void;
@@ -1201,10 +1164,10 @@ export interface ExhibitCameraPreviewProps {
 
 /**
  * The native preview component. Grid and level are JS overlays drawn over
- * this view (spec §3) — they are never in the committed pixels.
+ * this view (spec §3) and are never in the committed pixels.
  *
- * Typed loosely at the native boundary: requireNativeViewManager's prop
- * typing happens at runtime; the interface above is the contract.
+ * Loosely typed at the native boundary: requireNativeViewManager's prop
+ * typing happens at runtime, and the interface above is the contract.
  */
 export const ExhibitCameraPreview: ComponentType<ExhibitCameraPreviewProps> | null =
   Platform.OS === 'ios' && native
@@ -1240,9 +1203,9 @@ export function onSyncStalled(cb: (e: SyncStalledEvent) => void): () => void {
   return () => sub?.remove();
 }
 
-/** Native pipeline diagnostics: verbatim one-line facts — graph
- * wiring outcomes, format picks, the live connection census, interruption
- * boundaries. Forwarded to the persistent diagnostics log; never errors. */
+/** Native pipeline diagnostics: one-line facts — graph wiring outcomes,
+ * format picks, the live connection census, interruption boundaries.
+ * Forwarded to the persistent diagnostics log; never throws. */
 export interface CameraDiagnosticEvent {
   message: string;
 }

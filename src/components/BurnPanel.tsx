@@ -1,16 +1,12 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * BurnPanel — the selective-disclosure lock surface.
- * User-facing language is "lock forever", not "burn".
- *
- * Details sealed inside an exhibit can be opened one at a time — or
- * locked forever by destroying the master seed (the only key material
- * that can ever open them). The seal is unaffected either way. A lock
- * is an action, never silent: the event log records it, and a scheduled
- * lock fires the next time the app comes to the foreground after the
- * deadline, not at the wall-clock instant. The confirmation sheet shows
- * BURN_FINALITY_WORDING verbatim (src/disclosure/burn.ts — locked
- * wording).
+ * BurnPanel: the selective-disclosure lock surface. User-facing language is
+ * "lock forever", not "burn". Locking destroys the master seed, the only key
+ * material that opens the sealed details; the seal itself is unaffected. Every
+ * lock is written to the event log, and a scheduled lock fires on the next
+ * foreground after the deadline, not at the wall-clock instant. The
+ * confirmation sheet shows BURN_FINALITY_WORDING verbatim
+ * (src/disclosure/burn.ts).
  */
 
 import React, { useState } from 'react';
@@ -46,7 +42,7 @@ export function BurnPanel({ state, busy, onSetPolicy, onBurnNow }: {
   busy: boolean;
   /** Persist a new policy (hours) or the never-default (undefined). */
   onSetPolicy: (hours?: number) => void;
-  /** Burn immediately — the caller runs applyBurn after this sheet confirms. */
+  /** Burn immediately. The caller runs applyBurn once this sheet confirms. */
   onBurnNow: () => void;
 }) {
   const styles = useThemedStyles(buildStyles);
@@ -137,7 +133,7 @@ export function BurnPanel({ state, busy, onSetPolicy, onBurnNow }: {
         </View>
       )}
 
-      {/* ---- honest record surface --------------------------------------- */}
+      {/* ---- record ------------------------------------------------------ */}
       <Divider />
       <Text style={styles.blockTitle}>Record</Text>
       {state.events.map((e, i) => (

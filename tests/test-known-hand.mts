@@ -1,20 +1,13 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * "Known hand": local collection history at the unidentified floor.
- *
- * The rule under test: local history is NOT vouching. It attaches to the
- * resolution result only when every outside anchor has missed (tier
- * 'unknown'), only at a threshold of two prior captures, and it never
- * promotes the tier. A hand seen on this device is a checkable fact about
- * this device — stated as exactly that, never more.
+ * "Known hand": local collection history at the unidentified floor. Local
+ * history attaches only at tier 'unknown', only from two prior captures up,
+ * and never promotes the tier.
  *
  *  1. unknown + history ≥ 2  → tier stays 'unknown', localHand attached.
- *  2. unknown + history < 2  → bare 'unknown', no localHand (one stray
- *     capture is not a track record).
+ *  2. unknown + history < 2  → bare 'unknown', no localHand.
  *  3. unknown + no history   → bare 'unknown'.
- *  4. any outside anchor hit (this-device) → no localHand even with
- *     history: vouching makes local history irrelevant, and attaching it
- *     there would muddy what the tier means.
+ *  4. any outside anchor hit (this-device) → no localHand, even with history.
  */
 import { resolveSignerTrust } from './trustProvider.mts';
 

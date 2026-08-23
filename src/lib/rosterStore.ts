@@ -1,12 +1,11 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Roster storage — the device's copy of one or more signed newsroom rosters,
+ * Roster storage: the device's copy of one or more signed newsroom rosters,
  * held in the OS keychain (WHEN_UNLOCKED_THIS_DEVICE_ONLY).
  *
- * A roster is accepted ONLY after its editor signature verifies — a tampered
- * or self-made roster is rejected at the door, exactly like org credentials.
- * Import is explicit (paste / file); nothing here ever upgrades a signer
- * whose fingerprint is not listed.
+ * A roster is accepted only after its editor signature verifies. Import is
+ * explicit (paste or file), and a signer whose fingerprint is not listed is
+ * never upgraded.
  */
 
 import * as SecureStore from 'expo-secure-store';
@@ -48,7 +47,7 @@ export type RosterImportResult =
 
 /**
  * Imports a signed roster from its JSON text. The editor signature must
- * verify — failure states are plain strings for the UI.
+ * verify; failure states are plain strings for the UI.
  */
 export async function importRosterJson(json: string): Promise<RosterImportResult> {
   let parsed: unknown;
@@ -65,8 +64,8 @@ export async function importRosterJson(json: string): Promise<RosterImportResult
     return { ok: false, error: check.reason ?? 'editor signature invalid' };
   }
   const all = await readAll();
-  // A newer roster from the same editor key replaces the older one (issue
-  // time decides; equal times keep the existing).
+  // A newer roster from the same editor key replaces the older one; issue
+  // time decides, and equal times keep the existing one.
   const rest = all.filter((r) => r.editor.fingerprint !== parsed.editor.fingerprint);
   const existing = all.find((r) => r.editor.fingerprint === parsed.editor.fingerprint);
   if (existing && Date.parse(existing.issuedAt) > Date.parse(parsed.issuedAt)) {
@@ -82,9 +81,9 @@ export async function removeRoster(editorFingerprint: string): Promise<void> {
 }
 
 /**
- * Resolves a signer against every stored roster. First hit wins (a key
- * listed in two rosters is a distribution error — shown as the first).
- * `atMs` must be a VERIFIED signing time or null.
+ * Resolves a signer against every stored roster; first hit wins, so a key
+ * listed in two rosters shows as the first. `atMs` must be a verified
+ * signing time or null.
  */
 export async function resolveSignerInRosters(
   fingerprint: string,

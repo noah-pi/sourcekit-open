@@ -1,21 +1,19 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Self-signed X.509 certificate (DER) for the device signing key, built with
- * a minimal hand-rolled ASN.1 writer — no native PKI dependency.
+ * a minimal hand-rolled ASN.1 writer. No native PKI dependency.
  *
- * The extension profile follows the C2PA certificate profile (spec §14.5.1,
- * as enforced by c2pa-rs): X.509 v3, EC P-256 SPKI, critical keyUsage
- * (digitalSignature + nonRepudiation), critical EKU (emailProtection — the
- * EKU C2PA's own test certs carry; `opts.eku: 'timeStamping'` swaps in the
- * RFC 3161 §2.3 TSA purpose for lab TSA fixtures), SubjectKeyIdentifier, and
- * AuthorityKeyIdentifier (required). The subject carries an Organization —
- * c2pa-rs surfaces the signer org and errors if absent.
+ * Extension profile per the C2PA certificate profile (spec §14.5.1, as
+ * enforced by c2pa-rs): X.509 v3, EC P-256 SPKI, critical keyUsage
+ * (digitalSignature + nonRepudiation), critical EKU (emailProtection;
+ * `opts.eku: 'timeStamping'` swaps in the RFC 3161 §2.3 TSA purpose for lab
+ * TSA fixtures), SubjectKeyIdentifier, and AuthorityKeyIdentifier. The
+ * subject must carry an Organization or c2pa-rs errors.
  *
- * The certificate is self-signed: third-party verifiers will report it as
- * "untrusted" (not on the C2PA trust list) — expected and displayed
- * honestly — while the signature itself cryptographically validates.
+ * Self-signed, so third-party verifiers report it as untrusted (not on the
+ * C2PA trust list) while the signature itself validates.
  *
- * Pure module — no React Native dependencies.
+ * Pure module, no React Native dependencies.
  */
 
 import { sha1 } from '@noble/hashes/sha1';
@@ -83,9 +81,8 @@ export const CERT_COMMON_NAME = 'Source Kit Device';
 
 /**
  * Builds a self-signed P-256 certificate valid from `notBefore` for 5 years.
- * Takes the public key and a digest-signing function (rather than the private
- * key) so Secure Enclave keys — which never leave the chip — can certify
- * themselves.
+ * Takes a digest-signing function rather than the private key so Secure
+ * Enclave keys, which never leave the chip, can certify themselves.
  */
 export async function buildSelfSignedCert(
   publicKey: Uint8Array,

@@ -1,18 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * The trust axis lives in the verification DATA MODEL,
- * not only in presentation. verifyPhotoBytes/verifyVideoBytes accept an
- * injected trustResolver and attach the outcome to report.signerTrust, so a
- * desk scripting against the verifier sees the same amber as the UI.
+ * The trust axis lives in the verification data model, not only in
+ * presentation: verifyPhotoBytes/verifyVideoBytes take an injected
+ * trustResolver and attach the outcome to report.signerTrust, so a desk
+ * scripting against the verifier sees what the UI shows.
  *
- *  1. No resolver supplied      → signerTrust null, and the omission is
- *     DISCLOSED in checksNotPerformed (never silently green).
- *  2. Resolver, no anchors      → tier 'unknown' in the report itself; the
- *     performed-line states the amber is in the data.
+ *  1. No resolver supplied      → signerTrust null, omission disclosed in
+ *     checksNotPerformed.
+ *  2. Resolver, no anchors      → tier 'unknown' in the report itself.
  *  3. Resolver, own fingerprint → tier 'this-device'.
- *  4. Resolver THROWS           → signerTrust null, failure stated in
- *     checksNotPerformed (a broken anchor store can never turn amber green
- *     or red — it is disclosed).
+ *  4. Resolver throws           → signerTrust null, failure stated in
+ *     checksNotPerformed.
  *  5. Resolver input contract   → fingerprint equals the lab signer's,
  *     verifiedAtMs null without a pinned time authority, orgChain null for
  *     a single-cert chain.

@@ -1,27 +1,23 @@
 /**
- * Juxtapose — the "What should be true" cards.
- *
- * The pivot: these cards never detect and never conclude. Each puts what was
- * SEALED next to what SHOULD BE true, and leaves the match to the person
- * looking at the photo. No error bands, no agrees/diverges, no scores.
+ * Juxtapose — the "What should be true" cards. Each puts what was sealed next
+ * to what should follow from it and leaves the match to the reader. No error
+ * bands, no agrees/diverges, no scores, and no pixel analysis.
  *
  *   The horizon  — the committed gravity (pose-trace roll/pitch at the
  *                  shutter) places the level line on a rectangle standing in
- *                  for the frame. Nothing in the pixels is analyzed.
+ *                  for the frame.
  *   Shadows      — the committed time and place fix the sun (NOAA ephemeris,
- *                  src/reader/verify/solar.ts); one sundial-style graphic —
- *                  a gnomon rising from a perspective-tilted ground plane,
- *                  its shadow drawn on the plane in the sun-opposite
- *                  direction at the computed length ratio — shows where
- *                  shadows run and how long they should be, in the object's
- *                  own heights (NSEW, never bare degrees).
+ *                  src/reader/verify/solar.ts). One sundial graphic: a gnomon
+ *                  on a perspective-tilted ground plane with its shadow in the
+ *                  sun-opposite direction at the computed length ratio, in the
+ *                  object's own heights and labeled NSEW.
  *   Weather      — the official archive reading for the sealed time and
- *                  place, fetched on tap (network, stated).
+ *                  place, fetched on tap over the network.
  *   Motion       — the sealed gyro trace around the shutter, drawn as-is.
  *
- * Location honesty: horizon and motion need only the pose trace; shadows and
- * weather need the committed location too — cards whose inputs are absent
- * simply don't render (the caller checks), matching the mockup's rule.
+ * Horizon and motion need only the pose trace; shadows and weather also need
+ * the committed location. Cards whose inputs are absent do not render, and the
+ * caller does that check.
  */
 
 import React, { useState } from 'react';
@@ -46,7 +42,7 @@ export interface JuxtaInputs {
   /** Device compass heading at capture (degrees CW from north), when sealed. */
   headingDeg: number | null;
   at: Date | null;
-  /** "Aug 12 · 2:41 PM · Austin" — the sealed time/place line, caller-formatted. */
+  /** The sealed time/place line, caller-formatted ("Aug 12 · 2:41 PM · Austin"). */
   sealedWhenWhere: string;
 }
 
@@ -120,42 +116,35 @@ function Card({ title, sub, children }: { title: string; sub: string; children: 
 // ---------------------------------------------------------------------------
 
 /**
- * Sealed attitude → frame geometry, as an actual 3D model (0.18.2 — Noah's
- * field note: the overlays ignored what happens when the phone points DOWN
- * or UP, and the lines pivoted off-center). The trace commits expo
- * DeviceMotion attitude (roll = gamma, pitch = beta, decidegrees ÷ 10).
- * The 0.18.1 field bug stands as recorded below: the web/CoreMotion Euler
- * chart (Z–X′–Y″) hits gimbal lock at beta ≈ ±90° — exactly an upright
- * phone taking a photo — so neither raw Euler angle is trustworthy alone.
- *
- * The robust quantities come from the GRAVITY VECTOR. With device axes
- * x = right, y = top, z = out of screen, gravity in device coords is
- * proportional to g = (cos β·sin γ, −sin β, −cos β·cos γ), and the camera
- * looks along −z. Then, with no Euler-chart assumptions anywhere:
+ * Sealed attitude → frame geometry. The trace commits expo DeviceMotion
+ * attitude (roll = gamma, pitch = beta, decidegrees ÷ 10). Neither raw Euler
+ * angle is usable alone: the Z–X′–Y″ chart hits gimbal lock at beta ≈ ±90°,
+ * which is an upright phone taking a photo. Everything below is derived from
+ * the gravity vector instead. With device axes x = right, y = top, z = out of
+ * screen, gravity in device coords is proportional to
+ * g = (cos β·sin γ, −sin β, −cos β·cos γ), and the camera looks along −z:
  *
  *   gravityTiltDeg — the plumb lean on screen: the direction of gravity's
  *                    projection onto the image plane, atan2(cos β·sin γ, sin β).
- *   horizonTiltDeg — the horizon's tilt: roll ROTATES the horizon around
- *                    the image center; the perpendicular of the plumb.
- *   aimDownDeg     — how far the lens points BELOW horizontal: the angle
+ *   horizonTiltDeg — the horizon's tilt: roll rotates the horizon around the
+ *                    image center; the perpendicular of the plumb.
+ *   aimDownDeg     — how far the lens points below horizontal: the angle
  *                    between the camera axis (0,0,−1) and the horizontal
- *                    plane, asin(−ẑ·ĝ) = asin(cos β·cos γ). Roll AND pitch
- *                    both count — a phone rolled onto its side and tilted
- *                    forward reads correctly, where the old |β|−90 did not.
- *   horizonTopPct  — pitch TRANSLATES the horizon: a pinhole maps elevation
+ *                    plane, asin(−ẑ·ĝ) = asin(cos β·cos γ). Roll and pitch
+ *                    both count.
+ *   horizonTopPct  — pitch translates the horizon: a pinhole maps elevation
  *                    angle to vertical offset by the tangent, so aimed down
- *                    the horizon rises by tan(aim)/tan(half the vertical
- *                    field of view) — and LEAVES THE FRAME entirely past
- *                    the FOV edge (horizonInFrame says when).
+ *                    the horizon rises by tan(aim)/tan(half the vertical field
+ *                    of view), and leaves the frame past the FOV edge
+ *                    (horizonInFrame says when).
  *   plumbMagnitude — |gravity's projection onto the image plane| = |cos aim|:
- *                    1 aimed level, 0 aimed straight down or up — where the
- *                    plumb DIRECTION stops meaning anything at all.
+ *                    1 aimed level, 0 aimed straight down or up, where the
+ *                    plumb direction stops meaning anything.
  *
- * Standing caveat, stated honestly: with no orientation sealed in the
- * record, the portrait image-plane mapping is assumed; a landscape capture
- * gets the same formulas applied to the displayed (EXIF-normalized) frame.
- * The half-FOV is nominal for a phone main camera (26°); the mapping is
- * illustrative but monotone, and honest about the horizon leaving frame.
+ * No orientation is sealed in the record, so the portrait image-plane mapping
+ * is assumed; a landscape capture gets the same formulas on the displayed
+ * (EXIF-normalized) frame. The half-FOV is nominal for a phone main camera
+ * (26°), so the mapping is illustrative but monotone.
  */
 const RAD_D = Math.PI / 180;
 const HALF_VFOV_DEG = 26;
@@ -171,7 +160,7 @@ export function horizonTiltDeg(rollDeg: number, pitchDeg: number): number {
   return -gravityTiltDeg(rollDeg, pitchDeg);
 }
 
-/** Degrees the lens aims BELOW horizontal (negative = aimed up). */
+/** Degrees the lens aims below horizontal (negative = aimed up). */
 export function aimDownDeg(rollDeg: number, pitchDeg: number): number {
   const b = pitchDeg * RAD_D;
   const g = rollDeg * RAD_D;
@@ -192,12 +181,12 @@ export function horizonInFrame(aimDown: number): boolean {
   return Math.abs(Math.tan(aimDown * RAD_D) / Math.tan(HALF_VFOV_DEG * RAD_D)) <= 0.94;
 }
 
-/** |gravity projection onto the image plane|, 0..1 — the plumb's meaning. */
+/** |gravity projection onto the image plane|, 0..1. */
 export function plumbMagnitude(rollDeg: number, pitchDeg: number): number {
   return Math.abs(Math.cos(aimDownDeg(rollDeg, pitchDeg) * RAD_D));
 }
 
-/** Below this projection (|aim| past 60°) a plumb LINE says nothing. */
+/** Below this projection (|aim| past 60°) a plumb line says nothing. */
 const PLUMB_LINE_MIN = 0.5;
 
 export function HorizonLineOverlay({ rollDeg, pitchDeg }: { rollDeg: number; pitchDeg: number }) {
@@ -205,8 +194,8 @@ export function HorizonLineOverlay({ rollDeg, pitchDeg }: { rollDeg: number; pit
   const aim = aimDownDeg(rollDeg, pitchDeg);
   const tilt = horizonTiltDeg(rollDeg, pitchDeg);
   if (!horizonInFrame(aim)) {
-    // Out of frame: never a line clamped to a meaningless position — an
-    // edge chevron points to where the level sits, the badge states the aim.
+    // Out of frame: an edge chevron points to where the level sits and the
+    // badge states the aim, rather than clamping the line to an edge.
     const above = aim > 0; // aimed down → the horizon is above the frame
     return (
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -226,8 +215,8 @@ export function HorizonLineOverlay({ rollDeg, pitchDeg }: { rollDeg: number; pit
   const line = { top: `${horizonTopPct(aim)}%` as const };
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Roll rotates the horizon around the IMAGE CENTER: the
-          wrapper carries the rotation, the line carries the pitch offset. */}
+      {/* Roll rotates the horizon around the image center: the wrapper
+          carries the rotation, the line carries the pitch offset. */}
       <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${tilt}deg` }] }]}>
         <View style={[styles.horizonOverlayBacking, line]} />
         <View style={[styles.horizonOverlayLine, line]} />
@@ -237,15 +226,12 @@ export function HorizonLineOverlay({ rollDeg, pitchDeg }: { rollDeg: number; pit
 }
 
 /**
- * The gravity (level) overlay: the projection of gravity onto the image
- * plane, drawn ON the photo. Aimed near level that's a plumb line through
- * the frame center, leaning with the measured gravity, its length ∝ the
- * projection magnitude |cos aim| — against a faint screen-true vertical
- * for reference. Aimed steeply down or up (|aim| past ~60°) the projection
- * collapses and no line direction is honest: a center target renders
- * instead — filled core = gravity points INTO the scene (aimed down),
- * hollow = OUT toward the viewer (aimed up). It visualizes the sealed
- * attitude; it says nothing about the pixels.
+ * The gravity (level) overlay, drawn on the photo. Aimed near level it is a
+ * plumb line through the frame center, leaning with the measured gravity, its
+ * length proportional to |cos aim|, against a faint screen-true vertical.
+ * Past |aim| ≈ 60° the projection collapses and a center target renders
+ * instead: filled core means gravity points into the scene (aimed down),
+ * hollow means out toward the viewer (aimed up).
  */
 export function GravityPlumbOverlay({ rollDeg, pitchDeg }: { rollDeg: number; pitchDeg: number }) {
   const styles = useThemedStyles(buildStyles);
@@ -270,8 +256,8 @@ export function GravityPlumbOverlay({ rollDeg, pitchDeg }: { rollDeg: number; pi
       </View>
     );
   }
-  // The line pivots at the IMAGE CENTER (its view is centered) and its
-  // length follows the projection magnitude — shorter as the aim steepens.
+  // The line pivots at the image center and its length follows the
+  // projection magnitude, shortening as the aim steepens.
   const inset = `${50 - 40 * m}%` as const;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -288,12 +274,12 @@ function wrap180(deg: number): number {
 }
 
 /**
- * The sun overlay: an edge marker on the photo pointing toward the sun's
- * azimuth, computed from the sealed time/place (NOAA ephemeris) against the
- * sealed device heading. In frame (within ±35° of the camera axis) the
- * marker sits on the top edge at its bearing; off-frame it becomes an edge
- * arrow — right, left, or "behind the camera". Needs the sealed heading;
- * without one the caller renders the text badge only (no invented arrow).
+ * The sun overlay: an edge marker pointing toward the sun's azimuth, computed
+ * from the sealed time/place (NOAA ephemeris) against the sealed device
+ * heading. Within ±35° of the camera axis the marker sits on the top edge at
+ * its bearing; otherwise it becomes an edge arrow (right, left, or behind the
+ * camera). Requires the sealed heading; without one the caller renders the
+ * text badge alone.
  */
 export function SunAzimuthOverlay({ lat, lon, at, headingDeg }: { lat: number; lon: number; at: Date; headingDeg: number }) {
   const styles = useThemedStyles(buildStyles);
@@ -382,10 +368,10 @@ export function HorizonCard({ rollDeg, pitchDeg }: { rollDeg: number; pitchDeg: 
 // Shadows — the committed time and place fix the sun; shadows follow
 // ---------------------------------------------------------------------------
 
-/** Sundial geometry (px): a perspective ground plane — an ellipse tilted
- *  ~35° (ry/rx = sin 35° ≈ 0.57) — with the gnomon rising from its center.
- *  North is the FAR edge (top of the ellipse). A ground direction at
- *  compass bearing θ projects to screen (sin θ, −cos θ · SQUASH). */
+/** Sundial geometry (px): a perspective ground plane, an ellipse tilted ~35°
+ *  (ry/rx = sin 35° ≈ 0.57), with the gnomon rising from its center. North is
+ *  the far edge (top of the ellipse). A ground direction at compass bearing θ
+ *  projects to screen (sin θ, −cos θ · SQUASH). */
 const GROUND_RX = 74;
 const GROUND_RY = 42;
 const GROUND_SQUASH = GROUND_RY / GROUND_RX; // ≈ 0.568 — the ~35° tilt
@@ -393,12 +379,10 @@ const DIAL_CX = 90; // container is 180 wide
 const DIAL_CY = 64; // container is 114 tall: 22px of headroom above the far edge
 
 /**
- * The condition glyph (asked for weather-style icons). The
- * HONESTY RULE: the sealed record carries NO weather field (checked
- * src/provenance/manifest.ts), so the glyph is derived from sun elevation
- * alone — sun by day, an outlined sun near the horizon, a moon at night.
- * Clouds and rain would be fabricated conditions; they need a capture-time
- * weather API decision (flagged to Noah), so they never render here.
+ * The condition glyph. The sealed record carries no weather field
+ * (src/provenance/manifest.ts), so the glyph comes from sun elevation alone:
+ * sun by day, an outlined sun near the horizon, a moon at night. Cloud and
+ * rain glyphs would need a capture-time weather source, so they never render.
  */
 function sunCondition(elevationDeg: number): { icon: keyof typeof Ionicons.glyphMap; words: string } {
   if (elevationDeg <= 0) return { icon: 'moon-outline', words: 'Nighttime. Not applicable.' };
@@ -411,7 +395,7 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
   const pos = solarPosition(lat, lon, at);
   const condition = sunCondition(pos.elevationDeg);
   if (pos.elevationDeg <= 0) {
-    // Night: the sundial becomes plain language — Noah's verbatim.
+    // Night: the sundial is replaced by plain language.
     return (
       <Card title="Shadows" sub="Where the sun was, from the sealed time and place.">
         <View style={styles.conditionRow}>
@@ -425,16 +409,12 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
   const shadow = shadowGrammar(pos)!;
   const wind = compass8(shadow.bearingDeg);
   const ratio = Math.round((shadow.poleShadowCm / 100) * 100) / 100;
-  /* ONE shared unit keeps the drawing to scale on the tilted plane: the
-     gnomon stands 1.2 × unit px tall (a slight vertical emphasis is the
-     perspective convention) and the shadow runs ratio × unit px across the
-     ground from its base. When a low sun would overflow the plane the unit
-     shrinks; the proportion never does; past ~11× the tip clips at the
-     ellipse edge — honestly long. The bearing math is shadowGrammar's: the
-     shadow points OPPOSITE the sun azimuth ((azimuth + 180) mod 360 —
-     verified against the NOAA ephemeris, e.g. an evening sun at 277° over
-     Austin throws a 2.9× shadow at 97°, east). Only the projection changed
-     in 0.18.2 — perspective now, the math untouched. */
+  /* One shared unit keeps the drawing to scale on the tilted plane: the
+     gnomon stands 1.2 × unit px tall and the shadow runs ratio × unit px
+     across the ground from its base. A low sun shrinks the unit, never the
+     proportion; past ~11× the tip clips at the ellipse edge. The bearing comes
+     from shadowGrammar: the shadow points opposite the sun azimuth,
+     (azimuth + 180) mod 360. */
   const unit = Math.max(6, Math.min(20, (GROUND_RX - 10) / ratio));
   const gnomonH = Math.round(unit * 1.2 * 10) / 10;
   const shadowWorld = Math.min(ratio * unit, GROUND_RX - 10);
@@ -443,15 +423,12 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
   const sdy = -Math.cos(brg) * GROUND_SQUASH * shadowWorld;
   const shadowLen = Math.hypot(sdx, sdy);
   const shadowAng = (Math.atan2(sdy, sdx) * 180) / Math.PI; // screen y-down: rotate clockwise
-  // 0.18.5 post-field (Noah: "the sun arc is totally off — remove the sun
-  // and the arc; the rest works without"): the sun dot and the dotted day
-  // track are GONE. The dial keeps only what reads unambiguously — the
-  // gnomon and its shadow on the ground plane; the sun's own position stays
-  // in the words above ("Day · sun 36° up") and the SHOULD BE sentence.
+  // The dial draws only the gnomon and its shadow on the ground plane. The
+  // sun's own position is stated in the words above and in the sentence below.
   return (
     <Card title="Shadows" sub="Where the sun was, from the sealed time and place.">
-      {/* The condition glyph: sun geometry ONLY (see sunCondition) — never
-          a fabricated sky. */}
+      {/* The condition glyph: sun geometry only.
+          See sunCondition. */}
       <View style={styles.conditionRow}>
         <Ionicons name={condition.icon} size={13} color={colors.textDim} />
         <Text style={styles.conditionText}>{condition.words}</Text>
@@ -478,9 +455,8 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
           <View style={styles.gnomonShade} />
         </View>
         <View style={styles.gnomonBase} pointerEvents="none" />
-        {/* The bottom direction readout was removed — the shadow
-            direction is already stated in the SHOULD BE sentence below,
-            and the duplicated label read as a second, conflicting dial. */}
+        {/* No bottom direction readout: the shadow direction is stated in
+            the sentence below. */}
       </View>
       <Text style={styles.sratioLab}>1 m tall → {ratio} m shadow</Text>
       <Pair sealed={sealedWhenWhere} shouldBe={`Shadows run ${wind.toLowerCase() === 'n' ? 'north' : wind === 'NE' ? 'northeast' : wind === 'E' ? 'east' : wind === 'SE' ? 'southeast' : wind === 'S' ? 'south' : wind === 'SW' ? 'southwest' : wind === 'W' ? 'west' : 'northwest'}, about ${ratio}× the object's height.`} />
@@ -668,11 +644,9 @@ const buildStyles = () => StyleSheet.create({
     position: 'absolute', right: '6%', alignSelf: 'flex-end',
     color: colors.accent, fontSize: 8.5, fontWeight: '700',
   },
-  // Overlay lines sit on arbitrary photos: a bright-green core (readable on
-  // dark and light scenes) over a dark backing halo — never subtle. Bumped
- // a second time: still too faint over a bright sky at 7+3 px /
-  // 0.55 alpha, so the halo goes to 9 px / 0.70 and the core to 4 px, the
-  // core now CENTERED in the halo (marginTop splits the height difference).
+  // Overlay lines sit on arbitrary photos: a bright-green core over a dark
+  // backing halo, 9 px / 0.70 alpha halo under a 4 px core, so they read over
+  // a bright sky. marginTop centers the core in the halo.
   horizonOverlayBacking: {
     position: 'absolute', left: '4%', right: '4%', height: 9, borderRadius: 4.5,
     backgroundColor: 'rgba(10,13,16,0.70)',
@@ -683,10 +657,8 @@ const buildStyles = () => StyleSheet.create({
     backgroundColor: colors.onDark.accent,
   },
 
-  // gravity / plumb overlay (same second bump as the horizon line)
-  // Top/bottom insets now come inline (∝ the projection magnitude)
-  // and the bob is gone — it sat at a fixed bottom offset while the line
-  // rotated, floating off the line's end ("the offset anchor looks wrong").
+  // Gravity / plumb overlay, same weights as the horizon line. Top and bottom
+  // insets come inline, proportional to the projection magnitude.
   plumbReference: {
     position: 'absolute', top: '10%', bottom: '10%', left: '50%', marginLeft: -0.75,
     width: 1.5, backgroundColor: 'rgba(255,255,255,0.60)',
@@ -699,8 +671,8 @@ const buildStyles = () => StyleSheet.create({
     position: 'absolute', left: '50%', marginLeft: -2,
     width: 4, borderRadius: 2, backgroundColor: colors.onDark.accent,
   },
-  // The steep-aim plumb state: gravity points into (filled core) or out of
-  // (hollow core) the scene — a center target, never a meaningless line.
+  // Steep-aim plumb state: a center target whose core is filled when gravity
+  // points into the scene, hollow when it points out.
   plumbTargetWrap: {
     position: 'absolute', left: 0, right: 0, top: 0, bottom: 0,
     alignItems: 'center', justifyContent: 'center',
@@ -716,8 +688,8 @@ const buildStyles = () => StyleSheet.create({
     width: 10, height: 10, borderRadius: 5,
     borderWidth: 2, borderColor: colors.onDark.accent,
   },
-  // Out-of-frame affordances: an edge chevron toward the level, and a
-  // centered aim badge stating the aim in words and degrees.
+  // Out-of-frame affordances: an edge chevron toward the level and a centered
+  // badge stating the aim in words and degrees.
   edgeChevronWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   aimBadgeWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   aimBadgeChip: {
@@ -728,8 +700,8 @@ const buildStyles = () => StyleSheet.create({
   },
   aimBadgeText: { color: '#fff', fontSize: 9.5, fontWeight: '700' },
 
-  // sun overlay — filled accent pill, now with a dark halo ring and a step
-  // larger type/icon so it holds up over a bright sky.
+  // Sun overlay: filled accent pill with a dark halo ring, sized to hold up
+  // over a bright sky.
   sunMarker: {
     position: 'absolute',
     flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -748,16 +720,15 @@ const buildStyles = () => StyleSheet.create({
   },
   sunBadgeText: { color: '#fff', fontSize: fontSize.xs, fontWeight: '600' },
 
- // shadows — the perspective sundial: a tilted ground plane
-  // (hairline ellipse over a soft fill), N on the far edge, a shaded
- // charcoal gnomon, ONE sage shadow line — and the clay sun dot
-  // moving with azimuth AND elevation, opposite its shadow.
+  // Shadows — the perspective sundial: a tilted ground plane (hairline
+  // ellipse over a soft fill), N on the far edge, a shaded charcoal gnomon,
+  // and one sage shadow line.
   sundialPersp: {
     width: 2 * DIAL_CX, height: 114,
     alignSelf: 'center', marginTop: spacing.sm + 2,
   },
-  // The plane is a circle of radius GROUND_RX squashed to the tilt — the
-  // squash thins the stroke at the near/far edges, which reads as depth.
+  // The plane is a circle of radius GROUND_RX squashed to the tilt; the
+  // squash thins the stroke at the near and far edges, reading as depth.
   groundFill: {
     position: 'absolute', left: DIAL_CX - GROUND_RX, top: DIAL_CY - GROUND_RX,
     width: 2 * GROUND_RX, height: 2 * GROUND_RX, borderRadius: GROUND_RX,
@@ -774,27 +745,26 @@ const buildStyles = () => StyleSheet.create({
     position: 'absolute', top: DIAL_CY - GROUND_RY - 15, left: 0, right: 0,
     textAlign: 'center', color: colors.textFaint, fontSize: 7.5, fontWeight: '700',
   },
-  // The clay sun dot — the one warm accent. 12px (0.18.3, Noah: ~40%
-  // bigger than the old 8px), positioned by the polar projection above.
+  // The clay sun dot, 12px, positioned by the polar projection above.
   sunDotPersp: {
     position: 'absolute', width: 12, height: 12, borderRadius: 6,
     backgroundColor: '#C08552',
   },
-  // The dotted day-track the sun dot rides (same clay, quiet).
+  // The dotted day-track the sun dot rides.
   sunPathDot: {
     position: 'absolute', width: 3, height: 3, borderRadius: 1.5,
     backgroundColor: 'rgba(192,133,82,0.45)',
   },
-  // The shadow: rotated about its left-center end, which sits exactly on
-  // the gnomon's base (DIAL_CX, DIAL_CY).
+  // The shadow: rotated about its left-center end, which sits on the gnomon's
+  // base (DIAL_CX, DIAL_CY).
   shadowLinePersp: {
     position: 'absolute', left: DIAL_CX, top: DIAL_CY - 1.5,
     height: 3, borderRadius: 1.5,
     backgroundColor: colors.accent,
     transformOrigin: '0% 50%',
   },
-  // The gnomon: a 5px bar with a darker right edge — a round pole in light
-  // that comes from the sun side, not a hairline.
+  // The gnomon: a 5px bar with a darker right edge, reading as a round pole
+  // lit from the sun side.
   gnomonBar: {
     position: 'absolute', left: DIAL_CX - 2.5, width: 5, borderRadius: 2.5,
     backgroundColor: colors.text,
@@ -806,7 +776,7 @@ const buildStyles = () => StyleSheet.create({
     width: 9, height: 4.5, borderRadius: 4.5, backgroundColor: colors.text,
   },
   sratioLab: { color: colors.textDim, fontSize: fontSize.xs, marginTop: spacing.sm - 1, textAlign: 'center' },
-  // The condition glyph row (sun-elevation-derived icon + plain words).
+  // The condition glyph row: sun-elevation-derived icon plus words.
   conditionRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },
   conditionText: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 17 },
 

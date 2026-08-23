@@ -1,21 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * The signed-claim binding guard.
+ * The signed-claim binding guard. A c2pa.hash.* assertion binds media only when
+ * the signed claim references it. Three defective-credential shapes:
  *
- * A c2pa.hash.* assertion binds media ONLY when the SIGNED CLAIM references
- * it. Without this guard three defective-credential shapes are mislabeled:
- *
- *  1. Foreign claim with NO binding assertion → misread as CONTENT_MODIFIED
- *     ("media altered" — absence of proof surfaced as proven tamper).
- *  2. Malformed exclusion set (overlapping ranges) → misread as 'mismatch'.
- *  3. THE ATTACH ATTACK: a genuinely signed claim (telemetry only) plus a
- *     self-consistent binding box added POST-SIGNING over DIFFERENT media →
- *     misread as INTACT. A false green minted from real credentials.
+ *  1. Foreign claim with no binding assertion.
+ *  2. Malformed exclusion set (overlapping ranges).
+ *  3. Attach attack: a genuinely signed telemetry-only claim plus a
+ *     self-consistent binding box added post-signing over different media.
  *
  * All three must land SIGNATURE_INVALID with assetHashFailure 'void-binding'
- * (integrity UNPROVEN, defective credentials — never proven tamper), and the
- * disclosure line must say the binding is void. Control: a normal Source Kit
- * manifest still verifies INTACT.
+ * (integrity unproven, not proven tamper), and the disclosure line must say the
+ * binding is void. Control: a normal Source Kit manifest verifies INTACT.
  */
 import * as fs from 'node:fs';
 import { p256 } from '@noble/curves/p256';
@@ -116,15 +111,13 @@ check('overlapping exclusions: SIGNATURE_INVALID, never "media altered"', rB.ver
 check('overlapping exclusions: void-binding (malformed set, not mismatch)', rB.c2pa?.assetHashFailure === 'void-binding', String(rB.c2pa?.assetHashFailure));
 
 // ---------- 3. the attach attack: binding box added post-signing over DIFFERENT media ----------
-// The victim is a genuinely SIGNED capture: the attacker flips one media
-// byte, strips the legit APP11 chain, and splices in their own claim
-// (telemetry only — the binding box rides UNREFERENCED in the assertions
-// set) whose hash.data honestly covers the modified media. Everything
-// self-consistent except the one thing that matters: the signed claim never
-// declares the binding. (An earlier version of this case built the victim
-// from the UNSIGNED fixture and deleted segC.length bytes at offset 2 —
-// clean.jpg opens with a 16-byte APP0, so that corrupted the JPEG
-// mid-stream and the scanner bailed before the guard under test ever ran.)
+// The victim is a genuinely signed capture: the attacker flips one media byte,
+// strips the legit APP11 chain, and splices in a telemetry-only claim whose
+// binding box rides unreferenced in the assertions set while its hash.data
+// covers the modified media. Self-consistent except that the signed claim never
+// declares the binding. The victim must be the signed fixture: splicing into
+// the unsigned clean.jpg (which opens with a 16-byte APP0) corrupts the JPEG
+// mid-stream and the scanner bails before the guard runs.
 const labCtx = { location: null, headingDeg: null, pressureHPa: null, altitudeM: null, motion: null } as never;
 const signedClean = (await attestPhoto({
   photoUri: new URL('./clean.jpg', import.meta.url).pathname,
@@ -134,13 +127,14 @@ const legitStore = extractC2paStore(signedClean);
 if (!legitStore) throw new Error('attach-attack setup: signed fixture carries no extractable C2PA store');
 const other = new Uint8Array(signedClean);
 other[other.length - 500] ^= 0xff; // attacker media (past the manifest, inside the scan data)
-// Attacker's self-consistent binding: exclusion covers their own segment
-// slot, hash over everything else (the MODIFIED media). Fixed-point the
-// span — the CBOR width of `length` itself changes the segment size.
+// Attacker's self-consistent binding: the exclusion covers their own segment
+// slot and the hash covers the modified media. The span is solved by
+// fixed-point iteration since the CBOR width of `length` changes the segment
+// size.
 const strippedOther = concatBytes(other.subarray(0, 2), other.subarray(2 + legitStore.segmentLength));
 const attackerHash = sha256(strippedOther);
 const uuidC = bytesToHex(p256.utils.randomPrivateKey().subarray(0, 16));
-// The claim signs ONLY telemetry; the assertions box carries the attacker's binding.
+// The claim signs only telemetry; the assertions box carries the attacker's binding.
 const claimC = encode({
   claim_generator: 'ForeignTool/1.0', 'dc:format': 'image/jpeg', 'dc:title': 'guard.jpg',
   instanceID: uuidC,

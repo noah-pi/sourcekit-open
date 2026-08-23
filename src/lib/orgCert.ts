@@ -1,26 +1,18 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Organization credentials.
- *
- * An organization can elevate a device's self-signed identity to an
- * org-issued one — without the private key ever leaving the Secure Enclave:
+ * Organization credentials. An org can elevate a device's self-signed identity
+ * to an org-issued one without the private key leaving the Secure Enclave:
  *
  *   1. Device exports its public key + fingerprint (Settings → Export).
- *   2. The org's CA issues a certificate FOR THAT PUBLIC KEY (offline,
- *      e.g. openssl) and hands back the cert (+ CA cert).
- *   3. The device imports it here. From then on, every C2PA signature's
- *      x5chain is [org-issued device cert, org CA cert] — verifiers see the
- *      signature chain into the organization instead of a self-signed cert.
+ *   2. The org's CA issues a certificate for that public key offline and hands
+ *      back the cert plus its CA cert.
+ *   3. The device imports it here. Every C2PA signature's x5chain is then
+ *      [org-issued device cert, org CA cert].
  *
- * Revocation is intentionally verifier-side and standard: the org CA puts
- * OCSP/CRL endpoints (AIA / CRL Distribution Points) in the certs it
- * issues, and any verifier can check status against the org. We surface
- * the cert's serial + expiry so a desk can ask "is this cert still good?"
- * An org credential that no longer matches the active device key (after a
- * key rotation) is ignored and flagged, never silently used.
- *
- * What we deliberately do NOT do: accept private keys. Any "credential"
- * that ships a key is a liability, not an upgrade.
+ * Revocation is verifier-side: the org CA puts OCSP/CRL endpoints (AIA / CRL
+ * Distribution Points) in the certs it issues. The cert's serial and expiry
+ * are surfaced in the UI. A credential that no longer matches the active
+ * device key is flagged stale and not used. Private keys are never accepted.
  */
 
 import * as SecureStore from 'expo-secure-store';
@@ -58,9 +50,9 @@ export interface OrgCredential {
   };
   importedAt: string;
   /**
-   * How the credential arrived: the domain it was fetched from over TLS
-   * (sourcekit-org/1, src/lib/orgDirectory.ts). Absent for file imports. A
-   * LOCAL provenance fact — never embedded in signed claims.
+   * The domain the credential was fetched from over TLS (sourcekit-org/1,
+   * src/lib/orgDirectory.ts); absent for file imports. Local only — never
+   * embedded in signed claims.
    */
   sourceDomain?: string;
 }
@@ -80,8 +72,8 @@ function readTlv(b: Uint8Array, o: number): Tlv {
     const n = len & 0x7f;
     if (n === 0 || n > 4) throw new Error('DER: indefinite or oversized length');
     len = 0;
-    // Multiply-accumulate, never (len << 8) | byte: 32-bit signed shift
-    // wraps lengths ≥ 0x80000000 negative and walkers hang.
+    // Multiply-accumulate, not (len << 8) | byte: a 32-bit signed shift wraps
+    // lengths >= 0x80000000 negative and walkers hang.
     for (let i = 0; i < n; i++) len = len * 256 + b[p + i];
     p += n;
   }
@@ -193,9 +185,9 @@ export async function setOrgCredential(leafDer: Uint8Array, caDer: Uint8Array | 
   if (Date.parse(info.notAfter) <= now) throw new Error(`Certificate expired ${info.notAfter}. Ask your organization to re-issue.`);
   if (caDer) {
     parseCertInfo(caDer); // sanity: must at least be a parseable cert
-    // Real validation: the CA must actually have signed this leaf (signature,
-    // name chaining, CA flag, validity). Without this check anyone could
-    // self-issue a "credential" claiming any organization.
+    // The CA must actually have signed this leaf (signature, name chaining,
+    // CA flag, validity), or anyone could self-issue a credential claiming any
+    // organization.
     const chain = verifyChain([leafDer, caDer], [], now);
     if (!chain.linksValid) {
       throw new Error(`The CA certificate did not issue this device certificate (${chain.reason ?? 'chain broken'}). Ask your organization for the correct CA file.`);
@@ -226,9 +218,9 @@ export async function clearOrgCredential(): Promise<void> {
 }
 
 /**
- * The x5chain to sign with: [org leaf, org CA] when a valid credential for
- * the CURRENT device key exists, else null (caller falls back to self-signed).
- * A credential left behind by a key rotation is reported as stale, not used.
+ * The x5chain to sign with: [org leaf, org CA] when a valid credential for the
+ * current device key exists, else null (caller falls back to self-signed). A
+ * credential left behind by a key rotation is reported stale, not used.
  */
 export async function orgCertChainForKey(devicePublicKey: Uint8Array): Promise<{ chain: Uint8Array[]; info: OrgCredential['info'] } | 'stale' | null> {
   const cred = await getOrgCredential();

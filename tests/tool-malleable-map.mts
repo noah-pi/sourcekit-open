@@ -1,13 +1,11 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Tool: empirical malleability map of the APP11/JUMBF region, annotated by
- * structure. Builds a signed JPEG, flips every byte of the APP11 segment,
- * classifies the verifier outcome, then walks the JUMBF layout field by
- * field and reports which fields are protected, malleable, or partial.
- *
- * Ground truth for docs/INTEGRITY.md and for test-malleability.mts.
- * NOTE: byte offsets shift run to run (ECDSA cert signatures vary in DER
- * length) — always derive expectations STRUCTURALLY, never by offset.
+ * Tool: empirical malleability map of the APP11/JUMBF region. Builds a signed
+ * JPEG, flips every byte of the APP11 segment, classifies the verifier
+ * outcome, then walks the JUMBF layout field by field and reports which fields
+ * are protected, malleable, or partial. Ground truth for docs/INTEGRITY.md and
+ * test-malleability.mts. Byte offsets shift run to run because ECDSA cert
+ * signatures vary in DER length, so derive expectations structurally.
  */
 import * as fs from 'node:fs';
 import { p256 } from '@noble/curves/p256';
@@ -140,7 +138,7 @@ const v = await attestVideo({ videoUri: '/tmp/lab/clean.mp4', context: vctx, ide
 if (!v.signedVideoBytes) { console.log('video embed gate declined — skipping'); process.exit(0); }
 const vsigned = v.signedVideoBytes;
 fs.writeFileSync('/tmp/lab/malleable-signed.mp4', vsigned);
-// C2PA BMFF usertype per spec (NOT the JUMBF 'c2pa'-prefix jumd UUID).
+// C2PA BMFF usertype per spec, not the JUMBF 'c2pa'-prefix jumd UUID.
 const UT = [0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c, 0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81];
 let utAt = -1;
 outer: for (let i = 0; i < vsigned.length - 24; i++) {

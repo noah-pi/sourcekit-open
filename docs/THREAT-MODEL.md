@@ -1,14 +1,12 @@
 # Threat model — Source Kit 
 
-Who attacks this system, what we assume, what happens in each scenario, and
-what we consciously accept. Every scenario gets
-its honest status — **defended (lab-tested)**, **defended (by design)**,
-**partial (stated honestly)**, **accepted risk**, or **out of scope** — and
-"accepted" is always said out loud in the product, never buried here only.
+Who attacks this system, what it assumes, what happens in each scenario, and
+what it accepts. Every scenario carries a status: **defended (lab-tested)**,
+**defended (by design)**, **partial**, **accepted risk**, or **out of scope**.
+An accepted risk is stated in the product, not only here.
 
-Related: `SECURITY.md` (cryptographic design and threat cases), `INTEGRITY.md` (per-signal
-bounds), `NETWORK.md` (every network event), `DECISIONS.md` (why the engine
-is built the way it is).
+Related: `SECURITY.md` (cryptographic design and threat cases), `INTEGRITY.md`
+(per-signal bounds), `NETWORK.md` (every network event).
 
 ## Named adversaries
 
@@ -143,7 +141,7 @@ source. Three consequences shape the whole design:
 **(a) No guarantee may rest on attacker inconvenience, obscurity, or the
 effort of reverse-engineering.** All detection logic is public and patchable.
 Jailbreak path indicators, integrity heuristics, and anti-instrumentation
-checks are priced honestly as *speed bumps against commodity tooling only*.
+checks are *speed bumps against commodity tooling only*.
 Against an AI-assisted attacker who can read the exact check and patch around
 it, they are noise. They are therefore **never** load-bearing: no rung of the
 trust ladder, no verdict, no green state depends on one.
@@ -232,7 +230,7 @@ that — rung 2 at most, with the out-of-band caveat, never rung 3.
 **9. Org-assertion inconsistency.** The manifest's org identity assertion and
 its certificate chain disagree (org assertion names one org, chain top names
 another, or the telemetry hash doesn't match) → the verifier reports FAILED
-on binding mismatch, or a loud MISMATCH naming both — never silently picks
+on binding mismatch, or a loud MISMATCH naming both, and never picks
 one. If the cross-check can't run, the org is reported *unproven*, never
 vouched. *Defended (lab-tested — test-identity).*
 
@@ -244,16 +242,16 @@ chain cannot produce green. A *valid* chain to a self-asserted root says so.
 **11. Fingerprint grinding and the stranger-trust ritual.** An attacker
 grinds a key whose fingerprint shares an 8-hex prefix with a victim's, or
 social-engineers their way onto a manual "trusted" list → there is no manual
-list (removed in: the ritual was the attack surface), and identity
-surfaces show the full 64-character fingerprint for out-of-band comparison.
+list, and identity surfaces show the full 64-character fingerprint for
+out-of-band comparison.
 *Defended (by design).*
 
 **12. Forged roster / unknown editor key.** A roster is only as good as its
 editor signature, and the editor fingerprint must be confirmed out of band —
 the import flow instructs exactly that. A forged roster signed by an unknown
 key installs, but it *vouches for nothing the user has any reason to believe*;
-the trust decision happened at confirmation, not at import. *Partial (stated
-honestly — the human step is the control, and the UI says so).*
+the trust decision happened at confirmation, not at import. *Partial (the
+human step is the control, and the UI says so).*
 
 **13. Roster rollback.** An attacker hands a verifier a stale roster (before
 a revocation). The roster is genuinely signed, so it verifies — and the
@@ -261,7 +259,7 @@ capture resolves by *that* roster's contents. The deployed mitigation is
 semantics, not versioning: revocations are dated, a capture signed before
 the revocation stays *active-then-revoked* (genuine), and the practice is to
 re-issue and redistribute rosters on every edit. A monotonic version counter
-would close this properly and isn't built. *Partial (stated honestly).*
+would close this properly and isn't built. *Partial.*
 
 ### C. Time
 
@@ -285,7 +283,7 @@ checked" on every verification. *Accepted risk (stated in-product).*
 
 **17. Anchoring delays and withheld confirmations (OTS).** Calendars are
 public and free; confirmation takes ~2 hours and can be delayed or withheld
-→ pending and queued states are shown honestly, an unconfirmed binding is
+→ pending and queued states are shown as such, an unconfirmed binding is
 rung-5 *unreached* (never failed, never reached), and a *confirmed* binding
 is only counted when the Bitcoin binding itself verifies. *Accepted risk
 (stated in-product).*
@@ -293,7 +291,7 @@ is only counted when the Bitcoin binding itself verifies. *Accepted risk
 ### D. Hardware & platform
 
 **18. Secure Enclave key extraction.** Out of scope — we assume the silicon
-(assumption 1). What we control is honest labeling: the key-storage backend
+(assumption 1). What the app controls is labeling: the key-storage backend
 is displayed per record, and the software fallback says "software".
 *Out of scope (assumed hardware).*
 
@@ -329,7 +327,7 @@ seal queue are AES-256-GCM under a keychain-held key
 passcode adds an escalating lockout. Against forensic extraction of an
 unlocked device, or compelled biometrics, protection degrades to whatever
 iOS provides — the passcode locks the door, it is not the key (the app says
-exactly this). *Partial (stated honestly).*
+exactly this). *Partial.*
 
 **23. De-identified-copy leakage.** Sharing strips byline, location, Wi-Fi,
 sensors, transcript, and device identity, re-signs as a fresh de-identified
@@ -347,7 +345,7 @@ risk (stated in product — NETWORK.md enumerates every event).*
 
 **25. Reader-layer attacks (the discrediter's toolkit).**
 Screenshot-the-green (a photo of a green verdict, recirculated after the
-file is tampered), tamper-to-red (deliberately corrupting a genuine file to
+file is tampered), tamper-to-red (corrupting a genuine file to
 produce a scary verdict), strip-and-discredit, and the liar's dividend.
 These attack *readers*, not cryptography, and no code can fix them. The
 defense is claim discipline, engineered: green means only "these bytes are

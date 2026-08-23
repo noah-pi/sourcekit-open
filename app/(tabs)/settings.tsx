@@ -1,24 +1,19 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Settings — seven sections, top to bottom:
- *   1. Notice (the beta status, bold and verbatim, + feedback link)
+ * Settings, seven sections top to bottom:
+ *   1. Notice (beta status, verbatim copy, feedback link)
  *   2. Device ID (hardware key, App Attest drill-in, copy/rotate, device line)
- *   3. Signer Information (optional byline, organization credential — fetched
- *      over TLS from the org's domain, or imported as a file)
- *   4. What gets recorded — one tight line per toggle, in two explicit
- *      groups: "Identifying — sealed into the file" in muted terracotta
- *      (location, byline, organization, Wi-Fi, transcript) and "Evidence —
- *      about the moment, not you" in sage green (multiple lenses, shutter
- *      burst, raw audio, full-rate motion log). The face check keeps a
- *      third color of its own; the Bitcoin-anchored timestamp row closes
- *      the card.
- *   5. Privacy & Security (app lock, camera roll, Bitcoin anchor status,
- *      erase all data)
- *   6. Appearance (Device / Dark / Light — Device follows the iPhone)
- *   7. Diagnostics (the last 30 capture/seal events, errors verbatim, Clear)
- * One line per row, one sub-line max. Deliberately absent: a Bitcoin on/off
- * switch (anchoring is default-always-on; status stays, read-only) and
- * trust-roster management.
+ *   3. Signer Information (optional byline, organization credential fetched
+ *      over TLS from the org's domain or imported as a file)
+ *   4. What gets recorded: one line per toggle in two groups, identifying
+ *      (terracotta) and evidence (sage). The face check has its own tint;
+ *      the Bitcoin-anchored timestamp row closes the card.
+ *   5. Privacy and Security (app lock, camera roll, anchor status, erase)
+ *   6. Appearance (Device / Dark / Light)
+ *   7. Diagnostics (last 30 capture/seal events, errors verbatim, Clear)
+ *
+ * One line per row, one sub-line max. No Bitcoin on/off switch (anchoring is
+ * always on, status is read-only) and no trust-roster management.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -73,7 +68,7 @@ import { destroyVault } from '../../src/vault/vaultFs';
 import { subscribeDiagnostics, clearDiagnostics, logDiagnostic, type DiagnosticEvent } from '../../src/lib/diagnosticsLog';
 import { getExhibitDebugFlags, setExhibitDebugFlag, type ExhibitDebugFlagKey, type ExhibitDebugFlags } from '../../src/lib/exhibitCamera';
 
-/** Fingerprint of the plain Enclave signing key — the key attestation binds. */
+/** Fingerprint of the plain Enclave signing key; the key attestation binds it. */
 function enclaveFingerprint(): string {
   try {
     const pub = enclaveGetPublicKey();
@@ -84,20 +79,18 @@ function enclaveFingerprint(): string {
 }
 
 /**
- * All 64 hex chars, grouped eight-by-eight — this is the screen where a
- * member reads their fingerprint aloud to an editor, so nothing truncates.
+ * All 64 hex chars, grouped eight-by-eight. Members read fingerprints aloud
+ * from this screen, so nothing truncates.
  */
 function groupedFingerprint(fp: string): string {
   return (fp.match(/.{1,8}/g) ?? []).join(' ');
 }
 
 /**
- * Scroll position, kept at MODULE scope on purpose. Toggling Device
- * appearance flips the effective scheme, and the root layout remounts the
- * navigator on scheme change (app/_layout.tsx `key={scheme}` — load-bearing
- * for module-scope styles, so it stays). That remount would otherwise throw
- * this list back to the top. The screen re-mounts, reads the saved offset,
- * and restores it — the list itself is never keyed or remounted here.
+ * Scroll position at module scope. A scheme change remounts the navigator
+ * (app/_layout.tsx `key={scheme}`, load-bearing for module-scope styles),
+ * which would throw this list back to the top; the screen re-reads this
+ * offset on mount and restores it.
  */
 let settingsScrollY = 0;
 
@@ -119,15 +112,15 @@ export default function SettingsScreen() {
   const [orgCred, setOrgCred] = useState<OrgCredential | null>(null);
   const [orgStale, setOrgStale] = useState(false);
   const [orgBusy, setOrgBusy] = useState(false);
-  // Local draft — persisted onBlur so we don't hit disk on every keystroke.
+  // Local draft, persisted onBlur so we don't write on every keystroke.
   const [authorDraft, setAuthorDraft] = useState(settings.author);
   // PQ dual-signature layer: enrollment info for display only.
   const [pqInfo, setPqInfo] = useState<{ fingerprint: string; enrolledAt: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
-  // The diagnostics log: the record of capture/seal events that toasts
-  // can't be (they fade; this persists).
+  // Diagnostics log: the persisted record of capture and seal events that
+  // the toasts don't keep.
   const [diagnostics, setDiagnostics] = useState<DiagnosticEvent[]>([]);
-  // Wave-7 isolation switches — null until the native flags are read.
+  // Wave-7 isolation switches; null until the native flags are read.
   const [debugFlags, setDebugFlags] = useState<ExhibitDebugFlags | null>(null);
 
   useEffect(() => subscribeDiagnostics(setDiagnostics), []);
@@ -136,17 +129,15 @@ export default function SettingsScreen() {
   }, []);
 
   /**
-   * Flip one wave-7 flag. Local state updates ONLY on {applied: true} —
-   * a rejected flip leaves the switch where it was (the persisted native
-   * value), never an optimistic lie. Applied to the NEXT session build;
-   * the footnote under the switches says so.
+   * Flip one wave-7 flag. Local state updates only on {applied: true}, so a
+   * rejected flip leaves the switch at the persisted native value. Takes
+   * effect at the next session build.
    */
   const handleDebugFlag = (key: ExhibitDebugFlagKey, value: boolean) => {
     void (async () => {
       const res = await setExhibitDebugFlag(key, value).catch(() => ({ applied: false, reason: 'error' }));
-      // 0.18.4-R5: a flip is recorded in the on-device log either way — the
-      // log then answers "did my switch take?" without guessing — and a
-      // rejection is STATED, never a silent snap-back of the switch.
+      // Every flip is recorded in the on-device log, applied or rejected,
+      // and a rejection is stated rather than snapping the switch back.
       logDiagnostic({
         t: Date.now(),
         kind: 'camera',
@@ -171,8 +162,8 @@ export default function SettingsScreen() {
     })();
   };
 
-  // 0.18.4-R3: which diagnostics switches differ from their native defaults
-  // (absent key = default). Drives the banner above the switches.
+  // Which diagnostics switches differ from their native defaults (an absent
+  // key means default). Drives the banner above the switches.
   const nonDefaultFlags = debugFlags
     ? (Object.keys(DEBUG_FLAG_DEFAULTS) as ExhibitDebugFlagKey[]).filter(
         (k) => (debugFlags[k] ?? DEBUG_FLAG_DEFAULTS[k]) !== DEBUG_FLAG_DEFAULTS[k]
@@ -185,8 +176,8 @@ export default function SettingsScreen() {
       setPublicKey(k.publicKeyBase64);
       setKeyBackend(k.backend);
     }).catch(() => {});
- // Attestation is set-and-forget: the launch path ensures it
-    // silently; here we simply read the stored state for display.
+    // The launch path ensures attestation; this only reads the stored
+    // state for display.
     getAttestState().then(setAttestState).catch(() => {});
     getAttestServerUrl().then((u) => setAttestServer(u ?? ''));
     pqEnrollmentInfo().then(setPqInfo).catch(() => {});
@@ -206,7 +197,7 @@ export default function SettingsScreen() {
     })();
   }, []);
 
-  /** Copies the public key + fingerprint so it can be published anywhere. */
+  /** Copies the public key and fingerprint for publishing. */
   const copyPublicKey = async () => {
     await Clipboard.setStringAsync(
       `Source Kit device key\nalg: ES256 (P-256)\nfingerprint (SHA-256): ${fingerprint}\npublic key (base64): ${publicKey}`
@@ -219,8 +210,8 @@ export default function SettingsScreen() {
     const url = attestServer.trim().replace(/\/+$/, '');
     setAttestBusy(true);
     try {
-      // Registry when one is deliberately configured (orgs); otherwise the
-      // local-challenge path — the same binding math, no server at all.
+      // Registry when one is configured (orgs), otherwise the local-challenge
+      // path: same binding math, no server.
       const state = url
         ? await (async () => { await setAttestServerUrl(url); return attestThisDevice(url); })()
         : await attestThisDeviceLocally();
@@ -234,7 +225,7 @@ export default function SettingsScreen() {
     }
   };
 
-  /** The attestation detail panel's export — the stored state, as JSON. */
+  /** The attestation detail panel's export: the stored state, as JSON. */
   const exportAttestation = async () => {
     if (!attestState) return;
     const path = `${FileSystem.cacheDirectory}exhibit-attestation.json`;
@@ -243,11 +234,10 @@ export default function SettingsScreen() {
   };
 
   /**
-   * The picker filters to JSON — the org-issued credential file
-   * carrying the X.509 chain:
-   *   { "leafDerBase64": "…", "caDerBase64": "…" }
-   * PEM-armored strings under the same keys are accepted too. The private
-   * key never leaves this device — the file only vouches for the public one.
+   * The picker filters to JSON: the org-issued credential file carrying the
+   * X.509 chain, { "leafDerBase64": "…", "caDerBase64": "…" }. PEM-armored
+   * strings under the same keys are accepted. The file vouches for the
+   * public key only; the private key never leaves the device.
    */
   const doImportOrgCred = async () => {
     setOrgBusy(true);
@@ -297,11 +287,9 @@ export default function SettingsScreen() {
   };
 
   /**
-   * Each install path explains ITS OWN specifics before it runs (0.18.2 —
-   * the dense paragraph under the buttons became one quiet line; the
-   * mechanism lives here, at the moment of action). Both alerts state the
-   * same enrollment fact: hand the org this device's key; the private key
-   * never leaves the device.
+   * Each install path explains its own specifics in an alert before it runs.
+   * Both state the same enrollment fact: hand the org this device's public
+   * key; the private key never leaves the device.
    */
   const handleFetchOrgCred = () => {
     const domain = orgDomainDraft.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
@@ -395,7 +383,6 @@ export default function SettingsScreen() {
                   await saveSettings({
                     author: '',
                     identityMode: 'anonymous',
-                    assignmentId: '',
                     saveToCameraRoll: false,
                     biometricsEnabled: false,
                   });
@@ -415,7 +402,7 @@ export default function SettingsScreen() {
     );
   };
 
-  /** Face check: the toggle is honest — it can't go on where the check can't run. */
+  /** Face check: the toggle cannot go on where the check cannot run. */
   const handleFaceCheckToggle = (v: boolean) => {
     if (v && !biometricsAvailable) {
       Alert.alert('Face check unavailable in this build', 'Face ID is not set up on this device, so the check cannot run. The toggle stays off.');
@@ -439,15 +426,14 @@ export default function SettingsScreen() {
           settingsScrollY = e.nativeEvent.contentOffset.y;
         }}
         onContentSizeChange={() => {
-          // Restore after a scheme-flip remount; a no-op on first mount (0)
-          // and effectively a no-op while interacting (the offset tracks the
-          // user's own scroll via onScroll).
+          // Restore after a scheme-flip remount. No-op on first mount, and
+          // during interaction the offset tracks the user's own scroll.
           if (settingsScrollY > 0) scrollRef.current?.scrollTo({ y: settingsScrollY, animated: false });
         }}
       >
         <ScreenTitle title="Settings" tag="in beta" subtitle="Signed and stored locally. Nothing uploads." />
 
-        {/* 1. Notice — the beta status, bold and first, plus the feedback link. */}
+        {/* 1. Notice: beta status and the feedback link. */}
         <Card style={styles.betaCard}>
           <View style={styles.betaRow}>
             <Ionicons name="flask-outline" size={18} color={colors.textDim} />
@@ -475,8 +461,8 @@ export default function SettingsScreen() {
         {/* 2. Device ID */}
         <SectionLabel text="Device ID" />
         <Card>
-          {/* Two rows, never one bullet-joined badge: where the key lives and
-              who attested it are separate facts. */}
+          {/* Two rows, not one joined badge: where the key lives and who
+              attested it are separate facts. */}
           <KeyValueRow
             label="Hardware Key"
             value={
@@ -581,7 +567,7 @@ export default function SettingsScreen() {
           <Text style={styles.deviceLine}>{deviceLine}</Text>
         </Card>
 
-        {/* 3. Signer Information — who the signature claims to be. */}
+        {/* 3. Signer Information: who the signature claims to be. */}
         <SectionLabel text="Signer Information" />
         <Card>
           <View style={styles.aliasHeader}>
@@ -600,12 +586,12 @@ export default function SettingsScreen() {
             autoCapitalize="words"
           />
           <Text style={styles.rowDetail}>
-            Self-declared: a name, never proof of identity. Sealed into captures when the Byline toggle below is on.
+            Self-declared: a name, not proof of identity. Sealed into captures when the Byline toggle below is on.
           </Text>
 
           <Divider />
-          {/* Same header rank as Alias — this is a second kind of
-              signer identity, not a footnote under it. */}
+          {/* Same header rank as Alias: a second kind of signer
+              identity. */}
           <View style={styles.aliasHeader}>
             <Text style={styles.rowTitle}>Organization Credential</Text>
             <View style={styles.optionalTag}>
@@ -665,13 +651,12 @@ export default function SettingsScreen() {
           </Text>
         </Card>
 
-        {/* 4. What gets recorded — two labeled groups (identifying in amber,
-            evidence in the accent), one tight line per toggle. */}
+        {/* 4. What gets recorded: two labeled groups, one tight line per
+            toggle. */}
         <SectionLabel text="What gets recorded" />
         <Card>
-          {/* Two explicit groups: terracotta marks the toggles that
-              seal WHO/WHERE-you-are into the file; sage marks evidence about
-              the moment itself. One tight line per toggle. */}
+          {/* Terracotta marks toggles that seal identifying facts into the
+              file; sage marks evidence about the moment. */}
           <GroupLabel tint={IDENTIFYING_TINT} text="Identifying · sealed into the file" />
           <ProofToggle
             icon="location-outline"
@@ -817,8 +802,8 @@ export default function SettingsScreen() {
           <Button tone="secondary" icon="trash-outline" label="Erase all Source Kit data" onPress={confirmEraseAll} />
         </Card>
 
-        {/* 6. Appearance — the only purely cosmetic setting in the app.
-            Three choices, same row language as the rest of the board. */}
+        {/* 6. Appearance. Three choices, same row language as the rest of
+            the board. */}
         <SectionLabel text="Appearance" />
         <Card>
           <View style={styles.appearanceTrack}>
@@ -842,15 +827,13 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
-        {/* 7. Diagnostics — what happened, newest first. Toasts fade in
-            3 s; this log is the plain record of capture and seal events,
-            error strings verbatim. */}
+        {/* 7. Diagnostics: capture and seal events, newest first, error
+            strings verbatim. */}
         <SectionLabel text="Diagnostics" />
         <Card>
-          {/* 0.18.4-R3: a flipped switch persists across app updates (only
-              deleting the app resets the suite) and silently changes the
-              camera pipeline under test. The banner states WHICH switches
-              differ from defaults and how to reset — facts only, no verdict. */}
+          {/* A flipped switch persists across app updates (only deleting the
+              app resets the suite) and changes the camera pipeline under
+              test. The banner names which switches differ and how to reset. */}
           {nonDefaultFlags.length > 0 ? (
             <View style={styles.flagNotice}>
               <Ionicons name="information-circle-outline" size={18} color={colors.textDim} />
@@ -866,27 +849,14 @@ export default function SettingsScreen() {
               </View>
             </View>
           ) : null}
-          {/* Camera diagnostics switches — persisted natively (UserDefaults
-              suite "exhibit.debug"; the 12 MP clamp defaults ON as of
-              0.17.2, the others default off). A flip takes effect at the
-              NEXT configureSession: the session rebuilds only in the
-              camera tab's focus effect (photo connections and policies are
-              constructed at session build), so the running session is
-              untouched. The footnote says exactly that. */}
-          {/* The rotation (wave 5) and legacy-graph switches are
-              GONE — both hunts are settled (the four-run matrix exonerated
-              every toggle; the virtual graph is the proven path). The
-              native flags still exist for a future bisect, but a switch
-              that no longer discriminates anything doesn't earn UI. */}
-          {/* There is no session-calibration switch: on this graph the
-              secondary photo output is detached, so the
-              one-shot could only ever harvest a primary-only calibration
-              that no commitment path can use (the rig extrinsic needs both
-              lenses), while remaining the named suspect for the dead
-              secondary stream. The native one-shot is retired outright; the
-              calibration block states 'unavailable' as it already did by
-              default. Per-frame intrinsics ride frame attachments and were
-              never behind the switch. */}
+          {/* Camera diagnostics switches, persisted natively in the
+              UserDefaults suite "exhibit.debug" (the 12 MP clamp defaults
+              on, the others off). A flip takes effect at the next
+              configureSession, which only happens in the focus effect of
+              the camera tab, so the running session is untouched. */}
+          {/* Rotation and legacy-graph flags have no switch here; they are
+              set natively only. */}
+          {/* No session-calibration switch either: same reason. */}
           <ToggleRow
             label="12 MP photo clamp"
             detail="Full-resolution photos capped at 12 MP. On by default; off reserves the full 48 MP photo stream on a live dual-camera graph, which costs the pipeline real bandwidth."
@@ -928,11 +898,10 @@ export default function SettingsScreen() {
 }
 
 /**
- * 0.18.4-R3 (external camera-pipeline review R1): the native defaults for
- * every debug flag, mirrored for the non-default banner. A flag flipped and
- * left in the exhibit.debug suite survives TestFlight updates — only
- * deleting the app resets it — so a stale A/B switch can silently
- * contaminate field runs. The banner names each differing switch.
+ * Native defaults for every debug flag, mirrored here for the non-default
+ * banner. A flag left flipped in the exhibit.debug suite survives TestFlight
+ * updates (only deleting the app resets it), so a stale switch can
+ * contaminate field runs.
  */
 const DEBUG_FLAG_DEFAULTS: Record<ExhibitDebugFlagKey, boolean> = {
   photoConnectionRotation: false,
@@ -951,10 +920,9 @@ const DEBUG_FLAG_LABELS: Record<ExhibitDebugFlagKey, string> = {
   legacyMultiInputGraph: 'Legacy dual-input graph',
 };
 
-// Toggle-board color language, paralleling the camera HUD icon palette:
-// muted terracotta marks the identifying signals, sage green the
-// evidence sinks, violet keeps the face check's own lane. No pure yellow,
-// no blue — the same anchors the HUD uses.
+// Toggle-board color language, matching the camera HUD icon palette:
+// terracotta for identifying signals, sage for evidence sinks, violet for
+// the face check's own lane.
 const IDENTIFYING_TINT = '#C08552'; // warm clay / terracotta
 const EVIDENCE_TINT = '#809263';    // sage green
 const FACE_CHECK_TINT = '#AF52DE';
@@ -966,7 +934,7 @@ const APPEARANCE_OPTIONS: { value: AppearancePreference; label: string }[] = [
   { value: 'light', label: 'Light' },
 ];
 
-/** Group header inside the toggle card — a tint dot + quiet caps label. */
+/** Group header inside the toggle card: tint dot plus caps label. */
 function GroupLabel({ text, tint }: { text: string; tint: string }) {
   const styles = useThemedStyles(buildStyles);
   return (
@@ -977,10 +945,9 @@ function GroupLabel({ text, tint }: { text: string; tint: string }) {
   );
 }
 
-/** Toggle row — same icon+label language as the HUD and grid badges.
- *  Subs are NEVER truncated (field report: ellipsized copy reads as
- *  a bug). Every sub reserves two lines (proofSubMin) so rows are evenly
- *  spaced whether the copy runs one line or two. */
+/** Toggle row, same icon and label language as the HUD and grid badges.
+ *  Subs are never truncated, and every sub reserves two lines (proofSubMin)
+ *  so one- and two-line rows land at the same height. */
 function ProofToggle({ icon, label, sub, value, onChange, tint, disabled, recommended }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -1061,15 +1028,14 @@ const buildStyles = () => StyleSheet.create({
   },
   optionalTagText: { color: colors.accent, fontSize: fontSize.xs, fontWeight: '700', letterSpacing: 0.4 },
   proofRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm + 2, paddingVertical: spacing.sm },
-  // Two lines of rowDetail (lineHeight 17) — reserved on every toggle sub
-  // so one-line and two-line rows land at the same height.
+  // Two lines of rowDetail (lineHeight 17), reserved on every toggle sub so
+  // one- and two-line rows land at the same height.
   proofSubMin: { minHeight: 34 },
   groupLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, marginBottom: 2 },
   groupDot: { width: 6, height: 6, borderRadius: 3 },
   groupLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
-  // Appearance selector — one inset track, three pills; the selected pill
-  // lifts to the card surface (the segmented-control register, no new
-  // component for a single row).
+  // Appearance selector: one inset track, three pills, the selected pill
+  // lifted to the card surface.
   appearanceTrack: {
     flexDirection: 'row',
     backgroundColor: colors.surface2,

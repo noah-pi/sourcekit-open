@@ -1,28 +1,22 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * IMU ↔ optical-flow consistency — the hard-to-forge one.
- *
- * The signed pose trace claims how the camera moved; the video frames show
- * how the scene actually moved. A forger can fabricate one or the other,
- * but fabricating BOTH consistently — gyro physics matching optical motion
- * frame by frame, at the right times, with the right signs — is a different
- * class of problem (a motion rig replaying a screen, per the threat model).
+ * IMU/optical-flow consistency. The signed pose trace states how the camera
+ * moved; the frames show how the scene moved. Faking both consistently
+ * requires a motion rig replaying a screen, per the threat model.
  *
  * What this computes:
- *  - ROLL: flow recovers content rotation in radians/frame; the gyro's roll
- *    rate integrates to the same quantity with NO scale assumption. The
- *    cleanest comparison — correlation plus sign agreement.
- *  - PAN: horizontal flow vs yaw rate, vertical flow vs pitch rate. Pixels
- *    and radians can't be equated without intrinsics, so we correlate the
- *    SHAPE of the series (normalized cross-correlation, lag-tolerant).
+ *  - Roll: flow recovers content rotation in radians/frame and the gyro's
+ *    roll rate integrates to the same quantity with no scale assumption, so
+ *    it compares directly — correlation plus sign agreement.
+ *  - Pan: horizontal flow vs yaw rate, vertical flow vs pitch rate. Pixels
+ *    and radians cannot be equated without intrinsics, so only the shape of
+ *    the series is correlated (lag-tolerant).
  *
- * HONESTY: evidence for a person, never a verdict. Correlations are
- * reported raw with sample counts and coverage; 'insufficient-data' is a
- * first-class answer (short clip, no pose trace, featureless video).
- * Strength bands are descriptive until corpus-calibrated. A real
- * capture can show weak consistency for innocent reasons: big moving
- * subjects, low texture, rolling-shutter wobble. That is why this panel
- * informs a reviewer and gates nothing.
+ * Correlations are reported raw with sample counts and coverage, and
+ * 'insufficient-data' is a first-class answer (short clip, no pose trace,
+ * featureless video). Strength bands are descriptive until corpus-calibrated;
+ * genuine captures can correlate weakly on moving subjects, low texture, or
+ * rolling-shutter wobble. This panel gates nothing.
  */
 
 import type { PoseTrace } from '../provenance/manifest';
@@ -34,9 +28,8 @@ export interface FlowSample {
   /** Frame-pair interval, ms (gyro is integrated over [tMs-dt/2, tMs+dt/2]). */
   dtMs: number;
   motion: GlobalMotion;
-  /** Index of the pair's second frame in the extractor's frame list — the
-      desk's overlay uses it to draw the vectors on the right frame.
-      Ignored by the consistency analyzer. */
+  /** Index of the pair's second frame in the extractor's frame list; the
+      desk overlay draws vectors on it. Ignored by this analyzer. */
   frameBIndex?: number;
 }
 
@@ -56,7 +49,7 @@ export interface ConsistencyReport {
   /** Shape correlation: vertical flow vs pitch rate. */
   panYCorrelation: number | null;
   strength: ConsistencyStrength;
-  /** One-line human summary for the dossier, honest about limits. */
+  /** One-line summary for the dossier, including limits. */
   note: string;
 }
 
@@ -99,8 +92,8 @@ function laggedCorrelation(a: number[], b: number[], maxLag: number): { r: numbe
 
 /**
  * Integrate a gyro rate series (rad/s at trace times, ms) over [t0Ms, t1Ms]
- * by trapezoids, interpolating endpoints. Times outside the trace
- * contribute nothing (no fabricated rotation).
+ * by trapezoids, interpolating endpoints. Times outside the trace contribute
+ * nothing.
  */
 export function integrateRate(times: number[], rate: number[], t0Ms: number, t1Ms: number): number {
   const at = (t: number): number | null => {
@@ -130,9 +123,9 @@ export function integrateRate(times: number[], rate: number[], t0Ms: number, t1M
 }
 
 /**
- * The consistency report. `poseTrace` comes from the signed record (times
- * are reconstructed as capturedAt + (i-anchor)*1000/hz, exactly as the
- * builder defined them); `flow` is the desk's frame-pair series.
+ * The consistency report. `poseTrace` comes from the signed record, with
+ * times reconstructed as capturedAt + (i-anchor)*1000/hz as the builder
+ * defined them; `flow` is the desk's frame-pair series.
  */
 export function analyzeImuFlowConsistency(
   poseTrace: PoseTrace | null | undefined,
@@ -172,9 +165,9 @@ export function analyzeImuFlowConsistency(
     rz.push(poseTrace.rotRate[i * 3 + 2] / 1000);
   }
 
-  // Expected per-pair rotations from the gyro. Sign convention: device and
-  // content rotation are opposite-handed — rather than asserting a sign a
-  // priori, correlation is evaluated on magnitude and sign reported raw.
+  // Expected per-pair rotations from the gyro. Device and content rotation
+  // are opposite-handed, so correlation is evaluated on magnitude and sign is
+  // reported raw rather than assumed.
   const gyroRoll: number[] = [];
   const gyroPitchRate: number[] = [];
   const gyroYawRate: number[] = [];
@@ -197,11 +190,10 @@ export function analyzeImuFlowConsistency(
   const panX = laggedCorrelation(flowTx, gyroYawRate, maxLag);
   const panY = laggedCorrelation(flowTy, gyroPitchRate, maxLag);
 
-  // Roll sign agreement where BOTH sides show non-trivial rotation. The
-  // handedness (device-roll vs content-roll sign) is a constant property of
-  // mounting/orientation, resolved ONCE from the data: whichever sign
-  // convention dominates is treated as correct, and agreement is measured
-  // against it — per-frame sign flips are what would be suspicious.
+  // Roll sign agreement where both sides show non-trivial rotation.
+  // Handedness is a constant of mounting/orientation, so the dominant sign
+  // convention in the data is taken as correct and agreement measured against
+  // it; per-frame sign flips are the suspicious case.
   let signPairs = 0;
   let rawSame = 0;
   for (let i = 0; i < flowRoll.length; i++) {

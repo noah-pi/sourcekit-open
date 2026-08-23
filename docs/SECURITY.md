@@ -211,7 +211,7 @@ which checks were performed and which weren't.
   not a deploy, which flushes on SIGTERM — can lose a few seconds of rate-limit
   counts. Challenges expire in 5 minutes regardless.
 - **Device migration isn't supported.** Enclave and keychain keys are per-device
-  by design. Exported signed files stay verifiable forever; the vault doesn't
+  Exported signed files stay verifiable forever; the vault doesn't
   move.
 - **c2patool labels self-signed device certificates "untrusted issuer"** until an
   org credential chains them to a real organization. Expected, and the app

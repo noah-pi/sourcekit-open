@@ -1,18 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * grayMatch — the shared on-device image math for the forensic cards.
- *
- * Everything here is MEASUREMENT, never verdict: decode two frames to small
- * grayscale planes and compare them with normalized cross-correlation (NCC)
- * or sum-of-absolute-differences (SAD) block matching. The cards report the
- * numbers; a person weighs them.
+ * grayMatch — shared on-device image math for the forensic cards. Decodes two
+ * frames to small grayscale planes and compares them with normalized
+ * cross-correlation (NCC) or sum-of-absolute-differences (SAD) block
+ * matching. Returns measurements only; the cards report them.
  *
  * Hermes constraints (do not relax):
- *  - jpeg-js MUST be called with { useTArray: true } — its default path
- *    allocates via Buffer.alloc, which does not exist under Hermes.
- *  - Downscale BEFORE decode: jpeg-js reads baseline JPEG at full
- *    resolution, so a 12 MP source is first resized to a tiny JPEG by
- *    expo-image-manipulator (native) and only then decoded in JS.
+ *  - jpeg-js must be called with { useTArray: true }; its default path
+ *    allocates via Buffer.alloc, which Hermes lacks.
+ *  - Downscale before decode: jpeg-js reads baseline JPEG at full
+ *    resolution, so the source is resized natively by
+ *    expo-image-manipulator first.
  */
 
 import * as FileSystem from 'expo-file-system/legacy';
@@ -29,7 +27,7 @@ export interface GrayPlane {
   gray: Uint8Array;
 }
 
-/** Sealed evidence paths carry no file:// prefix — the file APIs want one. */
+/** Sealed evidence paths carry no file:// prefix; the file APIs need one. */
 export function toFileUri(path: string): string {
   return path.startsWith('file://') || path.startsWith('content://') ? path : `file://${path}`;
 }
@@ -46,10 +44,9 @@ export function rgbaToGray(rgba: Uint8Array, width: number, height: number): Uin
 
 /**
  * Decode an on-disk image to a grayscale plane of exactly width × height.
- * Both dimensions are forced so two sources with different aspect ratios
- * land on the same comparison grid; the caller states the grid size.
- * Throws on any failure — callers render the neutral "could not be
- * computed on this device" state.
+ * Both dimensions are forced so sources with different aspect ratios land on
+ * the same comparison grid. Throws on failure; callers render the neutral
+ * "could not be computed" state.
  */
 export async function decodeUriToGray(uri: string, width: number, height: number): Promise<GrayPlane> {
   const out = await manipulateAsync(
@@ -113,16 +110,15 @@ export interface ParallaxResult {
   total: number;
   /** Median best-match horizontal offset (secondary relative to primary), px. */
   medianDisparityPx: number;
-  /** The NCC a patch had to reach to count as matched — stated in the UI. */
+  /** The NCC a patch had to reach to count as matched; stated in the UI. */
   matchThreshold: number;
 }
 
 /**
  * Patch-grid parallax: sample a grid of patches on the primary view and
- * NCC-match each against the secondary view within a horizontal search
- * window at the same row (a two-lens phone rig is horizontally offset).
- * Returns ONLY counts and the median disparity — interpretation is left
- * to the reader, by design.
+ * NCC-match each against the secondary view within a horizontal search window
+ * at the same row, since a two-lens phone rig is horizontally offset. Returns
+ * counts and the median disparity only.
  */
 export function measureParallax(
   primary: GrayPlane,
@@ -196,9 +192,9 @@ export interface FrameShift {
 }
 
 /**
- * Whole-frame translation estimate between two same-size gray planes:
- * SAD over a search square, best (dx, dy) wins. One number pair per frame
- * pair — deliberately crude, and stated as such where shown.
+ * Whole-frame translation estimate between two same-size gray planes: SAD
+ * over a search square, best (dx, dy) wins. One coarse number pair per frame
+ * pair, stated as such where shown.
  */
 export function measureFrameShift(a: GrayPlane, b: GrayPlane, search = 6): FrameShift {
   const w = Math.min(a.width, b.width);

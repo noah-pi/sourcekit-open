@@ -1,14 +1,12 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * SealBreakDemo — the onboarding's one teach-by-watching beat.
+ * SealBreakDemo — the onboarding's teach-by-watching beat. A mock photo drawn
+ * from views only, no assets or network. The dot animates from "as shot" to
+ * "edited" and back on its own; crossing the mark recolors the picture and
+ * flips the seal chip from intact to broken.
  *
- * A mock photo drawn entirely from views — no assets, no network. The dot
- * animates from "as shot" to "edited" and back on its own; crossing the mark
- * turns the picture lurid and flips the seal chip from intact to broken. One
- * loop makes the point: the seal covers the bytes, so any change breaks it.
- *
- * Honesty note: the chip says "changed", never "fake". An edit breaking
- * the seal says nothing about the scene — that line belongs to panel 3.
+ * The chip wording says "changed", not "fake": a broken seal says nothing
+ * about the scene. That line belongs to panel 3.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -17,8 +15,8 @@ import { colors, spacing, radii, fontSize, useThemedStyles } from '../../theme';
 import { Chip } from '../ui';
 
 const THUMB = 34;
-const HOT = 14; // padding around the dot — keeps translateX aligned to the track
-const SLIDE_MS = 1700; // one-way travel time — slow enough to read the flip
+const HOT = 14; // padding around the dot; keeps translateX aligned to the track
+const SLIDE_MS = 1700; // one-way travel time, slow enough to read the flip
 const HOLD_MS = 1100;  // dwell at each end so the two states land
 
 export function SealBreakDemo() {
@@ -29,8 +27,8 @@ export function SealBreakDemo() {
 
   const track = Math.max(trackW - THUMB, 1);
 
-  // The seal state is driven by the dot's actual position — the picture,
-  // the chip and the dot can never disagree.
+  // Seal state follows the dot's actual position, so picture, chip, and dot
+  // cannot disagree.
   useEffect(() => {
     const id = anim.addListener(({ value }) => {
       const isBroken = value > track * 0.4;
@@ -39,8 +37,8 @@ export function SealBreakDemo() {
     return () => anim.removeListener(id);
   }, [anim, track]);
 
-  // The loop starts once the track has a width to travel. Dwell, slide to
-  // "edited", dwell, slide back — forever, until the page unmounts.
+  // Loop starts once the track has a width: dwell, slide to "edited", dwell,
+  // slide back, until unmount.
   useEffect(() => {
     if (trackW <= 0) return;
     anim.setValue(0);
@@ -55,8 +53,8 @@ export function SealBreakDemo() {
 
   return (
     <View style={styles.demo}>
-      {/* The "photo": calm palette as shot, lurid once edited. Views only.
-          Decorative — VoiceOver gets the story from the label below. */}
+      {/* The "photo": calm palette as shot, lurid once edited. Views only,
+          and decorative; VoiceOver reads the label below instead. */}
       <View
         style={[styles.photo, { backgroundColor: broken ? '#2E2140' : '#A8C6DE' }]}
         accessibilityElementsHidden
@@ -73,14 +71,14 @@ export function SealBreakDemo() {
         <View style={[styles.hill, styles.hillRight, { backgroundColor: broken ? '#1E152B' : colors.accent }]} />
       </View>
 
-      {/* The track: end labels and the self-driving dot. No gestures —
-          the animation is the teacher. */}
+      {/* The track: end labels and the self-driving dot.
+          No gestures. */}
       <View
         style={styles.trackRow}
         accessibilityLabel="Demonstration: the photo moves between as shot and edited on its own. Editing the photo breaks its seal."
       >
         <Text style={styles.trackLabel}>as shot</Text>
-        {/* Width is measured on the track itself — the thumb's travel must
+        {/* Width is measured on the track itself: the thumb's travel must
             match the bar, not the wider row with its end labels. */}
         <View style={styles.track} onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}>
           <Animated.View style={[styles.thumbHot, { transform: [{ translateX: anim }] }]}>

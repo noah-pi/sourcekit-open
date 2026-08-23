@@ -1,11 +1,9 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * CSPRNG bootstrap.
- *
- * The noble libraries call crypto.getRandomValues, which Hermes (React
- * Native's JS engine) does not provide globally. expo-crypto exposes a
- * synchronous native CSPRNG, so we install a minimal polyfill before any
- * crypto code runs. Called once from the app entry.
+ * CSPRNG bootstrap. Hermes has no global crypto.getRandomValues, which the
+ * noble libraries need, so this installs one backed by expo-crypto's
+ * synchronous native CSPRNG. Called once from the app entry, before any
+ * crypto code runs.
  */
 
 import * as ExpoCrypto from 'expo-crypto';

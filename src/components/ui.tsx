@@ -47,7 +47,7 @@ export function Mono({ children, size = 'sm', color = colors.textDim, style }: {
   color?: string;
   style?: StyleProp<TextStyle>;
 }) {
-  useEffectiveScheme(); // re-render on palette flip — this component reads colors.* inline
+  useEffectiveScheme(); // re-render on palette flip; this component reads colors.* inline
   return (
     <Text
       selectable
@@ -91,9 +91,8 @@ export function Button({ label, onPress, tone = 'primary', icon, disabled, loadi
 }) {
   const styles = useThemedStyles(buildStyles);
   // Primary is the scheme's ink fill with the scheme's canvas as the label,
-  // both from tokens — a hard-coded label goes black-on-black in one scheme.
-  // Ghost is a hairline
-  // outline. Danger is a translucent red outline. No gradients on buttons.
+  // both from tokens: a hard-coded label goes black-on-black in one scheme.
+  // Ghost is a hairline outline, danger a translucent red one. No gradients.
   const stylesByTone = {
     primary: { bg: colors.text, fg: colors.bg, border: 'transparent' },
     secondary: { bg: colors.surface2, fg: colors.text, border: 'transparent' },
@@ -155,8 +154,8 @@ export function KeyValueRow({ label, value, mono }: { label: string; value: stri
     <View style={styles.kvRow}>
       <Text style={styles.kvLabel}>{label}</Text>
       {mono ? (
-        // The wrapper constrains width (kvValue alone doesn't apply to Mono):
-        // long values like registry URLs wrap instead of overrunning the card.
+        // Wrapper constrains width (kvValue does not apply to Mono), so long
+        // values like registry URLs wrap instead of overrunning the card.
         <View style={styles.kvValueWrap}>
           <Mono size="sm" color={colors.text} style={{ textAlign: 'right' }}>{value}</Mono>
         </View>

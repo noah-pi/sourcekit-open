@@ -1,26 +1,12 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Shamir secret sharing over GF(256) — desk-key custody.
- *
- * The newsroom desk private key (seal-to-desk) must never sit whole on
- * one laptop: one stolen machine must not decrypt every capture. This module
- * splits a secret (the 32-byte X25519 private key) into N shares, any K of
- * which reconstruct it.
+ * Shamir secret sharing over GF(256). Splits the newsroom desk X25519 private
+ * key (seal-to-desk) into N shares, any K of which reconstruct it.
  *
  * Share layout (binary): [ x-coordinate: 1 byte ][ y bytes: secret.length ][ tag: 4 bytes ]
- * The tag is the first 4 bytes of SHA-256(secret) — NOT a security boundary
- * (any K shares already yield the key), but a loud error check: shares from
- * different splits, a mistyped share, or K-1 shares padded with garbage all
- * reconstruct the WRONG secret, and the tag catches that instead of silently
- * producing a key that decrypts nothing.
- *
- * Honest limits, stated here because the UI repeats them:
- *  - Fewer than K shares reveal NOTHING about the secret (information-theoretic,
- *    per Shamir's construction over GF(256)).
- *  - Shares do not identify which desk key they belong to beyond the 4-byte
- *    tag — keep them labeled.
- *  - This protects the key at rest. While K shares are combined in a desk
- *    machine's memory to decrypt captures, that machine holds the whole key.
+ * The tag is the first 4 bytes of SHA-256(secret): an error check for mixed or
+ * mistyped shares, not a security boundary. Fewer than K shares reveal nothing
+ * about the secret; the UI repeats that limit.
  */
 
 import { randomBytes } from '@noble/hashes/utils';
@@ -47,7 +33,7 @@ function gmul(a: number, b: number): number {
 }
 
 export interface ShamirShare {
-  /** x-coordinate, 1..255. Never 0 (that would BE the secret). */
+  /** x-coordinate, 1..255. Never 0; f(0) is the secret itself. */
   x: number;
   /** y-values, one per secret byte. */
   y: Uint8Array;
@@ -72,7 +58,7 @@ export function splitSecret(secret: Uint8Array, threshold: number, count: number
   const shares: ShamirShare[] = [];
   for (let x = 1; x <= count; x++) shares.push({ x, y: new Uint8Array(secret.length), tag: Uint8Array.from(tag) });
   for (let byte = 0; byte < secret.length; byte++) {
-    // coefficients[0] IS the secret byte; the rest are random.
+    // coefficients[0] is the secret byte; the rest are random.
     const coeffs = randomBytes(threshold);
     coeffs[0] = secret[byte];
     for (const share of shares) {
@@ -86,9 +72,8 @@ export function splitSecret(secret: Uint8Array, threshold: number, count: number
 }
 
 /**
- * Reconstructs the secret from `threshold` or more distinct shares.
- * Throws — never returns a wrong secret silently — on duplicate x-coordinates,
- * mixed share lengths, or a tag mismatch (wrong/mistyped/mismatched shares).
+ * Reconstructs the secret from `threshold` or more distinct shares. Throws on
+ * duplicate x-coordinates, mixed share lengths, or a tag mismatch.
  */
 export function combineShares(shares: ShamirShare[]): Uint8Array {
   if (shares.length < 2) throw new Error('reconstruction needs at least 2 shares');
@@ -131,7 +116,7 @@ export function combineShares(shares: ShamirShare[]): Uint8Array {
   return secret;
 }
 
-/* ---- Text encoding — shares are meant to be printed, pasted, AirDropped. ---- */
+/* ---- Text encoding: shares are printed, pasted, or AirDropped. ---- */
 
 export function shareToBytes(share: ShamirShare): Uint8Array {
   const out = new Uint8Array(1 + share.y.length + 4);

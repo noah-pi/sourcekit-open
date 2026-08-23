@@ -1,16 +1,11 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Disclosure store hygiene.
- *
- * sealQueue writes documentDirectory/disclosure/{id}.json (per-item
- * disclosure state — the master seed until burn) and {id}.chunks.json (the
- * v2 chunk maps). An item delete that strands those files leaves the ONE
- * secret that can open withheld rungs behind after the item is gone. This
- * suite pins the real vaultFs code:
- *
- *   - deleteItem removes BOTH disclosure files (idempotent — absent is fine);
- *   - destroyVault removes the whole disclosure directory;
- *   - both operations are safe when the files never existed.
+ * Disclosure store hygiene. sealQueue writes
+ * documentDirectory/disclosure/{id}.json (per-item state, holding the master
+ * seed until burn) and {id}.chunks.json (v2 chunk maps); stranding either one
+ * leaves the seed that opens withheld rungs behind. Pins the real vaultFs:
+ * deleteItem removes both files, destroyVault removes the directory, and both
+ * are idempotent when the files are absent.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-vault-hygiene.mts
  */
@@ -33,7 +28,7 @@ const VAULT_DIR = `${documentDirectory}vault/`;
 const INDEX_FILE = `${VAULT_DIR}index.json`;
 
 // A vault key in the shim keychain, so sealVaultJson runs the real seal path
-// (never the passcode fallback).
+// rather than the passcode fallback.
 await SecureStore.setItemAsync('verify_vault_key_v1', Buffer.from(crypto.randomBytes(32)).toString('base64'));
 
 function seedItemWithDisclosure(id: string): void {
@@ -80,7 +75,7 @@ section('destroyVault removes the whole disclosure directory (A-I-2)');
   await destroyVault();
   check('destroyVault removes the disclosure directory', !fs.existsSync(p(DISC_DIR)));
   check('destroyVault removes the vault directory', !fs.existsSync(p(VAULT_DIR)));
-  // Nuclear option is idempotent too.
+  // destroyVault is idempotent too.
   let threw = '';
   try { await destroyVault(); } catch (e) { threw = (e as Error).message; }
   check('destroyVault is safe to run twice', threw === '', threw);

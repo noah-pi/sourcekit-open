@@ -2,9 +2,8 @@
 /**
  * Org credential over HTTPS — "sourcekit-org/1".
  *
- * The SSL integration: instead of hand-importing a credential file, a member
- * enters their organization's domain and the app fetches a STATIC document
- * the org publishes at:
+ * A member enters their organization's domain and the app fetches a static
+ * document the org publishes at:
  *
  *   https://<domain>/.well-known/sourcekit-org.json
  *
@@ -20,23 +19,17 @@
  *     ]
  *   }
  *
- * Who vouches for what, precisely:
- *   - TLS vouches for the DOMAIN: the document could only come from whoever
- *     controls the domain's certificate. That is the entire role of SSL here.
- *   - The org CA's signature vouches for the CONTENT: setOrgCredential
+ * Who vouches for what:
+ *   - TLS vouches for the domain only.
+ *   - The org CA's signature vouches for the content: setOrgCredential
  *     re-verifies that the leaf chains to the published CA, is in validity,
- *     and is issued for THIS device's public key. A forged, swapped, or
- *     mis-issued document fails that check and is rejected — the transport
- *     can deliver a lie, it cannot make one verify.
- *   - The domain itself is a LOCAL provenance fact (how the credential
- *     arrived). It is stored alongside the credential and shown in Settings;
- *     it is NOT embedded in any signed claim — the manifest carries the
- *     X.509 chain, exactly as with a file import.
+ *     and is issued for this device's public key.
+ *   - The domain is a local provenance fact, stored with the credential and
+ *     shown in Settings. It is not embedded in any signed claim; the
+ *     manifest carries the X.509 chain.
  *
- * Org-side tooling needs no server code: the document is a static file any
- * web host (or object store behind the domain) can serve, regenerated when
- * membership changes. Member fingerprints come from the app's Copy key /
- * export — the public key never leaves the device in any other form.
+ * The document is a static file, regenerated when membership changes. Member
+ * fingerprints come from the app's Copy key export.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
@@ -44,7 +37,7 @@ import { base64ToBytes, bytesToHex } from './bytes';
 import { getDeviceKey } from './deviceKey';
 import { pemOrDerToDer, setOrgCredential, type OrgCredential } from './orgCert';
 
-/** The one path an organization publishes, and the one format string it carries. */
+/** The path an organization publishes, and the format string it carries. */
 const WELL_KNOWN_PATHS = ['/.well-known/sourcekit-org.json'] as const;
 const ACCEPTED_FORMATS = ['sourcekit-org/1'] as const;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -77,8 +70,7 @@ export async function fetchOrgCredentialFromDomain(domainInput: string): Promise
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   let doc: OrgDirectoryDoc;
   try {
-    // Try the current path first, then the legacy one. A 404 on the first is
-    // not an error yet — only a 404 on both means the org has published nothing.
+    // A 404 is not an error until every well-known path has been tried.
     let res: Response | null = null;
     for (const path of WELL_KNOWN_PATHS) {
       const attempt = await fetch(`https://${domain}${path}`, {
@@ -125,8 +117,8 @@ export async function fetchOrgCredentialFromDomain(domainInput: string): Promise
     );
   }
 
-  // The cryptographic gate — domain delivery changes nothing about WHAT is
-  // accepted: leaf must chain to the published CA and name this device's key.
+  // Cryptographic gate: the leaf must chain to the published CA and name
+  // this device's key.
   const cred = await setOrgCredential(
     pemOrDerToDer(entry.leafPem),
     pemOrDerToDer(caPem),

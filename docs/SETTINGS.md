@@ -83,7 +83,7 @@ always land.
 - **Bitcoin-anchored timestamps** — each capture's fingerprint is submitted to
   the free public OpenTimestamps calendars: a hash only, never media, no
   account, no cost. Confirmation takes about two hours; pending and queued
-  states are shown honestly.
+  states are shown as pending and queued.
 - **Custom timestamp authorities (advanced)** — every trust claim is swappable.
   Leave blank to use the built-in RFC 3161 witness pool; enter one URL per line
   to use your organization's own authorities.
@@ -155,14 +155,14 @@ Publish the fingerprint so recipients can confirm your signatures.
 Every capture is also signed with ML-DSA-65, a post-quantum algorithm —
 insurance against a future break of P-256. This key is software in the OS
 keychain, not Secure Enclave: it signs alongside the device key, never instead,
-and it is not a hardware anchor. Assignment and de-identified copies
-deliberately skip it — a long-lived device key would re-link them.
+and it is not a hardware anchor. De-identified copies skip it: a long-lived
+device key would re-link them.
 
 ### Biometric-bound signing
 
 Optional extra assurance: fresh Face ID approval seals every capture — proof
 that a recognized person approved that capture, not just that the phone was
-unlocked. The honest trade-off (also shown when you enable it): biometric
+unlocked. The trade-off, also shown when you enable it: biometric
 signing uses a separate Secure Enclave key, and Apple's hardware attestation
 can only bind one key — your everyday signing key. New signatures carry
 "Face ID–approved" instead of the Apple hardware attestation, and any

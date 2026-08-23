@@ -1,11 +1,8 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Detached-manifest custody matching.
- *
- * The platform-stripping story, made testable: credentials ride in metadata;
- * platforms strip metadata; the sidecar manifest bundle + this matcher let a
- * desk prove EXACT custody of the stripped file's bytes — no recovery
- * service, no similarity guessing.
+ * Detached-manifest custody matching: platforms strip the metadata the
+ * credentials ride in, and the sidecar manifest bundle plus this matcher
+ * re-bind the stripped file's exact bytes.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-detached.mts
  */
@@ -49,8 +46,8 @@ const jTampered = Uint8Array.from(jStripped);
 jTampered[jTampered.length - 100] ^= 0xff; // inside the scan data
 check('tampered stripped jpeg does NOT match (exact means exact)', matchDetachedManifest(jTampered, jStore.payload) === null);
 
-// Two captures of the SAME source file: the asset hash commits to BYTES, not
-// to a capture event — so the same bytes match, correctly and honestly.
+// Two captures of the same source file: the asset hash commits to bytes,
+// not to a capture event, so identical bytes match.
 const jSame = await attestPhoto({ photoUri: '/tmp/lab/clean.jpg', context: { ...ctx, headingDeg: 180 }, identity, key });
 const jSameStore = extractC2paStore(jSame.signedPhotoBytes!)!;
 check('same source bytes match across captures (the commitment is to bytes)', matchDetachedManifest(jStripped, jSameStore.payload) !== null);
@@ -89,9 +86,8 @@ check('garbage store payload never matches', matchDetachedManifest(vStripped, ne
 check('garbage media never matches', matchDetachedManifest(new Uint8Array([0xff, 0xd8, 1, 2]), jStore.payload) === null);
 
 // ---------- UNSUPPORTED verdict ----------
-// A manifest whose uuid box references merkle aux boxes is one this build
-// cannot check: the honest verdict is UNSUPPORTED (unchecked), never
-// SIGNATURE_INVALID (condemned credentials we never evaluated).
+// A uuid box referencing merkle aux boxes cannot be checked here, so the
+// verdict is UNSUPPORTED rather than SIGNATURE_INVALID.
 {
   const u32 = (n: number) => new Uint8Array([(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]);
   const bx = (t: string, c: Uint8Array) => concatBytes(u32(c.length + 8), asciiToBytes(t), c);
@@ -99,7 +95,7 @@ check('garbage media never matches', matchDetachedManifest(new Uint8Array([0xff,
   const C2PA_UUID = [0xd8, 0xfe, 0xc3, 0xd6, 0x1b, 0x0e, 0x48, 0x3c, 0x92, 0x97, 0x58, 0x28, 0x87, 0x7e, 0xc4, 0x81];
   const merkleUuid = bx('uuid', concatBytes(
     new Uint8Array(C2PA_UUID), new Uint8Array(4), asciiToBytes('manifest'), new Uint8Array([0]),
-    new Uint8Array([0, 0, 0, 0, 0, 0, 0, 42]), // merkle offset ≠ 0 → aux boxes we can't walk
+    new Uint8Array([0, 0, 0, 0, 0, 0, 0, 42]), // merkle offset != 0: aux boxes, not walkable here
     new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
   ));
   const mdat = bx('mdat', new Uint8Array(64));

@@ -1,13 +1,9 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Sealed capture — encryption to a newsroom desk key.
- *
- * Threat model: a seized device should hold ciphertext the photographer
- * cannot open. When a newsroom roster carries a desk encryption key, captures
- * destined for the desk are sealed to that key: the copy that leaves the
- * vault (the share sheet) is readable only by whoever can reconstruct the
- * desk private key from its Shamir shares. The photographer cannot, and
- * neither can anyone holding the device.
+ * Sealed capture — encryption to a newsroom desk key. Captures bound for a
+ * desk are sealed to the roster's desk encryption key, so the shared copy
+ * opens only for whoever can reconstruct the desk private key from its
+ * Shamir shares; the device holder cannot.
  *
  * Construction (ECDH + HKDF + AES-256-GCM, all @noble):
  *   ephemeral X25519 keypair
@@ -18,24 +14,18 @@
  * File layout:
  *   [ 4-byte LE header length ][ header JSON ][ 12-byte nonce ][ ciphertext || 16-byte tag ]
  *
- * The header is the GCM AAD — tampering with it (including swapping the
- * ephemeral key) breaks decryption loudly. It carries ONLY the format tag,
- * the ephemeral public key, and the desk-key fingerprint: enough for a desk
- * to recognize "this is sealed to our key", nothing about the content. The
- * media hash lives INSIDE the ciphertext (in the proof bundle) — a plaintext
- * hash would hand anyone holding the media an equality oracle.
+ * The header is the GCM AAD, so tampering with it (including swapping the
+ * ephemeral key) breaks decryption. It carries only the format tag, the
+ * ephemeral public key, and the desk-key fingerprint. The media hash stays
+ * inside the ciphertext, in the proof bundle: a plaintext hash would be an
+ * equality oracle for anyone holding the media.
  *
  * Plaintext container:
  *   [ 4-byte LE proof JSON length (0 = none) ][ proof JSON ][ media bytes ]
  *
- * What this does NOT do (honest notes the UI repeats):
- *  - The photographer's own vault copy stays protected by the vault passcode;
- *    sealing protects the desk-bound copies. Seizure guidance stays: lock /
- *    wipe before a crossing.
- *  - The desk key is a software key. Its custody is the Shamir split —
- *    one stolen laptop must not decrypt everything; K shares together, in
- *    one machine's memory, are the whole key while they are there.
- *  - Sealing hides CONTENTS. It never hides that a sealed artifact exists.
+ * Limits: the vault copy is protected by the vault passcode, not by this;
+ * the desk key is software, held as a Shamir split; sealing hides contents,
+ * not the existence of a sealed artifact.
  */
 
 import { x25519 } from '@noble/curves/ed25519';
@@ -111,9 +101,8 @@ export function sealToDeskKey(
 }
 
 /**
- * Reads the plaintext header of a sealed artifact — all a desk can know
- * BEFORE reconstructing the private key. Throws if this is not a sealed
- * capture at all.
+ * Reads the plaintext header of a sealed artifact, all a desk can know before
+ * reconstructing the private key. Throws if this is not a sealed capture.
  */
 export function parseSealedHeader(bytes: Uint8Array): SealHeader {
   if (bytes.length < 4) throw new Error('not a sealed capture (too short)');
@@ -135,9 +124,9 @@ export function parseSealedHeader(bytes: Uint8Array): SealHeader {
 }
 
 /**
- * Opens a sealed artifact with the desk private key.
- * Throws — loudly, never a partial result — if the artifact is tampered,
- * sealed to a different desk key, or the key is wrong.
+ * Opens a sealed artifact with the desk private key. Throws, never returning
+ * a partial result, if the artifact is tampered with, sealed to a different
+ * desk key, or the key is wrong.
  */
 export function unsealWithDeskKey(bytes: Uint8Array, deskPrivateKey: Uint8Array): SealedContents {
   if (deskPrivateKey.length !== 32) throw new Error('a desk private key is 32 bytes (X25519)');
@@ -155,7 +144,7 @@ export function unsealWithDeskKey(bytes: Uint8Array, deskPrivateKey: Uint8Array)
   if (ephemeralPub.length !== 32) throw new Error('sealed capture header has a bad ephemeral key');
   const shared = x25519.getSharedSecret(deskPrivateKey, ephemeralPub);
   const key = deriveKey(shared, ephemeralPub, deskPub);
-  // Throws on GCM tag mismatch — tampering (header or payload) is never silent.
+  // Throws on GCM tag mismatch, so header or payload tampering is never silent.
   const plaintext = gcm(key, nonce, headerBytes).decrypt(sealed);
 
   const proofLen = new DataView(plaintext.buffer, plaintext.byteOffset).getUint32(0, true);

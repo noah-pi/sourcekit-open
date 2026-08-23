@@ -1,26 +1,19 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Corpus + ROC tooling — the structural gate for every signal.
+ * Corpus and ROC tooling. Doc 2's rule: no UI signal without characterized
+ * error rates, measured on a labeled corpus of genuine captures and red-team
+ * re-photos.
  *
- * Doc 2's rule: NO UI SIGNAL WITHOUT CHARACTERIZED ERROR RATES. Before any
- * analyzer's output gains prominence anywhere (app or desk), it must ship
- * with measured false-positive and true-positive rates on a labeled corpus
- * — genuine captures AND red-team re-photos — not with vibes.
- *
- * This module is the math, pure and testable:
+ * The math here:
  *   - sweep a threshold over labeled scores → ROC points (TPR/FPR)
  *   - AUC by trapezoid
- *   - the operating point at a target max FPR (e.g. "strong evidence may
- *     fire on at most 1 in 100 natural photos")
+ *   - the operating point at a target max FPR
  *
- * The corpus itself is data, not code: JSONL rows of {id, label, scores}
- * produced by tools/rephoto-corpus (which runs the desk analyzers over a
- * folder of labeled images). Labels are 'positive' (screen re-photo) or
- * 'negative' (natural capture) — nothing finer, because nothing finer is
- * knowable from a label.
+ * The corpus is data: JSONL rows of {id, label, scores} produced by
+ * tools/rephoto-corpus. Labels are 'positive' (screen re-photo) or
+ * 'negative' (natural capture).
  *
- * HONESTY: an ROC published without its corpus manifest (sizes, sources,
- * collection dates) is decoration. The report type forces those fields.
+ * RocReport requires the corpus manifest (sizes, sources, collection dates).
  */
 
 export type CorpusLabel = 'positive' | 'negative';
@@ -28,7 +21,7 @@ export type CorpusLabel = 'positive' | 'negative';
 export interface LabeledScore {
   id: string;
   label: CorpusLabel;
-  /** Higher = more signal (e.g. banding SNR in dB). */
+  /** Higher means more signal (e.g. banding SNR in dB). */
   score: number;
 }
 
@@ -83,9 +76,8 @@ export function auc(points: RocPoint[]): number {
 
 /**
  * The operating point for a stated maximum false-positive rate: the
- * highest-recall threshold whose FPR does not exceed `maxFpr`. Returns
- * null when no threshold satisfies the constraint — the honest answer,
- * not the nearest violation.
+ * highest-recall threshold whose FPR does not exceed `maxFpr`. Returns null
+ * when no threshold satisfies the constraint.
  */
 export function operatingPoint(points: RocPoint[], maxFpr: number): RocPoint | null {
   const feasible = points.filter((p) => p.falsePositiveRate <= maxFpr);

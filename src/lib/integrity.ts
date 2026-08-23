@@ -1,10 +1,8 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Device integrity signals — a SIGNED, SELF-REPORTED assertion, never
- * a capture gate. A compromised device can lie about being compromised; the
- * value is commitment — the claim is bound to the capture and cannot be
- * retroactively softened. Gating would lock out exactly the journalists whose
- * devices are most attacked while stopping no motivated adversary.
+ * Device integrity signals. Signed and self-reported, not a capture gate: a
+ * compromised device can lie, so the value is that the claim is bound to the
+ * capture and cannot be softened afterwards.
  */
 
 import * as Device from 'expo-device';
@@ -18,9 +16,9 @@ export interface DeviceIntegritySignals {
   emulatorSuspected: boolean;
   /** Jailbreak indicator paths present on disk (empty = none found). */
   jailbreakIndicators: string[];
-  /** Native runtime-instrumentation state; null on old builds / non-iOS. Same ceiling: self-reported, patchable. */
+  /** Native runtime-instrumentation state; null off iOS or when unavailable. Self-reported. */
   runtimeInstrumentation?: { debuggerAttached: boolean; injectedLibraries: string[] } | null;
-  /** Always shown with the signals — the honest ceiling. */
+  /** Rendered alongside the signals. */
   note: 'self-reported';
 }
 
@@ -40,7 +38,7 @@ export async function collectIntegritySignals(): Promise<DeviceIntegritySignals>
         const info = await FileSystem.getInfoAsync(`file://${path}`);
         if (info.exists) found.push(path);
       } catch {
-        // Sandboxed reads can fail — absence of evidence, recorded as none.
+        // Sandboxed reads can fail; recorded as not found.
       }
     }
   }

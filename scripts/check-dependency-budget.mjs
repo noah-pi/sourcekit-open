@@ -1,14 +1,8 @@
 #!/usr/bin/env node
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Dependency budget (supply-chain).
- *
- * Every direct dependency is an attack surface we vouch for. This script
- * fails CI when a package.json grows a dependency that is not on the
- * explicit allow-list below, or when the count exceeds the per-package cap.
- * Adding a dependency is a deliberate, reviewable act: edit the budget in
- * the same commit as the package.json change, with the reason in the
- * commit message.
+ * Dependency budget (supply-chain). Fails CI when a package.json carries a
+ * direct dependency missing from the allow-list below, or exceeds its cap.
  *
  * Run from the repo root:  node scripts/check-dependency-budget.mjs
  */
@@ -82,29 +76,19 @@ for (const rel of Object.keys(BUDGET)) {
   }
 }
 
-// Resolved-VERSION budget: names alone undercount the
-// supply chain — two resolved versions of one package are two copies of
-// every primitive to vet. Any package whose lockfile resolves to MORE THAN
-// ONE version must be declared here with the exact version set and the
-// reason; an undeclared split fails the gate.
-// Resolved-VERSION budget: names alone undercount the supply chain — two
-// resolved versions of one package are two copies of every primitive to vet.
-//
-// The app's lockfile carries the whole Expo and React Native tree, where
-// duplicate transitive versions are routine and not something we choose. So
-// the gate is scoped: `watch` names the packages we actually vouch for, and
-// only those are checked. Any watched package resolving to more than one
-// version must be declared with the exact set and the reason.
+// Resolved-version budget. Two resolved versions of one package are two
+// copies of every primitive to vet, so any package in `watch` resolving to
+// more than one version must be declared with its exact version set.
+// Scoped to `watch` because duplicate versions across the Expo and React
+// Native tree are routine and not ours to choose.
 const KNOWN_VERSION_SPLITS = {
   'package-lock.json': {
     watch: ['@noble/curves', '@noble/hashes', '@noble/ciphers', '@noble/post-quantum', 'cbor-x', 'jpeg-js'],
     declared: {
-      // @noble/post-quantum is written against the noble 2.x API line (it
-      // imports 2.x-only modules such as @noble/curves/abstract/fft.js),
-      // while the rest of the tree pins the 1.x line. npm overrides CANNOT
-      // safely collapse these — forcing one line breaks the other consumer
-      // (tests/test-pq.mts pins the PQ behavior). The split is accepted,
-      // documented in docs/DECISIONS.md, and re-vetted on every bump.
+      // @noble/post-quantum needs the noble 2.x API (e.g.
+      // @noble/curves/abstract/fft.js); the rest of the tree pins 1.x. An
+      // npm override to collapse them breaks one consumer or the other.
+      // See docs/DECISIONS.md.
       '@noble/ciphers': ['1.3.0', '2.2.0'],
       '@noble/curves': ['1.9.7', '2.2.0'],
       '@noble/hashes': ['1.8.0', '2.2.0'],
@@ -125,9 +109,8 @@ for (const [lockRel, { watch, declared }] of Object.entries(KNOWN_VERSION_SPLITS
     if (!m || !info.version) continue;
     if (!watch.includes(m[1])) continue;
     // OS-conditioned optional packages (esbuild/@rollup platform binaries)
-    // are never co-resident: exactly one installs per platform, so a
-    // "split" across them is an artifact of the lockfile listing every
-    // platform, not two copies on any machine.
+    // install one per platform, so their lockfile "split" is not a real
+    // duplicate.
     if (info.optional && info.os) continue;
     if (!versionsByName.has(m[1])) versionsByName.set(m[1], new Set());
     versionsByName.get(m[1]).add(info.version);

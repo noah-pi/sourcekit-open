@@ -1,9 +1,9 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Policy-layer unit coverage: every row of the verdict-mapping
- * table in policyLayer.ts is exercised with synthetic normalized facts. No
- * engine runs here — this pins the POLICY, the only verdict authority, so an
- * engine upgrade can never silently change what our verdicts mean.
+ * Policy-layer unit coverage: every row of the verdict-mapping table in
+ * policyLayer.ts, exercised with synthetic normalized facts. No engine runs
+ * here; this pins the policy, so an engine upgrade cannot change what the
+ * verdicts mean.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-policy-layer.mts
  */
@@ -31,7 +31,7 @@ async function verdictOf(n: NormalizedEngineResult): Promise<VerdictCode> {
   return (await policyVerdict(n)).verdict;
 }
 
-// Row 1 — engine unavailable → UNSUPPORTED (unchecked, never condemned)
+// Row 1 — engine unavailable → UNSUPPORTED
 {
   const n = baseResultLike('unavailable', 'none');
   n.engineAvailable = false;
@@ -66,7 +66,7 @@ async function verdictOf(n: NormalizedEngineResult): Promise<VerdictCode> {
   check('row 4: corrupt parse → UNREADABLE', (await verdictOf(n)) === 'UNREADABLE');
 }
 
-// Row 5 — UNSUPPORTED tri-state (ours; upstream has none)
+// Row 5 — UNSUPPORTED tri-state
 {
   const n = baseResultLike('upstream-c2pa-wasm', 'synthetic');
   n.manifestFound = true;
@@ -76,7 +76,7 @@ async function verdictOf(n: NormalizedEngineResult): Promise<VerdictCode> {
   check('row 5: unsupported structure → UNSUPPORTED with reason', r.verdict === 'UNSUPPORTED' && /algorithm\.unsupported/.test(r.reason), r.verdict);
 }
 {
-  // inconclusive evaluation (manifest found, all facts null) → UNSUPPORTED, never a green
+  // Inconclusive evaluation (manifest found, all facts null) → UNSUPPORTED.
   const n = baseResultLike('upstream-c2pa-wasm', 'synthetic');
   n.manifestFound = true;
   check('row 5b: inconclusive engine output → UNSUPPORTED (never INTACT by default)', (await verdictOf(n)) === 'UNSUPPORTED');
@@ -96,7 +96,7 @@ async function verdictOf(n: NormalizedEngineResult): Promise<VerdictCode> {
   check('row 7: claimAssertionsMatch=false → SIGNATURE_INVALID', (await verdictOf(n)) === 'SIGNATURE_INVALID');
 }
 
-// Row 8 — void binding → SIGNATURE_INVALID, UNPROVEN never proven tamper
+// Row 8 — void binding → SIGNATURE_INVALID
 {
   const n = evaluated();
   n.assetHashMatches = false;
@@ -115,7 +115,7 @@ async function verdictOf(n: NormalizedEngineResult): Promise<VerdictCode> {
   check('row 9: real mismatch → CONTENT_MODIFIED', (await verdictOf(n)) === 'CONTENT_MODIFIED');
 }
 
-// Row 10 — everything checks → INTACT; trust codes never block it
+// Row 10 — everything checks → INTACT; trust codes do not block it
 {
   const n = evaluated();
   n.trustListHit = 'none'; // signer on neither pinned list — informational
@@ -135,9 +135,9 @@ async function verdictOf(n: NormalizedEngineResult): Promise<VerdictCode> {
   check('precedence: SIGNATURE_INVALID dominates CONTENT_MODIFIED', (await verdictOf(n)) === 'SIGNATURE_INVALID');
 }
 
-// Row 10 gate requires claimAssertionsMatch === true:
-// an engine that never cross-checked the assertion store produced NO
-// evidence either way — that is the UNSUPPORTED tri-state, never a green.
+// Row 10 gate requires claimAssertionsMatch === true: an engine that did not
+// cross-check the assertion store gives no evidence either way, which is the
+// UNSUPPORTED tri-state.
 {
   const n = evaluated();
   n.claimAssertionsMatch = null;
@@ -148,9 +148,8 @@ async function verdictOf(n: NormalizedEngineResult): Promise<VerdictCode> {
     r.checksNotPerformed.some((l) => l.includes('claimAssertionsMatch=null')), r.checksNotPerformed.join(' | '));
 }
 
-// Precedence: POSITIVE TAMPER FACTS outrank UNSUPPORTED — a failed rung
-// is proven tamper, never absence-of-proof, even
-// when the structure is also one this build cannot fully parse.
+// Precedence: a positive tamper fact outranks UNSUPPORTED, including when the
+// structure is one this build cannot fully parse.
 {
   const n = evaluated();
   n.unsupported = true;
@@ -180,8 +179,7 @@ async function verdictOf(n: NormalizedEngineResult): Promise<VerdictCode> {
     (await verdictOf(n)) === 'SIGNATURE_INVALID');
 }
 {
-  // The other direction: unsupported with NO positive tamper fact stays
-  // UNSUPPORTED — declining to evaluate is honest when nothing failed.
+  // Unsupported with no positive tamper fact stays UNSUPPORTED.
   const n = evaluated();
   n.unsupported = true;
   n.unsupportedReason = 'engine declined structure: algorithm.unsupported';
@@ -210,7 +208,7 @@ async function verdictOf(n: NormalizedEngineResult): Promise<VerdictCode> {
   check('trust: no resolver → UNRESOLVED disclosed', r3.checksNotPerformed.some((l) => /UNRESOLVED/.test(l)));
 }
 
-// Parity: composed verdict MUST equal the archived verdict or THROW
+// Parity: the composed verdict must equal the archived verdict or throw.
 {
   const n = evaluated();
   const fakeReport = { verdict: 'CONTENT_MODIFIED' } as VerificationReport;

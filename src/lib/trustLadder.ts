@@ -1,48 +1,32 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Trust ladder — a pure projection of the verification
- * evidence into four named rungs:
+ * Trust ladder — projects the verification evidence into four named rungs:
  *
  *   bytes unchanged → signer identified → hardware-attested →
  *   time-bounded by an independent anchor
  *
- * Identification is one rung, not two. Identity is not knowable from the
- * file unless an organization outside it vouches for the key: a roster entry
- * or a trust-list accession IS the identification, and a self-asserted org
- * root names an organization without identifying anyone.
+ * Presentation logic only: it computes nothing new, it maps what verifyAsset,
+ * trustProvider, and the OTS checker already concluded. Mapping rules, tested
+ * in tests/test-ladder.mts:
  *
- * This module is presentation logic, NOT a verdict engine: it computes
- * nothing new, it maps what verifyAsset / trustProvider / the OTS checker
- * already concluded into a fixed, always-visible shape. The mapping rules
- * are stated here and tested in tests/test-ladder.mts:
- *
- * - Four states per rung. `reached` means the evidence actually verified —
- *   never "present", never "claimed". `unreached` is neutral (absence of
- *   proof is not suspicion). `failed` is reserved for proven tamper — a
- *   check that ran and came back false. `not-applicable` means the rung is
- *   structurally unavailable for this file (de-identified copies carry no
- *   attestation) or unevaluable (credentials failed, so everything above
- *   integrity is moot) — said out loud, never hidden.
- * - Integrity failure splits honestly: a broken SIGNATURE makes the
- *   credentials themselves unreliable, so every rung above is
- *   not-applicable; changed MEDIA leaves the credentials intact, so
- *   signer, attestation, and time still evaluate.
- * - Rung 2 (signer identified) is earned only by vouching OUTSIDE the
- *   file — a signed newsroom roster (with timing evaluated) or a curated
- *   trust list. A self-asserted org root names an organization without
- *   vouching for it: unreached with the out-of-band caveat attached.
- *   Roster timing red flags (signed after revocation / before membership
- *   began) are the rung's one failure.
- * - Rung 3 names the attestation environment: a genuine production
- *   attestation says "production"; a genuine DEVELOPMENT attestation is
- *   stated as a development build and leaves the rung unreached — never
- *   red (nothing failed), never silent (the fact is on the card).
- * - Rung 4 is earned only by INDEPENDENT time: a pinned-authority
- *   countersignature or a Bitcoin anchor whose block binding verified.
- *   The device clock, unpinned TSAs, and unchecked ledger bindings are
- *   unreached — each with its reason stated.
- * - The ladder never renders for files with no manifest (absence is
- *   neutral and gets its own card) — projectTrustLadder returns null.
+ * - Four states per rung. `reached` means the evidence verified. `unreached`
+ *   is neutral. `failed` means a check ran and came back false.
+ *   `not-applicable` means the rung is structurally unavailable for this file
+ *   (de-identified copies carry no attestation) or unevaluable.
+ * - Integrity failure splits: a broken signature makes the credentials
+ *   unreliable, so every rung above is not-applicable; changed media leaves
+ *   the credentials intact, so signer, attestation, and time still evaluate.
+ * - Rung 2 is earned only by vouching outside the file — a signed newsroom
+ *   roster with timing evaluated, or a curated trust list. A self-asserted org
+ *   root is unreached with the out-of-band caveat. Roster timing red flags
+ *   (signed after revocation, or before membership began) are its one failure.
+ * - Rung 3 names the attestation environment. A genuine development
+ *   attestation is stated as such and leaves the rung unreached.
+ * - Rung 4 is earned only by a pinned-authority countersignature or a Bitcoin
+ *   anchor whose block binding verified. Device clock, unpinned TSAs, and
+ *   unchecked ledger bindings are unreached with their reasons stated.
+ * - projectTrustLadder returns null for files with no manifest; absence gets
+ *   its own card.
  */
 
 import type { VerdictCode } from '../c2pa/verifyAsset';
@@ -52,12 +36,7 @@ export type RungState = 'reached' | 'unreached' | 'failed' | 'not-applicable';
 
 export type RungId = 'bytes' | 'known-key' | 'hardware' | 'time';
 
-/**
- * VoiceOver value vocabulary — one honest phrase per rung state, matching
- * the mapping rules above: "reached" only when evidence actually verified,
- * "not reached" neutral, "failed" reserved for proven tamper,
- * "not applicable" said out loud.
- */
+/** VoiceOver value vocabulary — one phrase per rung state. */
 export type RungStateA11yValue = 'reached' | 'not reached' | 'failed' | 'not applicable';
 
 export const RUNG_STATE_A11Y_VALUE: Record<RungState, RungStateA11yValue> = {
@@ -67,14 +46,11 @@ export const RUNG_STATE_A11Y_VALUE: Record<RungState, RungStateA11yValue> = {
   'not-applicable': 'not applicable',
 };
 
-/**
- * The rung as assistive technology speaks it. The four rungs are the app's
- * most important UI; without this they read as bare text fragments.
- */
+/** The rung as assistive technology speaks it. */
 export interface LadderRungA11y {
-  /** accessibilityRole — plain text: a rung conveys state, it is not a button. */
+  /** accessibilityRole — plain text; a rung is not a button. */
   role: 'text';
-  /** accessibilityLabel — the rung's name plus its honest detail clause. */
+  /** accessibilityLabel — the rung's name plus its detail clause. */
   label: string;
   /** accessibilityValue — the state vocabulary above. */
   value: RungStateA11yValue;
@@ -86,18 +62,18 @@ export interface LadderRung {
   label: string;
   state: RungState;
   /**
-   * One honest clause naming WHAT was compared or WHY the rung is
-   * unreached/unavailable. Never a verdict word ("secure", "trusted ✓").
+   * One clause naming what was compared, or why the rung is unreached or
+   * unavailable. Not a verdict word.
    */
   detail: string;
-  /** VoiceOver copy for the rung row — derived, never freehand. */
+  /** VoiceOver copy for the rung row, derived from label and detail. */
   a11y: LadderRungA11y;
 }
 
 /** A rung under construction — a11y is attached by finishLadder. */
 type RungDraft = Omit<LadderRung, 'a11y'>;
 
-/** Derives the VoiceOver copy from the rung's own words — never invented. */
+/** Derives the VoiceOver copy from the rung's own label and detail. */
 export function rungA11y(rung: RungDraft): LadderRungA11y {
   return {
     role: 'text',
@@ -118,7 +94,7 @@ export interface TrustLadder {
   rungs: [LadderRung, LadderRung, LadderRung, LadderRung];
   /** Index of the highest reached rung (ringed in the UI), or -1. */
   highestReached: number;
-  /** True when any rung failed — the card must read as tamper, not progress. */
+  /** True when any rung failed; the card then reads as tamper, not progress. */
   anyFailed: boolean;
 }
 
@@ -127,7 +103,7 @@ export type LadderRosterState =
   | 'active' | 'active-then-revoked' | 'expired'
   | 'revoked' | 'not-yet-valid' | 'unknown-time';
 
-/** Ledger-anchor state as far as THIS screen has checked it. */
+/** Ledger-anchor state as far as this screen has checked it. */
 export type LadderOtsState =
   | 'none' | 'pending' | 'confirmed-unchecked' | 'confirmed-verified' | 'invalid';
 
@@ -142,7 +118,7 @@ export interface LadderInput {
   tier: TrustTier;
   /** Roster membership at verified signing time, when tier === 'roster'. */
   rosterState: LadderRosterState | null;
-  /** Names for the detail lines — the projection quotes, never invents. */
+  /** Names quoted into the detail lines. */
   rosterNewsroom: string | null;
   trustListName: string | null;
   /** Org credential chain when present (multi-cert, links already judged). */
@@ -152,53 +128,46 @@ export interface LadderInput {
     present: boolean;
     valid: boolean;
     /**
-     * Which App Attest environment the attestation came from, when the
-     * verifier could tell (aaguid). Optional and backward compatible:
-     * absent means the verifier did not surface it. A genuine
-     * 'development' attestation is named as such on rung 3 — never red,
-     * never silent, and never dressed up as production.
+     * App Attest environment from the aaguid, when the verifier could tell;
+     * absent means it did not surface one. A genuine 'development'
+     * attestation is named as such on rung 3 and leaves it unreached.
      */
     attestationEnv?: 'production' | 'development' | null;
   };
   /**
-   * Why rung 3 cannot apply, when it can't — 'deidentified' (fresh one-time
-   * key by design) or 'assignment' (deliberately unlinkable key). Null when
-   * an attestation could legitimately be expected.
+   * Why rung 3 cannot apply: 'deidentified' (fresh one-time key). Null when an
+   * attestation could be expected.
    */
-  hardwareNotApplicable: 'deidentified' | 'assignment' | null;
+  hardwareNotApplicable: 'deidentified' | null;
 
   timestamps: {
     present: number;
     valid: number;
     trusted: number;
     /**
-     * Tokens the verifier could not evaluate (parse/coverage gap). Optional
-     * and backward compatible: absent means zero. Unchecked tokens are
-     * disclosed on the rung but NEVER fail it — a parser limitation is not
-     * tamper evidence.
+     * Tokens the verifier could not evaluate (parse/coverage gap); absent
+     * means zero. Disclosed on the rung but never failing it.
      */
     unchecked?: number;
   };
   ots: LadderOtsState;
   /**
-   * The manifest's hash binding is void (declared exclusions exempt the hash
-   * input). Rung 1 is then UNREACHED with a precise reason — a void binding
-   * is absence of proof, never proven tamper.
+   * The manifest's hash binding is void: declared exclusions exempt the hash
+   * input. Rung 1 is then unreached with the reason stated, not failed.
    */
   bindingVoid?: boolean | null;
 
   /**
-   * Local signer history — prior exhibits in THIS device's collection by
-   * the same fingerprint. Enriches rung 2's detail at the unidentified
-   * floor; NEVER promotes the rung to reached — local history is not
-   * vouching. The FIELD name stays `localHand` for stored-data
-   * compatibility (string values only); the display term is "signer".
+   * Prior exhibits in this device's collection by the same fingerprint. Only
+   * enriches rung 2's detail at the unidentified floor; it never promotes the
+   * rung. Field name is `localHand` for stored-data compatibility; the display
+   * term is "signer".
    */
   localHand?: { priorCaptures: number; firstSeen: string } | null;
 }
 
 export function projectTrustLadder(input: LadderInput): TrustLadder | null {
-  if (!input.manifestFound) return null; // absence is neutral — its own card
+  if (!input.manifestFound) return null; // no manifest: absence gets its own card
 
   // --- Rung 1: bytes unchanged -------------------------------------------
   const credentialsFailed =
@@ -242,9 +211,8 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
     };
   }
 
-  // When the credentials themselves failed, nothing above can be evaluated:
-  // the key, the chain, the attestation, and the tokens all arrive through
-  // the same broken envelope. Marked not-applicable and said out loud.
+  // Credentials failed: the key, chain, attestation, and tokens all arrive
+  // through the same broken envelope, so every rung above is not-applicable.
   if (credentialsFailed) {
     const blocked = (id: RungId, label: string): RungDraft => ({
       id,
@@ -261,10 +229,8 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   }
 
   // --- Rung 2: signer identified -------------------------------------------
- // One rung, because identification and accession are one
-  // fact — the file alone can never name a signer; only vouching OUTSIDE
-  // the file (a roster with timing evaluated, or a curated trust list)
-  // identifies anyone. A self-asserted org root is NOT identification.
+  // Only vouching outside the file identifies a signer: a roster with timing
+  // evaluated, or a curated trust list. A self-asserted org root does not.
   // Roster timing red flags are the rung's one failure.
   let knownKey: RungDraft;
   if (input.tier === 'roster' && (input.rosterState === 'revoked' || input.rosterState === 'not-yet-valid')) {
@@ -302,10 +268,8 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
       detail: `The chain names ${input.orgChain?.topSubject ?? 'an organization'}, but that root vouches for itself — a self-named organization identifies no one. Confirm the CA fingerprint out of band.`,
     };
   } else if (input.tier === 'this-device') {
-    // Recognizing our own key is NOT identification — the device telling
-    // itself "this is mine" vouches for nothing. Local history is stated as
-    // local history (a fact about this device's collection), never as
-    // vouching.
+    // Recognizing this device's own key is not identification; local history
+    // is stated as local history.
     knownKey = {
       id: 'known-key', label: 'Signer identified', state: 'unreached',
       detail: input.localHand
@@ -313,10 +277,8 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
         : "Signed by this device's own key. Nothing outside the file vouches for the signer; anyone can mint a key in milliseconds.",
     };
   } else {
-    // Unknown is neutral: anyone can mint a key, so an unidentified key
-    // says nothing in either direction. Never a failure. Local history,
-    // when present, is stated as local history — a fact about this
-    // device's collection, not vouching.
+    // Unknown is neutral, never a failure. Local history, when present, is
+    // stated as local history.
     knownKey = {
       id: 'known-key', label: 'Signer identified', state: 'unreached',
       detail: input.localHand
@@ -330,18 +292,11 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   if (input.hardwareNotApplicable === 'deidentified') {
     hardware = {
       id: 'hardware', label: 'Key attested by Apple hardware', state: 'not-applicable',
-      detail: 'Not applicable to de-identified copies: they are signed with a fresh one-time key by design.',
-    };
-  } else if (input.hardwareNotApplicable === 'assignment') {
-    hardware = {
-      id: 'hardware', label: 'Key attested by Apple hardware', state: 'not-applicable',
-      detail: 'Not applicable to assignment keys: no hardware attestation by design.',
+      detail: 'Not applicable to de-identified copies: they are signed with a fresh one-time key.',
     };
   } else if (input.appAttest.valid && input.appAttest.attestationEnv === 'development') {
-    // A genuine DEVELOPMENT attestation is not a failure (never red) and
-    // must not pass silently as production: Apple vouches for genuine
-    // hardware and the key, but a development build is not the shipping
-    // app — the rung stays unreached with the fact stated.
+    // A genuine development attestation is not a failure and is not
+    // production, so the rung stays unreached with the fact stated.
     hardware = {
       id: 'hardware', label: 'Key attested by Apple hardware', state: 'unreached',
       detail: "Checked against Apple's root, offline · minted by a DEVELOPMENT build authenticator.",
@@ -366,10 +321,9 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   }
 
   // --- Rung 4: time-bounded --------------------------------------------------
-  // Independent anchors only. A FAILED attached token is tamper evidence and
-  // fails the rung; unpinned tokens and unchecked bindings are unreached
-  // with their reasons stated. Tokens the verifier could not EVALUATE
-  // (unchecked — parse/coverage gaps) are disclosed but never fail the rung.
+  // Independent anchors only. A failed attached token fails the rung; unpinned
+  // tokens and unchecked bindings are unreached with their reasons stated.
+  // Tokens the verifier could not evaluate are disclosed but never fail it.
   const t = input.timestamps;
   const uncheckedTokens = t.unchecked ?? 0;
   const checkedFailures = t.present - t.valid - uncheckedTokens;
@@ -426,6 +380,6 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   return finishLadder([bytes, knownKey, hardware, time]);
 }
 
-/** The sentence that travels with the card in every cropped screenshot. */
+/** The sentence rendered under the card, including in screenshots. */
 export const LADDER_LIMITS_SENTENCE =
   'Custody is not reality. Judgment stays with the reader.';

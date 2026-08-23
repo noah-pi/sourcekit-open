@@ -1,30 +1,18 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Signed newsroom roster — the honest answer to "who took this?" for an
- * organization of twelve people.
+ * Signed newsroom roster: staff signing-key fingerprints with names, roles,
+ * and validity dates, signed by an editor key and distributed out of band
+ * (AirDrop, QR, a published file whose fingerprint is confirmed in person).
  *
- * A roster is a small file listing staff signing-key fingerprints with
- * names, roles, and validity dates, signed by an EDITOR key and distributed
- * out of band (AirDrop, QR code, a published file whose fingerprint is
- * confirmed once in person). It requires no CA, no conformance program, and
- * no money — and unlike the removed tap-to-trust "known signers" list, it is
- * revocable, expiring, and vouched for by someone accountable.
+ * Membership is evaluated at the verified signing time, never at the
+ * verifier's clock, so revoking a key leaves past captures genuine and
+ * reported as revoked later. With no verified signing time, membership
+ * cannot be evaluated and the display says so. A roster hit puts identity
+ * on the ROSTER trust tier, shown with who vouched and when.
  *
- * Semantics that matter (the departed-photographer case):
- *   - Membership is evaluated AT THE VERIFIED SIGNING TIME, never at the
- *     verifier's clock. Revoking a departed stringer's key does NOT
- *     invalidate their genuine past captures — a capture signed before the
- *     revocation is reported as "membership later revoked", honestly.
- *   - Without a verified signing time, membership-at-signing-time cannot be
- *     evaluated and the display says exactly that.
- *   - A roster hit upgrades identity to the ROSTER trust tier — below an org
- *     credential chain, above bare self-signed, and always displayed with
- *     who vouched (editor + newsroom) and when.
- *
- * The roster format is canonical JSON + one ES256 signature over SHA-256 of
- * the canonical payload — the same construction as attestation records, so
- * any desk tooling can produce it. The desk tool issues rosters;
- * the app consumes them.
+ * Format: canonical JSON plus one ES256 signature over SHA-256 of the
+ * canonical payload, the same construction as attestation records. The desk
+ * tool issues rosters; the app consumes them.
  */
 
 import { p256 } from '@noble/curves/p256';
@@ -38,9 +26,9 @@ export interface RosterEntry {
   /** Full 64-hex SHA-256 of the member's signing public key. Never a prefix. */
   fingerprint: string;
   name: string;
-  /** Free text — "staff photographer", "stringer, northern desk". */
+  /** Free text: "staff photographer", "stringer, northern desk". */
   role: string;
-  /** ISO-8601 date/timestamp — membership valid from. */
+  /** ISO-8601 date/timestamp; membership valid from. */
   validFrom: string;
   /** ISO-8601 or null for open-ended. */
   validTo: string | null;
@@ -50,24 +38,22 @@ export interface RosterEntry {
 }
 
 /**
- * Optional desk encryption key. When present, member devices
- * can seal captures TO this key — ciphertext only the desk's key-share
- * holders can open (see seal.ts). It rides the roster so the editor
- * signature covers it: a swapped desk key is a forged roster, rejected at
- * the door like any other tamper.
+ * Optional desk encryption key. Member devices seal captures to it, opened
+ * only by the desk's key-share holders (seal.ts). It rides the roster so the
+ * editor signature covers it, making a swapped desk key a forged roster.
  */
 export interface RosterEncryption {
   /** X25519 public key (32 bytes, base64) captures are sealed to. */
   deskPublicKeyBase64: string;
-  /** SHA-256 of the desk public key bytes, hex — display/confirmation. */
+  /** SHA-256 of the desk public key bytes, hex; for display and confirmation. */
   fingerprint: string;
-  /** ISO-8601 — when the editor attached this key. */
+  /** ISO-8601: when the editor attached this key. */
   addedAt: string;
 }
 
 export interface Roster {
   format: typeof ROSTER_FORMAT;
-  /** Display name of the organization — "The Examples Gazette". */
+  /** Display name of the organization, e.g. "The Examples Gazette". */
   newsroom: string;
   issuedAt: string;
   /** The editor key that vouches for this roster. */
@@ -106,7 +92,7 @@ export async function signRoster(
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
-/** Structural validation — types, required fields, fingerprint shapes. */
+/** Structural validation: types, required fields, fingerprint shapes. */
 export function isRoster(x: unknown): x is Roster {
   if (typeof x !== 'object' || x === null) return false;
   const r = x as Record<string, unknown>;
@@ -119,18 +105,17 @@ export function isRoster(x: unknown): x is Roster {
   const seenFingerprints = new Set<string>();
   for (const e of r.entries as Record<string, unknown>[]) {
     if (!e || typeof e.fingerprint !== 'string' || !HEX64.test(e.fingerprint)) return false;
-    // Duplicate fingerprints make membership ambiguous — resolveInRoster's
-    // .find would silently resolve to the FIRST entry (e.g. an expired
-    // one shadowing a valid one). Rejection here is what makes that .find
-    // safe; fail closed, never ambiguous.
+    // Duplicate fingerprints would make resolveInRoster's .find resolve to
+    // the first entry (an expired one could shadow a valid one). Rejecting
+    // them here is what makes that .find safe.
     if (seenFingerprints.has(e.fingerprint)) return false;
     seenFingerprints.add(e.fingerprint);
     if (typeof e.name !== 'string' || typeof e.role !== 'string' || typeof e.validFrom !== 'string') return false;
     if (e.validTo !== null && typeof e.validTo !== 'string') return false;
     if (e.revokedAt !== null && typeof e.revokedAt !== 'string') return false;
     // Dates fail closed: an unparseable validFrom/validTo/revokedAt would
-    // slip past membershipState's Number.isFinite guards and resolve
-    // 'active' — a roster whose dates cannot be evaluated is not a roster.
+    // slip past membershipState's Number.isFinite guards and resolve as
+    // 'active'.
     if (!Number.isFinite(Date.parse(e.validFrom))) return false;
     if (typeof e.validTo === 'string' && !Number.isFinite(Date.parse(e.validTo))) return false;
     if (typeof e.revokedAt === 'string' && !Number.isFinite(Date.parse(e.revokedAt))) return false;
@@ -153,7 +138,7 @@ export interface RosterSignatureCheck {
 
 /**
  * Verifies the editor's signature over the roster. A roster that fails this
- * is not a roster — it must never be stored or consulted.
+ * must not be stored or consulted.
  */
 export function verifyRosterSignature(roster: Roster): RosterSignatureCheck {
   try {
@@ -175,7 +160,7 @@ export function verifyRosterSignature(roster: Roster): RosterSignatureCheck {
   }
 }
 
-/** Membership state of ONE entry at ONE signing time. */
+/** Membership state of one entry at one signing time. */
 export type MembershipState =
   | 'active'                // valid at the signing time, and still standing
   | 'active-then-revoked'   // genuine: signed before a later revocation
@@ -196,8 +181,8 @@ export interface RosterResolution {
 }
 
 /**
- * Evaluates one entry at one signing time. `atMs` MUST come from a verified
- * RFC 3161 token (or null) — never the verifier's clock.
+ * Evaluates one entry at one signing time. `atMs` must come from a verified
+ * RFC 3161 token, or be null. Never the verifier's clock.
  */
 export function membershipState(entry: RosterEntry, atMs: number | null): MembershipState {
   if (atMs === null) return 'unknown-time';
@@ -216,12 +201,11 @@ export function membershipState(entry: RosterEntry, atMs: number | null): Member
 
 /**
  * Resolves a signer fingerprint against one roster. Returns null when the
- * fingerprint is not listed (unknown signers stay unknown — a roster can
- * never vouch for an unlisted key).
+ * fingerprint is not listed.
  */
 export function resolveInRoster(roster: Roster, fingerprint: string, atMs: number | null): RosterResolution | null {
-  // .find takes the first match — unambiguous because isRoster rejects
-  // any roster carrying a duplicate fingerprint.
+  // .find takes the first match; unambiguous because isRoster rejects any
+  // roster carrying a duplicate fingerprint.
   const entry = roster.entries.find((e) => e.fingerprint === fingerprint);
   if (!entry) return null;
   return {
@@ -237,9 +221,9 @@ export function resolveInRoster(roster: Roster, fingerprint: string, atMs: numbe
 }
 
 /**
- * Builds a fresh roster signed by a new editor key. Returns the roster AND
- * the editor private key — the caller (desk tool) is responsible for the
- * key's custody from this moment on. The app never generates editor keys.
+ * Builds a fresh roster signed by a new editor key. Returns the roster and
+ * the editor private key; custody of that key is the caller's (the desk
+ * tool's). The app never generates editor keys.
  */
 export async function createRoster(params: {
   newsroom: string;
@@ -277,9 +261,8 @@ export async function resignRoster(
   if (bytesToHex(sha256(pub)) !== roster.editor.fingerprint) {
     throw new Error('this editor key does not match the roster; refusing to re-sign');
   }
-  // Strip the OLD signature before re-signing: signRoster signs the object
-  // as passed, and a payload containing the old signature would verify
-  // against nothing (caught by the rotation regression test).
+  // Strip the old signature first: signRoster signs the object as passed,
+  // and a payload containing the old signature verifies against nothing.
   const { signature: _old, ...rest } = roster;
   const unsigned: Omit<Roster, 'signature'> = {
     ...rest,
@@ -306,7 +289,7 @@ export function rotateEntry(entries: RosterEntry[], oldFingerprint: string, next
   ];
 }
 
-/** Revoke a member as of now (the departed-photographer case). */
+/** Revoke a member as of now. */
 export function revokeEntry(entries: RosterEntry[], fingerprint: string): RosterEntry[] {
   const now = new Date().toISOString();
   return entries.map((e) => (e.fingerprint === fingerprint ? { ...e, revokedAt: now } : e));

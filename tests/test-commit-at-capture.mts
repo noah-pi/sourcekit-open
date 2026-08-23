@@ -1,16 +1,13 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Commit-at-capture + the burn scheduler.
+ * Commit-at-capture and the burn scheduler. Path under test: seal commits the
+ * context-claim bundle (root rides as com.verify.contextTree), openSubset
+ * derives salts on demand, burn is recorded, and openSubset then fails with
+ * 'burned'. The scheduler respects the per-item policy (default: never).
  *
- *   seal → the context-claim bundle is committed (root rides as
- *   com.verify.contextTree) → openSubset derives salts on demand → burn →
- *   openSubset fails honestly ('burned'). The burn is an ACTION — recorded,
- *   never silent — and the scheduler respects the per-item policy
- *   (default: never).
- *
- * Also: the geohash ladder derivation (prefix truncation, like time), the
- * inventory/master-seed invariants (A-01/A-02, docs/INTEGRITY.md), and
- * the residual-report plumbing in the export path.
+ * Also covers the geohash ladder derivation, the inventory and master-seed
+ * invariants (docs/INTEGRITY.md), and the residual report in the
+ * export path.
  *
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-commit-at-capture.mts
  */
@@ -44,9 +41,9 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 const section = (t: string) => console.log(`\n— ${t} —`);
 
-// Repo-relative default: stage.mjs copies this suite INTO tests/.staged, so
-// the staged dir is this file's own directory. VERIFY_STAGED_DIR overrides
-// when running the un-staged source against a lab staged elsewhere.
+// stage.mjs copies this suite into tests/.staged, so the staged dir is this
+// file's own directory. VERIFY_STAGED_DIR overrides it when running the
+// un-staged source against a lab staged elsewhere.
 const STAGED = process.env.VERIFY_STAGED_DIR ?? fileURLToPath(new URL('.', import.meta.url));
 
 const INPUT = {
@@ -108,13 +105,13 @@ section('seal → bundle committed → openSubset derives salts');
     ['identity.key-fingerprint', 'identity.org', 'identity.named', 'time.exact-ms', 'sensor.present', 'sensor.residual-summary']
       .every((id) => claims.some((c) => c.claimId === id)));
 
-  // The default Sealed bundle opens NOTHING and verifies.
+  // The default Sealed bundle opens nothing and verifies.
   const sealedV = verifyBundle(disc.sealedBundle, disc.root, disc.inventoryAssertion);
   check('the default Sealed-profile bundle verifies', sealedV.ok, JSON.stringify(sealedV.failures));
   check('the Sealed bundle opens zero claims', disc.sealedBundle.opened.length === 0);
 
-  // openSubset derives salts on demand — the short rung-set opens exactly
-  // the short rungs, with proofs that verify against the committed root.
+  // openSubset derives salts on demand: the short rung-set opens exactly the
+  // short rungs, with proofs that verify against the committed root.
   const state = createItemState('item-1', disc);
   const opened = openForItem(state, 'short');
   const jv = verifyBundle(opened.bundle, state.root, state.inventoryAssertion);
@@ -123,20 +120,20 @@ section('seal → bundle committed → openSubset derives salts');
   check('short opens exactly its rung-set',
     JSON.stringify(openedIds) === JSON.stringify(['identity.key-fingerprint', 'time.day', 'time.month', 'time.year'].sort()),
     JSON.stringify(openedIds));
-  check('no salt table exists anywhere in the state (A-02)',
+  check('no salt table exists anywhere in the state',
     !('salts' in state) && !('saltTable' in state) && !('salts' in opened.bundle));
 
-  // The inventoryDigest meta-leaf (A-01): tampering with the never-recorded
-  // declaration (an inventory ENTRY) breaks verification against the same root.
+  // The inventoryDigest meta-leaf: doctoring a never-recorded
+  // declaration (an inventory entry) breaks verification against the same root.
   const tamperedBundle = JSON.parse(JSON.stringify(opened.bundle));
   tamperedBundle.inventoryEntries.find((e: any) => e.claimId === 'location.country').state = 'committed';
   const tv = verifyBundle(tamperedBundle, state.root, state.inventoryAssertion);
-  check('a doctored never-recorded declaration is caught (A-01)',
+  check('a doctored never-recorded declaration is caught',
     !tv.ok && tv.failures.some((f) => f.includes('inventory') || f.includes('never-recorded')),
     JSON.stringify(tv.failures));
 
-  // Determinism: the same evidence commits the same claim VALUES (fresh seed
-  // changes salts, not values).
+  // Determinism: the same evidence commits the same claim values; a fresh seed
+  // changes salts, not values.
   const again = claimsFromCapture(INPUT);
   check('same evidence → same claim values', JSON.stringify(again.claims) === JSON.stringify(claims));
 
@@ -164,8 +161,8 @@ section('burn → openSubset fails honestly; the burn is an action');
   check('policy respects the per-item window (due)',
     shouldBurn(state, new Date('2026-08-08T10:00:00Z')));
 
-  // Opening BEFORE the burn works — and the opened bundle verifies FOREVER
-  // after (commitments close; opened evidence survives).
+  // Opening before the burn works, and the opened bundle still verifies after
+  // it: commitments close, opened evidence survives.
   const opened = openForItem(state, 'full');
   const burnedIds = await runBurnScheduler(store, new Date('2026-08-08T10:00:00Z'));
   check('the scheduler burns exactly the due item', JSON.stringify(burnedIds) === JSON.stringify(['item-burn']));
@@ -182,16 +179,16 @@ section('burn → openSubset fails honestly; the burn is an action');
     openErr.startsWith('burned:') && openErr.includes(BURN_FINALITY_WORDING), openErr);
   check('the locked finality wording rides the error', burnedOpenError(burned).message.includes(BURN_FINALITY_WORDING));
 
-  // A second scheduler run: already-burned items are not re-burned (no
-  // double event, no silent action).
+  // A second scheduler run: already-burned items are not re-burned, and no
+  // second event is written.
   const again = await runBurnScheduler(store, new Date('2026-08-09T10:00:00Z'));
   check('the scheduler never burns twice', again.length === 0 &&
     (await store.load('item-burn'))!.events.filter((e) => e.type === 'burn').length === 1);
   let doubleBurn = '';
   try { applyBurn(burned, new Date()); } catch (e) { doubleBurn = (e as Error).message; }
   check('applyBurn on a burned item says already-burned', doubleBurn.includes('already burned'));
-  // The locked wording must name what burn truly
-  // destroys (the proof material), not overclaim fact erasure.
+  // The locked wording names what burn destroys (the proof material) rather
+  // than claiming the facts are erased.
   check('the locked wording names proof-material destruction, not fact erasure',
     BURN_FINALITY_WORDING ===
       'After burn, withheld details can never be cryptographically disclosed again — the proof material is destroyed. What the record itself already shows remains visible.',
@@ -242,8 +239,8 @@ section('E.05 residuals ride the export path');
   const clean = exportForItem(state, 'short');
   check('a clean export returns an empty residual list', clean.residuals.length === 0, JSON.stringify(clean.residuals));
   check('the export records the open action', clean.state.events.some((e) => e.type === 'open' && e.profile === 'short'));
-  // The residual report IS verifyBundle's failure list: a profile-mismatched
-  // bundle (label forged after derivation) produces the named residual.
+  // The residual report is verifyBundle's failure list: a bundle whose profile
+  // label was forged after derivation produces the named residual.
   const forged = { ...clean.bundle, profile: 'full' as const };
   const residuals = verifyBundle(forged, state.root, state.inventoryAssertion).failures;
   check('a forged profile label yields named residuals', residuals.length > 0, JSON.stringify(residuals));
@@ -280,7 +277,7 @@ section('end to end: a real seal commits the context tree');
   // The sealed bundle from the capture verifies against the manifest root.
   check('the manifest-committed root verifies the Sealed bundle',
     verifyBundle(r.disclosure!.sealedBundle, ct.root, ct).ok);
-  // Master seed never touches the manifest (A-02): it must not appear in the signed bytes.
+  // Master seed never touches the manifest: it must not appear in the signed bytes.
   const seedHex = r.disclosure!.masterSeedHex;
   const seedBytes = hexToBytes(seedHex);
   let found = false;
@@ -296,10 +293,10 @@ section('end to end: a real seal commits the context tree');
 section("the EvidencePath 'never-recorded' sentinel never counts as a recorded sensor log");
 
 {
-  // The third EvidencePath state is the STRING literal 'never-recorded'
-  // (CaptureKit never opened the sink). A bare typeof-string check would
-  // count it as present — these cases drive the sentinel through the REAL
-  // attest → commitContextTree path, not a hardcoded boolean.
+  // The third EvidencePath state is the string literal 'never-recorded'
+  // (CaptureKit never opened the sink), which a bare typeof-string check would
+  // count as present. These cases drive the sentinel through the real
+  // attest → commitContextTree path.
   const key = labSigner();
   const sentinelEvidence = {
     rawPcmPath: 'never-recorded',

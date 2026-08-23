@@ -1,23 +1,17 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Org identity assertion (com.verify.identity).
+ * Org identity assertion (com.verify.identity). The org-credential install path
+ * needs SecureStore, so this drives the C2PA seam directly: buildC2paSegment
+ * with an identity param and a two-cert chain, as embedC2paInJpeg assembles it
+ * when identityAssertionFor fires (chain > 1 plus record.orgCredential).
  *
- * The app's org-credential install path needs SecureStore (not lab-testable),
- * so this suite exercises the C2PA seam DIRECTLY: buildC2paSegment with an
- * identity param and a two-cert chain, exactly as embedC2paInJpeg assembles
- * it when identityAssertionFor fires (chain > 1 + record.orgCredential).
- * That seam is the whole feature: emission, claim binding, parse, verify,
- * reporting, and gold-standard (c2patool) acceptance of the new box.
- *
- *  1. Emission: identity assertion box exists, referenced by the claim,
- *     parse recovers org/role/hash, telemetryHashMatches is true.
+ *  1. Emission: assertion box exists, claim references it, parse recovers
+ *     org/role/hash, telemetryHashMatches is true.
  *  2. Reporting: verifyPhotoBytes prints the verified line when the org name
- *     matches the chain top, the MISMATCH line when it doesn't.
- *  3. Tamper: a forged binding reference fails telemetryHashMatches (unit
- *     branch) — and editing the box itself breaks the claim binding.
- *  4. Neutrality: no identity param → no assertion, no lines, INTACT
- *     unaffected. deID copy of an identity-bearing photo carries NO
- *     assertion (ephemeral chain) and still verifies.
+ *     matches the chain top, the MISMATCH line when it does not.
+ *  3. Tamper: a forged binding reference fails telemetryHashMatches.
+ *  4. Neutrality: no identity param gives no assertion and no lines; a deID
+ *     copy carries no assertion (ephemeral chain) and still verifies.
  */
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -37,15 +31,15 @@ const check = (name: string, ok: boolean, detail = '') => {
   else { fail++; console.log(`  FAIL ${name} ${detail}`); }
 };
 const skip = (name: string, why: string) => { skipped++; console.log(`  SKIP ${name} :: ${why}`); };
-// c2patool is the optional gold standard: when absent, its checks SKIP loudly
-// (excluded from the pass/fail tally) instead of failing. See README ▸ Requirements.
+// c2patool is the optional gold standard: when absent its checks SKIP and are
+// excluded from the pass/fail tally. See README ▸ Requirements.
 const c2patoolBin = process.env.C2PATOOL ?? 'c2patool';
 let c2patoolAvailable = false;
 try { execFileSync(c2patoolBin, ['--version'], { stdio: 'pipe' }); c2patoolAvailable = true; } catch { /* not installed */ }
 if (!c2patoolAvailable) console.log('  NOTE: c2patool not found — gold-standard checks below will SKIP, not fail');
 
-// Two certs: the device leaf + a stand-in "org" cert. Chain VALIDITY is not
-// what this suite tests (x509 suite owns that) — only the assertion seam.
+// Two certs: the device leaf plus a stand-in "org" cert. Chain validity is the
+// x509 suite's job; this one covers the assertion seam.
 const devCert = await buildSelfSignedCert(
   Uint8Array.from(atob(key.publicKeyBase64), (c) => c.charCodeAt(0)),
   key.signDigest, new Date(Date.now() - 60_000));
@@ -74,9 +68,9 @@ async function signJpegWithIdentity(org: string | null): Promise<Uint8Array> {
 }
 
 // ---------- 1. emission + binding ----------
-// The lab cert builder hardcodes the chain top's org (Source Kit); the
-// cross-check requires the identity assertion to match it, so the lab identity
-// uses the same org. (This seam tests the assertion plumbing, not chain validity.)
+// The lab cert builder hardcodes the chain top's org (Source Kit) and the
+// cross-check requires the assertion to match it, so the lab identity uses the
+// same org.
 const signed = signJpegWithIdentity ? await signJpegWithIdentity('Source Kit') : null;
 fs.writeFileSync('/tmp/lab/identity-signed.jpg', signed);
 const store = extractC2paStore(signed);
@@ -131,7 +125,7 @@ if (m && v) {
   check('absence is neutral — no identity lines, INTACT',
     pReport.verdict === 'INTACT' && !pReport.checksPerformed.some((l) => l.includes('identity assertion')));
 
-  // deID copy of an identity-bearing original: ephemeral chain → no assertion.
+  // deID copy of an identity-bearing original: ephemeral chain, no assertion.
   const d = await deidentifyPhoto({ photoUri: '/tmp/lab/identity-signed.jpg', key, capturedAt: new Date().toISOString() });
   const dm = parseManifest(extractC2paStore(d.signedPhotoBytes)!.payload);
   check('deID copy carries NO identity assertion', dm?.identity === null);

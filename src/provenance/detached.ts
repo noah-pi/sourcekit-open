@@ -1,11 +1,10 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Detached-manifest custody matching: platforms strip
- * credentials (APP11/caBX/uuid), so the sidecar bundle is matched by exact
- * cryptographic reconstruction of the stripped bytes — never similarity. A
- * match (EXACT-AFTER-STRIP) means the signature verifies AND the asset hash
- * commits to these media bytes. Recompressed/remuxed media honestly does NOT
- * match: that falls back to pHash leads, which stay leads, never verdicts.
+ * Detached-manifest custody matching. Platforms strip credentials
+ * (APP11/caBX/uuid), so the sidecar bundle is matched by exact cryptographic
+ * reconstruction of the stripped bytes, not by similarity. A match means the
+ * signature verifies and the asset hash commits to these media bytes.
+ * Recompressed or remuxed media does not match; that falls back to pHash leads.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
@@ -23,9 +22,9 @@ export interface DetachedMatch {
   signatureValid: boolean;
   /** Assertion hashes in the claim match the assertion boxes. */
   claimAssertionsMatch: boolean;
-  /** Which exact reconstruction matched — both are cryptographic, never similarity. */
+  /** Which exact reconstruction matched. */
   how: 'stripped-container' | 'exclusion-ranges';
-  /** Manifests in the store — update chains are normal, and said so. */
+  /** Manifests in the store; update chains are normal. */
   manifestCount: number;
 }
 
@@ -35,7 +34,7 @@ function hashMatches(a: Uint8Array, b: Uint8Array): boolean {
 
 /**
  * Match media bytes (typically credential-stripped) against a detached store
- * payload. Null = no exact match, which says nothing about the pixels (pHash leads).
+ * payload. Null means no exact match, which says nothing about the pixels.
  */
 export function matchDetachedManifest(mediaBytes: Uint8Array, storePayload: Uint8Array): DetachedMatch | null {
   const chain = parseManifestChain(storePayload);
@@ -43,8 +42,8 @@ export function matchDetachedManifest(mediaBytes: Uint8Array, storePayload: Uint
   const active: C2paManifest | null = chain.manifests[chain.manifests.length - 1];
   if (!active) return null;
 
-  // The standard verifier's asset-hash line is ignored — the media layout
-  // changed, that is the premise — and replaced by exact reconstructions below.
+  // The standard verifier's asset-hash check is skipped (the media layout has
+  // changed) and replaced by the exact reconstructions below.
   const v = verifyManifest(mediaBytes, active);
   if (!v.signatureValid || !v.claimAssertionsMatch) return null;
 

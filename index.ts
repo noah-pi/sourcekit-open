@@ -1,7 +1,7 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
-// Entry point. The CSPRNG polyfill MUST be installed before any module that
-// could invoke noble crypto at import time. require() (not import) for the
-// router entry guarantees execution order.
+// Entry point. The CSPRNG polyfill must be installed before any module that
+// could invoke noble crypto at import time; require() (not import) for the
+// router entry guarantees that order.
 import { ensureCryptoPolyfill } from './src/lib/rand';
 
 ensureCryptoPolyfill();

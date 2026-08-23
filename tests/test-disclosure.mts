@@ -3,25 +3,22 @@
  * Selective-disclosure core suite.
  *
  * The disclosure library commits context claims under a Merkle root and
- * opens subsets of them. The honesty invariants pinned here:
+ * opens subsets of them. Invariants pinned here:
  *
- *   - Withheld means ABSENT: a withheld leaf is simply not opened; the
- *     bundle carries a count, never ciphertext.
- *   - Burn is real: without the master seed no leaf can be opened again
- *     by anyone — "I can't", not "I won't" — while bundles already
- *     produced verify forever.
- *   - Never-recorded is declared AT COMMIT TIME, immutable, and distinct
+ *   - Withheld means absent: a withheld leaf is not opened and the bundle
+ *     carries a count, not ciphertext.
+ *   - Without the master seed no leaf can be opened again, while bundles
+ *     already produced still verify.
+ *   - Never-recorded is declared at commit time, immutable, and distinct
  *     from withheld in every output.
- *   - No verdicts: failures are named, never booleaned away.
+ *   - Failures are named rather than reduced to a boolean.
  *
- * src/disclosure is NOT in stage.mjs's module list, so this suite
- * mini-stages the real sources itself:
- * it copies src/disclosure/*.ts next to the staged modules applying the
- * SAME import-flattening rewrite stage.mjs uses ('../lib/x' → './x.mts',
- * './x' → './disclosure-x.mts'), then imports the copies. The lab
- * exercises the real code; bare @noble imports resolve from the staged
- * node_modules like every other staged module. Run after `node stage.mjs`
- * (in-place runs copy into tests/.staged, which must exist).
+ * src/disclosure is not in stage.mjs's module list, so this suite stages the
+ * real sources itself: it copies src/disclosure/*.ts next to the staged
+ * modules with stage.mjs's import-flattening rewrite ('../lib/x' → './x.mts',
+ * './x' → './disclosure-x.mts'), then imports the copies. Bare @noble imports
+ * resolve from the staged node_modules. Run after `node stage.mjs` (in-place
+ * runs copy into tests/.staged, which must exist).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -84,7 +81,7 @@ const makeClaims = () => [
   { claimId: 'context.weather-summary', family: 'context', rung: 0, value: 'clear-night' },
 ];
 const NEVER = ['identity.named', 'sensor.residual-summary'];
-/** Golden root: pins canonicalization + HKDF + tree conventions + the inventory meta-leaf against drift. */
+/** Golden root: pins canonicalization, HKDF, tree conventions, and the inventory meta-leaf. */
 const GOLDEN_ROOT = 'c970f45fa0f5e51ba1dea36bcc5344278b95daba3190aaa58abb5f78378e5438';
 
 const committed = commitContext(SEED, makeClaims(), NEVER);
@@ -128,16 +125,15 @@ const open = (sel: any, profile?: any, customIds?: string[]) =>
     rungIndex('time', 'day') === 2);
 }
 
-// --- 2. withheld leaf is ABSENT, never encrypted -------------------------------
+// --- 2. withheld leaf is absent, not encrypted ---------------------------------
 {
   const bundle = open(profileSelection('short'), 'short');
   const json = JSON.stringify(bundle);
   check('withheld: count = committed minus opened (never-recorded not counted)',
     bundle.withheldCount === committed.leaves.length - bundle.opened.length && bundle.withheldCount === 12);
-  // Withheld VALUES appear nowhere. Withheld claimIds DO ride in
-  // inventoryEntries — they are the fixed public schema (ladder.ts names
-  // every expected claimId for every capture), so naming them discloses
-  // nothing, and the root now binds that declaration.
+  // Withheld values appear nowhere. Withheld claimIds do ride in
+  // inventoryEntries: they are the fixed public schema (ladder.ts names every
+  // expected claimId), and the root binds that declaration.
   check('withheld: withheld claim VALUES appear NOWHERE in the bundle',
     !json.includes('9q8yy') && !json.includes('37.421998') &&
     !json.includes('The Lab Gazette') && !json.includes('clear-night') && !json.includes('2026-03-02T10:05'));
@@ -156,14 +152,11 @@ const open = (sel: any, profile?: any, customIds?: string[]) =>
 {
   const before = open(profileSelection('full'), 'full');
 
-  // The property pinned here: commitContext returns NO salt table, and
-  // openSubset takes the master SEED, deriving each selected leaf's salt
-  // on demand.
-  // So once the seed is destroyed there is literally nothing left to open
-  // with — no surviving array to scrub, no second copy. What remains
-  // testable in JS: (a) opening requires the seed; (b) any other seed
-  // derives different salts; (c) a bundle built from wrong-seed salts
-  // fails by name; (d) pre-burn bundles verify forever.
+  // commitContext returns no salt table; openSubset takes the master seed and
+  // derives each selected leaf's salt on demand, so destroying the seed leaves
+  // nothing to open with. Testable here: (a) opening requires the seed; (b)
+  // another seed derives different salts; (c) a wrong-seed bundle fails by
+  // name; (d) pre-burn bundles still verify.
   const burnedSeed = Uint8Array.from(SEED);
   burnedSeed.fill(0);
   const saltBefore = deriveLeafSalt(SEED, 'time.day', 2);
@@ -171,10 +164,8 @@ const open = (sel: any, profile?: any, customIds?: string[]) =>
   check('burn: a zeroed/wrong seed derives DIFFERENT salts — opening is unrecoverable',
     bytesToHex(saltBefore) !== bytesToHex(saltAfterBurn));
 
-  // openSubset's only salt source is the seed it is given: after the burn
-  // the best anyone can do is call it with a wrong seed, and the result
-  // fails verification by name — the commitment is closed for everyone,
-  // us included. "I can't", not "I won't".
+  // openSubset's only salt source is the seed it is given, so after the burn
+  // a wrong seed is all that is left and it fails verification by name.
   const forged = openSubset(tree, committed.leaves, burnedSeed, profileSelection('short'), 'short', NEVER, INV);
   const vf = verifyBundle(forged, committed.root);
   check('burn: post-burn opening attempt fails, failure NAMED (I can\'t, not I won\'t)',
@@ -182,14 +173,13 @@ const open = (sel: any, profile?: any, customIds?: string[]) =>
     vf.failures[0] ?? 'no failures');
   check('burn: every forged leaf fails — none slips through', vf.openedClaims.length === 0);
 
-  // The bundle produced BEFORE the burn still verifies: commitments close,
-  // opened evidence doesn't.
+  // A bundle produced before the burn still verifies.
   const vb = verifyBundle(before, committed.root, committed.inventoryAssertion);
   check('burn: pre-burn full bundle STILL verifies (opened leaves stay open forever)',
     vb.ok && vb.openedClaims.length === committed.leaves.length, vb.failures.join(' | '));
 }
 
-// --- 4. tamper: every flip is NAMED, never booleaned away ----------------------
+// --- 4. tamper: every flip fails by name ---------------------------------------
 {
   const good = open(profileSelection('short'), 'short');
   const clone = () => JSON.parse(JSON.stringify(good));
@@ -245,13 +235,13 @@ const open = (sel: any, profile?: any, customIds?: string[]) =>
     verifyBundle(good, committed.root).ok && verifyBundle(good, committed.root).failures.length === 0);
 }
 
-// --- 4b. never-recorded is BOUND by the root ------------
+// --- 4b. never-recorded is bound by the root -----------------------------------
 {
   const good = open(profileSelection('short'), 'short');
   const clone = () => JSON.parse(JSON.stringify(good));
 
   // (b) state confusion: append a committed+withheld claim to neverRecorded
-  // WITHOUT touching the inventory — the denormalized list disagrees with
+  // without touching the inventory, so the denormalized list disagrees with
   // the root-bound entries.
   const relabel = clone();
   relabel.neverRecorded = [...relabel.neverRecorded, 'location.exact'];
@@ -259,11 +249,10 @@ const open = (sel: any, profile?: any, customIds?: string[]) =>
   check('root-binding: withheld→never-recorded relabel fails by name',
     !r1.ok && r1.failures.some((f: string) => f.includes('never-recorded-mismatch')), r1.failures.join(' | '));
 
-  // (b′) the count-preserving swap: relabel location.exact as
-  // never-recorded AND flip
-  // identity.named to 'committed' inside the inventory entries, keeping
-  // the committed count at 18. The inventory digest changes, so the
-  // meta-leaf no longer proves inclusion — named failure.
+  // (b′) count-preserving swap: relabel location.exact as never-recorded and
+  // flip identity.named to 'committed' inside the inventory entries, keeping
+  // the committed count at 18. The inventory digest changes, so the meta-leaf
+  // no longer proves inclusion.
   const swap = clone();
   swap.neverRecorded = [...swap.neverRecorded.filter((id: string) => id !== 'identity.named'), 'location.exact'].sort();
   swap.inventoryEntries = swap.inventoryEntries.map((e: any) =>
@@ -281,7 +270,7 @@ const open = (sel: any, profile?: any, customIds?: string[]) =>
   check('root-binding: flipped inventory-proof element → named inventory-commitment-mismatch',
     !r3.ok && r3.failures.some((f: string) => f.includes('inventory-commitment-mismatch')));
 
-  // The meta-leaf is never openable: a claim shaped like it fails schema.
+  // The meta-leaf is not openable: a claim shaped like it fails schema.
   const meta = clone();
   meta.opened.push({
     claim: { claimId: '\x00inventory', family: 'context', rung: 0, value: 'x' },
@@ -292,7 +281,7 @@ const open = (sel: any, profile?: any, customIds?: string[]) =>
     !r4.ok && r4.failures.some((f: string) => f.includes('malformed')), r4.failures.join(' | '));
 }
 
-// --- 4c. the profile label is verified, never decorative -----
+// --- 4c. the profile label is checked, not decorative --------------------------
 {
   const short = open(profileSelection('short'), 'short');
   const clone = () => JSON.parse(JSON.stringify(short));

@@ -2,24 +2,21 @@
 /**
  * Design tokens.
  *
- * Verdict colors carry meaning and shouldn't be reused decoratively: green is
- * intact/signed, amber is caution or unknown, red is proven tamper, slate is
- * information. Unsigned renders neutral gray, never red. Gradients mark the two
- * moments of action — a primary button and the seal pill — and stay off
- * evidence surfaces.
+ * Verdict colors carry meaning: green is intact/signed, amber is caution or
+ * unknown, red is proven tamper, slate is information, unsigned is neutral
+ * gray. Gradients are used only on a primary button and the seal pill, not on
+ * evidence surfaces. Camera chrome floats over a live viewfinder and uses the
+ * onDark tokens instead.
  *
- * The camera screen is the exception: its chrome floats over a live viewfinder,
- * so it uses the onDark tokens.
+ * The palette is dual, and `colors` is mutated in place when the effective
+ * scheme changes so every `import { colors }` keeps working. 'device' follows
+ * the OS, seeded synchronously at module load and kept live by an Appearance
+ * listener; 'dark' and 'light' pin it.
  *
- * The palette is dual. `colors` is mutated in place when the effective scheme
- * changes, so every `import { colors }` keeps working without a per-screen
- * rewrite. 'device' follows the OS, seeded synchronously at module load and
- * kept live by an Appearance listener; 'dark' and 'light' pin it.
- *
- * One gotcha: styles built at module scope capture their colors at module
- * evaluation. Flipping the scheme mid-session updates anything read at render
- * time immediately, but static style blocks only on the next tree rebuild —
- * which is why the root layout remounts the navigator on a scheme change.
+ * Styles built at module scope capture their colors at module evaluation, so
+ * a mid-session flip reaches render-time reads immediately but static style
+ * blocks only on the next tree rebuild — hence the navigator remount in the
+ * root layout.
  */
 import { Appearance, Platform, StyleSheet } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
@@ -33,8 +30,7 @@ export const colors = {
 
   text: '#1D1D1F',        // Apple label
   textDim: '#6E6E73',
-  // Carries the product's caveat text, so it has to clear WCAG AA:
-  // 4.07:1 on bg, 4.39:1 on surface.
+  // Carries caveat text, so it clears WCAG AA: 4.07:1 on bg, 4.39:1 on surface.
   textFaint: '#78787D',
 
   accent: '#1F6B45',
@@ -73,16 +69,15 @@ export type EffectiveScheme = 'light' | 'dark';
 const lightColors: ColorPalette = { ...colors, onDark: { ...colors.onDark } };
 
 /**
- * Dark palette — the approved Reader design system, so the app and Reader
- * agree. Approved values map straight onto the existing keys; keys with no
- * approved dark counterpart are derived in the same temperature/saturation
- * family and say how.
+ * Dark palette, taken from the approved Reader design system so the app and
+ * Reader agree. Keys with no approved dark counterpart are derived in the
+ * same temperature/saturation family; each says how.
  */
 const darkColors: ColorPalette = {
   bg: '#0D0D0F',            // approved: Reader bg
   surface: '#151519',       // approved: Reader card
-  // Derived: no approved value. Light surface2 is one step DARKER than bg
-  // (inset areas, tracks, chips), so the dark twin steps below dark bg.
+  // Derived: light surface2 is one step darker than bg (inset areas, tracks,
+  // chips), so the dark twin steps below dark bg.
   surface2: '#08080A',
   border: '#26262C',        // approved: Reader hairline
   // Derived: no approved value. Light borderSoft sits between bg and border
@@ -93,7 +88,7 @@ const darkColors: ColorPalette = {
   textDim: '#A9A9B2',       // approved: Reader muted
   textFaint: '#71717A',     // approved: Reader dim
 
-  accent: '#4E7A62',        // approved: Reader ok-dim — verdict green stays muted in dark, by design
+  accent: '#4E7A62',        // approved: Reader ok-dim; verdict green stays muted in dark
   // Derived: same key role as light accentSoft — the accent at low alpha.
   accentSoft: 'rgba(78, 122, 98, 0.16)',
   // Derived: the single-hue primary-action gradient, ok-dim lifted +0.10
@@ -101,9 +96,9 @@ const darkColors: ColorPalette = {
   // end — mirroring light's lighter-start/accent-end shape.
   accentGradStart: '#5E9D7B',
   accentGradEnd: '#4E7A62',
-  // Was the approved Reader warn #F5B301 — a pure yellow that
-  // clashes with the landed palette (sage/cream/clay). Now a muted, warmer
-  // amber in the same family; 7.4:1 on bg, 7.0:1 on surface (AA).
+  // Muted warm amber instead of the approved Reader warn #F5B301, a pure
+  // yellow that clashes with the sage/cream/clay palette; 7.4:1 on bg,
+  // 7.0:1 on surface (AA).
   warn: '#C9974F',
   // Derived: the warn at low alpha, light warnSoft's role.
   warnSoft: 'rgba(201, 151, 79, 0.14)',
@@ -117,8 +112,8 @@ const darkColors: ColorPalette = {
 
   onAccent: '#FFFFFF',      // unchanged: reads on ok-dim as it did on the light accent
 
-  // Camera chrome floats over the dark viewfinder in BOTH schemes — the
-  // dark-register tokens below are scheme-independent and stay put.
+  // Camera chrome floats over the dark viewfinder in both schemes; these
+  // dark-register tokens are scheme-independent.
   shutterRing: '#F5F5F7',
   onDark: {
     text: '#F5F5F7',
@@ -129,10 +124,10 @@ const darkColors: ColorPalette = {
 };
 
 /**
- * Resolution state. Seeded SYNCHRONOUSLY from the OS at module load: in the
- * default 'device' mode every module-scope StyleSheet evaluates with the
- * correct palette before first paint. The persisted preference arrives
- * later (settings load pushes it via setAppearancePreference).
+ * Resolution state, seeded synchronously from the OS at module load so that
+ * in 'device' mode every module-scope StyleSheet evaluates with the right
+ * palette before first paint. The persisted preference arrives later, pushed
+ * in by the settings load via setAppearancePreference.
  */
 let systemScheme: EffectiveScheme = Appearance.getColorScheme() === 'dark' ? 'dark' : 'light';
 let preference: AppearancePreference = 'device';
@@ -143,8 +138,8 @@ const schemeListeners = new Set<() => void>();
 function applyScheme(next: EffectiveScheme): void {
   if (next === effectiveScheme) return;
   effectiveScheme = next;
-  // Mutate the exported object in place — import sites keep the same
-  // reference and read the new values on their next render.
+  // Mutated in place so import sites keep the same reference and read the
+  // new values on their next render.
   Object.assign(colors, next === 'dark' ? darkColors : lightColors);
   schemeListeners.forEach((l) => l());
 }
@@ -184,10 +179,9 @@ export function useEffectiveScheme(): EffectiveScheme {
 
 /**
  * Themed styles that follow the scheme. Module-scope `StyleSheet.create`
- * snapshots whatever palette was current at import — the screen then stays
- * light after a flip. Resolve the sheet per render instead: the builder
- * reads the (mutated-in-place) `colors` AFTER any flip, and the scheme
- * subscription forces the re-render that recomputes it.
+ * snapshots the palette current at import, so use this instead: the builder
+ * reads the mutated `colors` at render, and the scheme subscription forces
+ * the re-render that recomputes it.
  *
  *   const buildStyles =  => StyleSheet.create({ … colors.x … });
  *   const styles = useThemedStyles(buildStyles);

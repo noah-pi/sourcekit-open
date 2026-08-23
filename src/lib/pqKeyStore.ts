@@ -1,22 +1,12 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * PQ key custody — the ML-DSA-65 SOFTWARE key.
- *
- * What lives here: a 32-byte seed in the OS keychain (SecureStore), from
- * which the full keypair is derived deterministically on demand. The full
- * 4032-byte ML-DSA secret key exceeds the keychain's per-item value limit;
- * the seed is the whole secret. Losing it loses the key — there is no
- * recovery, and that is honest: this layer is future-proofing against a
- * P-256 break, not identity custody. The classical key remains the device's
- * root of capture identity.
- *
- * Custody honesty (pinned in src/lib/pq.ts): this key is SOFTWARE — keychain
- * protection, not Secure Enclave. It is never displayed as a hardware
- * anchor, and it never gates anything: it signs alongside, never instead.
- *
- * Linkage rule: assignment mode and de-identified copies deliberately do NOT
- * use this key — a long-lived per-device key would re-link captures that
- * exist to be unlinkable. Callers enforce this; the store itself is dumb.
+ * ML-DSA-65 key custody. A 32-byte seed in SecureStore is the whole secret;
+ * the keypair derives from it on demand, since the 4032-byte ML-DSA secret key
+ * exceeds the keychain's per-item value limit. Losing the seed loses the key.
+ * Software-protected, not Secure Enclave: it signs alongside the P-256 device
+ * key and gates nothing. De-identified copies must not use it: a long-lived
+ * per-device key would re-link captures meant to be unlinkable. Callers
+ * enforce that; the store itself is dumb.
  */
 
 import * as SecureStore from 'expo-secure-store';
@@ -33,10 +23,9 @@ const OPTIONS: SecureStore.SecureStoreOptions = {
 let cached: PqCaptureKey | null = null;
 
 /**
- * Returns this device's PQ layer, generating and enrolling it on first use
- * (first capture after the upgrade). `enrolledAt` is recorded once at
- * generation and travels in every committed pqKey block — device-reported,
- * like every timestamp this app makes.
+ * Returns this device's PQ key, generating and enrolling it on first use.
+ * `enrolledAt` is set once at generation and travels in every committed pqKey
+ * block; it is device-reported.
  */
 export async function getOrCreatePqKey(): Promise<PqCaptureKey> {
   if (cached) return cached;

@@ -1,21 +1,17 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Wi-Fi SSID/BSSID opt-in capture.
+ * Wi-Fi SSID/BSSID opt-in capture. The native module is iOS-only and
+ * entitlement-gated, so this suite pins the signed-format contract:
  *
- * The native module can't run in the lab (iOS-only, entitlement-gated), so
- * this suite pins everything the lab CAN prove — the signed-format contract:
- *
- *  1. A wifi claim rides INSIDE the signed payload: it round-trips intact
- *     and any tamper with ssid/bssid breaks the record signature.
- *  2. Tri-state honesty: 'redacted' (opt-in off — the default) and
- *     'unavailable' (iOS returned nothing) both sign and verify; a legacy
- *     record with no wifi key at all verifies neutral.
- *  3. The real photo path: attestPhoto carries the claim into the signed
- *     JPEG, verifyPhotoBytes reads INTACT, and c2patool (gold standard)
- *     validates the file.
- *  4. deID always strips it: deidentifyPhoto, deidentifyPhotoToPng and
- *     deidentifyBmff all emit wifi:'redacted' + list 'wifi' in the stripped
- *     fields, the copies still verify, and the original is untouched.
+ *  1. The wifi claim rides inside the signed payload: it round-trips and any
+ *     tamper with ssid/bssid breaks the record signature.
+ *  2. Three states: 'redacted' (opt-in off, the default) and 'unavailable'
+ *     both sign and verify; a record with no wifi key verifies neutral.
+ *  3. Photo path: attestPhoto carries the claim into the signed JPEG,
+ *     verifyPhotoBytes reads INTACT, and c2patool validates the file.
+ *  4. deidentifyPhoto, deidentifyPhotoToPng and deidentifyBmff all emit
+ *     wifi:'redacted', list 'wifi' among the stripped fields, still verify,
+ *     and leave the original untouched.
  */
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -43,8 +39,8 @@ const check = (name: string, ok: boolean, detail = '') => {
   else { fail++; console.log(`  FAIL ${name} ${detail}`); }
 };
 const skip = (name: string, why: string) => { skipped++; console.log(`  SKIP ${name} :: ${why}`); };
-// c2patool is the optional gold standard: when absent, its checks SKIP loudly
-// (excluded from the pass/fail tally) instead of failing. See README ▸ Requirements.
+// c2patool is optional; when absent its checks skip rather than fail, and
+// are excluded from the tally. See README, Requirements.
 const c2patoolBin = process.env.C2PATOOL ?? 'c2patool';
 let c2patoolAvailable = false;
 try { execFileSync(c2patoolBin, ['--version'], { stdio: 'pipe' }); c2patoolAvailable = true; } catch { /* not installed */ }
@@ -86,7 +82,7 @@ const mkRecord = (ctx: any) => buildRecord({
   check('stripping the wifi key breaks the signature', !verifyRecordSignature(removeWifi).signatureValid);
 }
 
-// ---------- 2. tri-state honesty + legacy neutrality ----------
+// ---------- 2. tri-state + legacy neutrality ----------
 {
   for (const state of ['redacted', 'unavailable'] as const) {
     const signed = await signRecord(mkRecord({ ...ctxWith, wifi: state }), key.signDigest, key.signPayload);

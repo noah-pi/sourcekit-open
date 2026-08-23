@@ -35,13 +35,12 @@ export function payloadBytes(record: AttestationRecord): Uint8Array {
 }
 
 /**
- * Returns a new record with the signature field populated. When signPayload
- * is given (Secure Enclave backends), digest + signature happen in ONE hop —
- * the payload is hashed inside the native seal, never in JS.
+ * Returns a new record with the signature field populated. With signPayload
+ * (Secure Enclave backends) the digest and signature happen in one hop inside
+ * the native seal, never in JS.
  *
- * When `pq` is given, the same canonical payload is ALSO signed
- * with ML-DSA-65 — one commitment, two signatures. The PQ key is software;
- * this hedges future P-256 cryptanalysis and nothing else (src/lib/pq.ts).
+ * With `pq`, the same canonical payload is also signed with ML-DSA-65: one
+ * commitment, two signatures. The PQ key is software (src/lib/pq.ts).
  */
 export async function signRecord(
   record: AttestationRecord,
@@ -60,11 +59,10 @@ export interface RecordVerification {
   /** Recomputed fingerprint of the embedded public key (must match signer.fingerprint). */
   fingerprintMatches: boolean;
   /**
-   * PQ layer evaluation — null when the record carries neither a
-   * committed pqKey nor a pqSignature (legacy capture / de-identified copy).
-   * keyCommitted=true with present=false means the PQ signature was stripped
-   * after signing — the commitment inside the signed payload cannot be
-   * stripped without breaking the classical signature, so the gap is visible.
+   * PQ layer evaluation; null when the record carries neither a committed
+   * pqKey nor a pqSignature. keyCommitted=true with present=false means the PQ
+   * signature was stripped after signing: the commitment sits inside the
+   * signed payload, so the gap stays visible.
    */
   pq: PqLayerCheck | null;
 }

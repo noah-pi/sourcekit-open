@@ -1,25 +1,17 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * RFC 3161 TimeStampToken verification — real CMS/PKCS#7 checks.
+ * RFC 3161 TimeStampToken verification over CMS/PKCS#7. Four checks per
+ * token, numbered in the code below:
+ *   1. TSTInfo messageImprint matches the hash of the timestamped bytes
+ *      (the C2PA CounterSignature over the COSE signature).
+ *   2. CMS signedAttributes messageDigest matches the TSTInfo hash.
+ *   3. The TSA signature verifies under the TSA certificate's key
+ *      (ECDSA P-256/P-384 or RSA PKCS#1 v1.5).
+ *   4. genTime comes from the parsed TSTInfo and the TSA cert was valid at
+ *      that genTime.
  *
- * For each embedded token we prove:
- *   1. The TSTInfo's messageImprint is exactly SHA-256 of the bytes we
- *      timestamped (the C2PA CounterSignature structure over the COSE
- *      signature) — so the token really countersigns THIS signature, not
- *      some other blob.
- *   2. The CMS signedAttributes' messageDigest equals SHA-256 of the
- *      TSTInfo — so the TSA's signature covers THIS TSTInfo.
- *   3. The TSA's signature verifies under the TSA certificate's key
- *      (ECDSA P-256/P-384 or RSA PKCS#1 v1.5 — FreeTSA is RSA).
- *   4. genTime comes from the parsed TSTInfo, and the TSA cert was valid
- *      AT that genTime.
- *
- * What we deliberately do NOT claim: that the TSA's root is on a curated
- * trust list. The ecosystem's TSA trust list is still forming, so the
- * report names the TSA from its certificate and states plainly that root
- * anchoring is not performed. A token that passes 1–4 is cryptographically
- * genuine; whether you trust the named authority is a separate, stated
- * question.
+ * Root anchoring is not performed here; the report names the TSA from its
+ * certificate. Pinning lives in src/lib/tsaTrustList.ts.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
@@ -38,9 +30,9 @@ const OID_SHA256 = '608648016503040201';          // 2.16.840.1.101.3.4.2.1
 const OID_SHA384 = '608648016503040202';          // 2.16.840.1.101.3.4.2.2
 const OID_SHA512 = '608648016503040203';          // 2.16.840.1.101.3.4.2.3
 
-/** CMS digestAlgorithm → hash. FreeTSA's CMS layer uses SHA-512 even when the
- * requested imprint is SHA-256 — hardcoding SHA-256 here would fail every
- * genuine FreeTSA token. */
+/** CMS digestAlgorithm → hash. The CMS layer's digest can differ from the
+ * imprint digest (FreeTSA uses SHA-512 with a SHA-256 imprint), so it is
+ * always read from the token. */
 const CMS_DIGEST: Record<string, (m: Uint8Array) => Uint8Array> = {
   [OID_SHA256]: sha256,
   [OID_SHA384]: sha384,
@@ -77,24 +69,19 @@ export interface TimestampVerification {
 const FAIL = (reason: string, tsaFingerprints: string[] = []): TimestampVerification =>
   ({ tokenValid: false, reason, genTimeUtc: null, tsaName: null, tsaChainLinksValid: null, tsaFingerprints, checked: true });
 
-/** A failure of OUR parser or coverage — neutral, never red. */
+/** A gap in this parser's coverage. Neutral, not a red rung. */
 const UNCHECKED = (reason: string): TimestampVerification =>
   ({ tokenValid: false, reason, genTimeUtc: null, tsaName: null, tsaChainLinksValid: null, tsaFingerprints: [], checked: false });
 
 /**
- * RFC 3161 §2.4.2: TSAs frequently wrap the token in a TimeStampResp
- * envelope — SEQUENCE { status PKIStatusInfo, timeStampToken ContentInfo } —
- * instead of transmitting a bare ContentInfo. c2pa-rs accepts both, and the
- * c2pa test corpus (truepic, adobe-C/CA) ships the wrapped form. Detect the
- * wrapper (first child is a SEQUENCE carrying a status INTEGER, not the OID
- * that opens a ContentInfo), insist the status is granted /
- * grantedWithMods, and hand the inner ContentInfo to the verifier. A bare
- * ContentInfo passes straight through.
+ * Unwraps the RFC 3161 §2.4.2 TimeStampResp envelope
+ * (SEQUENCE { status PKIStatusInfo, timeStampToken ContentInfo }); a bare
+ * ContentInfo passes straight through. The wrapper is detected by a leading
+ * SEQUENCE carrying a status INTEGER, and the status must be granted or
+ * grantedWithMods.
  *
- * Returns the ContentInfo bytes, or null with `reason` set when the envelope
- * is present but the status is a rejection/waiting state — that is a TSA
- * response, not a timestamp, and we simply cannot evaluate it (unchecked,
- * never red).
+ * Returns the ContentInfo bytes, or null with `reason` when the status is a
+ * rejection or waiting state, which is unchecked rather than a failure.
  */
 export function unwrapTimestampResponse(
   token: Uint8Array,
@@ -127,7 +114,7 @@ export function unwrapTimestampResponse(
 
 /**
  * Verifies one TimeStampToken (CMS ContentInfo) against the exact message it
- * should imprint. Never throws — a bad token is evidence, not an exception.
+ * should imprint. Never throws; a bad token is returned as a result.
  */
 export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Array): TimestampVerification {
   try {
@@ -160,10 +147,8 @@ export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Ar
     const imprintAlg = readTlv(imprint.content, 0);
     const imprintAlgOid = readTlv(imprintAlg.content, 0);
     const imprintHash = readTlv(imprint.content, imprintAlg.next);
-    // The imprint hash is whatever the requester asked the TSA for — SHA-256
-    // is common, but truepic's tokens use SHA-384 and c2pa-rs accepts them.
-    // Support the SHA-2 family; anything else is a coverage gap (unchecked),
-    // never a red.
+    // The imprint hash is whatever the requester asked the TSA for. The SHA-2
+    // family is supported; anything else is unchecked, not a failure.
     const imprintHashFn = CMS_DIGEST[bytesToHex(imprintAlgOid.content)];
     if (!imprintHashFn) return UNCHECKED(`messageImprint uses an unsupported hash (${bytesToHex(imprintAlgOid.content)})`);
     const serialTlv = readTlv(tst.content, t); t = serialTlv.next; // serialNumber
@@ -172,12 +157,12 @@ export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Ar
     const g = bytesToUtf8(genTimeTlv.content);
     const genTimeUtc = `${g.slice(0, 4)}-${g.slice(4, 6)}-${g.slice(6, 8)}T${g.slice(8, 10)}:${g.slice(10, 12)}:${g.slice(12, 14)}Z`;
     const genTimeMs = Date.parse(genTimeUtc);
-    // A garbage genTime parses to NaN, and every window comparison against
-    // NaN is false — i.e. silently "valid". Fail loud instead.
+    // NaN compares false against every validity window, which would read as
+    // valid, so reject an unparseable genTime here.
     if (!Number.isFinite(genTimeMs)) return UNCHECKED('genTime is not a parseable GeneralizedTime');
 
-    // Check 1: the imprint binds THIS timestamp message, under the hash the
-    // imprint itself declares.
+    // Check 1: the imprint binds this timestamp message, under the hash the
+    // imprint declares.
     if (!equalBytes(imprintHash.content, imprintHashFn(expectedMessage))) {
       return FAIL('token does not countersign this signature (messageImprint mismatch)');
     }
@@ -196,12 +181,10 @@ export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Ar
         while (co < f.content.length) {
           const c = readTlv(f.content, co);
           co = c.next;
-          // Drop only the unparseable cert, never the whole set: one exotic
-          // cert (e.g. an RSA-PSS CA we don't verify yet) must not blind us
-          // to the certs we CAN read. But if EVERY cert drops, the reason is
-          // the single most useful diagnostic we have — carry it: a bare
-          // "no TSA certificates in token" would hide an unsupported-alg
-          // throw and turn a parser gap into false red rungs.
+          // Drop only the unparseable cert, keeping the readable ones. If
+          // every cert drops, carry the first failure reason: without it an
+          // unsupported algorithm reads as "no certificates" and turns a
+          // parser gap into a red rung.
           try { parsed.push(parseCertificate(c.full)); }
           catch (e) { firstDrop ??= (e as Error).message; }
         }
@@ -231,11 +214,9 @@ export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Ar
     if (signedAttrs.tag !== 0xa0) return UNCHECKED('no signed attributes');
     const sigAlgTlv = readTlv(si.content, s); s = sigAlgTlv.next;
     let sigAlgOid = bytesToHex(readTlv(sigAlgTlv.content, 0).content);
-    // CMS quirk (RFC 5754): for RSA the SignerInfo.signatureAlgorithm is the
-    // KEY algorithm rsaEncryption — the digest lives one field earlier, in
-    // digestAlgorithm. Map the pair to the concrete rsaSha* OID our verifier
-    // understands. Without this every RSA TSA (e.g. FreeTSA) failed its own
-    // genuine token.
+    // RFC 5754: for RSA, SignerInfo.signatureAlgorithm is the key algorithm
+    // rsaEncryption and the digest lives in digestAlgorithm. Map the pair to
+    // a concrete rsaSha* OID.
     if (sigAlgOid === OID_RSA_ENCRYPTION) {
       if (digestAlgOid === OID_SHA256) sigAlgOid = OID_RSA_SHA256;
       else if (digestAlgOid === OID_SHA384) sigAlgOid = OID_RSA_SHA384;
@@ -245,32 +226,29 @@ export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Ar
     const sigTlv = readTlv(si.content, s);
     if (sigTlv.tag !== 0x04) return UNCHECKED('signature missing');
 
-    // Find the signer cert by issuer + serial. The `?? certs[0]` fallback is
-    // deliberate leniency for TSAs whose sid doesn't byte-match an embedded
-    // cert: it CANNOT mint a false green (the CMS signature must still verify
-    // against that cert's key), and strictness here would reject genuine
-    // tokens. Do not "harden" this away.
+    // Find the signer cert by issuer + serial. The `?? certs[0]` fallback
+    // covers TSAs whose sid does not byte-match an embedded cert; it cannot
+    // mint a false pass, since the CMS signature must still verify against
+    // that cert's key.
     const signer = certs.find(
       (c) => equalBytes(c.issuerRaw, sidIssuer.full) && equalBytes(c.serial, sidSerial.content),
     ) ?? certs[0];
     const tsaName = signer.subjectCN ?? signer.subjectOrg;
-    // Fingerprints for trust pinning — signer first, then the rest of the
-    // embedded chain. Computed once, carried through every outcome below.
+    // Fingerprints for trust pinning, signer first, then the rest of the
+    // embedded chain. Carried through every outcome below.
     const tsaFingerprints = [signer, ...certs.filter((c) => c !== signer)].map((c) =>
       bytesToHex(sha256(c.der)),
     );
 
-    // Check (F7b, docs/SECURITY.md — RFC 3161 §2.3): the signer cert MUST
-    // carry the id-kp-timeStamping extended key usage. Without it a general
-    // -purpose cert (TLS, email) could mint timestamps we would report as
-    // genuine — the EKU is what makes a cert a TSA cert.
+    // RFC 3161 §2.3 (F7b, docs/SECURITY.md): the signer cert must carry the
+    // id-kp-timeStamping EKU, otherwise a general-purpose TLS or email cert
+    // could mint timestamps.
     if (!hasKeyPurpose(signer, OID_KP_TIME_STAMPING)) {
       return FAIL(`TSA certificate lacks the id-kp-timeStamping extended key usage (RFC 3161 §2.3)${tsaName ? ` (${tsaName})` : ''}`, tsaFingerprints);
     }
 
     // Check 2: messageDigest attribute == H(TSTInfo DER) under the CMS
-    // digestAlgorithm declared in this SignerInfo (NOT hardcoded SHA-256 —
-    // FreeTSA uses SHA-512 here).
+    // digestAlgorithm this SignerInfo declares.
     const cmsHash = CMS_DIGEST[digestAlgOid];
     if (!cmsHash) return UNCHECKED(`unsupported CMS digest algorithm (${digestAlgOid})`);
     let messageDigestOk = false;
@@ -287,10 +265,9 @@ export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Ar
     }
     if (!messageDigestOk) return FAIL('TSTInfo digest does not match the signed attributes', tsaFingerprints);
 
-    // Check 3: the CMS signature over the signed attributes. The signed bytes
-    // are the SET OF Attributes with the universal SET OF tag (0x31) in place
-    // of the implicit [0] tag (RFC 5652 §5.4). The regression suite covers
-    // this: 0x30 (SEQUENCE) silently rejects every genuine token.
+    // Check 3: the CMS signature over the signed attributes. Per RFC 5652
+    // §5.4 the signed bytes carry the universal SET OF tag (0x31) in place of
+    // the implicit [0] tag; 0x31, not 0x30.
     const signedBytes = new Uint8Array(signedAttrs.full.length);
     signedBytes.set(signedAttrs.full);
     signedBytes[0] = 0x31;

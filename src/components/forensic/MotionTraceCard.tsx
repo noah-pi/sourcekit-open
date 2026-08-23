@@ -1,34 +1,26 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * MotionTraceCard — the shutter-burst frames next to the sealed gyro trace.
+ * MotionTraceCard: the shutter-burst frames next to the sealed gyro trace.
  *
- * What it compares, in plain words: how the PICTURE drifted between the
- * burst frames around the shutter (decoded to 48 px grayscale, consecutive
- * pairs block-matched for whole-frame translation) against how the GYRO
- * says the phone was twisting at that same moment. Two maps, then the
- * sealed claim — never a score: agreement corroborates, disagreement is a
- * fact to weigh, not a verdict. The copy says so on the card.
+ * Compares how the picture drifted between the burst frames around the
+ * shutter (decoded to 48 px grayscale, consecutive pairs block-matched for
+ * whole-frame translation) against how the gyro says the phone twisted at
+ * the same moment. Two maps, then the sealed claim; the card states no
+ * verdict.
  *
- * States, honestly: "Not recorded" (burst off or not applicable — neutral),
- * a plainly stated read failure (the frames are no longer on this device,
- * or they could not be decoded — neutral), then the juxtaposition.
+ * States: "Not recorded" (burst off or not applicable), a stated read
+ * failure (frames gone from this device or undecodable), or the maps.
  *
- * 0.18.6 post-field viz (Noah: "these values are directional right? we can
- * assess both how much movement but also where" — Option 2, approved): the
- * two per-time bar lanes are replaced by two TRAJECTORY maps at fixed
- * scales, so motion can be compared across exhibits:
- *   • "drift" — the cumulative Σ(dx, dy) path of the frames, in a fixed
- *     ±32 px grid (sage). Direction and distance of the wander, not just
- *     magnitude per pair.
- *   • "twist" — the phone's rotation-rate path, yaw rate (rz) against
- *     pitch rate (ry) per sample, in a fixed ±200 °/s grid (clay).
- *   • roll stays a number (peak °/s) — a third map buys nothing.
- * Dot spacing encodes time (one dot per interval/sample, drawn in capture
- * order, fading in along the path; hollow dot = start, filled dot = end).
- * These are phase maps, not time series, so the old millisecond axis and
- * shutter hairline are gone; the filmstrip still marks the frames in
- * order. Paths clip at the grid edge and the lane label always states the
- * TRUE peak.
+ * Two trajectory maps at fixed scales, so motion compares across exhibits:
+ *   • drift — the cumulative Σ(dx, dy) path of the frames in a fixed
+ *     ±32 px grid (sage).
+ *   • twist — the phone's rotation-rate path, yaw rate (rz) against pitch
+ *     rate (ry) per sample, in a fixed ±200 °/s grid (clay).
+ *   • roll is a number only (peak °/s).
+ * Dot spacing encodes time: one dot per interval or sample in capture
+ * order, fading in along the path, hollow at the start and filled at the
+ * end. These are phase maps, not time series. Paths clip at the grid edge
+ * and the lane label always states the true peak.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -44,22 +36,20 @@ import { base64ToBytes } from '../../lib/bytes';
 import { writeFileBytes } from '../../lib/fileHash';
 import type { VideoPairFrameRef } from './MultipleLensCard';
 
-/** Cap on decoded burst frames — enough for the shift estimate, bounded cost. */
+/** Cap on decoded burst frames: enough for the shift estimate, bounded cost. */
 const MAX_FRAMES = 10;
 const GRID_W = 48;
 const GRID_H = 36;
 
-// The landed palette's two data colors: sage for the frames, clay for the
-// gyro — distinct in both schemes, never verdict colors.
+// Two data colors: sage for the frames, clay for the gyro. Distinct in both
+// schemes, and not verdict colors.
 const SERIES_FRAMES = '#809263';
 const SERIES_GYRO = '#C08552';
 
-// FIXED map scales — never per-capture normalization. A flatline must LOOK
-// flat in every exhibit, or cross-exhibit comparison is a lie of
-// presentation (scale rule, carried into the maps). The
-// drift grid is ±32 px per axis; the twist grid is ±200 °/s per axis (the
-// old gyro lane's full-scale). Paths clip at the grid edge; the lane
-// label always states the true peak.
+// Fixed map scales, never per-capture normalization, so a flatline looks
+// flat in every exhibit and captures compare. Drift grid is ±32 px per axis,
+// twist grid ±200 °/s per axis. Paths clip at the grid edge; the lane label
+// always states the true peak.
 const DRIFT_HALF_PX = 32;
 const TWIST_HALF_DPS = 200;
 const MAP_HEIGHT = 92;
@@ -70,9 +60,8 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-/** The cumulative wander of the frames: start at the origin and add each
- *  interval's signed shift. The widest |point| is how far the framing
- *  actually strayed. */
+/** Cumulative wander of the frames: start at the origin and add each
+ *  interval's signed shift. The widest |point| is how far framing strayed. */
 function driftPathFromShifts(shifts: { dx: number; dy: number }[]): MapPoint[] {
   const pts: MapPoint[] = [{ x: 0, y: 0 }];
   let x = 0;
@@ -97,13 +86,11 @@ function mapStats(points: MapPoint[], half: number): { peak: number; clipped: bo
 }
 
 /**
- * TrajectoryMap — a phase-space path in a fixed ±half grid, pure Views
- * (no SVG in the dependency tree). Points are in data units, chronological.
- * +x renders right, +y renders DOWN (image coordinates for the drift map;
- * the twist map uses the same screen convention so the two maps read
- * alike). Each consecutive pair is a hairline connector rotated into
- * place; dots ride the vertices when the path is short enough. Time runs
- * hollow → filled, fading in.
+ * TrajectoryMap: a phase-space path in a fixed ±half grid, built from Views
+ * (no SVG dependency). Points are chronological, in data units; +x renders
+ * right and +y renders down, the same convention on both maps. Each
+ * consecutive pair is a hairline connector rotated into place, with dots on
+ * the vertices when the path is short enough. Time runs hollow to filled.
  */
 function TrajectoryMap({ points, half, color, hint }: {
   points: MapPoint[];
@@ -173,9 +160,9 @@ function TrajectoryMap({ points, half, color, hint }: {
   );
 }
 
-/** One drift lane + one twist lane + the roll line — shared by the stills
- *  and video cards so both surfaces read identically. Lanes degrade
- *  independently: an absent series gets its stated empty message. */
+/** One drift lane, one twist lane, and the roll line. Shared by the stills
+ *  and video cards. Lanes degrade independently: an absent series renders
+ *  its stated empty message. */
 function MotionLanes({ drift, driftMsg, twist, twistMsg, rollPeakDps }: {
   drift: MapPoint[] | null;
   driftMsg: string;
@@ -234,11 +221,11 @@ function MotionLanes({ drift, driftMsg, twist, twistMsg, rollPeakDps }: {
   );
 }
 
-/** The twist path from a sealed pose trace: yaw rate (rz) against pitch
- *  rate (ry) per sample, °/s, over the window bracketing the shutter
- *  (anchor ± the frame-interval count, the old chart's window). Roll
- *  (rx) is tracked as a peak number only. rotRate is xyz-interleaved
- *  millirad/s; the sampler maps x=gamma→roll, y=beta→pitch, z=alpha→yaw. */
+/** Twist path from a sealed pose trace: yaw rate (rz) against pitch rate
+ *  (ry) per sample, °/s, over the window bracketing the shutter (anchor ±
+ *  the frame-interval count). Roll (rx) is a peak number only. rotRate is
+ *  xyz-interleaved millirad/s; the sampler maps x=gamma to roll, y=beta to
+ *  pitch, z=alpha to yaw. */
 function twistFromPose(trace: PoseTrace, intervals: number): { pts: MapPoint[]; rollPeakDps: number } | null {
   if (trace.samples < 3) return null;
   const n = Math.max(1, intervals);
@@ -258,31 +245,28 @@ function twistFromPose(trace: PoseTrace, intervals: number): { pts: MapPoint[]; 
 }
 
 // ---------------------------------------------------------------------------
-// stills — sealed ring buffer + pose trace
+// Stills: sealed ring buffer + pose trace.
 // ---------------------------------------------------------------------------
 
 type TraceState =
   | { state: 'reading' }
   | {
       state: 'done';
-      /** Signed per-interval frame shifts — the drift map's segments. */
+      /** Signed per-interval frame shifts: the drift map's segments. */
       shiftsXY: { dx: number; dy: number }[];
       /** Distinct primary capture timestamps across the committed frames,
-       *  from the ring's own index — null when the index is absent or
- * unreadable. Fewer than `committed` means the retained
-       *  frames did not advance: the flatline is a stated fact, not a
-       *  "no motion" reading. */
+       *  from the ring's own index; null when the index is absent or
+       *  unreadable. Fewer than `committed` means the retained frames did
+       *  not advance, so a flatline is not a "no motion" reading. */
       distinctTimestamps: number | null;
       committed: number | null;
       /** Unique 8×8 luma dHash values across the committed frames, from the
-       *  ring's own index — null when the index carries no hashes (a
-       *  pre-0.18.6 ring) or is unreadable. The pixel-distinctness fact
- * Noah asked for, stated from committed data. */
+       *  ring's own index; null when the index carries no hashes or is
+       *  unreadable. Pixel distinctness, stated from committed data. */
       distinctHashes: number | null;
       hashedFrames: number | null;
-      /** The burst frame file URIs in capture order — the filmstrip
-       *  surface (0.18.5 post-field, Noah: "I don't see any burst
-       *  images"). The same frames the shift estimate measured. */
+      /** Burst frame file URIs in capture order: the filmstrip surface.
+       *  The same frames the shift estimate measured. */
       frameUris: string[];
     }
   | { state: 'unavailable'; reason: string };
@@ -308,20 +292,18 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
       try {
         const dir = toFileUri(ringBufferDir as string).replace(/\/$/, '');
         const dirNames = await FileSystem.readDirectoryAsync(dir);
-        // PRIMARY frames only. Sorted, the -secondary.jpg files interleave
-        // with the primaries, so consecutive "pairs" would measure
-        // cross-CAMERA jumps as frame motion (the two lenses see different
-        // views).
+        // Primary frames only: sorted, the -secondary.jpg files interleave
+        // with the primaries, so consecutive pairs would measure
+        // cross-camera jumps as frame motion.
         const names = dirNames
           .filter((n) => /-primary\.jpe?g$/i.test(n))
           .sort()
           .slice(0, MAX_FRAMES);
         if (names.length < 2) throw new Error('fewer than two burst frames on this device');
         // The ring index (written at commit, same dir) carries each frame's
-        // capture timestamp. When the committed frames share timestamps —
-        // a starved pipeline redelivering one buffer — that fact is stated
-        // beside the measurement. Best-effort: an absent/unreadable index
-        // changes nothing else.
+        // capture timestamp. Shared timestamps mean a starved pipeline
+        // redelivered one buffer, and that is stated beside the measurement.
+        // Best-effort: an absent or unreadable index changes nothing else.
         let distinctTimestamps: number | null = null;
         let committed: number | null = null;
         let distinctHashes: number | null = null;
@@ -339,8 +321,8 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
               distinctTimestamps = new Set(pts).size;
               committed = pts.length;
             }
-            // The committed per-frame dHashes — pixel distinctness
-            // stated from the ring's own index, never inferred.
+            // Committed per-frame dHashes: pixel distinctness from the
+            // ring's own index, not inferred.
             const hashes = (doc.frames ?? [])
               .map((f) => f?.primaryDHash64)
               .filter((v): v is string => typeof v === 'string');
@@ -350,7 +332,7 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
             }
           }
         } catch {
-          /* the index is a courtesy to the reader; the JPEGs still measure */
+          /* the index is a courtesy; the JPEGs still measure */
         }
         const shifts: FrameShift[] = [];
         let prev = await decodeUriToGray(`${dir}/${names[0]}`, GRID_W, GRID_H);
@@ -397,9 +379,8 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
         <Text style={styles.line}>{`Frames recorded at capture: ${trace.reason}.`}</Text>
       ) : (
         <View style={styles.juxta}>
-          {/* 0.18.5 post-field (Noah: "I don't see any burst images in the
-              pose data"): the measured frames themselves, in capture order
-              — the analysis below reads these exact JPEGs. */}
+          {/* The measured frames in capture order; the analysis below reads
+              these exact JPEGs. */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stripScroll}>
             {trace.frameUris.map((uri, i) => (
               <View key={uri} style={styles.stripItem}>
@@ -415,32 +396,25 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
             twistMsg="No gyro trace sealed with this capture, so the twist map stands empty."
             rollPeakDps={twist ? twist.rollPeakDps : null}
           />
-          {/* 0.18.6 post-field (Noah: "the copy frames…gyro peak at the
-              bottom is redundant and can be cut"): the lane labels state
-              the true peaks — the old bottom summary line is gone. The
-              evidentiary fact lines below stay. */}
-          {/* When the committed frames carry fewer distinct capture
-              timestamps than frames, the pipeline retained the same frame
-              repeatedly — the fact is stated from the ring's own index, so
-              a flatline never reads as "no motion" on its own. */}
+          {/* The lane labels state the true peaks; there is no bottom
+              summary line. The fact lines below stay. */}
+          {/* Fewer distinct capture timestamps than frames means the
+              pipeline retained the same frame repeatedly. Stated from the
+              ring's own index so a flatline does not read as "no motion". */}
           {trace.distinctTimestamps !== null && trace.committed !== null && trace.distinctTimestamps < trace.committed ? (
             <Text style={styles.line}>
               {`The ${trace.committed} committed frames carry ${trace.distinctTimestamps} distinct capture timestamp${trace.distinctTimestamps === 1 ? '' : 's'} — the retained frames did not advance during this capture.`}
             </Text>
           ) : null}
-          {/* 0.18.6 (Noah: "pixel for pixel… no pixel movement ever
-              registered"): the frames' own committed hashes state the
-              distinctness — a number, from the ring index, never an
-              inference. Identical frames read as 1 unique; a real serial
-              burst reads as all-unique. */}
+          {/* Distinctness from the frames' own committed hashes. Identical
+              frames read as 1 unique; a real serial burst reads all-unique. */}
           {trace.distinctHashes !== null && trace.hashedFrames !== null ? (
             <Text style={styles.line}>
               {`Pixel distinctness: ${trace.distinctHashes} unique frame hash${trace.distinctHashes === 1 ? '' : 'es'} across ${trace.hashedFrames} committed frame${trace.hashedFrames === 1 ? '' : 's'} (8×8 luma dHash).`}
             </Text>
           ) : null}
-          {/* Juxtapose, never conclude: still pixels against fast rotation
-              (or the reverse) is a fact on display — the weighing is the
-              reader's, this card never scores it. */}
+          {/* The sealed claim beside the maps; the card does not score
+              it. */}
           {motion ? (
             <Text style={styles.dim}>
               {`Sealed motion claim: ${
@@ -461,8 +435,7 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
 }
 
 // ---------------------------------------------------------------------------
-// Video motion trace (0.18.6 — Noah: "it seems weird that we're not doing
-// pose trace for video too! that's where it'd probably be most effective")
+// Video motion trace.
 // ---------------------------------------------------------------------------
 
 /** One gyro instant from the sealed sensor JSONL, take-relative. */
@@ -471,23 +444,20 @@ interface GyroPoint {
   off: number;
   /** Rotation-rate magnitude, degrees/second. */
   dps: number;
-  /** Per-axis rates, degrees/second — z=yaw, y=pitch, x=roll (the
-   *  sampler's alpha/beta/gamma mapping). 0.18.6 post-field: the twist
-   *  map needs the axes, not just the magnitude. */
+  /** Per-axis rates, degrees/second: z=yaw, y=pitch, x=roll (the sampler's
+   *  alpha/beta/gamma mapping). The twist map needs the axes. */
   yawDps: number;
   pitchDps: number;
   rollDps: number;
 }
 
 /** Parse the sealed video sensor JSONL into take-relative gyro instants.
-    Pure (string in, points out) so the lab runs the exact shipped code.
+    Pure, so the lab runs the exact shipped code.
 
-    0.18.6 field fix: pre-fix field files wrote the FLUSH instant as the
-    anchor's bootSecAtAnchor (the take's END), which re-zeroed every sample
-    to a negative offset and pushed the whole gyro lane off-card. The window
-    line's requestedStart is the take start on the same boot clock in BOTH
-    formats, so it is the base; the anchor line (written as the take start
-    from 0.18.6 on) is the fallback, then the first sample. Returns null
+    Time base, in order: the window line's requestedStart, then the anchor
+    line, then the first sample. requestedStart is preferred because some
+    field files carry the flush instant (the take's end) in the anchor's
+    bootSecAtAnchor, which would re-zero every sample negative. Returns null
     when the log carries no usable gyro samples. */
 export function parseVideoGyroLog(raw: string): { gyro: GyroPoint[]; bootBase: number } | null {
   let anchorBoot: number | null = null;
@@ -529,35 +499,32 @@ type VideoTraceState =
       state: 'done';
       /** Drift map: signed consecutive-pair shifts across the take. */
       shiftsXY: { dx: number; dy: number }[] | null;
-      /** Twist map: bucketed yaw/pitch means over the take window, null
-       *  when no sensor log was sealed/readable. */
+      /** Twist map: bucketed yaw/pitch means over the take window; null
+       *  when no sensor log was sealed or readable. */
       twist: MapPoint[] | null;
       rollPeakDps: number | null;
     }
   | { state: 'unavailable'; reason: string };
 
-/** Cap on decoded pair frames — the take's pair cadence keeps this ≤ ~30
- *  in practice; the cap is stated when it bites. */
+/** Cap on decoded pair frames; the take's pair cadence keeps this near 30
+ *  in practice. The cap is stated when it bites. */
 const MAX_VIDEO_TRACE_FRAMES = 48;
 /** Display buckets for the twist map (a 60 s take logs ~6,000 samples). */
 const GYRO_BUCKETS = 120;
 
 /**
- * VideoMotionCard — the motion trace of a VIDEO take. A video
- * take has no shutter burst; its serial photography is the committed
- * second-camera pair frames across the take, and its pose trace is the
- * sealed sensor JSONL's gyro stream. Same juxtaposition discipline as the
- * stills card, same trajectory maps: the picture's
- * cumulative drift against the phone's yaw/pitch twist path on fixed
- * scales, numbers only — the weighing is the reader's.
+ * VideoMotionCard: the motion trace of a video take. A take has no shutter
+ * burst, so its serial photography is the committed second-camera pair
+ * frames and its pose trace is the sealed sensor JSONL's gyro stream. Same
+ * trajectory maps as the stills card, on the same fixed scales.
  *
- * Lanes degrade independently and honestly: no second-camera frames
- * (Multiple lenses off) → the drift map states its absence; no sensor
- * log → the twist map states its absence. Both absent → "Not recorded".
+ * Lanes degrade independently: no second-camera frames (Multiple lenses
+ * off) empties the drift map, no sensor log empties the twist map, and both
+ * absent renders "Not recorded".
  */
 export function VideoMotionCard({ videoFrames, sensorLogPath }: {
-  /** The take's committed second-camera frames in pair order (the card's
-      own derivation — record.videoStereo via secondaryFrameFor). */
+  /** The take's committed second-camera frames in pair order, derived from
+      record.videoStereo via secondaryFrameFor. */
   videoFrames: VideoPairFrameRef[] | null;
   /** The sealed three-state sensor-log path (record.context.captureEvidence). */
   sensorLogPath: EvidencePath | undefined;
@@ -575,8 +542,8 @@ export function VideoMotionCard({ videoFrames, sensorLogPath }: {
     setTrace({ state: 'reading' });
     (async () => {
       try {
-        // --- Twist map: the sealed sensor JSONL (the take's own log —
-        // anchor line binds the boot clock to the recording start).
+        // --- Twist map: the sealed sensor JSONL. Its anchor line binds the
+        // boot clock to the recording start.
         let gyro: GyroPoint[] | null = null;
         if (logRecorded) {
           try {
@@ -586,16 +553,16 @@ export function VideoMotionCard({ videoFrames, sensorLogPath }: {
               gyro = parsed.gyro;
             }
           } catch {
-            // The log path points at the capture device — on any other
-            // device (an exported file in Inspect) it is simply absent.
-            // The lane states its absence; the drift map still renders.
+            // The log path points at the capture device, so on any other
+            // device (an exported file in Inspect) it is absent. The lane
+            // states that; the drift map still renders.
             gyro = null;
           }
         }
 
-        // --- Drift map: consecutive committed pair frames, same camera
-        // across time — decoded 48×36 grayscale, block-matched like the
-        // stills burst, signed (dx, dy) per interval.
+        // --- Drift map: consecutive committed pair frames from the same
+        // camera, decoded 48×36 grayscale and block-matched like the stills
+        // burst, signed (dx, dy) per interval.
         let shiftsXY: { dx: number; dy: number }[] | null = null;
         if (hasFrames && videoFrames) {
           const capped = videoFrames.slice(0, MAX_VIDEO_TRACE_FRAMES);
@@ -623,11 +590,11 @@ export function VideoMotionCard({ videoFrames, sensorLogPath }: {
           throw new Error('neither the sensor log nor the pair frames could be read');
         }
 
-        // Twist path: bucket the raw stream (~100 Hz) down to GYRO_BUCKETS
-        // display points; each bucket is the MEAN yaw/pitch rate over its
-        // slice (the map wants the representative direction, not the
-        // loudest instant). Empty buckets are skipped — a gap in the
-        // stream must not drag the path to the origin.
+        // Twist path: bucket the raw ~100 Hz stream down to GYRO_BUCKETS
+        // display points, each the mean yaw/pitch rate over its slice, for
+        // the representative direction rather than the loudest instant.
+        // Empty buckets are skipped so a gap does not drag the path to the
+        // origin.
         let twist: MapPoint[] | null = null;
         let rollPeakDps: number | null = null;
         if (gyro && gyro.length > 0) {
@@ -680,9 +647,8 @@ export function VideoMotionCard({ videoFrames, sensorLogPath }: {
             twistMsg="No gyro trace readable from this file, so the twist map stands empty."
             rollPeakDps={trace.rollPeakDps}
           />
-          {/* 0.18.6 (Noah: "the copy frames…gyro peak at the bottom is
-              redundant and can be cut"): the lane labels state the true
-              peaks — no bottom copy line. */}
+          {/* The lane labels state the true peaks; there is no bottom
+              summary line. */}
         </View>
       )}
     </ForensicCard>
@@ -704,8 +670,8 @@ const buildStyles = () => StyleSheet.create({
     backgroundColor: '#101013',
   },
   stripLabel: { color: colors.textFaint, fontSize: 9.5, marginTop: 2, textAlign: 'center' },
-  // The trajectory maps (0.18.6 post-field — Option 2 replaces the 0.18.3
-  // dual bar lanes): two phase-space maps at fixed scales + the roll line.
+  // Trajectory maps: two phase-space maps at fixed scales, plus the roll
+  // line.
   mapWrap: { marginTop: spacing.sm },
   laneLabels: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',

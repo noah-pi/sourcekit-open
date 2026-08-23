@@ -1,12 +1,12 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Validate deidentifyBmff (BMFF de-identification).
+ * Validates deidentifyBmff (BMFF de-identification).
  *  1. Sign an MP4 video and an M4A (with transcript) via the real attest paths.
  *  2. De-identify both via deidentifyBmff.
- *  3. App-verify the de-identified copies: signature + asset hash must hold,
- *     identity/location must read 'redacted', transcript must be GONE.
- *  4. c2patool must validate the de-identified files (gold standard).
- *  5. Tamper with the de-identified copy → verification must FAIL.
+ *  3. App-verify the copies: signature and asset hash hold, identity/location
+ *     read 'redacted', transcript is gone.
+ *  4. c2patool validates the de-identified files.
+ *  5. Tampering with a de-identified copy fails verification.
  */
 import * as fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -29,8 +29,8 @@ const check = (name: string, ok: boolean, detail = '') => {
   else { fail++; console.log(`  FAIL ${name} ${detail}`); }
 };
 const skip = (name: string, why: string) => { skipped++; console.log(`  SKIP ${name} :: ${why}`); };
-// c2patool is the optional gold standard: when absent, its checks SKIP loudly
-// (excluded from the pass/fail tally) instead of failing. See README ▸ Requirements.
+// c2patool is optional: when absent its checks skip loudly and are excluded
+// from the pass/fail tally. See README ▸ Requirements.
 const c2patoolBin = process.env.C2PATOOL ?? '/tmp/bin/c2patool';
 let c2patoolAvailable = false;
 try { execFileSync(c2patoolBin, ['--version'], { stdio: 'pipe' }); c2patoolAvailable = true; } catch { /* not installed */ }
@@ -82,7 +82,7 @@ check('audio deidentified marker includes transcript', !!ra?.deidentified && ra.
 check('no transcript in de-id audio record', (ra as any)?.transcript == null);
 check('original capturedAt carried into de-id copy', rv?.capturedAt === ORIGINAL_TS, String(rv?.capturedAt));
 
-// the words spoken must not survive anywhere in the de-identified bytes
+// The spoken words must not survive anywhere in the de-identified bytes.
 const haystack = Buffer.from(da.signedBytes).toString('latin1');
 check('transcript text absent from de-id m4a bytes',
   !haystack.includes('secret plan') && !haystack.includes('docks'));
@@ -109,7 +109,7 @@ fs.writeFileSync('/tmp/lab/deid-tampered.mp4', tampered);
 const vt = await verifyVideo('/tmp/lab/deid-tampered.mp4');
 check('tampered de-id video rejected', vt.verdict !== 'INTACT', vt.verdict);
 
-// ---------- 7. de-identify a CLEAN (never-signed) file — share-as-deid of legacy media ----------
+// ---------- 7. de-identify a clean, never-signed file ----------
 const dl = await deidentifyBmff({ bytes: fs.readFileSync('/tmp/lab/clean.mp4'), mime: 'video/mp4', kind: 'video', key });
 fs.writeFileSync('/tmp/lab/deid-legacy.mp4', dl.signedBytes);
 const vl = await verifyVideo('/tmp/lab/deid-legacy.mp4');

@@ -1,37 +1,25 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * The burn scheduler + per-item disclosure store
+ * Burn scheduler and per-item disclosure store.
  *
- * A vault-level policy. Each sealed item carries a DisclosureItemState:
- * the committed claims, the sealed-profile bundle, the root, and — until
- * a burn — the master seed. `{ burnAfterHours?: number }` per item
- * (default: NEVER). A burn destroys the master seed, making withheld
- * rungs permanently undisclosable — the honesty wording, verbatim for
- * the UI layer (the wording must NOT overclaim —
- * claim values persist in the vault store and the record itself retains
- * its facts; what burn truly destroys is the PROOF MATERIAL for withheld
- * rungs):
+ * Each sealed item carries a DisclosureItemState: committed claims, the
+ * sealed-profile bundle, the root, and, until a burn, the master seed.
+ * `burnAfterHours` is per item and defaults to never. A burn destroys the
+ * master seed, so withheld rungs can no longer be disclosed. Claim values
+ * still live in the vault store; what burn destroys is the proof material
+ * for withheld rungs. The UI wording is BURN_FINALITY_WORDING below.
  *
- *   "After burn, withheld details can never be cryptographically
- *    disclosed again — the proof material is destroyed. What the
- *    record itself already shows remains visible."
+ * Invariants:
+ *   - Every burn appends a `burn` event to the item's event log.
+ *   - Salts derive from the seed at openSubset time only; this module
+ *     never holds a salt table.
+ *   - Bundles already exported keep verifying after a burn.
+ *   - The scheduler is policy plus an injected store: the app runs it on
+ *     foreground (from sealQueue.resumeSealQueue) against a vault-sealed
+ *     file store, the lab against memory.
  *
- * Held invariants:
- *   - Burn is an ACTION, never silent: every burn appends a `burn` event
- *     to the item's event log (committed into the stored state).
- *   - A-02 is not regressed: salts are still derived from the seed at
- *     openSubset time only; this module never holds a salt table.
- *   - Opened evidence survives: bundles already exported verify forever
- *     (commitments close, opened evidence doesn't).
- *   - The scheduler is pure policy + injected persistence: it runs on
- *     app foreground (wired from sealQueue.resumeSealQueue) with a
- *     vault-sealed file store; the lab drives the same code with an
- *     in-memory store.
- *
- * Residuals: exporting a non-Sealed profile returns the residual
- * report alongside the bundle — bundle.ts's verifyBundle already names
- * profile mismatches and accounting failures; this module plumbs that
- * list into the export result so the UI layer can render it.
+ * Exporting a non-Sealed profile returns verifyBundle's residual list
+ * alongside the bundle for the UI to render.
  */
 
 import { commitContext } from './commit';
@@ -61,29 +49,28 @@ export interface DisclosureItemState {
   createdAt: string;
   /** Merkle root committed in the manifest's com.verify.contextTree assertion. */
   root: string;
-  /** The committed claims (values included) — sealed at rest by the store. */
+  /** The committed claims, values included; sealed at rest by the store. */
   claims: ContextClaim[];
   inventoryAssertion: CommittedInventoryAssertion;
   /** The default Sealed-profile bundle produced at commit. */
   sealedBundle: DisclosureBundle;
   /**
-   * Hex master seed — PRESENT until a burn, ABSENT (deleted) after. The
-   * ONLY way any withheld rung can ever be opened (A-02: salts derive
-   * from it and exist nowhere else).
+   * Hex master seed: present until a burn, deleted after. The only way a
+   * withheld rung can be opened (salts derive from it and exist
+   * nowhere else).
    */
   masterSeedHex?: string;
   /** Burn policy: destroy the seed this many hours after createdAt. Absent = never. */
   burnAfterHours?: number;
-  /** Set by applyBurn — the seed is gone from this moment on, forever. */
+  /** Set by applyBurn; the seed is gone from this moment on. */
   burnedAt?: string;
   /**
-   * Set when a SCHEDULED burn attempt failed (e.g. the store's save threw)
-   * — honest, never silent. Cleared by the next
-   * successful burn. A failing store can also defeat this recording itself;
-   * the scheduler still isolates the failure to the one item either way.
+   * Set when a scheduled burn attempt failed (e.g. the store's save threw).
+   * Cleared by the next successful burn. A failing store can also defeat
+   * this recording; the scheduler isolates the failure to the one item.
    */
   burnFailure?: { at: string; error: string };
-  /** Action log — a burn is an action, never silent. */
+  /** Action log: commit, open, and burn events. */
   events: DisclosureEvent[];
 }
 
@@ -125,14 +112,11 @@ export function shouldBurn(state: DisclosureItemState, now: Date): boolean {
 }
 
 /**
- * Destroy the master seed: the field is set to `undefined` and the property
- * then deleted from the record object (JS strings are immutable — true
- * secure erase of every transient copy is not expressible in this runtime;
- * the honest guarantee is structural: the seed is never persisted again
- * after this call, and no salt table ever existed to scrub). Burns are
- * idempotent in effect but NOT silent: a second call throws, because
- * "already burned" is a state the caller must know, not an event to
- * re-record.
+ * Destroy the master seed: the field is set to undefined and the property
+ * deleted from the record. JS strings are immutable, so transient copies
+ * cannot be scrubbed; the guarantee is that the seed is never persisted
+ * again and no salt table exists. A second call throws rather than
+ * re-recording a burn.
  */
 export function applyBurn(state: DisclosureItemState, now: Date): DisclosureItemState {
   if (state.masterSeedHex === undefined) {
@@ -141,7 +125,7 @@ export function applyBurn(state: DisclosureItemState, now: Date): DisclosureItem
   const at = now.toISOString();
   const next: DisclosureItemState = {
     ...state,
-    // Clear-then-delete: the stored record never carries the seed again.
+    // Clear-then-delete so the stored record never carries the seed again.
     // A successful burn also clears any earlier recorded burn failure.
     masterSeedHex: undefined,
     burnFailure: undefined,
@@ -155,7 +139,7 @@ export function applyBurn(state: DisclosureItemState, now: Date): DisclosureItem
 
 const BURNED_OPEN_ERROR = `burned: the master seed was destroyed. ${BURN_FINALITY_WORDING}`;
 
-/** The honest error thrown when opening a burned item (test-pinned wording). */
+/** Error thrown when opening a burned item (test-pinned wording). */
 export function burnedOpenError(state: DisclosureItemState): Error {
   return new Error(
     `${BURNED_OPEN_ERROR} (item '${state.itemId}', burned at ${state.burnedAt ?? 'unknown time'})`
@@ -170,10 +154,9 @@ function hexToSeed(hex: string): Uint8Array {
 }
 
 /**
- * Rebuild the commitment (tree included) from the stored claims + seed.
- * commitContext is deterministic; the rebuilt root MUST equal the stored
- * root — a mismatch means the stored state was tampered with and is a
- * named failure, never a silent re-root.
+ * Rebuild the commitment (tree included) from the stored claims and seed.
+ * commitContext is deterministic, so the rebuilt root must equal the stored
+ * root; a mismatch means the stored state was altered and throws.
  */
 function rebuildCommitment(state: DisclosureItemState, seed: Uint8Array) {
   const committed = commitContext(seed, state.claims, state.inventoryAssertion.neverRecorded);
@@ -187,12 +170,10 @@ function rebuildCommitment(state: DisclosureItemState, seed: Uint8Array) {
 }
 
 /**
- * Derive a bundle for `profile` on demand from the master seed (the
- * real-burn property: without the seed this is impossible for everyone).
- * After a burn this throws the honest 'burned' error — the withheld rungs
- * are gone, not locked. An 'open' event is recorded on the returned state
- * for the caller to persist (opening is an action too, though a
- * non-destructive one).
+ * Derive a bundle for `profile` on demand from the master seed; without the
+ * seed it is impossible for anyone, so after a burn this throws the 'burned'
+ * error. An 'open' event is recorded on the returned state for the caller to
+ * persist.
  */
 export function openForItem(
   state: DisclosureItemState,
@@ -220,11 +201,9 @@ export function openForItem(
 }
 
 /**
- * Residual plumbing: the disclosure export path. Derives the
- * requested profile's bundle and runs the full bundle verification
- * against the stored root + inventory — the returned `residuals` list is
- * EXACTLY verifyBundle's named failures (profile mismatch, accounting
- * gaps), empty when the export is clean. The UI layer renders this list.
+ * Disclosure export path: derives the requested profile's bundle and verifies
+ * it against the stored root and inventory. `residuals` is verifyBundle's
+ * named failures (profile mismatch, accounting gaps), empty when clean.
  */
 export function exportForItem(
   state: DisclosureItemState,
@@ -238,8 +217,8 @@ export function exportForItem(
 }
 
 // ---------------------------------------------------------------------------
-// Persistence + scheduler (injected store — the app wires vault-sealed
-// files; the lab wires memory. Policy is identical either way.)
+// Persistence and scheduler. The store is injected: vault-sealed files in the
+// app, memory in the lab. Policy is identical either way.
 // ---------------------------------------------------------------------------
 
 export interface DisclosureStore {
@@ -249,15 +228,12 @@ export interface DisclosureStore {
 }
 
 /**
- * Run due burns. Every burned item is saved WITH its burn event — a burn
- * is an action, never silent, and the event log is the proof. Returns the
- * ids burned this run (an empty run is the normal case and logs nothing).
+ * Run due burns. Every burned item is saved with its burn event. Returns the
+ * ids burned this run; an empty run is the normal case.
  *
- * Per-item containment: a failing load/save for ONE
- * item must never abort later items' burns. The failure is recorded in the
- * failing item's own state (`burnFailure`) — honest, never silent — on a
- * best-effort basis: when the store itself is what failed, that recording
- * can fail too, and the scheduler still moves on to the next item.
+ * Per-item containment: a failing load/save for one item never aborts later
+ * items. The failure is recorded in that item's own `burnFailure` on a
+ * best-effort basis, since a broken store can also fail that write.
  */
 export async function runBurnScheduler(store: DisclosureStore, now: Date = new Date()): Promise<string[]> {
   const burned: string[] = [];
@@ -277,8 +253,7 @@ export async function runBurnScheduler(store: DisclosureStore, now: Date = new D
           });
         }
       } catch {
-        // The store is failing — the next run retries; the failure is not
-        // hidden by choice, the medium to report it is what is broken.
+        // The store itself is failing; the next run retries.
       }
     }
   }

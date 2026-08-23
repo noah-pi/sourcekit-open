@@ -1,22 +1,14 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Mode switcher — AUDIO / PHOTO / VIDEO in a
- * horizontal track above the shutter, with a highlight pill that slides to
- * the active slot on every switch.
+ * Mode switcher: AUDIO / PHOTO / VIDEO in a horizontal track above the
+ * shutter, with a highlight pill that slides to the active slot.
  *
- * SIMPLIFIED (build-24 field fix): the first cut stacked a second label row
- * inside the pill and counter-translated it with Animated.multiply on the
- * native driver — on device that rendered both rows misaligned on top of
- * each other (the "overlapping labels" garble). This version keeps exactly
- * ONE label row: the pill translates underneath, and each label's color
- * crossfades dim↔bright on mode commit. Mode changes are discrete commits
- * (never mid-gesture), so a per-label Animated.timing on the native driver
- * is the whole cost — no layout, no measurement, no stacked rows.
- *
- * Direction honesty (the iOS 26 "Classic Mode Switching" lesson — never
- * invert a learned swipe): the pill physically travels toward the newly
- * active label along the row's visual order, and the screen's swipe
- * mapping (leftward swipe advances AUDIO → PHOTO → VIDEO) is unchanged.
+ * One label row only. The pill translates underneath it and each label's color
+ * crossfades dim to bright on mode commit; stacking a counter-translated
+ * second row inside the pill misrenders on device. Mode changes are discrete
+ * commits, so the cost is one native-driver Animated.timing per label.
+ * The pill travels toward the newly active label in the row's visual order;
+ * a leftward swipe advances AUDIO to PHOTO to VIDEO.
  */
 
 import React, { useEffect, useRef } from 'react';
