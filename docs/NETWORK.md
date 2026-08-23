@@ -21,7 +21,7 @@ Calls 3–7 are hash-or-nothing flows: digests out, receipts in. Custom TSA
 endpoints and custom OTS calendars are configurable in Settings (every
 trust claim is swappable); the defaults are free, accountless public goods.
 
-> **Row 8 deserves its own sentence.** Comparing a sealed capture against the
+> **Row 8.** Comparing a sealed capture against the
 > official weather for that hour is a genuinely useful check, and it costs a
 > third party the coordinates. It fires when a reader opens a located capture,
 > not when one is taken, so it discloses the location of a file you are already

@@ -15,7 +15,7 @@
  *     index 0. The declared CLAIMS have no leaves; the DECLARATION is
  *     committed. Never-recorded is not part of withheldCount.
  *   - Opened leaves verify FOREVER, even after the master seed is
- *     burned — commitments close, opened evidence doesn't (SPEC §2.3).
+ *     burned — commitments close, opened evidence doesn't.
  *   - No verdicts: verifyBundle reports named failures and the claims
  *     that verified. It never concludes anything about the capture.
  *
@@ -95,7 +95,7 @@ export interface VerifyResult {
 }
 
 /**
- * Selection presets (SPEC §1.5):
+ * Selection presets:
  *   sealed — open nothing: root + never-recorded list only
  *   short  — location ≤ country, time ≤ day, identity = key-fingerprint
  *            only. Sensor and context families stay withheld in `short`

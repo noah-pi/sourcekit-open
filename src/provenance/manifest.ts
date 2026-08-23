@@ -70,7 +70,7 @@ export interface PoseTrace {
 }
 
 /**
- * Three-state evidence path (E.04 / SPEC-WS1 rule 4b). Every sink reports
+ * Three-state evidence path (E.04 / rule 4b). Every sink reports
  * EXACTLY one per capture:
  *   string           — recorded; the on-device path (no file:// prefix)
  *                      where the file sat at seal time
@@ -99,14 +99,14 @@ export interface CaptureEvidencePaths {
 
 /**
  * The v2 super-root: SHA-256 over the concatenated per-track Merkle roots
- * in manifest order (SPEC-WS2-Phase2 §1). Zero tracks → SHA-256 of the empty
+ * in manifest order. Zero tracks → SHA-256 of the empty
  * input.
  */
 export function streamedChunksSuperRoot(trackRootsHex: string[]): string {
   return bytesToHex(sha256(concatBytes(...trackRootsHex.map(hexToBytes))));
 }
 
-// ---- WS2 Phase 2: unified media assertions (SPEC-WS2-Phase2 §1–§3) ----
+// ---- unified media assertions ----
 // PARITY PRINCIPLE: photo, video, and audio share the same JUMBF assertion
 // labels, schema, field names, and verification math. The only allowed
 // divergences (canonical list: docs/MEDIA-PARITY.md): stills have no ENF
@@ -122,20 +122,20 @@ export const CONTEXT_TREE_LABEL = 'com.verify.contextTree';
 export const POSE_TRACE_LABEL = 'com.verify.poseTrace';
 export const CAPTURE_INTEGRITY_LABEL = 'com.verify.captureIntegrity';
 
-/** Fixed 1 MiB chunk size (SPEC-WS1 §3). */
+/** Fixed 1 MiB chunk size. */
 export const STREAM_CHUNK_BYTES = 1048576;
 
 /**
  * The honest report when a verifier has the assertion but no chunk map:
  * roots are checkable where the container allows; byte-range localization
- * needs the map. Locked wording (SPEC-WS2-Phase2 §1) — tests pin it.
+ * needs the map. Locked wording — tests pin it.
  */
 export const MISSING_CHUNK_MAP_NOTE = 'chunk map not present — root-only verification';
 
 export type StreamedChunksTrackId = 'video' | 'audio';
 
 /**
- * streamedChunks v2 (SPEC-WS2-Phase2 §1): a fixed-size per-track Merkle
+ * streamedChunks v2: a fixed-size per-track Merkle
  * structure; the full chunk digest list lives in the vault record
  * (`chunkMaps[trackId]`) and the proof-bundle sidecar, not the manifest.
  * `binding` names what the roots bind: v2 roots are recomputed at seal from
@@ -203,7 +203,7 @@ export interface ChunkMapSidecar {
 }
 
 /**
- * com.verify.poseTrace (SPEC-WS2-Phase2 §3): Merkle root over the 100 Hz
+ * com.verify.poseTrace: Merkle root over the 100 Hz
  * gyro sample lines from the CaptureKit sensor JSONL; the full trace stays
  * in the vault record and rides the proof bundle for desk parallax.
  * HONESTY INVARIANT (G1, docs/INTEGRITY.md): `gyroPriorAuthenticated` is
@@ -229,7 +229,7 @@ export const POSE_TRACE_NOTE =
   'Evidence for desk parallax, never a verdict.';
 
 /**
- * com.verify.captureIntegrity (SPEC-WS2-Phase2 §2): evidence-completeness
+ * com.verify.captureIntegrity: evidence-completeness
  * and biometric-gate facts, every media kind. All fields self-reported;
  * null = "not applicable / not collected", stated explicitly (E.04).
  */

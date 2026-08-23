@@ -1,7 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The burn scheduler + per-item disclosure store
- * (SPEC-WS2-Phase2 §4).
  *
  * A vault-level policy. Each sealed item carries a DisclosureItemState:
  * the committed claims, the sealed-profile bundle, the root, and — until

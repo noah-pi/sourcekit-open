@@ -551,10 +551,9 @@ function bitcoinCalendarValue(ots: OtsView): { text: string; color?: string } {
 }
 
 /**
- * The seal rows — the manifest lines that used to sit in the
- * "Manifest details" drawer, merged into the Capture claims card in the
- * exhibit page's row format. The old Signature detail section's copy rides
- * as the rows' details, so a failure still says exactly what failed. These
+ * The seal rows — the manifest lines, in the Capture claims card using the
+ * exhibit page's row format. Each row carries its own detail copy, so a
+ * failure says exactly what failed. These
  * rows are what the seal SAYS (and what was mechanically checked about its
  * structure); none of them is a scene verdict.
  */
@@ -1424,7 +1423,7 @@ export default function InspectScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* 0.18.2: the beta tag belongs on the screen header (Noah) — the
+        {/* The beta tag belongs on the screen header (Noah) — the
             same ScreenTitle `tag` pill the Settings screen uses, verbatim. */}
         <ScreenTitle
           title="Inspect"

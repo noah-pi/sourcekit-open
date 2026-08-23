@@ -333,8 +333,8 @@ export interface C2paManifestParams {
   /**
  * Sizing-only probe token lengths. Token sizes are TSA-fixed, so
    * the layout probe uses the last observed length per TSA instead of a
-   * throwaway network fetch — that fetch used to cost a full TSA round per
-   * seal. When absent, the probe falls back to fetchTimestamp (lab seam).
+   * throwaway network fetch, which would cost a full TSA round per seal.
+   * When absent, the probe falls back to fetchTimestamp (lab seam).
    */
   probeTokenSizes?: () => number[];
   /** Optional App Attest binding assertion (JSON: Apple attestation object + challenge + bound signing-key fingerprint) — embedded as com.verify.app-attest. */
@@ -920,8 +920,8 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
   const telemetryJson = utf8ToBytes(JSON.stringify(p.telemetry));
 
   let exclusionLength = 0;
-  // 0.18.5: 64 → 256 bytes. A TSA that alternates signing certs (or an OTS
-  // calendar whose response grew between probe and real fetch) can drift a
+  // 256 bytes of slack. A TSA that alternates signing certs (or an OTS
+  // calendar whose response grows between probe and real fetch) can drift a
   // token by more than 64 bytes; the slack is reserved segment size, not
   // per-capture overhead anyone sees.
   const SLACK = 256; // absorbs TSA token-size variance without a re-sign
@@ -1563,7 +1563,7 @@ export function extractC2paStore(jpeg: Uint8Array): { payload: Uint8Array; segme
     // literally there — a byte-compare against the first packet's store
     // header — so both writer forms reassemble to the exact logical store.
     // Without this, the 8 duplicated bytes land mid-stream and every box
-    // straddling a segment boundary hashes wrong (0.18.7: Adobe 2022
+    // straddling a segment boundary hashes wrong (Adobe 2022
     // ingredient thumbnails failed claim-assertion verification for exactly
     // this reason — the foreign store's declared lengths count the LOGICAL
     // stream, not the physical file bytes).

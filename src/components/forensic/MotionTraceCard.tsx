@@ -7,8 +7,7 @@
  * pairs block-matched for whole-frame translation) against how the GYRO
  * says the phone was twisting at that same moment. Two maps, then the
  * sealed claim — never a score: agreement corroborates, disagreement is a
- * fact to weigh, not a verdict (0.18.2 — Noah didn't understand what the
- * card was doing; the copy now says it plainly).
+ * fact to weigh, not a verdict. The copy says so on the card.
  *
  * States, honestly: "Not recorded" (burst off or not applicable — neutral),
  * a plainly stated read failure (the frames are no longer on this device,
@@ -309,10 +308,10 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
       try {
         const dir = toFileUri(ringBufferDir as string).replace(/\/$/, '');
         const dirNames = await FileSystem.readDirectoryAsync(dir);
-        // PRIMARY frames only. The glob used to take every JPEG in
-        // the ring dir — sorted, the -secondary.jpg files interleave with
-        // the primaries, and consecutive "pairs" then measured cross-CAMERA
-        // jumps as frame motion (the two lenses see different views).
+        // PRIMARY frames only. Sorted, the -secondary.jpg files interleave
+        // with the primaries, so consecutive "pairs" would measure
+        // cross-CAMERA jumps as frame motion (the two lenses see different
+        // views).
         const names = dirNames
           .filter((n) => /-primary\.jpe?g$/i.test(n))
           .sort()
@@ -420,7 +419,7 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
               bottom is redundant and can be cut"): the lane labels state
               the true peaks — the old bottom summary line is gone. The
               evidentiary fact lines below stay. */}
-          {/* 0.18.4: when the committed frames carry fewer distinct capture
+          {/* When the committed frames carry fewer distinct capture
               timestamps than frames, the pipeline retained the same frame
               repeatedly — the fact is stated from the ring's own index, so
               a flatline never reads as "no motion" on its own. */}

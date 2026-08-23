@@ -204,10 +204,9 @@ function notify(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Seal-job visibility: the queue has always KEPT failed jobs and
-// their verbatim error strings — what it never did was SHOW them. A seal
-// failure used to be invisible (vault insertion is the last step, so a
-// failed seal simply never appears in Exhibits). This read API is how the
+// Seal-job visibility: the queue KEEPS failed jobs and their verbatim error
+// strings. A seal failure is otherwise invisible — vault insertion is the
+// last step, so a failed seal never appears in Exhibits. This read API is how the
 // Exhibits "needs attention" section renders the queue's state plainly:
 // failed with its error, pending/sealing as a stated state.
 // ---------------------------------------------------------------------------
@@ -630,7 +629,7 @@ async function saveDisclosureState(
  */
 const EVIDENCE_DIR = `${FileSystem.documentDirectory}evidence/`;
 
-/** A W2.1 full-sensor artifact to vault-store alongside the stereo files
+/** A full-sensor artifact to vault-store alongside the stereo files
     (additive — never part of the frozen five-artifact stereo contract). */
 export interface ExtraEvidenceFile {
   /** Summary key + plaintext-twin bookkeeping name ('fullResStill' | 'fullResSecondary'). */
@@ -691,7 +690,7 @@ async function storeExhibitArtifacts(
       // The committed three-state dispositions, verbatim from the bundle
       // section, plus where each artifact's vault-sealed bytes landed.
       artifacts: section.artifacts,
-      // W2.1/W2.4 additive fields — absent on pre-W2 captures.
+ // additive fields — absent on older captures.
       ...(Object.keys(extraSummary).length > 0 ? { fullRes: extraSummary } : {}),
       ...(result.captureSettings ? { captureSettings: result.captureSettings } : {}),
       stored,
@@ -711,7 +710,7 @@ async function storeExhibitArtifacts(
 }
 
 /**
- * W2.1/W2.4 seal inputs from the capture result's additive fields:
+ * seal inputs from the capture result's additive fields:
  * vault-storage entries for the full-sensor stills plus the context-tree
  * claims that commit their hashes and the full capture-settings block into
  * the SIGNED tree. The hash committed is recomputed from the bytes read at
@@ -745,7 +744,7 @@ async function buildFullResSealExtras(
   ];
   for (const spec of specs) {
     const ep = spec.ep;
-    if (!ep) continue; // pre-W2 native build: absence stated by omission
+    if (!ep) continue; // older native build: absence stated by omission
     if (ep.state === 'never-recorded') {
       claims.push({ claimId: spec.claimId, family: 'context', rung: 0, value: `never-recorded:${ep.reason}` });
       continue;
@@ -835,7 +834,7 @@ async function storeVideoStereoArtifacts(
 }
 
 /**
- * Read the CaptureKit sensor JSONL for the poseTrace commitment (WS2
+ * Read the CaptureKit sensor JSONL for the poseTrace commitment (
  * Phase 2 §3). Best-effort: a missing/unreadable log is an honest absence
  * (no poseTrace assertion), never a seal failure.
  */
@@ -854,8 +853,8 @@ async function readSensorLogText(job: SealJob): Promise<string | null> {
 function evidenceEnabledFor(job: SealJob): EvidenceEnabledSnapshot | null {
   if (!job.captureEvidence) return null;
   const t = useStore.getState().settings;
-  // CaptureEvidence.sensors retired — the full-rate sensor log now
-  // follows the single Motion log toggle (includeSensors).
+  // The full-rate sensor log follows the single Motion log toggle
+  // (includeSensors); captureEvidence carries no sensors flag of its own.
   return { ring: t.captureEvidence.ring, rawPcm: t.captureEvidence.rawPcm, sensors: t.includeSensors };
 }
 
@@ -1089,7 +1088,7 @@ async function pump(): Promise<void> {
           // is a no-op on a fresh native capture).
           let stereoCommit: { section: StereoBundleSection; contextClaims: import('../disclosure/inventory').ContextClaim[] } | null = null;
           let stereoFiles: CommittedStereoFile[] = [];
-          // W2.1/W2.4 additive commitments: full-sensor stills (hash claims
+ // additive commitments: full-sensor stills (hash claims
           // + vault storage) and the device-read capture-settings block,
           // folded into the SAME signed context tree as the stereo claims.
           let fullResExtras: ExtraEvidenceFile[] = [];

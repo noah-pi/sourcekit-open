@@ -2,9 +2,9 @@
 /**
  * Diagnostics log — because a 3-second toast is not a record.
  *
- * Capture and seal failures used to evaporate: the toast faded, the seal
- * queue kept its error string on a job nobody rendered, and the user was
- * left with an empty Exhibits tab and no explanation. This module is the
+ * Capture and seal failures can evaporate: a toast fades, the queue keeps
+ * its error string on a job nobody renders, and the user is left with an
+ * empty Exhibits tab and no explanation. This module is the
  * small, plain memory of what happened: a ring buffer of the last 30
  * capture/seal events, persisted as JSON under documentDirectory, read
  * back newest-first by the Settings screen.

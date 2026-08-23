@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS3 differential oracle (SPEC §2.1 oracle.ts).
+ * Differential oracle.
  *
  * Runs BOTH engines over the same bytes, composes each side's verdict
  * through the policy layer (the only verdict authority), and diffs the
@@ -9,7 +9,7 @@
  * written reason (tests/oracle-whitelist.json); they are never silently
  * absorbed.
  *
- * Known intentional divergence CLASSES (Binding-Path §6, SPEC §0):
+ * Known intentional divergence CLASSES (Binding-Path §6, ):
  *  - UNSUPPORTED-for-merkle-aux: upstream fails (algorithm.unsupported /
  *    hard error) where we decline to evaluate. Whitelist entry required.
  *  - A-1 binding guard: upstream fails closed with assertion.undeclared —

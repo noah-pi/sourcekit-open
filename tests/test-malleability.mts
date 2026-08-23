@@ -104,9 +104,9 @@ const addField = (name: string) => { const f = byName.get(name)!; addRange(f.sta
 addField('APP11 En');
 // APP11 Z is fully load-bearing as of 0.18.8. The low three bytes were
 // already covered by the chain-hardening in extractC2paStore (a broken or
-// renumbered Z chain is stated absence, never a guess); the high byte used
-// to be ignored on read and is now checked too, so the whole field leaves
-// the allowlist. docs/INTEGRITY.md matches.
+// renumbered Z chain is stated absence, never a guess), and the high byte is
+// checked on read, so the whole field is outside the allowlist.
+// docs/INTEGRITY.md matches.
 { const f = byName.get('store jumb.length')!; addRange(f.start, f.end - 1); }        // high 3 bytes only
 { const f = byName.get('store jumd.uuid')!; addRange(f.start + 4, f.end); }          // suffix after 'c2pa' prefix
 addField('store jumd.label');

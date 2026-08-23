@@ -49,7 +49,10 @@ const RULES = [
   ['process-residue', /\b(WS\d|W\d\.\d|Phase \d\b|SPEC §|audit [A-Z]-\d|Drop \d\b|research §|copy v\d|\d\.\d+\.x lesson)/, 'cut'],
   ['time-travel', /\b(used to|previously|originally|at first|has since|as of \d+\.\d|we (added|removed|changed)|this change|the old |retired|is now |are now |now (checks|reads|says|does|enforces))\b/i, 'cut'],
   ['version-tag', /\((?:0|1)\.\d+\.\d+[^)]*\)|\b(?:0|1)\.\d+\.\d+:/, 'cut'],
-  ['meta-commentary', /\b(worth stating|worth saying|say this plainly|it should be said|stated plainly|said out loud|deserves its own|to be clear,)/i, 'cut'],
+  // 'said out loud' / 'stated plainly' are this project's words for disclosing
+  // rather than hiding — behaviour, not commentary. Only the writing-about-the-
+  // writing forms are flagged.
+  ['meta-commentary', /\b(worth stating|worth saying|say this plainly|it should be said|deserves its own|to be clear,)/i, 'cut'],
   ['self-grade', /\b(elegant|genuine achievement|the interesting (part|work)|cleverly|beautifully|honestly,|obviously|of course,)/i, 'cut'],
   ['apology', /\b(sorry|apolog|unfortunately|forgive|admittedly|to be fair|for what it'?s worth)\b/i, 'cut'],
   ['rebuttal', /\b(rather than being|not a blocker|nowhere to put|could not have put|it isn'?t\.|nothing (about|here) (depends|requires))/i, 'review'],

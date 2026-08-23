@@ -385,7 +385,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
             )}
           </View>
 
-          {/* 0.18.5 post-field: the whole take's second camera — every
+          {/* The whole take's second camera — every
               committed pair frame as a strip, labeled by its capture-side
               sequence number (never a time claim: the anchors are host
               clock, not take-relative). */}

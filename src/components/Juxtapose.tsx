@@ -478,7 +478,7 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
           <View style={styles.gnomonShade} />
         </View>
         <View style={styles.gnomonBase} pointerEvents="none" />
-        {/* 0.18.1: the bottom direction readout was removed — the shadow
+        {/* The bottom direction readout was removed — the shadow
             direction is already stated in the SHOULD BE sentence below,
             and the duplicated label read as a second, conflicting dial. */}
       </View>

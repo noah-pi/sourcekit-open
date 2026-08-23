@@ -53,8 +53,8 @@ async function getWifiClaim(): Promise<WifiClaim | 'unavailable'> {
 }
 
 /**
- * The one-shot compass read. 0.18.6: this is NO LONGER the sealed pointing
- * direction — Apple defines CLHeading as the azimuth of the TOP EDGE's
+ * The one-shot compass read. This is NOT the sealed pointing direction:
+ * Apple defines CLHeading as the azimuth of the TOP EDGE's
  * horizontal projection, which for the actual shooting stance (phone
  * upright, top edge at the sky) is a near-degenerate number that flips
  * 180° with the sign of the tilt (the field report: "check your sun

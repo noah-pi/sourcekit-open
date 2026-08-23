@@ -44,7 +44,7 @@ const sensorLog = Array.from(
 ).join('\n') + '\n';
 const evidenceEnabled = { ring: true, rawPcm: true, sensors: true };
 
-/** The WS2 Phase 2 parity set (present for EVERY media kind). */
+/** The parity set (present for EVERY media kind). */
 const PARITY_LABELS = [
   'com.verify.captureIntegrity',
   'com.verify.contextTree',

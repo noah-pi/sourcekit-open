@@ -73,10 +73,10 @@ function outcome(fn: () => unknown): 'threw' | 'returned' {
 }
 
 // --- 1b. derNormalizeLowS must emit MINIMAL DER ------------------------------
-// A short r or s (value < 2^248, about 1 signature in 128) used to come back
-// out re-padded to 32 bytes, giving an INTEGER with a needless leading 0x00.
-// The r||s value was intact, so COSE still verified — but any strict DER
-// consumer rejected the signature, and the whole verdict went red at random.
+// A short r or s (value < 2^248, about 1 signature in 128) must not come back
+// out re-padded to 32 bytes, which would give an INTEGER a needless leading
+// 0x00. The r||s value survives that, so COSE still verifies — but a strict
+// DER consumer rejects the signature, and the verdict goes red at random.
 {
   let nonMinimal = 0, valueChanged = 0, sampled = 0;
   for (let i = 0; i < 3000; i++) {

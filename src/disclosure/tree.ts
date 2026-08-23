@@ -14,13 +14,13 @@
  *     case, same as StreamingHasher)
  *   - a single leaf is its own root
  *
- * "Sorted-pair" (SPEC §1.4) means the pairs are formed over the SORTED
+ * "Sorted-pair" means the pairs are formed over the SORTED
  * leaf set: leaves are sorted by claimId upstream (inventory.ts) and
  * paired in that order. Parents are positional, exactly like
  * StreamingHasher — parent = SHA-256(left || right) — so a leaf's slot
  * is fully bound: an inclusion proof presented for the WRONG index
  * (within-pair or cross-pair) or the wrong tree size fails, which the
- * suite pins (SPEC §2.7).
+ * suite pins.
  */
 
 import { sha256 } from '@noble/hashes/sha256';

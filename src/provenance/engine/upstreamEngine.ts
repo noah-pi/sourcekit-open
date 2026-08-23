@@ -1,14 +1,14 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Wraps the official C2PA reader and returns a
- * NORMALIZED result. No verdicts here — normalization only (SPEC §2.1).
+ * NORMALIZED result. No verdicts here — normalization only.
  * Verdicts are composed exclusively by policyLayer.ts.
  *
- * Binding (SPEC §1, WS3-Binding-Path §3a):
+ * Binding:
  *   - TARGET:  @contentauth/c2pa-node@ (napi over c2pa-rs) —
  *     requires **node >= 22** (its `engines` field). The staged harness
  *     and CI run node 20, so this binding cannot load there.
- *   - FALLBACK (documented in SPEC §1 for node < 22):
+ *   - FALLBACK (documented in for node < 22):
  *     @contentauth/c2pa-wasm@ — the SAME c2pa-rs core compiled to
  *     wasm, pinned exactly, runs on node 20. This module prefers c2pa-node
  *     on node >= 22 and uses the wasm build otherwise; `engine` in the
@@ -31,7 +31,7 @@
 import { createRequire } from 'node:module';
 
 // ---------------------------------------------------------------------------
-// Normalized result shape (shared by both engines; SPEC §2.1 minimum fields
+// Normalized result shape (shared by both engines — minimum fields
 // are manifests / activeClaim / validationStatus / signerChain / trustListHit
 // / rawErrors — the rest are the facts policyLayer needs to compose OUR
 // verdicts without either engine emitting one).
@@ -79,7 +79,7 @@ export interface NormalizedEngineResult {
   containerRejected: 'NOT_JPEG' | 'NOT_BMFF' | null;
   manifestFound: boolean;
   manifests: EngineManifestSummary[];
-  /** The active (most recent) manifest's claim summary — SPEC's activeClaim. */
+ /** The active (most recent) manifest's claim summary — the active claim. */
   activeClaim: EngineManifestSummary | null;
   validationStatus: EngineStatus[];
   // --- verdict facts (never verdicts) -------------------------------
@@ -115,7 +115,7 @@ export interface UpstreamReadOptions {
 // Engine loading — dynamic, optional, honest about what loaded.
 // ---------------------------------------------------------------------------
 
-const C2PA_NODE_VERSION = '0.8.1';   // pinned target (SPEC §1) — node>=22 only
+const C2PA_NODE_VERSION = '0.8.1';   // pinned target — node>=22 only
 const C2PA_WASM_VERSION = '0.11.1';  // pinned fallback — node 20 harness
 
 interface WasmBindings {
@@ -293,7 +293,7 @@ const ASSET_MISMATCH_CODES = new Set([
   'assertion.dataHash.mismatch', 'assertion.bmffHash.mismatch', 'assertion.boxesHash.mismatch',
 ]);
 /**
- * A-1 binding-guard classes (SPEC §0.3): the claim references no usable hard
+ * A-1 binding-guard classes: the claim references no usable hard
  * binding, or references one outside/unresolvable — the binding is VOID
  * (integrity unproven, defective credentials), never proven tamper.
  */

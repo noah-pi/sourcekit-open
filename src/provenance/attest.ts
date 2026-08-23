@@ -205,7 +205,7 @@ function deviceModel(): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Commit-at-capture + unified media assertions (SPEC-WS2-Phase2)
+// Commit-at-capture + unified media assertions
 //
 // THE PARITY PRINCIPLE: the SAME assertion set rides photo, video, and audio
 // seals — com.verify.contextTree, com.verify.streamedChunks,
@@ -362,10 +362,10 @@ async function photoThumbnailJpeg(photoUri: string): Promise<Uint8Array | null> 
 }
 
 /**
- * 0.16.0 C3 (photo path): the capture-time pHash, computed PRE-SIGNING so
- * the c2pa.soft-binding lands under the COSE claim signature — the hoist
- * of what vaultFs used to compute only post-embed (its copy is now a
- * cross-check). 32×32 luma → pHashFromGray32, same recipe as the vault.
+ * The capture-time pHash, computed PRE-SIGNING so the c2pa.soft-binding
+ * lands under the COSE claim signature. vaultFs computes its own copy
+ * post-embed as a cross-check. 32×32 luma → pHashFromGray32, same recipe
+ * as the vault.
  */
 async function photoPhashHex(photoUri: string): Promise<string | null> {
   try {
@@ -450,7 +450,7 @@ export async function attestPhoto(params: {
   /** Capture-evidence toggle snapshot — when CaptureKit ran. */
   evidenceEnabled?: EvidenceEnabledSnapshot | null;
   /**
-   * Capture-result context claims (Spec-Camera-Module-0.13 + W2.1/W2.4):
+   * Capture-result context claims (Spec-Camera-Module-0.13 + ):
    * built by commitStereoArtifacts from the CaptureResult's three-state
    * artifact paths (context.stereo-*) plus sealQueue's full-res extras
    * (context.fullres-still / context.fullres-secondary /
@@ -1076,7 +1076,7 @@ async function embedC2paInBmff(
   /** TSA token source — defaults to the live network fetchers; overridable
       so the lab can pin a deterministic token layout (F3, docs/SECURITY.md). */
   fetchTimestamp: C2paManifestParams['fetchTimestamp'] = fetchTimestampTokensBounded,
-  /** WS2 Phase 2 parity assertions (com.verify.* JUMBF boxes). */
+  /** parity assertions (com.verify.* JUMBF boxes). */
   customAssertions?: { label: string; data: unknown }[] | null,
   /** 0.16.0 standard assertions (C5 claim thumbnail for video). */
   standard?: StandardAssertions | null
@@ -1114,7 +1114,7 @@ async function embedC2paInBmff(
 
   let fixed: number | null = null;
   let hash: Uint8Array = new Uint8Array(32); // placeholder — round 1 only sizes the store
-  // 0.18.6: 8 → 12 rounds. The builder now overshoots the 1–5-byte
+  // 12 rounds. The builder overshoots the 1–5-byte
   // unpaddeable gap (see buildC2paStoreBmff), ratcheting the target by +5
   // per unlucky token-size draw; 12 rounds absorb a run of those while each
   // signing round stays exactly one signature (one biometric evaluation on
@@ -1321,7 +1321,7 @@ export async function attestAudio(params: {
   if (params.key.biometricBound) record.biometricBound = true;
   record.pqKey = params.pq ? pqPublicBlock(params.pq.publicKey, params.pq.enrolledAt) : null;
 
-  // WS2 Phase 2 §1/§2: audio gets the IDENTICAL assertion set (parity) —
+  // /§2: audio gets the IDENTICAL assertion set (parity) —
   // the m4a's single audio track demuxes to a one-track v2 commitment.
   // There is no native stream-hash commitment on the audio recorder path,
   // so there is no cross-check to run; the binding is delivery-file, as
@@ -1359,8 +1359,8 @@ export async function attestAudio(params: {
  *
  * Produces a NEW signed JPEG whose attestation keeps the proof that matters
  * for integrity — same media hash, same capture-time claim, fresh RFC 3161
- * countersignature — under a fresh ONE-TIME signing key (re-keyed, 0.9.0:
- * the long-lived device key is deliberately NOT used), while removing the
+ * countersignature — under a fresh ONE-TIME signing key (the long-lived
+ * device key is deliberately NOT used), while removing the
  * identifying values only: byline, organization, location, Wi-Fi,
  * signing-key linkage. Non-identifying evidence — motion, heading,
  * barometrics, pose trace, depth, capture-evidence states, device model —

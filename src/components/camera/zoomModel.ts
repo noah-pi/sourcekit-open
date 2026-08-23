@@ -24,7 +24,7 @@ import type { ExhibitLens, LensZoomCap } from '../../lib/exhibitCamera';
 
 /**
  * Fallback digital-zoom ceiling, relative to wide 1x, used ONLY when the
- * native per-device quality caps haven't reported (pre-W2 native builds,
+ * native per-device quality caps haven't reported (older native builds,
  * capabilities not yet fetched, or a lens the caps omit).
  *
  * Native Wave 2 landed the contract this constant was standing in

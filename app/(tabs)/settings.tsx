@@ -95,7 +95,7 @@ function groupedFingerprint(fp: string): string {
  * Scroll position, kept at MODULE scope on purpose. Toggling Device
  * appearance flips the effective scheme, and the root layout remounts the
  * navigator on scheme change (app/_layout.tsx `key={scheme}` — load-bearing
- * for module-scope styles, so it stays). That remount is what used to throw
+ * for module-scope styles, so it stays). That remount would otherwise throw
  * this list back to the top. The screen re-mounts, reads the saved offset,
  * and restores it — the list itself is never keyed or remounted here.
  */
@@ -873,13 +873,13 @@ export default function SettingsScreen() {
               camera tab's focus effect (photo connections and policies are
               constructed at session build), so the running session is
               untouched. The footnote says exactly that. */}
-          {/* 0.18.5: the rotation (wave 5) and legacy-graph switches are
+          {/* The rotation (wave 5) and legacy-graph switches are
               GONE — both hunts are settled (the four-run matrix exonerated
               every toggle; the virtual graph is the proven path). The
               native flags still exist for a future bisect, but a switch
               that no longer discriminates anything doesn't earn UI. */}
-          {/* 0.18.6: the session-calibration switch is GONE — with the
-              0.18.5 graph the secondary photo output is detached, so the
+          {/* There is no session-calibration switch: on this graph the
+              secondary photo output is detached, so the
               one-shot could only ever harvest a primary-only calibration
               that no commitment path can use (the rig extrinsic needs both
               lenses), while remaining the named suspect for the dead

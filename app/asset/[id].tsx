@@ -1350,10 +1350,9 @@ export default function AssetScreen() {
           </View>
         </View>
 
-        {/* 0.18.2: the export-defaults explainer was removed (stated in the
-            export sheet itself). The spacer keeps the rhythm the copy
-            occupied — two lines at fontSize.xs — so the layout doesn't
-            collapse upward. */}
+        {/* Export defaults are stated in the export sheet itself. This
+            spacer holds the rhythm that copy would occupy — two lines at
+            fontSize.xs — so the layout doesn't collapse upward. */}
         <View style={styles.sharePrivacySpacer} />
 
         {transcript ? (
@@ -1430,7 +1429,7 @@ export default function AssetScreen() {
                 <NlRow label="Wi-Fi" value="Unavailable at capture" />
               ) : ctx?.wifi ? (
                 <>
-                  {/* 0.14.0: the BSSID is the corroboratable claim; the
+                  {/* The BSSID is the corroboratable claim; the
                       network name is kept off this page (anyone can name
                       a network anything — and it's a privacy leak). */}
                   {ctx.wifi.bssid ? <NlRow label="Wi-Fi BSSID" value={ctx.wifi.bssid} mono /> : (
@@ -1446,7 +1445,7 @@ export default function AssetScreen() {
                   label="Platform"
                   value={record.device.platform === 'ios' ? 'iOS' : record.device.platform}
                 />
-                {/* 0.18.1: the capture software is a capture claim like any
+                {/* The capture software is a capture claim like any
                     other — the sealed claim-generator string ("Source Kit/
                     0.18.0 (com.verify.camera)"), the record's own app block
                     as the honest fallback. */}
@@ -1467,7 +1466,7 @@ export default function AssetScreen() {
                   <Text style={nl.drawerHead}>Sensors (Device-reported)</Text>
                   {ctx?.headingDeg != null ? <NlRow label="Heading" value={`${ctx.headingDeg}°`} /> : null}
                   {ctx?.pressureHPa != null ? <NlRow label="Barometer" value={`${ctx.pressureHPa} hPa`} /> : null}
-                  {/* 0.18.1: altitude rides the same sensors block here as on
+                  {/* Altitude rides the same sensors block here as on
                       the Inspect screen — same sealed claim, same row. */}
                   {ctx?.altitudeM != null ? <NlRow label="Altitude (baro.)" value={`${ctx.altitudeM} m`} /> : null}
                   {ctx?.motion ? (
@@ -1706,7 +1705,7 @@ export default function AssetScreen() {
                 <Button small icon="finger-print-outline" label="Hash-only claim" tone="secondary" onPress={() => void shareProofJson('hash-only')} loading={busy === 'Building proof…'} />
               </View>
 
-              {/* 0.14.2: the "Full report" drawer (AttestationView) was
+              {/* The "Full report" drawer (AttestationView) was
                   removed — it re-rendered signature timing, sensor-frame
                   timing, the pose trace and the signer fingerprint, all of
                   which already live once in the Capture / Integrity groups

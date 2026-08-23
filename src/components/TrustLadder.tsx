@@ -113,7 +113,7 @@ const buildStyles = () => StyleSheet.create({
   },
   nodeRing: {
     // The current-highest rung gets a thicker ring — SAME outer diameter as
-    // every other node (0.18.6, Noah: the ringed dot used to render 4 px
+    // every other node (the ringed dot renders 4 px
     // larger, which read as emphasis-by-size on whichever rung sat last).
     borderWidth: 2.5,
   },

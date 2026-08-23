@@ -48,9 +48,9 @@ const JOB_ICON: Record<SealJobSnapshot['kind'], keyof typeof Ionicons.glyphMap> 
 };
 
 /**
- * Seal-failure visibility: vault insertion is the LAST step of
- * sealing, so a failed seal used to leave no trace here at all. This row
- * states the failed job plainly — what kind, when it was captured, the
+ * Seal-failure visibility: vault insertion is the LAST step of sealing, so
+ * a failed seal leaves nothing in the grid of its own. This row states the
+ * failed job plainly — what kind, when it was captured, the
  * verbatim error — and offers a retry (the queue's own failure logic is
  * unchanged; a retry that still fails is marked failed again).
  */

@@ -436,7 +436,7 @@ export default function CaptureScreen() {
   // {1,1} until known — mapping onto an unknown range would be a guess.
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number; qualityCap?: number }>({ min: 1, max: 1 });
   // Per-constituent-device quality caps from capabilities(). null
-  // until fetched / on pre-W2 builds — maxRelativeZoom then falls back to
+ // until fetched / on older builds — maxRelativeZoom then falls back to
   // MAX_RELATIVE_ZOOM.
   const [lensCaps, setLensCaps] = useState<LensZoomCap[] | null>(null);
   const lensCapsRef = useRef<LensZoomCap[] | null>(null);
@@ -583,9 +583,8 @@ export default function CaptureScreen() {
   const modeSwipeRef = useRef<(dir: 1 | -1) => void>(() => {});
  // Mode-swipe exclusion zones: a horizontal drag that STARTS on
   // the pro tray or the docked precision bar is a dial adjustment, never a
-  // mode switch — the root responder used to claim those drags mid-dial
-  // ("adjusting the dials gets interpreted as slide between modes"). The
-  // zones are window-Y spans measured off the wrappers at render; each is
+  // mode switch. The zones are window-Y spans measured off the wrappers at
+  // render; each is
   // consulted only while its control is actually open.
   const trayZone = useRef<{ y0: number; y1: number } | null>(null);
   const ribbonZone = useRef<{ y0: number; y1: number } | null>(null);
@@ -790,7 +789,7 @@ export default function CaptureScreen() {
           configureSession({
             // On the virtual dual-wide graph (stereo on) the
             // ultra-wide "lens" is a zoom stop, not an input — the graph
-            // only forms from a wide anchor (native 0.18.4: lens == .wide
+            // only forms from a wide anchor (native: lens == .wide
             // gate). Reconfiguring with ultraWide here would tear the
             // pair down to the multi-input graph on every blur/refocus.
             // The parked 0.5 zoom is re-applied after start, unchanged.
@@ -883,7 +882,7 @@ export default function CaptureScreen() {
           if (cancelled) return;
           if (caps?.zoomRange) setZoomRange(caps.zoomRange);
           // Per-device quality caps drive the sweep ceiling
-          // (maxRelativeZoom); absent on pre-W2 builds → fallback constant.
+ // (maxRelativeZoom); absent on older builds → fallback constant.
           setLensCaps(caps?.lensZoomCaps ?? null);
           // Pro-strip capability inventory: the strip hides any control the
           // hardware doesn't report (and the PRO button itself when nothing
@@ -1271,7 +1270,7 @@ export default function CaptureScreen() {
       // ExhibitCamera stills path (the ONE camera session): the
       // delivery still plus the synchronized stereo partner, committed
       // calibration, timestamps, and per-device metadata, each a three-state
-      // EvidencePath. W2.1 adds full-sensor stills (own hash) and W2.4 the
+      // EvidencePath. adds full-sensor stills (own hash) and the
       // committed capture-settings block + photo EXIF. The full
       // CaptureResult rides the seal job; the pump stores the artifact
       // files under the sealed record's evidence dir.
@@ -1491,9 +1490,8 @@ export default function CaptureScreen() {
           startVideo({
             deliveryPath: `${FileSystem.cacheDirectory}capture-${stamp}.mp4`,
             evidenceDir,
-            // The settings toggle drives a REAL sink (0.13.0: it was a dead
-            // control — the module had no PCM tee, so the record could only
-            // ever say 'never-recorded').
+            // The settings toggle drives a REAL sink: the module tees PCM,
+            // so the record can say more than 'never-recorded'.
             rawPcm: settings.captureEvidence.rawPcm,
           }),
           15000,
@@ -1712,7 +1710,7 @@ export default function CaptureScreen() {
     // The light is per mode: entering a mode re-derives
     // the applied light from THAT mode's persisted preference — photo's
     // flash pref and video's torch never carry into each other, and the
-    // trip to audio always goes dark. (0.14.2: photo↔video hops ride the
+    // trip to audio always goes dark. (Photo↔video hops ride the
     // same native session, so this is a chrome call, not a rebuild.)
     setRibbonParam(null);
     if (m === 'audio') setTorch(false);
@@ -1761,7 +1759,7 @@ export default function CaptureScreen() {
 
   const selectLens = async (l: ExhibitLens) => {
     // 0.18.7 (field: "the 0.5 doesn't work when the multiple lenses is
-    // off"): a same-lens tap used to return early on the JS state alone —
+    // off"): a same-lens tap must not return early on the JS state alone —
     // if the state and the live session ever drifted (a graph teardown or
     // a rebuild that landed on a different stack), the pill went dead and
     // stayed dead. The native call is idempotent (it answers
@@ -1875,9 +1873,9 @@ export default function CaptureScreen() {
   );
  /** The dual-view graph is LIVE — second camera attached,
    *  both lenses streaming. The 0.5/1 pills are zoom stops on this graph,
- * not switches, so they hide exactly while this holds. 0.18.7:
-   *  the pro tray no longer hides wholesale — only the controls that
-   *  errored in the field (per-constituent focus/WB/ISO/shutter) hide;
+ * not switches, so they hide exactly while this holds. The pro tray does
+   *  not hide wholesale — only the controls that error in the field
+   *  (per-constituent focus/WB/ISO/shutter) hide;
    *  flash/torch and EV keep working on the fused device and stay (see
    *  visibleProParams). Everything returns when Multiple lenses turns off
    *  (the session rebuilds — altView is a lifecycle dep). */
@@ -2050,11 +2048,10 @@ export default function CaptureScreen() {
           onReset: () => void applyBias(0),
         };
       case 'focus': {
-        // 0.18.4 (Noah: "the focus has huge jumps"): the five-rung ladder
-        // made the whole manual range four coarse jumps. [0,1) stays the
-        // AUTO zone; [1, 11] is now CONTINUOUS lensPosition ((v−1)/10 with
-        // snap 0.05 = 0.005 motor steps), with haptic detents and tick marks
-        // at the old ladder positions so the familiar landmarks remain.
+        // A five-rung ladder would make the whole manual range four coarse
+        // jumps. [0,1) is the AUTO zone; [1, 11] is CONTINUOUS lensPosition
+        // ((v−1)/10 with snap 0.05 = 0.005 motor steps), with haptic detents
+        // and tick marks at the ladder positions as landmarks.
         const AUTO_ZONE = 1;
         const domain = { min: 0, max: 11 };
         const toLens = (v: number) => Math.min(1, Math.max(0, (v - AUTO_ZONE) / 10));

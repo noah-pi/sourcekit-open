@@ -431,8 +431,8 @@ export interface CaptureResult extends SensorLogEvidence {
   droppedPairCount: number;
   hardwareCost: number | null;
   physicalDevices: { primary: string | null; secondary: string | null };
-  // ---- W2.1: full-sensor stills (additive; ABSENT on pre-W2 native
-  // builds — callers treat undefined as "not committed this capture") ----
+  // ---- full-sensor stills (additive; ABSENT on older native builds —
+  // callers treat undefined as "not committed this capture") ----
   /** Full-sensor-resolution JPEG from the primary photo output. Distinct
    * from deliveryPath, whose pixels are a video-frame encode (see
    * captureSettings.deliveryStillSource). 'never-recorded' in video mode
@@ -448,12 +448,12 @@ export interface CaptureResult extends SensorLogEvidence {
   fullResSecondary?: EvidencePath;
   fullResSecondarySha256?: string | null;
   fullResSecondaryDimensions?: { width: number; height: number } | null;
-  // ---- W2.4: every camera setting, device-read at the commit instant ----
+  // ---- every camera setting, device-read at the commit instant ----
   /** The committed settings block. The { unavailable: true } shape is the
    * honest degradation when the session died mid-capture (the device
    * reference was gone at commit time) — stated, never omitted silently. */
   captureSettings?: CaptureSettings | { unavailable: true; note: string };
-  // ---- 0.15.1: degraded single-lens fallback + mirroring truth (additive;
+  // ---- degraded single-lens fallback + mirroring truth (additive;
   // ABSENT on pre-0.15.1 native builds — callers treat undefined as "not
   // committed this capture") ----
   /** Stereo evidence state for THIS capture: 'ok' = a synchronized
@@ -494,7 +494,7 @@ export interface CaptureResult extends SensorLogEvidence {
   depth?: EvidencePath;
   depthSha256?: string | null;
   depthMetadata?: DepthArtifactMetadata | null;
-  // ---- 0.17.2: shutter-burst sink (additive; ABSENT on pre-0.17.2 builds
+  // ---- shutter-burst sink (additive; ABSENT on older builds
   // and on sessions configured without `ring` — callers treat undefined as
   // "not committed this capture") ----
   /** Directory holding the 3 pre-shutter + 4 post-shutter frames the
@@ -803,8 +803,8 @@ export interface LensZoomCap {
 
 /**
  * The active device's zoom contract. min/max are the device's own
- * supported range (unchanged hardware semantics). The W2.3 additions are
- * optional — ABSENT on pre-W2 native builds:
+ * supported range (unchanged hardware semantics). The additions are
+ * optional — ABSENT on older native builds:
  *  - qualityCap: app-chosen digital-quality ceiling for THIS device (a
  *    quality choice, not a hardware limit); the UI clamps to
  *    min(max, qualityCap).
@@ -844,7 +844,7 @@ export interface ExhibitCameraCapabilities {
   activeFormatISO?: { min: number; max: number };
   activeFormatExposureDurationSec?: { min: number; max: number };
   zoomRange?: ZoomRange;
-  /** Per-constituent-device ceilings; absent on pre-W2 builds. */
+ /** Per-constituent-device ceilings; absent on older builds. */
   lensZoomCaps?: LensZoomCap[];
   /** States verbatim that qualityCap is a quality choice, not a
    * hardware limit. Part of the contract. */
@@ -1008,8 +1008,8 @@ export async function setZoom(factor: number): Promise<ChromeResult> {
 /**
  * Ramped device zoom: ramp(toVideoZoomFactor:withRate:) for
  * UI-driven scrub ramps. Lens jumps stay on the instant setZoom. `rate`
- * defaults to 8 (the pre-W2 ramp rate) and is clamped natively to [1, 60].
- * On pre-W2 native builds the function is absent — the caller's fallback
+ * defaults to 8 (the previous default) and is clamped natively to [1, 60].
+ * On older native builds the function is absent — the caller's fallback
  * is setZoom (an instant set is a degenerate ramp).
  */
 export async function setZoomSmooth(factor: number, rate = 8): Promise<ZoomSmoothResult> {
@@ -1024,7 +1024,7 @@ export async function setZoomSmooth(factor: number, rate = 8): Promise<ZoomSmoot
  * Photo-strobe preference: sets the flashMode used by the photo
  * output's stills captures. Torch is untouched — it stays the video-only
  * continuous light. No session required: the preference persists natively
- * and is validated against supportedFlashModes at capture time. On pre-W2
+ * and is validated against supportedFlashModes at capture time. On older builds
  * native builds: honest no-op.
  */
 export async function setPhotoFlashMode(mode: PhotoFlashMode): Promise<PhotoFlashResult> {
@@ -1170,8 +1170,8 @@ export async function setExhibitDebugFlag(
   return { applied: res.applied, reason: res.reason };
 }
 
-/** Current flag states. Module absence = the native defaults (0.17.2: the
- * 12 MP clamp defaults TRUE; the other flags default false). */
+/** Current flag states. Module absence = the native defaults: the 12 MP
+ * clamp defaults TRUE; the other flags default false. */
 export async function getExhibitDebugFlags(): Promise<ExhibitDebugFlags> {
   if (!native || typeof native.getDebugFlags !== 'function') {
     return { photoConnectionRotation: false, photoMaxDimensionsPolicy: true };

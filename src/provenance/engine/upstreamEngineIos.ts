@@ -1,12 +1,12 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * IOS binding (SPEC WS3 phase iOS, WS3-Binding-Path
+ * IOS binding (
  * §2/§7a). Wraps the native module `modules/c2pa-ios` (c2pa-swift v0.0.12,
  * C2PAC.xcframework, iOS 16+) and returns the SAME NORMALIZED result shape
  * as the desk engine (source-kit-open src/provenance/engine/upstreamEngine.ts),
  * so the shared policy layer (policyLayer.ts — THE verdict authority) is fed
  * identical facts on device and on desk. NO VERDICTS HERE — normalization
- * only (SPEC §2.1).
+ * only.
  *
  * Normalization code (status-code classes, thrown-error classifier, store
  * JSON summarization, container gate) is deliberately VERBATIM from the desk
@@ -27,7 +27,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { base64ToBytes, bytesToBase64 } from '../../lib/bytes';
 
 // ---------------------------------------------------------------------------
-// Normalized result shape — IDENTICAL to the desk engine's (SPEC §2.1).
+// Normalized result shape — IDENTICAL to the desk engine's.
 // policyLayer.ts consumes this and only this.
 // ---------------------------------------------------------------------------
 
@@ -78,7 +78,7 @@ export interface NormalizedEngineResult {
   containerRejected: 'NOT_JPEG' | 'NOT_BMFF' | null;
   manifestFound: boolean;
   manifests: EngineManifestSummary[];
-  /** The active (most recent) manifest's claim summary — SPEC's activeClaim. */
+ /** The active (most recent) manifest's claim summary — the active claim. */
   activeClaim: EngineManifestSummary | null;
   validationStatus: EngineStatus[];
   // --- verdict facts (never verdicts) -------------------------------
@@ -114,7 +114,7 @@ export interface UpstreamReadOptions {
 // Native module loading — optional, honest about what loaded.
 // ---------------------------------------------------------------------------
 
-/** c2pa-swift package version this binding is written against (pinned, SPEC §1). */
+/** c2pa-swift package version this binding is written against (pinned, ). */
 const C2PA_SWIFT_VERSION = '0.0.12';
 
 interface C2paIosNative {
@@ -277,7 +277,7 @@ const ASSET_MISMATCH_CODES = new Set([
   'assertion.dataHash.mismatch', 'assertion.bmffHash.mismatch', 'assertion.boxesHash.mismatch',
 ]);
 /**
- * A-1 binding-guard classes (SPEC §0.3): the claim references no usable hard
+ * A-1 binding-guard classes: the claim references no usable hard
  * binding, or references one outside/unresolvable — the binding is VOID
  * (integrity unproven, defective credentials), never proven tamper.
  */
@@ -583,7 +583,7 @@ export async function readIosAsset(
 
 /**
  * DETACHED path — validate a sidecar manifest (application/c2pa bytes)
- * against its asset (WS3-Binding-Path §6c; the app's existing detached.ts
+ * against its asset (; the app's existing detached.ts
  * flow). Same normalized result as the embedded path.
  */
 export async function readIosDetached(
