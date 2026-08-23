@@ -1,4 +1,4 @@
-# Dependency updates are supply-chain events here, not chores: every bump
+# Dependency updates are supply-chain events here: every bump
 # re-runs the full lab + the dependency budget in CI, and a version split
 # must be declared in scripts/check-dependency-budget.mjs to merge.
 version: 2

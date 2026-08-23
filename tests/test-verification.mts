@@ -639,7 +639,7 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
     !verifyOtsReceipt(tamperedAtt, digest).receiptValid);
   check('ots: garbage bytes are not a receipt', parseOtsReceipt(new Uint8Array([1, 2, 3, 4])) === null);
   const unsupportedOp = concatBytes(OTS_MAGIC, new Uint8Array([1, 0x08]), digest, new Uint8Array([0x02]));
-  check('ots: unsupported ops are refused, not guessed', parseOtsReceipt(unsupportedOp) === null);
+  check('ots: unsupported ops are refused', parseOtsReceipt(unsupportedOp) === null);
 }
 
 

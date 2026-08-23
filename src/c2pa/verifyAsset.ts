@@ -413,7 +413,7 @@ async function c2paReport(
   // Bitcoin beacon: a signed time lower bound. The embedded block hash could
   // not be known before that block was mined, so the signature cannot predate
   // it; the signer's `observedAt` is its own clock. Shape-checked and
-  // disclosed, not a verdict.
+  // disclosed.
   const beacon = telemetryRecord?.beacon;
   if (beacon) {
     if (isValidTip(beacon.blockHash, beacon.blockHeight)) {

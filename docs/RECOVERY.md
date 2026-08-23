@@ -34,7 +34,7 @@ its metadata is gone, and the custody chain is intact.
 Recompressed or remuxed media does not match this way. The asset hash commits
 to bytes, and those bytes no longer exist.
 
-## Visual, by perceptual hash — the primitive, not a feature
+## Visual, by perceptual hash
 
 The media was re-encoded, resized or recompressed since signing — messaging apps
 do this silently — so the hash no longer matches but the perceptual hash is
