@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS3 upstream engine — iOS binding (SPEC WS3 phase iOS, WS3-Binding-Path
+ * IOS binding (SPEC WS3 phase iOS, WS3-Binding-Path
  * §2/§7a). Wraps the native module `modules/c2pa-ios` (c2pa-swift v0.0.12,
  * C2PAC.xcframework, iOS 16+) and returns the SAME NORMALIZED result shape
  * as the desk engine (source-kit-open src/provenance/engine/upstreamEngine.ts),
@@ -502,7 +502,7 @@ async function normalizeRead(
   } else {
     // No caller-pinned anchors: we cannot attribute an engine trust report
     // to the official TL vs the frozen ITL — so we claim nothing
-    // (WS3-Binding-Path §8.8: disclose WHICH list a verdict used).
+ // (disclose WHICH list a verdict used).
     r.trustListHit = 'unknown';
   }
 

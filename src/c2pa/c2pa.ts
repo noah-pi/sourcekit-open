@@ -87,7 +87,7 @@ const UUID_JSON = c2paUuid('json');
 const UUID_JPEG = c2paUuid('jpeg');
 
 // ---------------------------------------------------------------------------
-// Standard assertion labels (0.16.0 data contract, C2–C5) — per the vendored
+// Standard assertion labels — per the vendored
 // C2PA SDK 2.3 StandardAssertionLabel enum (modules/c2pa-ios …/
 // Manifest/StandardAssertionLabel.swift). Emitted through the first-class
 // allowlist in verifyAssertionBoxes; parsed back by parseOneManifest with
@@ -100,7 +100,7 @@ export const LABEL_SOFT_BINDING = 'c2pa.soft-binding';
 export const LABEL_THUMBNAIL_CLAIM_JPEG = 'c2pa.thumbnail.claim.jpeg';
 export const LABEL_TRAINING_MINING = 'c2pa.training-mining';
 /**
- * D1 (0.16.0): signed stereo depth. Label spellings are the vendored SDK
+ * D1: signed stereo depth. Label spellings are the vendored SDK
  * 2.3 enum's (StandardAssertionLabel.depthmap / .collectionDataHash), which
  * are also the spec's (C2PA 2.2 §18.21 Depthmap, §18.8 Collection Data
  * Hash).
@@ -108,7 +108,7 @@ export const LABEL_TRAINING_MINING = 'c2pa.training-mining';
 export const LABEL_DEPTHMAP_GDEPTH = 'c2pa.depthmap.GDepth';
 export const LABEL_COLLECTION_HASH = 'c2pa.hash.collection.data';
 /**
- * 0.16.1: the secondary viewpoint baked into the manifest as a first-class
+ * The secondary viewpoint baked into the manifest as a first-class
  * standard ingredient (C2PA 2.2 §18.11, ingredient.v3 schema) with
  * relationship 'componentOf' — the wide-angle frame is a COMPONENT of this
  * exhibit, not a parent it was derived from. Its 512px thumbnail rides as
@@ -193,7 +193,7 @@ function tstContainer(tokens: Uint8Array[]): Uint8Array {
  * the convergence loops whole — the field's intermittent
  * "seal-failed — C2PA segment did not converge" on first pass (retry
  * succeeded because re-fetched TSA tokens shift the delta out of the hole).
- * 0.18.7: null sentinel; every caller treats a hole as an off-target round
+ * Null sentinel; every caller treats a hole as an off-target round
  * and grows past it, so no delta can ever kill a seal.
  */
 export function padForDelta(delta: number): number | null {
@@ -331,7 +331,7 @@ export interface C2paManifestParams {
   /** Returns every witness token obtained (empty array when offline). */
   fetchTimestamp?: (message: Uint8Array) => Promise<Uint8Array[]>;
   /**
-   * Sizing-only probe token lengths (0.18.0). Token sizes are TSA-fixed, so
+ * Sizing-only probe token lengths. Token sizes are TSA-fixed, so
    * the layout probe uses the last observed length per TSA instead of a
    * throwaway network fetch — that fetch used to cost a full TSA round per
    * seal. When absent, the probe falls back to fetchTimestamp (lab seam).
@@ -439,16 +439,16 @@ export interface C2paManifestParams {
   } | null;
   /**
    * D1 commit half: the exhibit as a first-class multi-part C2PA object —
-   * c2pa.hash.collection.data (§18.8) over the artifact set the exhibit
+ * c2pa.hash.collection.data over the artifact set the exhibit
    * comprises (photo clean bytes + depth map). Set membership itself is
-   * sealed: per-entry sha256 over ALL bytes of each member (§15.12.5).
+ * sealed: per-entry sha256 over ALL bytes of each member.
    * `uri` is the member's name in the set ('photo.jpg', 'depth.png' …) —
    * no '.'/'..' components (§15.12.5 invalidURI); entries violating that
    * are dropped, and an empty set means no assertion at all.
    */
   collectionAssets?: { uri: string; bytes: Uint8Array; dcFormat?: string | null }[] | null;
   /**
-   * 0.16.1: the secondary (wide) viewpoint as a componentOf ingredient.
+   * The secondary (wide) viewpoint as a componentOf ingredient.
    * `thumbnailJpeg` is the embedded 512px lead; `fullResSha256` commits the
    * measurement-grade bytes that stay in the vault — the claim seals BOTH,
    * so the vault copy and the in-file lead cannot silently diverge. Absent
@@ -723,7 +723,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     standardBoxes.push(jumbBox(UUID_JPEG, LABEL_THUMBNAIL_CLAIM_JPEG, box('jpeg', p.thumbnailJpeg)));
     standardLabels.push(LABEL_THUMBNAIL_CLAIM_JPEG);
   }
-  // 0.16.1: the secondary viewpoint as a componentOf ingredient — its own
+  // The secondary viewpoint as a componentOf ingredient — its own
   // embedded thumbnail (a lead, self-evidently not the measurement pixels)
   // plus a data hash of the full-res bytes in the vault (the measurement).
   // Both boxes enter the claim's assertion list, so the signature covers the
@@ -926,7 +926,7 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
   // per-capture overhead anyone sees.
   const SLACK = 256; // absorbs TSA token-size variance without a re-sign
 
-  // 0.18.7: per-round sizes, carried to the final throw — an unreachable
+  // Per-round sizes, carried to the final throw — an unreachable
   // fixpoint must be diagnosable from the field log alone.
   const rounds: string[] = [];
 
@@ -947,7 +947,7 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
     const labels = ['c2pa.hash.data', ...rest.labels];
     const claimBytes = buildClaimBytes(p, uuid, assertionBoxes, labels);
 
-    // Phase 1: converge sizes with a fixed-size dummy signature and (if a
+    // Converge sizes with a fixed-size dummy signature and (if a
     // TSA is configured) probe tokens — no real signature is burned.
     const plan = await planClaim(claimBytes, p);
     const probeSigned = { protectedBstr: plan.protectedBstr, rawSignature: DUMMY_RAW_SIG, pq: p.pq ? { alg: PQ_ALG, fp: p.pq.fingerprint, sig: DUMMY_PQ_SIG } : null };
@@ -967,7 +967,7 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
       if (pad !== null && assembleProbe(pad).length === exclusionLength) converged = true;
     }
     if (converged) {
-      // Phase 2: sizes are final — sign the claim exactly once, fetch the
+      // Sizes are final — sign the claim exactly once, fetch the
       // real witness tokens, and re-pad from scratch (real tokens can drift
       // a few bytes from the probes; the slack absorbs it).
       const { signed, timestampTokens } = await signPlannedClaim(plan, p);
@@ -982,7 +982,7 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
         const segment = assembleReal(pad);
         if (segment.length === exclusionLength) return segment;
       }
-      // 0.18.5: token drift beyond the slack is no longer FATAL. The real
+      // Token drift beyond the slack is no longer FATAL. The real
       // witness tokens occasionally exceed their probes (TSA cert-chain or
       // calendar-response variance between two fetches seconds apart) —
       // the 2026-08-17 field logs showed this throw on the first pass of
@@ -1033,7 +1033,7 @@ export async function buildC2paStorePng(p: C2paManifestParams, insertOffset: num
     const labels = ['c2pa.hash.data', ...rest.labels];
     const claimBytes = buildClaimBytes(p, uuid, assertionBoxes, labels);
 
-    // Phase 1: converge sizes with the fixed-size dummy signature + probe
+    // Converge sizes with the fixed-size dummy signature + probe
     // tokens; phase 2 signs the final claim exactly once (see buildC2paSegment).
     const plan = await planClaim(claimBytes, p);
     const probeSigned = { protectedBstr: plan.protectedBstr, rawSignature: DUMMY_RAW_SIG, pq: p.pq ? { alg: PQ_ALG, fp: p.pq.fingerprint, sig: DUMMY_PQ_SIG } : null };
@@ -1064,7 +1064,7 @@ export async function buildC2paStorePng(p: C2paManifestParams, insertOffset: num
         const store = assembleReal(pad);
         if (store.length + CHUNK_OVERHEAD === exclusionLength) return store;
       }
-      // 0.18.5: same re-converge-instead-of-throw as the JPEG path — see
+      // Same re-converge-instead-of-throw as the JPEG path — see
       // buildC2paSegment's note. Bounded by the 12-iteration loop.
       exclusionLength = Math.max(bare.length + CHUNK_OVERHEAD, exclusionLength) + SLACK;
       continue;
@@ -1421,27 +1421,27 @@ export interface C2paManifest {
    */
   actions: { list: EditAction[]; referenced: boolean } | null;
   /**
-   * c2pa.metadata (0.16.0, C4) — signer-attributed standard metadata
+   * c2pa.metadata — signer-attributed standard metadata
    * (JSON-LD). DECLARED by the sealing software like actions: parsed for
    * display, claim-bound only when `referenced`.
    */
   c2paMetadata: { data: Record<string, unknown>; referenced: boolean } | null;
   /**
-   * c2pa.soft-binding (0.16.0, C3) — the declared soft binding (alg id +
+   * c2pa.soft-binding — the declared soft binding (alg id +
    * first block value, hex). RECOVERY METADATA, never a hard binding: the
    * spec forbids soft bindings as hard bindings, and no report string may
    * present a match here as asset integrity.
    */
   softBinding: { alg: string; valueHex: string | null; referenced: boolean } | null;
   /**
-   * c2pa.training-mining (0.16.0, C5) — the declared training/data-mining
+   * c2pa.training-mining — the declared training/data-mining
    * permissions, property → use (e.g. 'c2pa.ai_generative_training' →
    * 'notAllowed'). The signer/developer's stance, stated; not a runtime
    * enforcement signal.
    */
   trainingMining: { entries: Record<string, string>; referenced: boolean } | null;
   /**
-   * c2pa.asset-type / c2pa.asset-type.v2 (0.16.0, C5) — declared asset
+   * c2pa.asset-type / c2pa.asset-type.v2 — declared asset
    * types (e.g. ['image']). v1 (CBOR map) and v2 (JSON array) both parse.
    */
   assetType: { types: string[]; referenced: boolean } | null;
@@ -1452,7 +1452,7 @@ export interface C2paManifest {
    */
   thumbnails: { label: string; bytes: Uint8Array; referenced: boolean }[];
   /**
-   * c2pa.depthmap.GDepth (0.16.0, D1; §18.21) — the declared depth map:
+   * c2pa.depthmap.GDepth — the declared depth map:
    * GDepth envelope fields plus the decoded map image. Optically captured
    * by the signer's claim; parsed for display/coherence, claim-bound only
    * when `referenced`. Self-asserted like every assertion — a scene-match
@@ -1472,7 +1472,7 @@ export interface C2paManifest {
     referenced: boolean;
   } | null;
   /**
-   * c2pa.hash.collection.data (0.16.0, D1; §18.8) — the declared
+   * c2pa.hash.collection.data — the declared
    * multi-part set (photo + depth map), per-entry sha256 over ALL bytes of
    * each member. A HARD BINDING over set membership: validate with
    * verifyCollectionHash against the actual artifacts.
@@ -1607,7 +1607,7 @@ export function parseManifest(storePayload: Uint8Array): C2paManifest | null {
 function parseManifestInner(storePayload: Uint8Array): C2paManifest | null {
   // Full payload, NOT cut at the store's declared length: 2022-era writers
   // under-declare the store box too, and parseJumb's physical-tail tolerance
-  // needs those trailing bytes to recover the last child (0.18.7).
+ // needs those trailing bytes to recover the last child.
   const store = parseJumb(storePayload);
   const manifestCount = store?.children.length ?? 0;
   const manifest = store?.children[manifestCount - 1];
@@ -1943,7 +1943,7 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
           }
         } catch { /* non-fatal */ }
       } else if (/^c2pa\.thumbnail\.(claim|ingredient)\.(jpeg|png)(\.\d+)?$/.test(a.label) && a.body.length >= 8) {
-        // 0.18.6 field fix: multi-still video manifests suffix later pair
+        // Multi-still video manifests suffix later pair
         // thumbnails (.1/.2/.3 — emission keeps claim labels unique); the
         // anchored regex dropped every still after the first, so exported
         // videos lost their second-camera frames on inspect.
@@ -2296,7 +2296,7 @@ export function verifyManifest(
 }
 
 // ---------------------------------------------------------------------------
-// c2pa.hash.collection.data validation (0.16.0, D1; spec §15.12.5)
+// c2pa.hash.collection.data validation
 // ---------------------------------------------------------------------------
 
 export interface CollectionHashEntryResult {

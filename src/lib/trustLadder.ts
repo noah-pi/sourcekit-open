@@ -6,7 +6,7 @@
  *   bytes unchanged → signer identified → hardware-attested →
  *   time-bounded by an independent anchor
  *
- * 0.18.6 (Noah): the old rungs 2+3 ("known key" / "org-vouched") merged
+ * The old rungs 2+3 ("known key" / "org-vouched") merged
  * into ONE rung. Identity is not knowable from the file at all unless an
  * organization outside the file vouches for the key — a roster entry or a
  * trust-list accession IS the identification, and a self-asserted org root
@@ -264,7 +264,7 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   }
 
   // --- Rung 2: signer identified -------------------------------------------
-  // 0.18.6 (Noah): one rung, because identification and accession are one
+ // One rung, because identification and accession are one
   // fact — the file alone can never name a signer; only vouching OUTSIDE
   // the file (a roster with timing evaluated, or a curated trust list)
   // identifies anyone. A self-asserted org root is NOT identification.

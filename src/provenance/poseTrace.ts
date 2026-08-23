@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 2 §3: the signed gyro trace (com.verify.poseTrace).
+ * The signed gyro trace (com.verify.poseTrace).
  *
  * Source: the CaptureKit sensor JSONL (SPEC-WS1 §5.2) — one sample per
  * line, `{"t":<bootSec>,"kind":"gyro","x":..,"y":..,"z":..}` at ~100 Hz.

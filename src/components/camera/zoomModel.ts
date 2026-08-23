@@ -27,7 +27,7 @@ import type { ExhibitLens, LensZoomCap } from '../../lib/exhibitCamera';
  * native per-device quality caps haven't reported (pre-W2 native builds,
  * capabilities not yet fetched, or a lens the caps omit).
  *
- * Native Wave 2 (W2.3) landed the contract this constant was standing in
+ * Native Wave 2 landed the contract this constant was standing in
  * for: capabilities.lensZoomCaps carries each constituent device's
  * hardware max AND an app-chosen digital-quality cap (a quality choice,
  * honestly documented — not a hardware limit). maxRelativeZoom below
@@ -39,7 +39,7 @@ export const MAX_RELATIVE_ZOOM = 10;
 
 /**
  * The relative (wide-1x-based) zoom ceiling from the native per-device
- * quality caps (W2.3). For each optical stop whose lens the caps cover,
+ * quality caps. For each optical stop whose lens the caps cover,
  * the ceiling is stopFactor × min(hardwareMax, qualityCap) — how far a
  * sweep on THAT stack may go; the ceiling of the sweep itself is the best
  * across stacks (a pinch crosses lenses). Falls back to MAX_RELATIVE_ZOOM

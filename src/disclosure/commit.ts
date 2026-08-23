@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 1: commit + burn semantics (docs/INTEGRITY.md — selective disclosure).
+ * Commit + burn semantics (docs/INTEGRITY.md — selective disclosure).
  * One Merkle root commits the full claim set; leaf 0 is the inventory meta-leaf,
  * so the root binds the never-recorded declaration at commit time. No salt table
  * ever leaves this module: salts are re-derived from the master

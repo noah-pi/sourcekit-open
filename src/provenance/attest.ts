@@ -92,14 +92,14 @@ interface StandardAssertions {
   } | null;
   /** D1: the sealed artifact set → c2pa.hash.collection.data (photos, when depth recorded). */
   collectionAssets?: { uri: string; bytes: Uint8Array; dcFormat?: string | null }[] | null;
-  /** 0.16.1: secondary viewpoint → c2pa.ingredient.v3 + ingredient thumbnail (photos, when a secondary frame exists). */
+  /** Secondary viewpoint → c2pa.ingredient.v3 + ingredient thumbnail (photos, when a secondary frame exists). */
   secondaryView?: {
     thumbnailJpeg: Uint8Array;
     fullResSha256: string;
     width?: number | null;
     height?: number | null;
   } | null;
-  /** 0.18.5 post-field: periodic video pair stills → one componentOf
+  /** Periodic video pair stills → one componentOf
       ingredient each (videos, when the recording committed pairs). */
   videoStills?: {
     thumbnailJpeg: Uint8Array;
@@ -110,7 +110,7 @@ interface StandardAssertions {
 }
 
 /**
- * The upstream-resolved depth artifact for THIS capture (0.16.0, D1): the
+ * The upstream-resolved depth artifact for THIS capture: the
  * CaptureResult's depth EvidencePath plus its committed sha256/metadata.
  * The bytes live on disk (like every stereo artifact) — attest reads them,
  * verifies the committed hash once (trust-but-verify: one sha256 call keeps
@@ -144,7 +144,7 @@ export function resolveDepthSealInput(result: CaptureResult): DepthCommitInput |
 }
 
 /**
- * The upstream-resolved secondary viewpoint for THIS capture (0.16.1): the
+ * The upstream-resolved secondary viewpoint for THIS capture: the
  * CaptureResult's full-res ultra-wide EvidencePath plus its committed sha256
  * and dimensions. Same discipline as depth — attest reads the bytes,
  * verifies the committed hash once (trust-but-verify), and seals BOTH a
@@ -162,7 +162,7 @@ export interface SecondaryCommitInput {
 }
 
 /**
- * Resolves the secondary viewpoint to commit from a CaptureResult (0.16.1).
+ * Resolves the secondary viewpoint to commit from a CaptureResult.
  * Returns null when no secondary field exists at all (pre-0.16.1 native
  * build, or a session with the secondary camera off).
  */
@@ -186,14 +186,14 @@ export interface AttestResult {
   signedAudioBytes?: Uint8Array;
   record: AttestationRecord;
   /**
-   * WS2 Phase 2 (§4): the disclosure commitment state for the vault store
+ * The disclosure commitment state for the vault store
    * — Sealed-profile bundle + master seed. VAULT-ONLY: the seed never
    * rides in the manifest or any export. sealQueue persists it via
    * src/disclosure/burn.ts.
    */
   disclosure?: SealedCaptureDisclosure | null;
   /**
-   * WS2 Phase 2 (§1): the per-track chunk maps behind the
+ * The per-track chunk maps behind the
    * com.verify.streamedChunks v2 assertion (video/audio) — the vault
    * record's copy, exported later as the proof-bundle sidecar.
    */
@@ -205,7 +205,7 @@ function deviceModel(): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// WS2 Phase 2: commit-at-capture + unified media assertions (SPEC-WS2-Phase2)
+// Commit-at-capture + unified media assertions (SPEC-WS2-Phase2)
 //
 // THE PARITY PRINCIPLE: the SAME assertion set rides photo, video, and audio
 // seals — com.verify.contextTree, com.verify.streamedChunks,
@@ -233,7 +233,7 @@ export interface EvidenceEnabledSnapshot {
  * complete = no APPLICABLE sink is in the enabled-but-failed (null) state.
  * 'never-recorded' sinks (toggle off or structural) do not make a capture
  * incomplete. Applicability is the named exception set: the ring is a
- * stills sink, raw PCM applies to video sessions and (0.18.3+) audio takes,
+ * stills sink, raw PCM applies to video sessions and audio takes,
  * the sensor log applies to every CaptureKit kind. null = no CaptureKit
  * session ran (fallback path).
  */
@@ -428,26 +428,26 @@ export async function attestPhoto(params: {
   identity: { author: string | null; organization: string | null } | 'redacted';
   key: DeviceSigner;
   capturedAt?: string;
-  /** Assignment-mode label + cert chain (0.9.0) — signs outside the device identity. */
+ /** Assignment-mode label + cert chain — signs outside the device identity. */
   assignmentLabel?: string | null;
   certChainOverride?: Uint8Array[];
-  /** Device integrity signals, signed as a self-reported assertion (0.9.0). */
+ /** Device integrity signals, signed as a self-reported assertion. */
   integritySignals?: DeviceIntegritySignals | null;
-  /** Sanitized camera EXIF (src/lib/exif.ts) — signed as com.verify.exif (0.10.0). */
+ /** Sanitized camera EXIF (src/lib/exif.ts) — signed as com.verify.exif. */
   exif?: Record<string, number | string> | null;
-  /** Cached Bitcoin tip (src/lib/beacon.ts) — signed time lower bound (0.10.0). */
+ /** Cached Bitcoin tip (src/lib/beacon.ts) — signed time lower bound. */
   beacon?: BeaconCommitment | null;
   /** PQ dual-signature layer — software key; hedges P-256 cryptanalysis only. */
   pq?: PqCaptureKey | null;
   /**
-   * Face check outcome (0.11.1) — the boolean result of the OS biometric
+ * Face check outcome — the boolean result of the OS biometric
    * check run at capture start when the toggle is on; null/absent when the
    * toggle was off. The flag ONLY: no face geometry or template exists.
    */
   biometricGatePassed?: boolean | null;
-  /** Raw CaptureKit sensor JSONL (WS2 Phase 2 §3) — committed as com.verify.poseTrace. */
+  /** Raw CaptureKit sensor JSONL — committed as com.verify.poseTrace. */
   sensorLogText?: string | null;
-  /** Capture-evidence toggle snapshot (WS2 Phase 2 §2) — when CaptureKit ran. */
+  /** Capture-evidence toggle snapshot — when CaptureKit ran. */
   evidenceEnabled?: EvidenceEnabledSnapshot | null;
   /**
    * Capture-result context claims (Spec-Camera-Module-0.13 + W2.1/W2.4):
@@ -459,9 +459,9 @@ export async function attestPhoto(params: {
    * throws, fail-closed. Absent when no stereo module ran.
    */
   stereoClaims?: ContextClaim[] | null;
-  /** D1 (0.16.0): the resolved depth artifact — see DepthCommitInput. */
+ /** D1: the resolved depth artifact — see DepthCommitInput. */
   depth?: DepthCommitInput | null;
-  /** 0.16.1: the resolved secondary viewpoint — see SecondaryCommitInput. */
+  /** The resolved secondary viewpoint — see SecondaryCommitInput. */
   secondary?: SecondaryCommitInput | null;
 }): Promise<AttestResult> {
   const cleanBytes = await readFileBytes(params.photoUri);
@@ -486,14 +486,14 @@ export async function attestPhoto(params: {
 
   record.assignment = params.assignmentLabel ? { label: params.assignmentLabel } : null;
   record.deviceIntegrity = params.integritySignals ?? null;
-  // Capture-integrity signals (0.9.3) — self-reported, signed, bounded.
+ // Capture-integrity signals — self-reported, signed, bounded.
   record.captureIntegrity = {
     captureToSignatureMs: Math.max(0, Date.now() - Date.parse(record.capturedAt)),
     sensorTiming: params.context.sensorTiming ?? null,
     biometricGatePassed: params.biometricGatePassed ?? null,
     note: 'self-reported' as const,
   };
-  // Time lower bound from the cached beacon (0.10.0) — whatever tip is cached
+ // Time lower bound from the cached beacon — whatever tip is cached
   // right now, fresh or stale; never fetched here (that would couple a network
   // event to the shutter). Absent, not fabricated, when nothing is cached.
   record.beacon = params.beacon ?? null;
@@ -504,7 +504,7 @@ export async function attestPhoto(params: {
   // The PQ public key is committed INSIDE the signed payload —
   // the binding that makes the dual signature meaningful (src/lib/pq.ts).
   record.pqKey = params.pq ? pqPublicBlock(params.pq.publicKey, params.pq.enrolledAt) : null;
-  // WS2 Phase 2: the parity assertion set. Stills commit the zero-track
+  // The parity assertion set. Stills commit the zero-track
   // streamedChunks assertion (structural — a JPEG has no elementary
   // streams; the hard binding covers the file byte-for-byte). This is the
   // named stills exception — docs/MEDIA-PARITY.md.
@@ -517,7 +517,7 @@ export async function attestPhoto(params: {
     evidenceEnabled: params.evidenceEnabled ?? null,
     stereoClaims: params.stereoClaims ?? null,
   });
-  // D1 (0.16.0, commit half): the depth artifact. 'never-recorded'/'error'
+  // D1: the depth artifact. 'never-recorded'/'error'
   // is a SIGNED statement of absence (verbatim reason — no fabrication);
   // 'path' reads the bytes from disk, verifies the committed sha256 once
   // (trust-but-verify), then commits c2pa.depthmap.GDepth (the map's
@@ -589,7 +589,7 @@ export async function attestPhoto(params: {
       }
     }
   }
-  // 0.16.1: the secondary viewpoint as a componentOf ingredient. Same
+  // The secondary viewpoint as a componentOf ingredient. Same
   // discipline as depth: 'path' reads the bytes, verifies the committed
   // sha256 once (trust-but-verify), then commits BOTH the embedded 512px
   // thumbnail (a lead) and the full-res data hash (the measurement — those
@@ -696,7 +696,7 @@ async function embedC2paInJpeg(stripped: Uint8Array, signedRecord: AttestationRe
       // produced a verified artifact (see attestPhoto's fail-closed block).
       depthmap: standard?.depthmap ?? null,
       collectionAssets: standard?.collectionAssets ?? null,
-      // 0.16.1: the secondary-viewpoint ingredient — absent unless the
+      // The secondary-viewpoint ingredient — absent unless the
       // capture side produced a verified secondary frame (same block).
       secondaryView: standard?.secondaryView ?? null,
     },
@@ -796,7 +796,7 @@ export async function attestPng(params: {
  * was deliberate, not a silent absence.
  */
 /**
- * De-identify re-key (0.9.0 source protection): the anonymised copy signs
+ * De-identify re-key: the anonymised copy signs
  * with a fresh one-time key, so its fingerprint shares nothing with the
  * device's long-lived identity — the linkage between identified and
  * anonymised copies is broken by construction, not by promise. The honest
@@ -930,7 +930,7 @@ function secondCameraCarry(bytes: Uint8Array, container: 'jpeg' | 'bmff'): {
   }
 }
 
-/** 0.18.5 post-field: at most this many periodic pair frames embed as
+/** At most this many periodic pair frames embed as
     ingredient leads in the video manifest (evenly spaced by the caller,
     first + last always included); the vault holds every pair — the
     manifest is the viewing surface, not the archive. */
@@ -941,12 +941,12 @@ export async function deidentifyPhotoToPng(params: {
   key: DeviceSigner;
   /** Original capture time, carried over so the copy's "captured" claim stays literally true. */
   capturedAt?: string;
-  /** The source record's non-identifying context, carried into the copy (0.18.6). */
+ /** The source record's non-identifying context, carried into the copy. */
   source?: DeidSourceContext;
 }): Promise<{ signedPngBytes: Uint8Array; record: AttestationRecord }> {
   const cleanBytes = stripCaBx(params.pngBytes);
   const fields = [...DEID_FIELDS, 'exif'];
-  // Re-keyed: params.key is intentionally NOT used for signing (0.9.0).
+ // Re-keyed: params.key is intentionally NOT used for signing.
   const { key, chain } = await deidEphemeralKey();
 
   const record = buildRecord({
@@ -979,7 +979,7 @@ export async function deidentifyPhotoToPng(params: {
  * proves integrity and custody. Non-identifying evidence (motion, heading,
  * barometrics, pose trace, depth, ENF anchor, capture-evidence states,
  * device model) is carried verbatim from the source record when the caller
- * passes it (0.18.6). The `deidentified` marker makes the redaction explicit
+ * passes it. The `deidentified` marker makes the redaction explicit
  * to any verifier. The original is untouched.
  */
 export async function deidentifyBmff(params: {
@@ -990,7 +990,7 @@ export async function deidentifyBmff(params: {
   key: DeviceSigner;
   /** Original capture time, carried over so the copy's "captured" claim stays literally true. */
   capturedAt?: string;
-  /** The source record's non-identifying context, carried into the copy (0.18.6). */
+ /** The source record's non-identifying context, carried into the copy. */
   source?: DeidSourceContext;
 }): Promise<{ signedBytes: Uint8Array; record: AttestationRecord }> {
   let stripped = params.bytes;
@@ -1002,7 +1002,7 @@ export async function deidentifyBmff(params: {
     ...DEID_FIELDS,
     ...(params.kind === 'audio' ? ['transcript'] : []),
   ];
-  // Re-keyed: params.key is intentionally NOT used for signing (0.9.0).
+ // Re-keyed: params.key is intentionally NOT used for signing.
   const { key, chain } = await deidEphemeralKey();
 
   const record = buildRecord({
@@ -1024,7 +1024,7 @@ export async function deidentifyBmff(params: {
 
   const signedRecord = await signRecord(record, key.signDigest, key.signPayload);
   // transcript: null — the words spoken never ride in a de-identified share copy.
-  // The second-camera stills + claim thumbnail DO ride (0.18.6): parsed from
+ // The second-camera stills + claim thumbnail DO ride: parsed from
   // the original manifest, non-identifying, committed unchanged.
   const carry = params.kind === 'video' ? secondCameraCarry(params.bytes, 'bmff') : null;
   const signedBytes = await embedC2paInBmff(
@@ -1059,7 +1059,7 @@ async function orgCredentialForRecord(): Promise<AttestationRecord['orgCredentia
  * makes the fixpoint well-behaved: build with the current hash, embed,
  * recompute — the layout length is pinned (padding absorbs TSA variance)
  * and the loop converges in two rounds, three when a TSA surprises us.
- * 0.18.6: the finalize step re-fetches TSA tokens fresh each signing round,
+ * The finalize step re-fetches TSA tokens fresh each signing round,
  * and a 1–5 byte shortfall against the pin is unpaddeable; the builder
  * overshoots that gap to exactly +5 (always encodable) and this loop
  * re-pins to the overshot length, so an unlucky token draw costs one extra
@@ -1104,7 +1104,7 @@ async function embedC2paInBmff(
     transcript,
     identity: identityAssertionFor(chain, signedRecord),
     customAssertions: customAssertions ?? null,
-    // 0.18.5 post-field fix: the `standard` block was accepted but never
+    // The `standard` block was accepted but never
     // forwarded — the video claim thumbnail silently never embedded. Wire
     // it, plus the periodic pair-still ingredients (each fail-closed
     // upstream; absent stays absent).
@@ -1142,23 +1142,23 @@ export async function attestVideo(params: {
   assignmentLabel?: string | null;
   certChainOverride?: Uint8Array[];
   integritySignals?: DeviceIntegritySignals | null;
-  /** Cached Bitcoin tip (src/lib/beacon.ts) — signed time lower bound (0.10.0). */
+ /** Cached Bitcoin tip (src/lib/beacon.ts) — signed time lower bound. */
   beacon?: BeaconCommitment | null;
   /** PQ dual-signature layer — software key; hedges P-256 cryptanalysis only. */
   pq?: PqCaptureKey | null;
-  /** Face check outcome (0.11.1) — boolean only, never biometrics; null when the toggle was off. */
+ /** Face check outcome — boolean only, never biometrics; null when the toggle was off. */
   biometricGatePassed?: boolean | null;
   /** TSA token source override (default: live network fetchers). Lab seam for deterministic manifests. */
   fetchTimestamp?: C2paManifestParams['fetchTimestamp'];
-  /** Raw CaptureKit sensor JSONL (WS2 Phase 2 §3) — committed as com.verify.poseTrace. */
+  /** Raw CaptureKit sensor JSONL — committed as com.verify.poseTrace. */
   sensorLogText?: string | null;
-  /** Capture-evidence toggle snapshot (WS2 Phase 2 §2) — when CaptureKit ran. */
+  /** Capture-evidence toggle snapshot — when CaptureKit ran. */
   evidenceEnabled?: EvidenceEnabledSnapshot | null;
-  /** Video stereo-pair claims (0.13.0 §8, commitStereoVideoArtifacts) — the
+  /** Video stereo-pair claims — the
       pairsCommitted/pairsMissed/hardwareCost counts + pairs-root, signed
       into the context tree. */
   stereoClaims?: ContextClaim[] | null;
-  /** 0.18.5 post-field: the periodic pair UW frames as viewable manifest
+  /** The periodic pair UW frames as viewable manifest
       ingredients — the raw vaulted pair JPEG bytes + anchors. Each is
       hashed here and embedded with a ≤512px lead (fail-closed per still:
       a still that fails to process is omitted + logged, the seal goes on).
@@ -1193,7 +1193,7 @@ export async function attestVideo(params: {
   });
   record.assignment = params.assignmentLabel ? { label: params.assignmentLabel } : null;
   record.deviceIntegrity = params.integritySignals ?? null;
-  // Capture-integrity signals (0.9.3) — self-reported, signed, bounded.
+ // Capture-integrity signals — self-reported, signed, bounded.
   record.captureIntegrity = {
     captureToSignatureMs: Math.max(0, Date.now() - Date.parse(record.capturedAt)),
     sensorTiming: params.context.sensorTiming ?? null,
@@ -1226,7 +1226,7 @@ export async function attestVideo(params: {
   });
   const signedRecord = await signRecord(record, params.key.signDigest, params.key.signPayload, params.pq);
 
-  // 0.18.5 post-field: the periodic pair frames as componentOf ingredients.
+  // The periodic pair frames as componentOf ingredients.
   // The embedded bytes ARE the vaulted pair JPEG (≤640×480, capture-side
   // byte cap) — lead and measurement coincide, and the data hash commits
   // the same bytes. Fail-closed per still; the bound keeps the file lean
@@ -1276,15 +1276,15 @@ export async function attestAudio(params: {
   assignmentLabel?: string | null;
   certChainOverride?: Uint8Array[];
   integritySignals?: DeviceIntegritySignals | null;
-  /** Cached Bitcoin tip (src/lib/beacon.ts) — signed time lower bound (0.10.0). */
+ /** Cached Bitcoin tip (src/lib/beacon.ts) — signed time lower bound. */
   beacon?: BeaconCommitment | null;
   /** PQ dual-signature layer — software key; hedges P-256 cryptanalysis only. */
   pq?: PqCaptureKey | null;
-  /** Face check outcome (0.11.1) — boolean only, never biometrics; null when the toggle was off. */
+ /** Face check outcome — boolean only, never biometrics; null when the toggle was off. */
   biometricGatePassed?: boolean | null;
-  /** Raw sensor JSONL (WS2 Phase 2 §3) — committed as com.verify.poseTrace when present. */
+  /** Raw sensor JSONL — committed as com.verify.poseTrace when present. */
   sensorLogText?: string | null;
-  /** Capture-evidence toggle snapshot (WS2 Phase 2 §2) — when CaptureKit ran. */
+  /** Capture-evidence toggle snapshot — when CaptureKit ran. */
   evidenceEnabled?: EvidenceEnabledSnapshot | null;
 }): Promise<AttestResult> {
   const rawBytes = await readFileBytes(params.audioUri);
@@ -1309,7 +1309,7 @@ export async function attestAudio(params: {
   });
   record.assignment = params.assignmentLabel ? { label: params.assignmentLabel } : null;
   record.deviceIntegrity = params.integritySignals ?? null;
-  // Capture-integrity signals (0.9.3) — self-reported, signed, bounded.
+ // Capture-integrity signals — self-reported, signed, bounded.
   record.captureIntegrity = {
     captureToSignatureMs: Math.max(0, Date.now() - Date.parse(record.capturedAt)),
     sensorTiming: params.context.sensorTiming ?? null,
@@ -1361,7 +1361,7 @@ export async function attestAudio(params: {
  * for integrity — same media hash, same capture-time claim, fresh RFC 3161
  * countersignature — under a fresh ONE-TIME signing key (re-keyed, 0.9.0:
  * the long-lived device key is deliberately NOT used), while removing the
- * identifying values only (0.18.6): byline, organization, location, Wi-Fi,
+ * identifying values only: byline, organization, location, Wi-Fi,
  * signing-key linkage. Non-identifying evidence — motion, heading,
  * barometrics, pose trace, depth, capture-evidence states, device model —
  * is carried verbatim from the source record when the caller passes it.
@@ -1377,7 +1377,7 @@ export async function deidentifyPhoto(params: {
   key: DeviceSigner;
   /** Original capture time, carried over so the copy's "captured" claim stays literally true. */
   capturedAt?: string;
-  /** The source record's non-identifying context, carried into the copy (0.18.6). */
+ /** The source record's non-identifying context, carried into the copy. */
   source?: DeidSourceContext;
 }): Promise<{ signedPhotoBytes: Uint8Array; record: AttestationRecord }> {
   // Strip the old manifest AND any EXIF/IPTC metadata — the redacted record is
@@ -1386,9 +1386,9 @@ export async function deidentifyPhoto(params: {
   const originalBytes = await readFileBytes(params.photoUri);
   const cleanBytes = stripMetadata(stripManifest(originalBytes));
   const fields = [...DEID_FIELDS, 'exif'];
-  // Re-keyed: params.key is intentionally NOT used for signing (0.9.0).
+ // Re-keyed: params.key is intentionally NOT used for signing.
   const { key, chain } = await deidEphemeralKey();
-  // 0.18.6: the simultaneous second-camera frame + claim thumbnail carry
+  // The simultaneous second-camera frame + claim thumbnail carry
   // into the copy — non-identifying evidence, parsed from the original.
   const carry = secondCameraCarry(originalBytes, 'jpeg');
 

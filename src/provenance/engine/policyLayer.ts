@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS3 policy layer — THE verdict authority (SPEC §0.2, §2.1).
+ * THE verdict authority (SPEC §0.2, §2.1).
  *
  * No engine ever emits a verdict. Engines return normalized facts
  * (NormalizedEngineResult); THIS module composes them into OUR verdict

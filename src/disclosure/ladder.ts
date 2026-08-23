@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 1: disclosure ladders — the fixed coarseness rungs every
+ * Disclosure ladders — the fixed coarseness rungs every
  * claim family commits under (docs/INTEGRITY.md — selective disclosure).
  *
  * A ladder is an ordered list of rung names, coarsest first (rung 0).
@@ -87,7 +87,7 @@ export function expectedClaimIds(): string[] {
 const EXACT_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 // ---------------------------------------------------------------------------
-// Geohash (WS2 Phase 2): the location family's PURE derivation. The exact
+// Geohash: the location family's PURE derivation. The exact
 // claim value is the canonical string `'<lat>,<lon>'` (6 decimal places,
 // round-half-away-from-zero at 5e-7° ≈ 5 cm — below GPS noise, so the
 // quantization never decides anything a desk would weigh). Coarser rungs

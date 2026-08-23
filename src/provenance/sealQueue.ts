@@ -74,14 +74,14 @@ export interface SealJob {
   /** Sanitized camera EXIF captured at the shutter (photo jobs). */
   exif?: Record<string, number | string> | null;
   /**
-   * CaptureKit evidence-file paths (1.0.0, WS1) — raw PCM master, sensor log,
+ * CaptureKit evidence-file paths — raw PCM master, sensor log,
    * stills ring dump; merged into the record's context block at seal time.
-   * Audio jobs (WS2 Phase 2 §3 parity) carry only the sensor-log slot — the
+   * Audio jobs carry only the sensor-log slot — the
    * audio recorder's gyro JSONL; PCM/ring stay structural 'never-recorded'.
    */
   captureEvidence?: CaptureEvidencePaths | null;
   /**
-   * ExhibitCamera stereo stills result (0.13.0): the FULL CaptureResult from
+ * ExhibitCamera stereo stills result: the FULL CaptureResult from
    * the native module — captureId, delivery path, stereo session state, and
    * the three-state EvidencePaths for the secondary frame / calibration /
    * timestamps / metadata / RAW DNG. The pump stores the artifact files
@@ -90,7 +90,7 @@ export interface SealJob {
    */
   exhibitCapture?: CaptureResult | null;
   /**
-   * ExhibitCamera video session facts (0.13.0) — stated, never inferred:
+ * ExhibitCamera video session facts — stated, never inferred:
    * audioTrack false means the delivery file structurally has no audio;
    * the pair counts and the evidence dir locate the periodic stereo pairs
    * committed during recording.
@@ -109,12 +109,12 @@ export interface SealJob {
     pairEvents?: StereoVideoPairEvent[];
   } | null;
   /**
-   * Assignment-mode label snapshotted at enqueue (0.9.0) — the capture signs
+ * Assignment-mode label snapshotted at enqueue — the capture signs
    * with the assignment key even if the setting changes before sealing.
    */
   assignmentLabel?: string | null;
   /**
-   * Face check outcome (0.11.1) — the boolean result of the OS biometric
+ * Face check outcome — the boolean result of the OS biometric
    * check run at capture start when the toggle is on; null when off. Signed
    * into the record's captureIntegrity telemetry. The flag ONLY: no face
    * geometry, template, or image ever touches this queue.
@@ -132,7 +132,7 @@ let pumping = false;
 const listeners = new Set<Listener>();
 
 /**
- * Container rebasing (0.16.2, field failure 8/13): a TestFlight reinstall
+ * Container rebasing: a TestFlight reinstall
  * moves Documents into a NEW app-container UUID. Every path this queue
  * persisted still names the OLD container, so perfectly intact drafts read
  * as "file does not exist" (the zombie FileNotExistsException jobs). The
@@ -204,7 +204,7 @@ function notify(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Seal-job visibility (0.15.1): the queue has always KEPT failed jobs and
+// Seal-job visibility: the queue has always KEPT failed jobs and
 // their verbatim error strings — what it never did was SHOW them. A seal
 // failure used to be invisible (vault insertion is the last step, so a
 // failed seal simply never appears in Exhibits). This read API is how the
@@ -269,7 +269,7 @@ export async function retrySealJob(id: string): Promise<void> {
 }
 
 /**
- * User-initiated discard of a FAILED job (0.17.0): the Needs-attention card's
+ * User-initiated discard of a FAILED job: the Needs-attention card's
  * Remove action. Deletes the draft file (vault-armored ciphertext), drops the
  * job, persists, notifies. A no-op for jobs that aren't failed — a live pump
  * never loses work to a stray tap.
@@ -318,7 +318,7 @@ export async function cancelSealJob(id: string): Promise<void> {
 }
 
 /**
- * Pump checkpoint (0.18.4): honor a mid-seal cancel between major steps —
+ * Pump checkpoint: honor a mid-seal cancel between major steps —
  * never mid-write. On abandon: the unsealed work file and the armored draft
  * are deleted, the job drops out of the queue, and the log states the
  * discard. Returns true when the job was abandoned (the pump continues with
@@ -402,11 +402,11 @@ export async function enqueuePhotoSeal(params: {
   identity: Identity;
   /** Sanitized camera EXIF from the shutter. */
   exif?: Record<string, number | string> | null;
-  /** CaptureKit ring/sensor-log evidence paths (1.0.0, WS1) — native stills path only. */
+ /** CaptureKit ring/sensor-log evidence paths — native stills path only. */
   captureEvidence?: CaptureEvidencePaths | null;
-  /** Full ExhibitCamera CaptureResult (0.13.0) — stereo artifacts ride the job to the record's evidence dir. */
+ /** Full ExhibitCamera CaptureResult — stereo artifacts ride the job to the record's evidence dir. */
   exhibitCapture?: CaptureResult | null;
-  /** Face check outcome (0.11.1) — boolean only; null when the toggle was off. */
+ /** Face check outcome — boolean only; null when the toggle was off. */
   biometricGatePassed?: boolean | null;
 }): Promise<void> {
   await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {});
@@ -444,10 +444,10 @@ export async function enqueueAudioSeal(params: {
   context: SensorContext;
   identity: Identity;
   transcript: TranscriptAssertion | null;
-  /** Face check outcome (0.11.1) — boolean only; null when the toggle was off. */
+ /** Face check outcome — boolean only; null when the toggle was off. */
   biometricGatePassed?: boolean | null;
   /**
-   * Audio IMU evidence path (WS2 Phase 2 §3 media parity) — the gyro JSONL
+   * Audio IMU evidence path — the gyro JSONL
    * the native recorder wrote during the take, as a three-state EvidencePath
    * (path / enabled-but-failed null / 'never-recorded'); the other two
    * CaptureKit sinks are structural 'never-recorded' for audio. When the
@@ -494,11 +494,11 @@ export async function enqueueVideoSeal(params: {
   videoUri: string;
   context: SensorContext;
   identity: Identity;
-  /** CaptureKit PCM/sensor-log evidence paths (1.0.0, WS1) — native session path only. */
+ /** CaptureKit PCM/sensor-log evidence paths — native session path only. */
   captureEvidence?: CaptureEvidencePaths | null;
-  /** ExhibitCamera video session facts (0.13.0) — audio track presence, stereo pair counts, evidence dir. */
+ /** ExhibitCamera video session facts — audio track presence, stereo pair counts, evidence dir. */
   exhibitVideo?: SealJob['exhibitVideo'];
-  /** Face check outcome (0.11.1) — boolean only; null when the toggle was off. */
+ /** Face check outcome — boolean only; null when the toggle was off. */
   biometricGatePassed?: boolean | null;
 }): Promise<void> {
   await FileSystem.makeDirectoryAsync(DIR, { intermediates: true }).catch(() => {});
@@ -538,7 +538,7 @@ export async function enqueueVideoSeal(params: {
 export async function resumeSealQueue(): Promise<void> {
   await ensureLoaded();
   void pump();
-  // Burn scheduler (WS2 Phase 2 §4): foreground hook. Burns are recorded
+  // Burn scheduler: foreground hook. Burns are recorded
   // events in the vault disclosure store — never silent. The outer catch
   // only guards the void'd promise; per-item containment lives INSIDE the
   // scheduler: one failing item is recorded in its
@@ -547,7 +547,7 @@ export async function resumeSealQueue(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// WS2 Phase 2 §4: the vault disclosure store (sealed at rest like everything
+// The vault disclosure store (sealed at rest like everything
 // else) — per-item disclosure state (master seed until burn, Sealed bundle,
 // claims) and the chunk maps behind the v2 streamedChunks assertion.
 // ---------------------------------------------------------------------------
@@ -618,7 +618,7 @@ async function saveDisclosureState(
 }
 
 /**
- * ExhibitCamera stereo artifacts (0.13.0): after a still seals, the
+ * ExhibitCamera stereo artifacts: after a still seals, the
  * COMMITTED artifact bytes (the desk-shape JSON for calibration /
  * timestamps / metadata — the exact bytes the bundle hash binds; the raw
  * sensor bytes for the frames) move into the sealed record's own evidence
@@ -664,7 +664,7 @@ async function storeExhibitArtifacts(
         // Stated below via the section entries; never a seal failure.
       }
     }
-    // W2.1 full-sensor stills: vault-sealed like every other exhibit byte,
+    // Vault-sealed like every other exhibit byte,
     // their committed hashes in the summary AND in the signed context
     // tree (context.fullres-* claims, built by buildFullResSealExtras).
     const extraSummary: Record<string, { sha256: string; bytes: number; stored: string | null; nativeSha256: string | null }> = {};
@@ -784,7 +784,7 @@ async function buildFullResSealExtras(
 }
 
 /**
- * VIDEO pair artifact storage (0.13.0 §8): after a video seals, the
+ * VIDEO pair artifact storage: after a video seals, the
  * COMMITTED pair bytes (converted calibration JSON — the exact bytes the
  * bundle hash binds; the raw secondary JPEGs) move into the record's
  * evidence dir under pairs/, vault-sealed. A sealed pairs-summary.json
@@ -854,13 +854,13 @@ async function readSensorLogText(job: SealJob): Promise<string | null> {
 function evidenceEnabledFor(job: SealJob): EvidenceEnabledSnapshot | null {
   if (!job.captureEvidence) return null;
   const t = useStore.getState().settings;
-  // 0.18.1: captureEvidence.sensors retired — the full-rate sensor log now
+  // CaptureEvidence.sensors retired — the full-rate sensor log now
   // follows the single Motion log toggle (includeSensors).
   return { ring: t.captureEvidence.ring, rawPcm: t.captureEvidence.rawPcm, sensors: t.includeSensors };
 }
 
 /**
- * Ledger anchoring (0.9.1): after the item is sealed, submit the record's
+ * Ledger anchoring: after the item is sealed, submit the record's
  * payload digest to the free OTS calendars — hash-only, no account. Best-
  * effort: offline digests queue with their delay honestly recorded, and a
  * failed anchor never fails the seal. When the network is clearly up we
@@ -874,7 +874,7 @@ async function maybeAnchorOts(recordId: string, record: import('./manifest').Att
 }
 
 /**
- * CaptureKit provenance (1.0.0, WS1): the evidence-file paths are merged
+ * CaptureKit provenance: the evidence-file paths are merged
  * into the record's context block — the existing capture-metadata block —
  * at seal time, so they are signed with everything else. Fallback-path
  * captures carry no such block (absent, disclosed — never fabricated).
@@ -894,17 +894,17 @@ async function pump(): Promise<void> {
     for (const job of list) {
       if (job.state !== 'pending') continue;
       // A queued job can be cancelled from the grid while this loop runs;
-      // re-check membership before claiming it (0.18.3).
+ // re-check membership before claiming it.
       if (jobs?.includes(job) !== true) continue;
       job.state = 'sealing';
       job.attempts += 1;
       await persist();
       notify();
-      // Checkpoint 0 (0.18.4): a cancel that landed between the membership
+ // Checkpoint 0: a cancel that landed between the membership
       // re-check and the claim is honored before any seal work starts.
       if (await abandonIfCancelled(job, null)) continue;
       try {
-        // Assignment mode (0.9.0): sign with the assignment-scoped software
+ // Assignment mode: sign with the assignment-scoped software
         // key instead of the device key — assignments are unlinkable to each
         // other and to the device. The cert chain is the assignment key's own
         // self-signed cert (never the device's chain or org credential).
@@ -955,7 +955,7 @@ async function pump(): Promise<void> {
         // here — refreshes run on their own jittered schedule, decoupled from
         // captures (src/lib/beacon.ts). Absent (not fabricated) when uncached.
         const beacon = currentBeacon();
-        // WS2 Phase 2: read the sensor JSONL for the poseTrace commitment and
+        // Read the sensor JSONL for the poseTrace commitment and
         // snapshot the evidence toggles for the captureIntegrity assertion.
         // Audio: the recorder's gyro sink is not a CaptureKit session and has
         // no CaptureKit toggle snapshot — evidenceEnabled stays null; the
@@ -966,7 +966,7 @@ async function pump(): Promise<void> {
         if ((job.kind ?? 'photo') === 'audio') {
           const { signedAudioBytes, record, disclosure, chunkMaps } = await attestAudio({
             audioUri: workUri,
-            // Media parity (WS2 Phase 2 §3): merge the audio recorder's gyro
+            // Media parity: merge the audio recorder's gyro
             // evidence path into the signed context exactly like video/photo.
             context: contextWithCaptureKit(job),
             identity: job.identity,
@@ -983,7 +983,7 @@ async function pump(): Promise<void> {
             evidenceEnabled,
           });
           if (!signedAudioBytes) throw new Error('signing produced no output');
-          // Checkpoint (0.18.4): last cancel point before the vault write.
+ // Checkpoint: last cancel point before the vault write.
           if (await abandonIfCancelled(job, workCleanup)) continue;
           savedId = (await saveItem({
             kind: 'audio',
@@ -997,7 +997,7 @@ async function pump(): Promise<void> {
           await saveDisclosureState(savedId, disclosure, chunkMaps);
           await maybeAnchorOts(savedId, record);
         } else if (job.kind === 'video') {
-          // ExhibitCamera VIDEO stereo ingestion (0.13.0, Spec §8): the
+          // ExhibitCamera VIDEO stereo ingestion: the
           // periodic pairs dumped during recording are enumerated from the
           // collected pair events (the module writes no per-pair timestamps
           // file — the events carry the anchors), converted by stereoGlue
@@ -1009,7 +1009,7 @@ async function pump(): Promise<void> {
           // bytes attestVideo hashes into record.asset.sha256.
           let videoStereoCommit: { section: VideoStereoBundleSection; contextClaims: import('../disclosure/inventory').ContextClaim[] } | null = null;
           let videoStereoFiles: CommittedStereoFile[] = [];
-          // 0.18.5 post-field: the embedded viewing surface for a reviewing
+          // The embedded viewing surface for a reviewing
           // human — up to 8 pair frames (evenly spaced, first + last always
           // in) sealed into the manifest as componentOf ingredients. The
           // vault keeps every pair; embedding is the lead surface.
@@ -1062,7 +1062,7 @@ async function pump(): Promise<void> {
           });
           // signedVideoBytes is only undefined for out-of-scope containers, where
           // saveItem seals the raw draft + sidecar record — the honest degradation.
-          // Checkpoint (0.18.4): last cancel point before the vault write.
+ // Checkpoint: last cancel point before the vault write.
           if (await abandonIfCancelled(job, workCleanup)) continue;
           savedId = (await saveItem({ kind: 'video', videoUri: workUri, videoBytes: signedVideoBytes, record })).id;
           await saveDisclosureState(savedId, disclosure, chunkMaps);
@@ -1094,9 +1094,9 @@ async function pump(): Promise<void> {
           // folded into the SAME signed context tree as the stereo claims.
           let fullResExtras: ExtraEvidenceFile[] = [];
           let extraClaims: ContextClaim[] = [];
-          // D1 (0.16.0): the resolved depth artifact for THIS capture.
+ // D1: the resolved depth artifact for THIS capture.
           let depthInput: DepthCommitInput | null = null;
-          // 0.16.1: the resolved secondary viewpoint for THIS capture.
+          // The resolved secondary viewpoint for THIS capture.
           let secondaryInput: SecondaryCommitInput | null = null;
           if (job.exhibitCapture) {
             const primarySha256 = (await hashFileSha256(workUri)).hex;
@@ -1109,11 +1109,11 @@ async function pump(): Promise<void> {
             const fullRes = await buildFullResSealExtras(job.exhibitCapture);
             fullResExtras = fullRes.extras;
             extraClaims = fullRes.claims;
-            // D1 (0.16.0): the depth artifact rides the same job — resolved
+ // D1: the depth artifact rides the same job — resolved
             // (full-res primary, degraded fallback), committed pre-signing
             // by attestPhoto, sealed into the vault below.
             depthInput = resolveDepthSealInput(job.exhibitCapture);
-            // 0.16.1: the secondary viewpoint rides the same job — resolved,
+            // The secondary viewpoint rides the same job — resolved,
             // committed pre-signing by attestPhoto as a componentOf
             // ingredient (embedded thumbnail + full-res data hash); the
             // full-res bytes themselves are already vault-sealed by
@@ -1141,7 +1141,7 @@ async function pump(): Promise<void> {
             secondary: secondaryInput,
           });
           if (!signedPhotoBytes) throw new Error('signing produced no output');
-          // Checkpoint (0.18.4): last cancel point before the vault write.
+ // Checkpoint: last cancel point before the vault write.
           if (await abandonIfCancelled(job, workCleanup)) continue;
           savedId = (await saveItem({
             kind: 'photo',

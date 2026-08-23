@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 1: context-claim inventory (docs/INTEGRITY.md — selective disclosure).
+ * Context-claim inventory (docs/INTEGRITY.md — selective disclosure).
  *
  * Every capture carries the FULL expected claim set — all rungs of all
  * fixed ladders (ladder.ts) plus any free-form `context.*` claims. Each

@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 2: the burn scheduler + per-item disclosure store
+ * The burn scheduler + per-item disclosure store
  * (SPEC-WS2-Phase2 §4).
  *
  * A vault-level policy. Each sealed item carries a DisclosureItemState:

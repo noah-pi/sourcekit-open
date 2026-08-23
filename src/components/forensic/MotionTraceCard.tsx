@@ -57,7 +57,7 @@ const SERIES_GYRO = '#C08552';
 
 // FIXED map scales — never per-capture normalization. A flatline must LOOK
 // flat in every exhibit, or cross-exhibit comparison is a lie of
-// presentation (0.18.3's fixed-scale rule, carried into the maps). The
+// presentation (scale rule, carried into the maps). The
 // drift grid is ±32 px per axis; the twist grid is ±200 °/s per axis (the
 // old gyro lane's full-scale). Paths clip at the grid edge; the lane
 // label always states the true peak.
@@ -270,7 +270,7 @@ type TraceState =
       shiftsXY: { dx: number; dy: number }[];
       /** Distinct primary capture timestamps across the committed frames,
        *  from the ring's own index — null when the index is absent or
-       *  unreadable (0.18.4). Fewer than `committed` means the retained
+ * unreadable. Fewer than `committed` means the retained
        *  frames did not advance: the flatline is a stated fact, not a
        *  "no motion" reading. */
       distinctTimestamps: number | null;
@@ -278,7 +278,7 @@ type TraceState =
       /** Unique 8×8 luma dHash values across the committed frames, from the
        *  ring's own index — null when the index carries no hashes (a
        *  pre-0.18.6 ring) or is unreadable. The pixel-distinctness fact
-       *  Noah asked for, stated from committed data (0.18.6). */
+ * Noah asked for, stated from committed data. */
       distinctHashes: number | null;
       hashedFrames: number | null;
       /** The burst frame file URIs in capture order — the filmstrip
@@ -309,7 +309,7 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
       try {
         const dir = toFileUri(ringBufferDir as string).replace(/\/$/, '');
         const dirNames = await FileSystem.readDirectoryAsync(dir);
-        // 0.18.4: PRIMARY frames only. The glob used to take every JPEG in
+        // PRIMARY frames only. The glob used to take every JPEG in
         // the ring dir — sorted, the -secondary.jpg files interleave with
         // the primaries, and consecutive "pairs" then measured cross-CAMERA
         // jumps as frame motion (the two lenses see different views).
@@ -340,7 +340,7 @@ export function MotionTraceCard({ ringBufferDir, poseTrace, motion }: {
               distinctTimestamps = new Set(pts).size;
               committed = pts.length;
             }
-            // 0.18.6: the committed per-frame dHashes — pixel distinctness
+            // The committed per-frame dHashes — pixel distinctness
             // stated from the ring's own index, never inferred.
             const hashes = (doc.frames ?? [])
               .map((f) => f?.primaryDHash64)
@@ -544,11 +544,11 @@ const MAX_VIDEO_TRACE_FRAMES = 48;
 const GYRO_BUCKETS = 120;
 
 /**
- * VideoMotionCard — the motion trace of a VIDEO take (0.18.6). A video
+ * VideoMotionCard — the motion trace of a VIDEO take. A video
  * take has no shutter burst; its serial photography is the committed
  * second-camera pair frames across the take, and its pose trace is the
  * sealed sensor JSONL's gyro stream. Same juxtaposition discipline as the
- * stills card, same trajectory maps (0.18.6 post-field): the picture's
+ * stills card, same trajectory maps: the picture's
  * cumulative drift against the phone's yaw/pitch twist path on fixed
  * scales, numbers only — the weighing is the reader's.
  *

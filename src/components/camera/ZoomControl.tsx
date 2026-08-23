@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Zoom control (0.15.0 Drop 2, research §5) — replaces the "too fast, no
+ * Zoom control — replaces the "too fast, no
  * in-between" zoom UI.
  *
  * <ZoomWheel/> — the bottom row: optical pills (.5 / 1 / tele factor, only
@@ -91,7 +91,7 @@ export function ZoomWheel({
   /** The lens the session is ACTUALLY on (post-honesty-check) — pills
    *  highlight from this, never from intent. */
   currentLens: ExhibitLens;
-  /** Relative ceiling of the wheel sweep (W2.3): the native per-device
+ /** Relative ceiling of the wheel sweep: the native per-device
    *  quality-cap ceiling when the caps have reported, else the
    *  MAX_RELATIVE_ZOOM fallback. */
   maxZoom?: number;
@@ -147,7 +147,7 @@ export function ZoomWheel({
         const c = stopsRef.current;
         // Bounds re-derived per move: the lens inventory (and thus the
         // stack floor) can arrive after the responder was created. The
-        // wheel never leaves the current stack (0.17.1, the Halide model).
+        // wheel never leaves the current stack.
         const lo = stackZoomFloor(c, lensRef.current);
         const next = clampZoom(
           Math.pow(2, startLog.current + g.dx / PX_PER_OCTAVE),

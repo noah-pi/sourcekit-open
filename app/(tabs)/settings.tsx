@@ -185,7 +185,7 @@ export default function SettingsScreen() {
       setPublicKey(k.publicKeyBase64);
       setKeyBackend(k.backend);
     }).catch(() => {});
-    // Attestation is set-and-forget (0.18.0): the launch path ensures it
+ // Attestation is set-and-forget: the launch path ensures it
     // silently; here we simply read the stored state for display.
     getAttestState().then(setAttestState).catch(() => {});
     getAttestServerUrl().then((u) => setAttestServer(u ?? ''));
@@ -604,7 +604,7 @@ export default function SettingsScreen() {
           </Text>
 
           <Divider />
-          {/* Same header rank as Alias (0.14.0) — this is a second kind of
+          {/* Same header rank as Alias — this is a second kind of
               signer identity, not a footnote under it. */}
           <View style={styles.aliasHeader}>
             <Text style={styles.rowTitle}>Organization Credential</Text>
@@ -669,7 +669,7 @@ export default function SettingsScreen() {
             evidence in the accent), one tight line per toggle. */}
         <SectionLabel text="What gets recorded" />
         <Card>
-          {/* Two explicit groups (0.18.1): terracotta marks the toggles that
+          {/* Two explicit groups: terracotta marks the toggles that
               seal WHO/WHERE-you-are into the file; sage marks evidence about
               the moment itself. One tight line per toggle. */}
           <GroupLabel tint={IDENTIFYING_TINT} text="Identifying · sealed into the file" />
@@ -951,8 +951,8 @@ const DEBUG_FLAG_LABELS: Record<ExhibitDebugFlagKey, string> = {
   legacyMultiInputGraph: 'Legacy dual-input graph',
 };
 
-// Toggle-board color language, paralleling the camera HUD icon palette
-// (0.18.1): muted terracotta marks the identifying signals, sage green the
+// Toggle-board color language, paralleling the camera HUD icon palette:
+// muted terracotta marks the identifying signals, sage green the
 // evidence sinks, violet keeps the face check's own lane. No pure yellow,
 // no blue — the same anchors the HUD uses.
 const IDENTIFYING_TINT = '#C08552'; // warm clay / terracotta
@@ -978,7 +978,7 @@ function GroupLabel({ text, tint }: { text: string; tint: string }) {
 }
 
 /** Toggle row — same icon+label language as the HUD and grid badges.
- *  0.18.2: subs are NEVER truncated (field report: ellipsized copy reads as
+ *  Subs are NEVER truncated (field report: ellipsized copy reads as
  *  a bug). Every sub reserves two lines (proofSubMin) so rows are evenly
  *  spaced whether the copy runs one line or two. */
 function ProofToggle({ icon, label, sub, value, onChange, tint, disabled, recommended }: {

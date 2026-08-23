@@ -41,7 +41,7 @@ export default function LockScreen() {
     // The user just authenticated — move the vault key behind the OS
     // keychain's user-presence access control while that presence is fresh.
     await upgradeVaultKeyAcl().catch(() => {});
-    // 0.18.6: prime the key HERE, at the moment of presence, so no grid
+    // Prime the key HERE, at the moment of presence, so no grid
     // cell or background seal job ever pops the OS presence prompt at an
     // arbitrary moment later (an ignored prompt wedged the pump; a
     // cancelled one threw mid-seal — the "face ID results in errors"

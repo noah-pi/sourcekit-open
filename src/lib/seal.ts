@@ -31,7 +31,7 @@
  * What this does NOT do (honest notes the UI repeats):
  *  - The photographer's own vault copy stays protected by the vault passcode;
  *    sealing protects the desk-bound copies. Seizure guidance stays: lock /
- *    wipe before a crossing (W5.3 operational guidance).
+ *    wipe before a crossing.
  *  - The desk key is a software key. Its custody is the Shamir split —
  *    one stolen laptop must not decrypt everything; K shares together, in
  *    one machine's memory, are the whole key while they are there.

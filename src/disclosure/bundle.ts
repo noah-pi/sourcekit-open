@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 1: the disclosure bundle (docs/INTEGRITY.md — selective disclosure).
+ * The disclosure bundle (docs/INTEGRITY.md — selective disclosure).
  *
  * A bundle opens a SUBSET of the committed context leaves against the
  * signed root. The governing honesty rules:

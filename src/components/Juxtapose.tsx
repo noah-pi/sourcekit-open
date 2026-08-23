@@ -1,5 +1,5 @@
 /**
- * Juxtapose — the "What should be true" cards (0.17.0).
+ * Juxtapose — the "What should be true" cards.
  *
  * The pivot: these cards never detect and never conclude. Each puts what was
  * SEALED next to what SHOULD BE true, and leaves the match to the person
@@ -226,7 +226,7 @@ export function HorizonLineOverlay({ rollDeg, pitchDeg }: { rollDeg: number; pit
   const line = { top: `${horizonTopPct(aim)}%` as const };
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {/* Roll rotates the horizon around the IMAGE CENTER (0.18.2): the
+      {/* Roll rotates the horizon around the IMAGE CENTER: the
           wrapper carries the rotation, the line carries the pitch offset. */}
       <View style={[StyleSheet.absoluteFill, { transform: [{ rotate: `${tilt}deg` }] }]}>
         <View style={[styles.horizonOverlayBacking, line]} />
@@ -393,7 +393,7 @@ const DIAL_CX = 90; // container is 180 wide
 const DIAL_CY = 64; // container is 114 tall: 22px of headroom above the far edge
 
 /**
- * The condition glyph (0.18.2 — Noah asked for weather-style icons). The
+ * The condition glyph (asked for weather-style icons). The
  * HONESTY RULE: the sealed record carries NO weather field (checked
  * src/provenance/manifest.ts), so the glyph is derived from sun elevation
  * alone — sun by day, an outlined sun near the horizon, a moon at night.
@@ -670,7 +670,7 @@ const buildStyles = () => StyleSheet.create({
   },
   // Overlay lines sit on arbitrary photos: a bright-green core (readable on
   // dark and light scenes) over a dark backing halo — never subtle. Bumped
-  // a second time (0.18.2): still too faint over a bright sky at 7+3 px /
+ // a second time: still too faint over a bright sky at 7+3 px /
   // 0.55 alpha, so the halo goes to 9 px / 0.70 and the core to 4 px, the
   // core now CENTERED in the halo (marginTop splits the height difference).
   horizonOverlayBacking: {
@@ -684,7 +684,7 @@ const buildStyles = () => StyleSheet.create({
   },
 
   // gravity / plumb overlay (same second bump as the horizon line)
-  // 0.18.2: top/bottom insets now come inline (∝ the projection magnitude)
+  // Top/bottom insets now come inline (∝ the projection magnitude)
   // and the bob is gone — it sat at a fixed bottom offset while the line
   // rotated, floating off the line's end ("the offset anchor looks wrong").
   plumbReference: {
@@ -729,7 +729,7 @@ const buildStyles = () => StyleSheet.create({
   aimBadgeText: { color: '#fff', fontSize: 9.5, fontWeight: '700' },
 
   // sun overlay — filled accent pill, now with a dark halo ring and a step
-  // larger type/icon so it holds up over a bright sky (0.18.2 bump).
+  // larger type/icon so it holds up over a bright sky.
   sunMarker: {
     position: 'absolute',
     flexDirection: 'row', alignItems: 'center', gap: 5,
@@ -748,9 +748,9 @@ const buildStyles = () => StyleSheet.create({
   },
   sunBadgeText: { color: '#fff', fontSize: fontSize.xs, fontWeight: '600' },
 
-  // shadows — the perspective sundial (0.18.2): a tilted ground plane
+ // shadows — the perspective sundial: a tilted ground plane
   // (hairline ellipse over a soft fill), N on the far edge, a shaded
-  // charcoal gnomon, ONE sage shadow line — and (0.18.3) the clay sun dot
+ // charcoal gnomon, ONE sage shadow line — and the clay sun dot
   // moving with azimuth AND elevation, opposite its shadow.
   sundialPersp: {
     width: 2 * DIAL_CX, height: 114,
@@ -780,7 +780,7 @@ const buildStyles = () => StyleSheet.create({
     position: 'absolute', width: 12, height: 12, borderRadius: 6,
     backgroundColor: '#C08552',
   },
-  // 0.18.5: the dotted day-track the sun dot rides (same clay, quiet).
+  // The dotted day-track the sun dot rides (same clay, quiet).
   sunPathDot: {
     position: 'absolute', width: 3, height: 3, borderRadius: 1.5,
     backgroundColor: 'rgba(192,133,82,0.45)',

@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Inspect — check a file against its seal (0.18.2). The result is a
+ * Inspect — check a file against its seal. The result is a
  * forensic reader, not a trophy case — and it mirrors the exhibit details
  * page 1:1 (Noah: "almost identical, especially the manifest points"):
  * the verdict card first, then ONE Capture claims card in the exhibit's
@@ -104,7 +104,7 @@ interface VerdictContext {
  * key and a "valid signature" in 200 milliseconds; intact bytes alone never
  * earn green.
  *
- * Copy v5 (0.17.0): seven verdicts, plain register. No "confirmed", no
+ * Copy v5: seven verdicts, plain register. No "confirmed", no
  * "checks out" — icons carry status, words carry facts.
  */
 function verdictCopy(v: VerdictCode, ctx: VerdictContext): { headline: string; subline: string; tone: 'good' | 'bad' | 'warn' | 'neutral'; icon: keyof typeof Ionicons.glyphMap } {
@@ -244,7 +244,7 @@ function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRe
     return { frame: null, ptsSeconds: null, recordError: f?.state === 'error' ? f.error ?? 'the native module reported an error' : null, videoFrames: null };
   }
   if (record.asset.kind === 'video') {
-    // 0.18.5 post-field: every recorded pair frame — the filmstrip surface.
+    // Every recorded pair frame — the filmstrip surface.
     const recordedPairs = (record.videoStereo?.pairs ?? []).filter(
       (p) => p.artifacts?.secondaryFrame?.state === 'recorded' && !!p.artifacts.secondaryFrame.dataBase64,
     );
@@ -253,7 +253,7 @@ function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRe
       return {
         frame: { dataBase64: f.dataBase64!, mime: f.mime, sha256: f.sha256 },
         pairIndex: p.pairIndex,
-        // 0.18.6 (Noah): the pair's own primary PTS anchor — a filmstrip
+ // The pair's own primary PTS anchor — a filmstrip
         // tap re-seeks the blend's primary frame to THAT pair's moment.
         ptsSeconds: p.anchors.primaryHostSeconds ?? null,
       };
@@ -551,7 +551,7 @@ function bitcoinCalendarValue(ots: OtsView): { text: string; color?: string } {
 }
 
 /**
- * The seal rows (0.18.2) — the manifest lines that used to sit in the
+ * The seal rows — the manifest lines that used to sit in the
  * "Manifest details" drawer, merged into the Capture claims card in the
  * exhibit page's row format. The old Signature detail section's copy rides
  * as the rows' details, so a failure still says exactly what failed. These
@@ -668,7 +668,7 @@ function VerdictCard({ report, identity, ladder }: { report: VerificationReport;
     orgName: identity.tier === 'org' ? report.c2pa?.certChain?.topSubject ?? sealedIdentity?.organization ?? null : null,
     bindingVoid: report.c2pa?.assetHashFailure === 'void-binding',
   });
-  // ── Headline/rung coherence (0.18.8) ──────────────────────────────────
+ // ── Headline/rung coherence ──────────────────────────────────
   // verdictCopy keys on the verdict code alone; the ladder sees the rungs.
   // Two rules keep the card from contradicting the ladder beneath it:
   //   1. A FAILED rung dominates: the headline names the failure and the
@@ -733,7 +733,7 @@ function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta, fa
   overlay: string;
   onOverlay: (key: string) => void;
   juxta: JuxtaInputs | null;
-  /** 0.18.6: the manifest's own embedded claim thumbnail, materialized to
+  /** The manifest's own embedded claim thumbnail, materialized to
       cache — the preview when this device can't extract a frame from the
       container. It is sealed content (referenced-gated), not a guess. */
   fallbackUri?: string | null;
@@ -749,7 +749,7 @@ function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta, fa
     setThumb(null);
     setThumbFailed(false);
     setPlaying(false);
-    // 0.18.6: try several offsets before declaring no frame — a fixed
+    // Try several offsets before declaring no frame — a fixed
     // 250 ms seek fails on very short takes and on containers this
     // device's AVFoundation seeks poorly in.
     (async () => {
@@ -1168,7 +1168,7 @@ export default function InspectScreen() {
     const fromRecord = record
       ? secondaryFrameFor(record)
       : { frame: null, ptsSeconds: null, recordError: null, videoFrames: null };
-    // 0.18.6: an exported file's embedded frames are the fallback when the
+    // An exported file's embedded frames are the fallback when the
     // sealed record carries none (video pairs ride the proof bundle
     // on-device, but ARE embedded in the file — see manifestSecondaryFrames).
     if (fromRecord.frame || !parsedManifest) return fromRecord;
@@ -1183,7 +1183,7 @@ export default function InspectScreen() {
   }, [record, parsedManifest]);
   const enfAnchor = useMemo(() => (record ? readEnfAnchor(record) : null), [record]);
 
-  // 0.18.6: the manifest's embedded claim thumbnail, materialized once —
+  // The manifest's embedded claim thumbnail, materialized once —
   // PickedMedia's preview when this device can't extract a frame from the
   // sealed container. Referenced-gated; absence stays absence.
   const [manifestThumbUri, setManifestThumbUri] = useState<string | null>(null);
@@ -1257,7 +1257,7 @@ export default function InspectScreen() {
   const editFlag = useMemo(() => {
     if (!editHistory) return null;
     const actions = editHistory.actions?.list ?? [];
-    // 0.18.1: the flag exists for declarations that say something — edit
+    // The flag exists for declarations that say something — edit
     // actions, MULTIPLE sources, or derivation from an earlier file. A
     // straight single-source capture declares nothing of the kind:
     // Source's own manifests carry exactly one componentOf ingredient (the
@@ -1497,7 +1497,7 @@ export default function InspectScreen() {
               />
             ) : null}
 
-            {/* DECLARED EDITS (0.18.3, Noah) — above Capture claims, only
+            {/* DECLARED EDITS — above Capture claims, only
                 when the file actually declares some, and only the C2PA
                 actions themselves: no ingredients ("includes other media"),
                 no disclaimer copy. Hidden entirely when there are none.
@@ -1672,7 +1672,7 @@ export default function InspectScreen() {
                     </View>
                   ) : null}
 
-                  {/* THE SEAL — the manifest lines, merged (0.18.2). What
+                  {/* THE SEAL — the manifest lines, merged. What
                       used to be the Manifest details drawer and the Signature
                       detail section: each fact once, failure copy riding as
                       the row's own detail. */}
@@ -1797,7 +1797,7 @@ export default function InspectScreen() {
                       videoFrames={secondary.videoFrames}
                     />
                     {forensicKind === 'video' ? (
-                      // 0.18.6 (Noah): a video take's motion trace — the
+ // A video take's motion trace — the
                       // committed pair frames (the dropped file carries
                       // them embedded) against the gyro log when THIS
                       // device can read it. The gyro lane states its
@@ -1846,7 +1846,7 @@ export default function InspectScreen() {
               </View>
             ) : null}
 
-            {/* ADVANCED (0.18.3, Noah) — the same cog-outline group card as
+            {/* ADVANCED — the same cog-outline group card as
                 the exhibit details page, holding the raw C2PA manifest reel:
                 the FULL manifest, exactly as recovered, with copy as the way
                 it leaves the phone. The old Signer section is cut (redundant
@@ -1969,7 +1969,7 @@ const buildStyles = () => StyleSheet.create({
   mediaStill: { width: '100%', height: 260, borderRadius: radii.md, backgroundColor: '#000' },
   mediaPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface2, gap: spacing.sm },
   mediaPlaceholderText: { color: colors.textFaint, fontSize: fontSize.xs },
-  // 0.18.6: the tap-to-play badge over a video still (playback is a tap
+  // The tap-to-play badge over a video still (playback is a tap
   // away, never a dead still — the field report's "videos don't play").
   playBadge: {
     position: 'absolute',
@@ -1999,7 +1999,7 @@ const buildStyles = () => StyleSheet.create({
   verdictHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   verdictText: { fontFamily: type.display, fontSize: fontSize.xl, fontWeight: '700', flex: 1, lineHeight: 28 },
   verdictSubline: { color: colors.textDim, fontSize: fontSize.sm, lineHeight: 20, marginTop: spacing.sm },
-  // 0.18.2 parity: these ARE the exhibit page's NlRow styles (buildNl) —
+  // These ARE the exhibit page's NlRow styles (buildNl) —
   // plain small label left, value right-aligned, 7px row rhythm.
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md, paddingVertical: 7 },
   // 126: "Countersignatures" is the longest label we render; at 110 it
@@ -2044,7 +2044,7 @@ const buildStyles = () => StyleSheet.create({
   warnTextFlush: { color: colors.danger, fontSize: fontSize.xs, lineHeight: 17, marginBottom: spacing.sm },
 
   // --- the accordion body: sections of the ONE extended card, separated by
-  //     hairlines — never detached squircles (0.15.0 Drop 2) ---
+  //     hairlines — never detached squircles ---
   detailBody: { marginTop: spacing.xs },
   detailSection: {
     borderTopWidth: StyleSheet.hairlineWidth,

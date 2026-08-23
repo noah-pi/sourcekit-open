@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Detached-manifest custody matching (W5.5, docs/RECOVERY.md): platforms strip
+ * Detached-manifest custody matching: platforms strip
  * credentials (APP11/caBX/uuid), so the sidecar bundle is matched by exact
  * cryptographic reconstruction of the stripped bytes — never similarity. A
  * match (EXACT-AFTER-STRIP) means the signature verifies AND the asset hash

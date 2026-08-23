@@ -9,7 +9,7 @@
  * written reason (tests/oracle-whitelist.json); they are never silently
  * absorbed.
  *
- * Known intentional divergence CLASSES (WS3-Binding-Path §6, SPEC §0):
+ * Known intentional divergence CLASSES (Binding-Path §6, SPEC §0):
  *  - UNSUPPORTED-for-merkle-aux: upstream fails (algorithm.unsupported /
  *    hard error) where we decline to evaluate. Whitelist entry required.
  *  - A-1 binding guard: upstream fails closed with assertion.undeclared —

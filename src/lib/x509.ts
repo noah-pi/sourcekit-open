@@ -270,7 +270,7 @@ export function parseCertificate(der: Uint8Array): ParsedCert {
   const SUPPORTED: string[] = [
     OID.ecdsaSha256, OID.ecdsaSha384, OID.ecdsaSha512,
     OID.rsaSha256, OID.rsaSha384, OID.rsaSha512,
-    // RSASSA-PSS (1.2.840.113549.1.1.10): Adobe's 2022-era C2PA chains are
+    // RSASSA-PSS: Adobe's 2022-era C2PA chains are
     // signed PSS-4096; c2pa-rs verifies them, so we must too.
     OID.rsassaPss,
   ];
@@ -561,7 +561,7 @@ export function verifyCertSignature(child: ParsedCert, parent: ParsedCert): bool
   return verifySignatureWithKey(parent.keyAlg, child.sigAlgOid, child.tbsFull, child.signature, child.pssHash);
 }
 
-/** id-kp-timeStamping (1.3.6.1.5.5.7.3.8) — RFC 3161 §2.3 requires this EKU on TSA certs. */
+/** id-kp-timeStamping — RFC 3161 §2.3 requires this EKU on TSA certs. */
 export const OID_KP_TIME_STAMPING = '2b06010505070308';
 
 /**

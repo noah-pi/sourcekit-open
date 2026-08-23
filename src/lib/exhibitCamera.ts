@@ -33,7 +33,7 @@ export type ExhibitFacing = 'back' | 'front';
 export type ExhibitTorch = 'off' | 'on';
 
 /**
- * Photo-strobe preference (W2.2): AVCapturePhotoSettings.flashMode on the
+ * Photo-strobe preference: AVCapturePhotoSettings.flashMode on the
  * photo output for stills. Distinct from ExhibitTorch — the torch is the
  * video-only continuous light and is never driven by this preference.
  */
@@ -210,7 +210,7 @@ export interface CameraMetadataBlock {
   synchronizedDeltaMs: number | null;
   droppedPairCount: number;
   /** Every iOS frame passes the platform's computational pipeline; stated
-   * so no manifest implies "unprocessed sensor data" for a JPEG (§10). */
+ * so no manifest implies "unprocessed sensor data" for a JPEG. */
   platformProcessing: 'apple-default-pipeline';
 }
 
@@ -254,7 +254,7 @@ export interface SyncTimestampsFile {
 }
 
 // ---------------------------------------------------------------------------
-// Committed capture settings (W2.4 — device read-backs at the commit instant)
+// Committed capture settings (device read-backs at the commit instant)
 // ---------------------------------------------------------------------------
 
 /**
@@ -299,7 +299,7 @@ export interface CaptureSettings {
   whiteBalanceMode: 'auto' | 'continuous' | 'locked' | 'unknown';
   /** AVCaptureDevice.DeviceType raw value — the lens stack in use. */
   physicalDevice: string;
-  /** The strobe preference written into the photo settings (W2.2). */
+ /** The strobe preference written into the photo settings. */
   photoFlashMode: PhotoFlashMode;
   photoFlashHardware: boolean;
   /** Device-reported supported flash modes ([] = unknown, no session). */
@@ -357,7 +357,7 @@ export interface ConfigureSessionOptions {
   secondaryLens?: SecondaryLensPreference;
 }
 
-/** The selectable secondary stack vocabulary (0.17.2). 'auto' = the
+/** The selectable secondary stack vocabulary. 'auto' = the
  * native UW↔W/T pairing chosen by the primary lens. */
 export type SecondaryLensPreference = 'auto' | 'ultraWide' | 'wide' | 'telephoto';
 
@@ -474,7 +474,7 @@ export interface CaptureResult extends SensorLogEvidence {
    * preview the user composed on) and commits the read-back value. null
    * when no connection existed to read. */
   frontMirrored?: boolean | null;
-  // ---- D1 (0.16.0): depth artifacts (additive; ABSENT on pre-D1 native
+ // ---- D1: depth artifacts (additive; ABSENT on pre-D1 native
   // builds AND on some early-exit branches — callers treat undefined as
   // "not committed this capture") ----
   /** Primary photo output's depth map: 16-bit grayscale PNG, min/max-
@@ -556,7 +556,7 @@ export interface VideoResult extends SensorLogEvidence {
     sampleCount: number;
     sampleRate: number;
     fileSha256: string | null;
-    /** 0.18.6 field diagnostics: the finalized CAF's own container facts,
+    /** The finalized CAF's own container facts,
      *  read back at stop and committed alongside the writer's counters —
      *  framesMatchContainer:false would state a writer/container divergence
      *  as sealed data (a build-40 field master showed an unexplained exact
@@ -570,7 +570,7 @@ export interface VideoResult extends SensorLogEvidence {
     containerFrames?: number;
     framesMatchContainer?: boolean;
   } | null;
-  /** Audio tap liveness counter for the take (0.17.2; additive). 0 while
+  /** Audio tap liveness counter for the take. 0 while
    * the master was requested = the tap never delivered — an audio-session/
    * permission fact, stated, not a conversion failure. */
   audioBufferCount?: number;
@@ -770,7 +770,7 @@ export interface HDRResult extends ChromeResult {
   activeHDR?: boolean;
 }
 
-/** Photo-strobe preference result (W2.2). */
+/** Photo-strobe preference result. */
 export interface PhotoFlashResult extends ChromeResult {
   photoFlash?: PhotoFlashMode;
   /** Strobe hardware present on the active device. */
@@ -780,7 +780,7 @@ export interface PhotoFlashResult extends ChromeResult {
   note?: string;
 }
 
-/** Zoom-ramp result (W2.3): ramp(toVideoZoomFactor:withRate:). */
+/** Zoom-ramp result: ramp(toVideoZoomFactor:withRate:). */
 export interface ZoomSmoothResult extends ChromeResult {
   zoomFactor?: number;
   clamped?: boolean;
@@ -789,7 +789,7 @@ export interface ZoomSmoothResult extends ChromeResult {
 }
 
 /**
- * Per-constituent-device zoom ceilings (W2.3). `qualityCap` is a
+ * Per-constituent-device zoom ceilings. `qualityCap` is a
  * conservative APP-CHOSEN digital-quality ceiling — NOT a hardware limit
  * (see zoomQualityNote); `hardwareMax` is the device's own
  * maxAvailableVideoZoomFactor. Absent lenses are omitted entirely.
@@ -844,9 +844,9 @@ export interface ExhibitCameraCapabilities {
   activeFormatISO?: { min: number; max: number };
   activeFormatExposureDurationSec?: { min: number; max: number };
   zoomRange?: ZoomRange;
-  /** W2.3: per-constituent-device ceilings; absent on pre-W2 builds. */
+  /** Per-constituent-device ceilings; absent on pre-W2 builds. */
   lensZoomCaps?: LensZoomCap[];
-  /** W2.3: states verbatim that qualityCap is a quality choice, not a
+  /** States verbatim that qualityCap is a quality choice, not a
    * hardware limit. Part of the contract. */
   zoomQualityNote?: string;
   /** 0.17.2 (additive): the selectable secondary stack — every rear stack
@@ -854,7 +854,7 @@ export interface ExhibitCameraCapabilities {
    * current preference ('auto' when unset). */
   secondaryLensOptions?: string[];
   secondaryLens?: string;
-  /** 0.17.2: hardware probe for an opportunistic third synchronized view.
+  /** Hardware probe for an opportunistic third synchronized view.
    * The view itself is gated behind the thirdViewEnabled debug flag
    * (UNTESTED ON HARDWARE — off by default); this only states what the
    * hardware could do. */
@@ -985,7 +985,7 @@ export async function setLens(lens: ExhibitLens): Promise<ChromeResult> {
 }
 
 /**
- * Selectable stereo partner (0.17.2): 'auto' restores the native UW↔W/T
+ * Selectable stereo partner: 'auto' restores the native UW↔W/T
  * pairing; an explicit rear stack (e.g. 'telephoto' on a triple-lens Pro)
  * pins the partner. Applies live on a running back session, else stored
  * for the next configureSession. A conflict with the primary lens or an
@@ -1006,7 +1006,7 @@ export async function setZoom(factor: number): Promise<ChromeResult> {
 }
 
 /**
- * Ramped device zoom (W2.3): ramp(toVideoZoomFactor:withRate:) for
+ * Ramped device zoom: ramp(toVideoZoomFactor:withRate:) for
  * UI-driven scrub ramps. Lens jumps stay on the instant setZoom. `rate`
  * defaults to 8 (the pre-W2 ramp rate) and is clamped natively to [1, 60].
  * On pre-W2 native builds the function is absent — the caller's fallback
@@ -1021,7 +1021,7 @@ export async function setZoomSmooth(factor: number, rate = 8): Promise<ZoomSmoot
 }
 
 /**
- * Photo-strobe preference (W2.2): sets the flashMode used by the photo
+ * Photo-strobe preference: sets the flashMode used by the photo
  * output's stills captures. Torch is untouched — it stays the video-only
  * continuous light. No session required: the preference persists natively
  * and is validated against supportedFlashModes at capture time. On pre-W2
@@ -1240,7 +1240,7 @@ export function onSyncStalled(cb: (e: SyncStalledEvent) => void): () => void {
   return () => sub?.remove();
 }
 
-/** Native pipeline diagnostics (0.18.2): verbatim one-line facts — graph
+/** Native pipeline diagnostics: verbatim one-line facts — graph
  * wiring outcomes, format picks, the live connection census, interruption
  * boundaries. Forwarded to the persistent diagnostics log; never errors. */
 export interface CameraDiagnosticEvent {

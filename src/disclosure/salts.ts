@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS2 Phase 1: per-leaf salts from one master seed (docs/INTEGRITY.md — selective disclosure).
+ * Per-leaf salts from one master seed (docs/INTEGRITY.md — selective disclosure).
  *   salt = HKDF-SHA256(ikm = masterSeed, salt = none,
  *                      info = 'exhibit-leaf-v1' || claimId || rungBE, L = 32)
  *   leafDigest = SHA-256('leaf-v1' || canonical(ContextClaim) || salt)

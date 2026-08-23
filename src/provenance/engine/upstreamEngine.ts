@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * WS3 upstream engine — wraps the official C2PA reader and returns a
+ * Wraps the official C2PA reader and returns a
  * NORMALIZED result. No verdicts here — normalization only (SPEC §2.1).
  * Verdicts are composed exclusively by policyLayer.ts.
  *
@@ -548,7 +548,7 @@ export async function readUpstreamAsset(
     // No caller-pinned anchors: the engine may still report
     // signingCredential.untrusted against its built-in list, but we cannot
     // attribute that to the official TL vs the frozen ITL — so we claim
-    // nothing (WS3-Binding-Path §8.8: disclose WHICH list a verdict used).
+ // nothing (disclose WHICH list a verdict used).
     r.trustListHit = 'unknown';
   }
 
