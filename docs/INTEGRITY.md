@@ -314,7 +314,7 @@ Burn is all-or-nothing. Per-claim custody isn't implemented.
 
 ### Tree conventions
 
-The tree matches the capture-side streaming tree in `StreamingHasher.swift`:
+The tree matches the capture-side streaming tree:
 raw 32-byte digests as leaves, an odd leaf promoted unchanged, parent =
 `SHA-256(left ‖ right)` over pairs of the claimId-sorted leaf set, empty tree =
 SHA-256 of the empty input, lowercase-hex root.

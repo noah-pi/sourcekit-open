@@ -129,7 +129,6 @@ jobs:
         run: ./node_modules/.bin/tsx test-disclosure.mts
         working-directory: tests/.staged
 
-
       - name: JUMBF layout parity suite
         run: ./node_modules/.bin/tsx test-jumbf-parity.mts
         working-directory: tests/.staged
@@ -146,11 +145,6 @@ jobs:
         run: ./node_modules/.bin/tsx test-posetrace.mts
         working-directory: tests/.staged
 
-
-
-
-
-
       - name: Real FreeTSA token regression suite (stored fixture, no network)
         run: ./node_modules/.bin/tsx test-tsa-real-network.mts
         working-directory: tests/.staged
@@ -158,7 +152,6 @@ jobs:
       - name: Vault disclosure-hygiene suite
         run: ./node_modules/.bin/tsx test-vault-hygiene.mts
         working-directory: tests/.staged
-
 
   app-typecheck:
     runs-on: ubuntu-latest
@@ -187,7 +180,6 @@ jobs:
             $(ls *.mts | grep -v -E '^(test|tool|build)-')
         working-directory: tests/.staged
 
-
   supply-chain:
     runs-on: ubuntu-latest
     steps:
@@ -198,7 +190,6 @@ jobs:
 
       - name: Dependency budget (allow-list + caps + lockfiles)
         run: node scripts/check-dependency-budget.mjs
-
 
       - name: Audit gate — server
         run: node scripts/check-audit.mjs server

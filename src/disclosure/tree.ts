@@ -3,8 +3,7 @@
  * Merkle tree over committed leaf digests
  * (docs/INTEGRITY.md — selective disclosure).
  *
- * Conventions match the capture-side streaming tree (exhibit-app CaptureKit
- * StreamingHasher.swift):
+ * Conventions match the capture-side streaming tree:
  *
  *   - leaves are raw 32-byte digests, never hex, inside the tree
  *   - an odd leaf is promoted unchanged to the next level
