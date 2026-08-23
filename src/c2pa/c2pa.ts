@@ -12,13 +12,12 @@
  *           └── c2pa.signature    (COSE_Sign1, ES256, x5chain = device cert)
  *
  * The hash.data assertion hard-binds the signature to the media bytes via a
- * byte-range exclusion, so any post-signing edit fails validation — in this
- * app and in any third-party C2PA verifier (c2patool, verify.contentauthenticity.org).
+ * byte-range exclusion, so any post-signing edit fails validation here and in
+ * third-party verifiers (c2patool, verify.contentauthenticity.org).
  *
- * The builder output is validated in the lab against the official c2pa-rs
- * implementation: clean files report only `signingCredential.untrusted`
- * (expected — the device cert is self-signed and not on the C2PA trust list),
- * tampered files report `assertion.dataHash.mismatch`.
+ * Output is checked against c2pa-rs: clean files report only
+ * `signingCredential.untrusted` (the device cert is self-signed and off the
+ * C2PA trust list), tampered files report `assertion.dataHash.mismatch`.
  *
  * Pure module — no React Native dependencies.
  */
@@ -56,13 +55,10 @@ function mapGet(m: unknown, key: unknown): unknown {
 }
 
 /**
- * Normalizes a claim's assertion reference URL to the bare assertion label.
- * Two forms exist in the wild: the shorthand
- * `self#jumbf=c2pa.assertions/<label>` (2022-era writers, and our own) and
- * the store-qualified `self#jumbf=/c2pa/<manifest>/c2pa.assertions/<label>`
- * (c2pa-rs, Truepic). Anything else is returned unchanged, so a malformed
- * URL simply matches no box and the reference fails closed — never a
- * silent pass.
+ * Normalizes a claim's assertion reference URL to the bare label. Two forms
+ * occur: shorthand `self#jumbf=c2pa.assertions/<label>` and store-qualified
+ * `self#jumbf=/c2pa/<manifest>/c2pa.assertions/<label>` (c2pa-rs, Truepic).
+ * Anything else is returned unchanged, so it matches no box and fails closed.
  */
 function assertionRefLabel(url: string): string {
   const m = url.match(/^self#jumbf=(?:\/c2pa\/[^/]+\/)?c2pa\.assertions\/(.+)$/);
@@ -87,11 +83,10 @@ const UUID_JSON = c2paUuid('json');
 const UUID_JPEG = c2paUuid('jpeg');
 
 // ---------------------------------------------------------------------------
-// Standard assertion labels — per the vendored
-// C2PA SDK 2.3 StandardAssertionLabel enum (modules/c2pa-ios …/
-// Manifest/StandardAssertionLabel.swift). Emitted through the first-class
-// allowlist in verifyAssertionBoxes; parsed back by parseOneManifest with
-// the same referenced-gating as actions/ingredients.
+// Standard assertion labels. Spellings come from the vendored C2PA SDK 2.3
+// StandardAssertionLabel enum (modules/c2pa-ios …/Manifest/
+// StandardAssertionLabel.swift). Emitted by verifyAssertionBoxes, parsed
+// back by parseOneManifest.
 // ---------------------------------------------------------------------------
 export const LABEL_ACTIONS_V2 = 'c2pa.actions.v2';
 export const LABEL_ASSET_TYPE_V2 = 'c2pa.asset-type.v2';
@@ -99,23 +94,14 @@ export const LABEL_METADATA = 'c2pa.metadata';
 export const LABEL_SOFT_BINDING = 'c2pa.soft-binding';
 export const LABEL_THUMBNAIL_CLAIM_JPEG = 'c2pa.thumbnail.claim.jpeg';
 export const LABEL_TRAINING_MINING = 'c2pa.training-mining';
-/**
- * D1: signed stereo depth. Label spellings are the vendored SDK
- * 2.3 enum's (StandardAssertionLabel.depthmap / .collectionDataHash), which
- * are also the spec's (C2PA 2.2 §18.21 Depthmap, §18.8 Collection Data
- * Hash).
- */
+/** Signed stereo depth. C2PA 2.2 §18.21 Depthmap, §18.8 Collection Data Hash. */
 export const LABEL_DEPTHMAP_GDEPTH = 'c2pa.depthmap.GDepth';
 export const LABEL_COLLECTION_HASH = 'c2pa.hash.collection.data';
 /**
- * The secondary viewpoint baked into the manifest as a first-class
- * standard ingredient (C2PA 2.2 §18.11, ingredient.v3 schema) with
- * relationship 'componentOf' — the wide-angle frame is a COMPONENT of this
- * exhibit, not a parent it was derived from. Its 512px thumbnail rides as
- * c2pa.thumbnail.ingredient.jpeg (a LEAD, self-evidently not the measurement
- * pixels); the full-res bytes stay in the vault, committed by the
- * ingredient's data hash. A stranger holding ONLY the JPEG sees the second
- * viewpoint in any C2PA reader.
+ * Secondary viewpoint as a standard ingredient (C2PA 2.2 §18.11,
+ * ingredient.v3) with relationship 'componentOf'. Its 512px thumbnail rides
+ * as c2pa.thumbnail.ingredient.jpeg; the full-res bytes stay in the vault,
+ * committed by the ingredient's data hash.
  */
 export const LABEL_INGREDIENT_V3 = 'c2pa.ingredient.v3';
 export const LABEL_THUMBNAIL_INGREDIENT_JPEG = 'c2pa.thumbnail.ingredient.jpeg';
@@ -125,11 +111,10 @@ export const DIGITAL_SOURCE_TYPE_DIGITAL_CAPTURE =
   'http://cv.iptc.org/newscodes/digitalsourcetype/digitalCapture';
 
 /**
- * Soft-binding algorithm identifier for the pHash the capture pipeline
- * already computes (src/lib/phash.ts): 32×32 ITU-R 601 luma → 32×32 DCT-II →
- * 8×8 lowest-frequency magnitudes vs their median → 64 bits. A LEAD for
- * sidecar-loss recovery, never a hard binding — the spec forbids soft
- * bindings as hard bindings, and nothing here treats it as one.
+ * Soft-binding algorithm id for the capture pHash (src/lib/phash.ts): 32×32
+ * ITU-R 601 luma → 32×32 DCT-II → 8×8 lowest-frequency magnitudes vs their
+ * median → 64 bits. Recovery metadata after sidecar loss; the spec forbids
+ * treating a soft binding as a hard one.
  */
 export const SOFT_BINDING_ALG_PHASH = 'com.verify.phash-dct64/1';
 
@@ -173,8 +158,8 @@ function cborText(s: string): Uint8Array {
 }
 
 /** tstContainer per C2PA spec (Example 2 CDDL): { tstTokens: [ { val }, ... ] }.
- *  Multiple entries = witness cosigning: independent TSAs countersign the same
- *  signature, so trusted time doesn't hinge on any single authority. */
+ *  Multiple entries are witness cosigning: independent TSAs countersign the
+ *  same signature. */
 function tstContainer(tokens: Uint8Array[]): Uint8Array {
   const arr = 0x80 | tokens.length; // up to 23 witnesses; we use 2–3
   return concatBytes(
@@ -184,17 +169,11 @@ function tstContainer(tokens: Uint8Array[]): Uint8Array {
 }
 
 /**
- * Exact pad length so the "pad" entry grows the unprotected header by
- * exactly `delta` bytes — or NULL when no exact pad exists. The CBOR bstr
- * header steps from 1 to 2 bytes at payload 24 and from 2 to 3 bytes at
- * payload 256, so the entry size 4+h+padLen has exactly two holes: delta 29
- * (padLen would be 24, which already needs the 2-byte header) and delta 262
- * (padLen 255 → 3-byte header). 0.18.6 THREW here, and the throw escaped
- * the convergence loops whole — the field's intermittent
- * "seal-failed — C2PA segment did not converge" on first pass (retry
- * succeeded because re-fetched TSA tokens shift the delta out of the hole).
- * Null sentinel; every caller treats a hole as an off-target round
- * and grows past it, so no delta can ever kill a seal.
+ * Exact pad length so the "pad" entry grows the unprotected header by exactly
+ * `delta` bytes, or null when no exact pad exists. The CBOR bstr header steps
+ * at payload 24 and 256, so entry size 4+h+padLen has two holes: delta 29 and
+ * delta 262. Callers treat null as an off-target round and grow past the hole
+ * rather than failing the seal.
  */
 export function padForDelta(delta: number): number | null {
   for (const h of [3, 2, 1]) {
@@ -206,10 +185,10 @@ export function padForDelta(delta: number): number | null {
 }
 
 /**
- * The COSE unprotected-header entry carrying the PQ dual signature: { alg: 'ML-DSA-65', fp: hex fingerprint, sig: 3309 bytes } — signed
- * over the identical Sig_structure as the ES256 signature. The public key
- * itself is NOT duplicated here; it is committed inside the signed record
- * payload (telemetry.pqKey), which doubles as the strip detector.
+ * COSE unprotected-header entry for the PQ dual signature:
+ * { alg: 'ML-DSA-65', fp: hex fingerprint, sig: 3309 bytes }, over the same
+ * Sig_structure as the ES256 signature. The public key lives in the signed
+ * record payload (telemetry.pqKey), not here, so stripping this is detectable.
  */
 export interface PqCoseEntry {
   alg: string;
@@ -219,8 +198,8 @@ export interface PqCoseEntry {
 
 function unprotectedHeader(timestampTokens: Uint8Array[], padLen: number, pq?: PqCoseEntry | null): Uint8Array {
   const entries: Uint8Array[] = [];
-  // V2 sigTst2 (CTT model): each token countersigns the COSE Countersign_structure
-  // over the signature — what modern c2pa-rs emits and validates.
+  // V2 sigTst2 (CTT model): each token countersigns the COSE
+  // Countersign_structure over the signature, as c2pa-rs emits and validates.
   if (timestampTokens.length > 0) entries.push(concatBytes(cborText('sigTst2'), tstContainer(timestampTokens)));
   if (pq) entries.push(concatBytes(cborText('verifyPq'), encode({ alg: pq.alg, fp: pq.fp, sig: pq.sig })));
   if (padLen > 0) entries.push(concatBytes(cborText('pad'), bstr(new Uint8Array(padLen))));
@@ -232,7 +211,7 @@ function unprotectedHeader(timestampTokens: Uint8Array[], padLen: number, pq?: P
 export interface TranscriptAssertion {
   text: string;
   segments: { start: number; duration: number; text: string }[];
-  /** Honest provenance for the transcript itself. */
+  /** Which engine produced the transcript. */
   engine: 'apple-speech-ondevice';
 }
 
@@ -281,9 +260,8 @@ export function timestampMessageForSignature(protectedBstr: Uint8Array, rawSigna
  * The message a V1 sigTst timestamp countersigns, per c2pa-rs
  * (sigtst.rs::validate_cose_tst_info — TimeStampStorage::V1_sigTst): the
  * RFC 9052 Sig_structure with context "CounterSignature" whose payload is
- * the CLAIM bytes (what the COSE_Sign1 itself signed), not the signature.
- * Verified against the c2pa test corpus: every sigTst-carrying file
- * (adobe-20220124-*, truepic-20230212-*) matches this construction exactly.
+ * the claim bytes (what the COSE_Sign1 itself signed), not the signature.
+ * Matches every sigTst-carrying file in the c2pa test corpus.
  */
 export function timestampMessageForClaim(protectedBstr: Uint8Array, claimBytes: Uint8Array): Uint8Array {
   return concatBytes(

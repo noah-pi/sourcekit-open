@@ -1,22 +1,19 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Zoom control — replaces the "too fast, no
- * in-between" zoom UI.
+ * Zoom control.
  *
  * <ZoomWheel/> — the bottom row: optical pills (.5 / 1 / tele factor, only
- * the lenses the hardware reports) you TAP to jump to, and a DRAG anywhere
- * on the row turns it into a smooth zoom wheel sweeping the in-between
- * factors (the complaint was "no in-between"). Haptic tick at each optical
- * detent crossed. The wheel is a leaf: live values ride the LiveChannel,
- * so scrubbing never re-renders the viewfinder tree.
+ * the lenses the hardware reports) tap to jump; a drag anywhere on the row
+ * turns it into a smooth zoom wheel across the in-between factors, with a
+ * haptic tick at each optical detent crossed. The wheel is a leaf: live values
+ * ride the LiveChannel, so scrubbing never re-renders the viewfinder tree.
  *
- * <ZoomHud/> — the top readout while zooming: ONLY the effective
- * mm-equivalent ("≈27mm", Blackmagic-style, derived from the hardware's
- * reported wide FOV — never shown when unreported). No × factor, no
- * DIGITAL marker: the lens pills below already carry the factor.
+ * <ZoomHud/> — the top readout while zooming: the effective mm-equivalent
+ * ("≈27mm"), derived from the hardware's reported wide FOV and hidden when
+ * unreported. The lens pills below carry the factor.
  *
- * Pinch lives on the screen's root responder (it owns two-finger
- * gestures); it drives the same channel, so pill row and HUD agree.
+ * Pinch lives on the screen's root responder (it owns two-finger gestures) and
+ * drives the same channel, so pill row and HUD agree.
  */
 
 import React, { useRef, useState, useSyncExternalStore } from 'react';
@@ -46,18 +43,16 @@ export function ZoomHud({
 }: {
   channel: LiveChannel<LiveZoom>;
   stops: OpticalStop[];
-  /** 35 mm-equivalent of the wide stack; null when the hardware didn't
-   *  report a FOV — the readout simply doesn't render (never a guess). */
+  /** 35 mm-equivalent of the wide stack; null when the hardware reported no
+   *  FOV, in which case the readout does not render. */
   baseMm: number | null;
 }) {
   const { factor, active } = useSyncExternalStore(channel.subscribe, channel.get);
-  // Hidden when idle AND parked exactly on an optical stop (the pills
-  // already say which lens is live — a readout would be noise).
+  // Hidden when idle and parked exactly on an optical stop; the pills
+  // already say which lens is live.
   const parked = !active && stops.some((s) => s.factor !== null && Math.abs(factor - s.factor) < 0.01);
   if (parked) return null;
-  // The readout is the 35mm-equivalent focal length ONLY ("≈27mm") — the
-  // same effectiveMm math as before (zoom factor × base wide equiv), with
-  // the × factor and DIGITAL marker cut: the pills below carry the factor.
+  // 35mm-equivalent focal length: zoom factor × base wide equivalent.
   const mm = effectiveMm(baseMm, factor);
   if (mm === null) return null;
   return (
@@ -88,12 +83,11 @@ export function ZoomWheel({
 }: {
   channel: LiveChannel<LiveZoom>;
   stops: OpticalStop[];
-  /** The lens the session is ACTUALLY on (post-honesty-check) — pills
-   *  highlight from this, never from intent. */
+  /** The lens the session is on, post-honesty-check; pills highlight from
+   *  this, not from intent. */
   currentLens: ExhibitLens;
- /** Relative ceiling of the wheel sweep: the native per-device
-   *  quality-cap ceiling when the caps have reported, else the
-   *  MAX_RELATIVE_ZOOM fallback. */
+ /** Relative ceiling of the wheel sweep: the native per-device quality-cap
+   *  ceiling when the caps have reported, else MAX_RELATIVE_ZOOM. */
   maxZoom?: number;
   /** Tap on a pill: jump to that lens's optical stop (a real lens switch,
    *  honesty-checked by the screen). */
@@ -102,13 +96,10 @@ export function ZoomWheel({
   onLive: (relative: number) => void;
   /** Wheel released: commit this relative factor. */
   onCommit: (relative: number) => void;
-  /** 0.18.6 (Noah: "if multi-lens is on, don't show the 0.5 1 options"):
-   *  while the dual-view graph is live both lenses are already fused, so
-   *  per-lens jump pills are the wrong affordance (a .5/1 tap there is a
-   *  zoom-stop jump, not a lens choice — and read as a dead button in the
-   *  field). Hidden pills, still the wheel: the row stays the zoom
-   *  surface and shows the live factor as its only pill. Pills return the
-   *  moment Multiple lenses is off — real lens switches again. */
+  /** Hides the per-lens jump pills while the dual-view graph is live, since
+   *  both lenses are already fused and a pill tap would be a zoom-stop jump
+   *  rather than a lens choice. The row stays the wheel and shows the live
+   *  factor as its only pill. */
   hidePills?: boolean;
 }) {
   const { factor, active } = useSyncExternalStore(channel.subscribe, channel.get);
@@ -122,20 +113,20 @@ export function ZoomWheel({
   stopsRef.current = stops;
   const lensRef = useRef(currentLens);
   lensRef.current = currentLens;
-  // The ceiling moves when the native caps land — read through a ref so the
-  // once-created pan responder always sees the current value.
+  // The ceiling moves when the native caps land; read through a ref so the
+  // once-created pan responder sees the current value.
   const maxZoomRef = useRef(maxZoom);
   maxZoomRef.current = maxZoom;
   const lastHapticStop = useRef<number | null>(null);
-  // The exact factor last scrubbed to — the release commits THIS, not the
-  // (possibly one frame behind) channel snapshot.
+  // The exact factor last scrubbed to; the release commits this, not the
+  // channel snapshot, which can be a frame behind.
   const wheelValue = useRef(factor);
 
   const pan = useRef(
     PanResponder.create({
       // Taps fall through to the pill buttons; only a decisive horizontal
-      // drag turns the row into the wheel (and beats the root mode-swipe
-      // responder to the claim, since the row is deeper).
+      // drag turns the row into the wheel. The row is deeper than the root
+      // mode-swipe responder, so it wins the claim.
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_evt, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
       onPanResponderGrant: () => {
@@ -145,9 +136,8 @@ export function ZoomWheel({
       },
       onPanResponderMove: (_evt, g) => {
         const c = stopsRef.current;
-        // Bounds re-derived per move: the lens inventory (and thus the
-        // stack floor) can arrive after the responder was created. The
-        // wheel never leaves the current stack.
+        // Bounds re-derived per move: the lens inventory, and so the stack
+        // floor, can arrive after the responder was created.
         const lo = stackZoomFloor(c, lensRef.current);
         const next = clampZoom(
           Math.pow(2, startLog.current + g.dx / PX_PER_OCTAVE),
@@ -182,16 +172,15 @@ export function ZoomWheel({
     }),
   ).current;
 
-  /** Which pill is live: the factor parked on a known stop (within a
-   *  whisper), or — for a lens whose factor the hardware couldn't report
-   *  ('T') — simply being the lens the session is on. */
+  /** Which pill is live: the factor parked on a known stop, or, for a lens
+   *  whose factor the hardware did not report ('T'), being the current lens. */
   const activeStop = (s: OpticalStop) =>
     (s.factor !== null && Math.abs(factor - s.factor) < (wheeling || active ? 0.03 : 0.01)) ||
     (s.factor === null && s.lens === currentLens);
 
-  // Apple behavior: while zoomed between stops, the in-between value
-  // appears as its own pill so the current factor is always visible. (On
-  // a factor-unknown lens parked at 1 the lens pill already says it.)
+  // Between stops, the in-between value gets its own pill so the current
+  // factor stays visible. A factor-unknown lens parked at 1 already reads
+  // from its lens pill.
   const unknownLensParked =
     stopFor(stops, currentLens)?.factor === null && Math.abs(factor - 1) < 0.03;
   const between =
@@ -201,10 +190,8 @@ export function ZoomWheel({
     <View style={styles.wheelRow} {...pan.panHandlers}>
       {hidePills ? (
         // Pills hidden (dual-view graph live): the row is the wheel only.
-        // The live factor appears ONLY while it says something the graph
-        // doesn't already — scrubbing, or parked between stops. Parked
-        // exactly on a stop it read as the old "1" pill (Noah: "the 1
-        // still appears when it's on — it should be hidden").
+        // The live factor shows while scrubbing or parked between stops, and
+        // is hidden when parked exactly on a stop.
         wheeling || active || between ? (
           <View style={[styles.pill, styles.pillLive]} pointerEvents="none">
             <Text style={[styles.pillText, styles.pillTextActive]}>{formatFactor(factor)}</Text>
@@ -254,10 +241,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
   },
-  // Apple's own zoom control language: translucent circles, factor text,
-  // the live stop carries the ring. Labels are FOV-derived from hardware.
-  // Mockup .zp: 10.5/700 translucent pills; the active stop is the mockup's
-  // ok-bright green on its 13% wash.
+  // Translucent circles with factor text; the live stop carries the ring.
+  // Labels are FOV-derived from hardware. Mockup .zp: 10.5/700 pills, active
+  // stop in ok-bright green on a 13% wash.
   pill: {
     minWidth: 34,
     height: 34,

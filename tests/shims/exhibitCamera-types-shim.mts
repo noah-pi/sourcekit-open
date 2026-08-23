@@ -1,24 +1,20 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * TYPE-ONLY stand-in for the app's withheld camera bridge
+ * Type-only stand-in for the app's withheld camera bridge
  * (src/lib/exhibitCamera.ts). attest.mts and stereoGlue.mts import these
- * types for the capture-contract shapes only; type imports are erased at
- * runtime and the lab never runs camera code. The declarations below mirror
- * the committed-record contract — the same shapes the public record schema
- * and the desk's stereo verifier consume — and deliberately omit every
- * function, method, and implementation detail of the withheld module.
- * If the app's contract drifts from this file, the staged strict typecheck
- * fails. That is the point.
+ * shapes; type imports are erased at runtime and the lab never runs camera
+ * code. Mirrors the committed-record contract and omits every function and
+ * implementation detail. Drift from the app's contract fails the staged
+ * strict typecheck.
  */
 
-/** The app narrows this to a named union of NativeException-derived codes;
- * the lab never constructs one, so the shim keeps it wide. */
+/** The app narrows this to a union of NativeException-derived codes; the
+ * lab never constructs one, so the shim keeps it wide. */
 export type ExhibitCameraErrorCode = string;
 
 /**
- * Three-state honesty for every committed artifact: recorded, attempted-
- * and-failed (stated verbatim), or never-attempted (unreached, never red).
- * There is no silent middle state. Paths are plain filesystem paths.
+ * Three states per committed artifact: recorded, attempted and failed, or
+ * never attempted. Paths are plain filesystem paths.
  */
 export type EvidencePath =
   | { state: 'path'; path: string }
@@ -32,7 +28,7 @@ export interface DepthArtifactMetadata {
   filtered: boolean;
   width: number;
   height: number;
-  /** The COLOR image's dimensions — what the map gets stretched to fit. */
+  /** The color image's dimensions; the map is stretched to fit these. */
   photoWidth: number;
   photoHeight: number;
   accuracy?: unknown;
@@ -79,10 +75,10 @@ export interface CalibrationFile {
 }
 
 /**
- * The capture handoff: every evidence artifact in three-state form, plus the
- * committed hashes/dimensions for the full-sensor stills and depth maps.
- * Only the fields the lab reads are mirrored; the app's interface carries
- * more (settings read-backs, stereo status detail) — all additive.
+ * The capture handoff: every evidence artifact in three-state form, plus
+ * committed hashes and dimensions for the full-sensor stills and depth
+ * maps. Only the fields the lab reads are mirrored; the app's interface
+ * carries more, all additive.
  */
 export interface CaptureResult extends SensorLogEvidence {
   captureId: string;

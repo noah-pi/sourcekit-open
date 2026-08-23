@@ -168,9 +168,8 @@ const CONTAINER_BOXES = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl', 'edts',
 /**
  * Walks moov's container hierarchy and shifts every absolute chunk offset
  * that points at or beyond `insertOffset` by `delta` (negative when bytes
- * were removed). Mutates `bytes` in place. Without this, inserting the
- * manifest box before mdat would leave every stco/co64 entry pointing at
- * media that has moved — a silent playback break.
+ * were removed). Mutates `bytes` in place. Without it, inserting the manifest
+ * box before mdat leaves every stco/co64 entry pointing at moved media.
  */
 function patchChunkOffsetsIn(bytes: Uint8Array, rangeStart: number, rangeEnd: number, insertOffset: number, delta: number, depth: number): void {
   if (depth > 8) return;
@@ -187,7 +186,7 @@ function patchChunkOffsetsIn(bytes: Uint8Array, rangeStart: number, rangeEnd: nu
     } else if (size32 === 0) {
       size = rangeEnd - offset;
     }
-    if (size < headerSize || offset + size > rangeEnd) return; // malformed — leave untouched
+    if (size < headerSize || offset + size > rangeEnd) return; // malformed, leave untouched
 
     if (CONTAINER_BOXES.has(type)) {
       patchChunkOffsetsIn(bytes, offset + headerSize, offset + size, insertOffset, delta, depth + 1);
@@ -255,8 +254,8 @@ export function embedUuidStore(clean: Uint8Array, storePayload: Uint8Array): Uin
 }
 
 /**
- * Removes the C2PA manifest box and shifts chunk offsets back — the exact
- * inverse of embedUuidStore (lab-verified bit-for-bit).
+ * Removes the C2PA manifest box and shifts chunk offsets back. Exact inverse
+ * of embedUuidStore.
  */
 export function stripC2paFromBmff(bytes: Uint8Array): Uint8Array {
   const found = extractC2paStoreBmff(bytes);
