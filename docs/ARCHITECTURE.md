@@ -2,7 +2,7 @@
 
 One page from capture to verification.
 
-## Capture & seal
+## Capture and seal
 
 ```
 camera/mic ──► media file (JPEG / MP4 / MOV / M4A)
@@ -38,7 +38,7 @@ manifest container itself, so the signature and the pixels can't drift apart.
 COSE_Sign1 signs the claim; the claim pins every assertion by hash;
 optionally an RFC 3161 TSA countersigns.
 
-## Verification (fully offline, two axes since)
+## Verification (fully offline)
 
 ```
 file ──► extract manifest (format-specific) ──► parse claim + assertions
@@ -49,7 +49,7 @@ file ──► extract manifest (format-specific) ──► parse claim + assert
 
 credibility axes (independent of the integrity verdict):
      ──► X.509 chain verifier (lib/x509.ts) — real link-by-link signature
-         verification (ECDSA P-256 & P-384, RSA), name chaining, CA flags,
+         verification (ECDSA P-256 and P-384, RSA), name chaining, CA flags,
          validity evaluated at the VERIFIED signing time, never the
          verifier's clock; anchored only to compiled-in pinned roots
      ──► RFC 3161 verifier (lib/rfc3161.ts) — messageImprint vs. the exact
@@ -84,7 +84,7 @@ Trust anchors are compiled-in or user-pinned only. Anything fetched at runtime
 is an input, not an anchor. No network is required; nothing about verification
 trusts us.
 
-## De-identify & re-sign (share flow)
+## De-identify and re-sign (share flow)
 
 Sharing flags embedded identifying details and offers a freshly signed copy:
 strip manifest (+ EXIF for JPEG), redact identity/location/sensors/device
@@ -92,7 +92,7 @@ model, drop the audio transcript, keep the original capture time, re-sign the
 identical media bytes, mark the record `deidentified` with the removed field
 list. The copy is independently verifiable — integrity without identity.
 
-## Server (optional, stateless-ish)
+## Server (optional)
 
 `server/server.mjs` — zero-framework node:http relay:
 - `GET /challenge` → single-use 5-min App Attest challenge (rate-limited)
