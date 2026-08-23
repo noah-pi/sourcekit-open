@@ -60,7 +60,7 @@ section('commit + verify');
   check('300 samples committed', a.sampleCount === 300);
   check('hz derived from the trace intervals', a.hz === 100, String(a.hz));
   check('gyroPriorAuthenticated locked false', a.gyroPriorAuthenticated === false);
-  check('the note names self-reporting honestly', a.note.includes('self-reported') && a.note.includes('never a verdict'));
+  check('the note names self-reporting', a.note.includes('self-reported') && a.note.includes('not a verdict'));
   const v = verifyPoseTraceAssertion(a, trace);
   check('the trace verifies against its commitment', v.ok, JSON.stringify(v.failures));
 
