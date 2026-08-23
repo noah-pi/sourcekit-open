@@ -1,11 +1,11 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * TrustProvider — pluggable trust anchors for VERIFICATION. Anchors live
- * OUTSIDE the file being verified; providers run in precedence order and the
- * first hit wins. Tiers (this-device / roster / org / trust-list / unknown)
- * are always displayed as distinct states: unsigned files render NEUTRAL,
- * valid-but-untrusted NEVER renders green. trust-list is NOT SHIPPED — the
- * report says so under "not checked".
+ * TrustProvider — pluggable trust anchors for verification. Anchors live
+ * outside the file being verified; providers run in precedence order and the
+ * first hit wins. Tiers: this-device / roster / org / trust-list / unknown.
+ * Display keeps them distinct: unsigned renders neutral, valid-but-untrusted
+ * does not render green. trust-list has no provider; the report lists it as
+ * "not checked".
  */
 
 import { resolveSignerInRosters } from './rosterStore';
@@ -13,9 +13,9 @@ import type { RosterResolution } from './roster';
 
 export type TrustTier = 'this-device' | 'roster' | 'org' | 'trust-list' | 'unknown';
 
-/** Local capture history for a hand — purely local, never vouching. */
+/** Local capture history for a hand. Local only; not a trust anchor. */
 export interface LocalHandHistory {
-  /** Prior exhibits in THIS device's collection sealed by this fingerprint. */
+  /** Prior exhibits in this device's collection sealed by this fingerprint. */
   priorCaptures: number;
   /** ISO timestamp of the earliest such exhibit. */
   firstSeen: string;
@@ -28,8 +28,8 @@ export interface SignerTrust {
   /** Org credential detail when tier === 'org' (from the verified chain). */
   org?: { subject: string | null; issuer: string | null };
   /**
-   * Attached ONLY at tier 'unknown' — local history never vouches and never
-   * promotes the tier. Display must always carry "on this device".
+   * Attached only at tier 'unknown'; never promotes the tier. Display carries
+   * "on this device".
    */
   localHand?: LocalHandHistory;
 }
@@ -39,11 +39,11 @@ export interface TrustResolutionInput {
   fingerprint: string;
   /** The verifying device's own fingerprint, when known. */
   ownFingerprint: string | null;
-  /** Org chain detail — present only when all links verified; a broken chain NEVER yields 'org'. */
+  /** Org chain detail. Present only when every link verified; a broken chain does not yield 'org'. */
   orgChain?: { linksValid: boolean; topSubject: string | null; issuer: string | null } | null;
   /** Verified signing time (valid RFC 3161 genTime) or null. */
   atMs: number | null;
-  /** Device-local capture history; attached only at the 'unknown' floor, never an anchor. */
+  /** Device-local capture history; attached only at the 'unknown' floor. */
   localHistory?: LocalHandHistory | null;
 }
 
@@ -52,7 +52,7 @@ export interface TrustProvider {
   resolve(input: TrustResolutionInput): Promise<SignerTrust | null>;
 }
 
-/** The device's own key — the strongest anchor there is. */
+/** The device's own key. Highest precedence. */
 export function thisDeviceProvider(): TrustProvider {
   return {
     id: 'this-device',
@@ -74,7 +74,7 @@ export function rosterProvider(): TrustProvider {
   };
 }
 
-/** 'org' only when the chain's links verified; the self-asserted-root caveat is the caller's display duty. */
+/** 'org' only when the chain's links verified. The caller displays the self-asserted-root caveat. */
 export function orgChainProvider(): TrustProvider {
   return {
     id: 'org',
@@ -87,15 +87,15 @@ export function orgChainProvider(): TrustProvider {
 
 /**
  * Default provider chain, in precedence order. A C2PA Trust List provider
- * slots in ABOVE roster when one ships — the seam is this array.
+ * slots in above roster; this array is the seam.
  */
 export function defaultTrustProviders(): TrustProvider[] {
   return [thisDeviceProvider(), rosterProvider(), orgChainProvider()];
 }
 
 /**
- * Resolves a signer to a trust tier. Never throws — resolution failure
- * degrades to 'unknown', the honest floor.
+ * Resolves a signer to a trust tier. Never throws; resolution failure
+ * degrades to 'unknown'.
  */
 export async function resolveSignerTrust(input: TrustResolutionInput): Promise<SignerTrust> {
   for (const provider of defaultTrustProviders()) {
@@ -103,11 +103,11 @@ export async function resolveSignerTrust(input: TrustResolutionInput): Promise<S
       const hit = await provider.resolve(input);
       if (hit) return hit;
     } catch {
-      // A broken provider must never upgrade OR block identity — keep looking.
+      // A broken provider neither upgrades nor blocks identity; keep looking.
     }
   }
-  // Local history lives at the 'unknown' floor — it never vouches. Threshold
-  // of two keeps a single stray capture from reading as a track record.
+  // Local history stays at the 'unknown' floor. Two-capture threshold keeps a
+  // single stray capture from reading as a track record.
   if (input.localHistory && input.localHistory.priorCaptures >= 2) {
     return { tier: 'unknown', localHand: input.localHistory };
   }

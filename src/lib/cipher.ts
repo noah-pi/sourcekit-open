@@ -27,7 +27,7 @@ export function decryptBytes(key: Uint8Array, blob: Uint8Array): Uint8Array {
   if (blob.length < NONCE_LEN + 16) throw new Error('Encrypted blob too short');
   const nonce = blob.subarray(0, NONCE_LEN);
   const sealed = blob.subarray(NONCE_LEN);
-  // Throws on authentication-tag mismatch — tampering is never silent.
+  // Throws on authentication-tag mismatch.
   return gcm(key, nonce).decrypt(sealed);
 }
 

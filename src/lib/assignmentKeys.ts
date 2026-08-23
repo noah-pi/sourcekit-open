@@ -1,32 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Per-assignment signing keys.
+ * Per-assignment signing keys. No UI path reaches this — there is no
+ * assignment picker and useStore clears a stale assignmentId on load — but
+ * the signing path still accepts an assignment label.
  *
- * NOT REACHABLE FROM THE UI. The assignment picker was removed, and
- * useStore clears a stale assignmentId on load, so nothing in the shipping app
- * calls this. The module is kept because the signing path still accepts an
- * assignment label and the behaviour below is what it would do.
- *
- * When assignment mode is on, captures sign with a dedicated key per
- * assignment instead of the device's long-lived key:
- *   - different assignments are unlinkable to each other and to the device
- *     fingerprint (independent random keys, no org credential attached);
- *   - rotating an assignment key breaks linkability across rotations;
- *   - captures WITHIN one assignment are linkable to each other: they share a
- *     key fingerprint, and the assignment label is written into the signed
- *     record as plain text. The label is user-chosen and can itself identify;
- *   - a desk that holds the newsroom roster can still vouch for an
- *     assignment key — the editor adds its fingerprint to the roster,
- *     which is exactly what the roster format is for.
- *
- * The honest cost, stated wherever this is configured: assignment keys are
- * SOFTWARE keys in the OS keychain (not the Secure Enclave), and captures
- * signed with them carry no hardware attestation and no org credential.
- * Verification shows exactly that — the record's signer block and the
- * "checks not performed" list never dress it up.
- *
- * Keys are stored per assignment label (hashed into the keychain alias, so
- * the label itself is not a keychain enumeration leak).
+ * Each label gets its own software key in the OS keychain (not the Secure
+ * Enclave), so assignments are unlinkable to each other and to the device
+ * fingerprint; captures within one assignment share a key fingerprint and
+ * carry the label as plain text in the signed record. Such captures have no
+ * hardware attestation and no org credential, which verification reports in
+ * the signer block and the "checks not performed" list. The keychain alias is
+ * a hash of the label, so labels are not enumerable.
  */
 
 import * as SecureStore from 'expo-secure-store';
@@ -58,8 +42,8 @@ function signerFrom(privateKeyHex: string): DeviceSigner {
 }
 
 /**
- * The signing key for an assignment, generated on first use. Rotation is a
- * deliberate user act (regenerateAssignmentKey), never implicit.
+ * Signing key for an assignment, generated on first use. Rotation happens
+ * only through regenerateAssignmentKey.
  */
 export async function getAssignmentKey(label: string): Promise<DeviceSigner> {
   const alias = aliasFor(label);

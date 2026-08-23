@@ -1,33 +1,18 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * pinLockout.ts — escalating PIN lockout.
- *
- * Why: the 6-digit PIN gates vault and identity. PBKDF2-SHA256 (600,000
- * iterations — see passcode.ts) makes brute force expensive, but with no
- * attempt counter a patient attacker (or a curious child) gets unlimited
- * tries.
- *
- * Policy: the first 4 failures are free. From the 5th onward each failure
- * locks the keypad, doubling from 30 s up to a 5-minute ceiling:
+ * Escalating lockout for the 6-digit vault PIN (hashing lives in passcode.ts).
+ * The first 4 failures are free; from the 5th each failure locks the keypad,
+ * doubling from 30 s to a 5-minute ceiling:
  *   5th → 30 s, 6th → 60 s, 7th → 2 min, 8th → 4 min, 9th+ → 5 min.
- * A successful unlock resets the counter.
- *
- * Persistence: attempts and the lock-until timestamp live in SecureStore, so
- * force-quitting the app does not reset the lockout. This is device-local
- * hardening, stated plainly: it raises the cost of casual probing; it is not a
- * substitute for iOS's own passcode and hardware protections.
- *
- * Clock note: the lock is wall-clock based. Someone
- * holding the UNLOCKED device can expire a lockout early by rolling the
- * system clock forward. Accepted: React Native exposes no monotonic clock,
- * and that attacker already holds the device — the lock remains a
- * casual-probing speed bump, priced as such.
+ * A successful unlock resets the counter. Attempts and the lock-until stamp
+ * persist in SecureStore, so force-quitting does not clear a lockout. The lock
+ * is wall-clock based: moving the system clock forward expires it early.
  */
 import * as SecureStore from 'expo-secure-store';
 
 const KEY = 'vault_pin_lockout_v1';
-// Same keychain accessibility as passcode.ts: this device only, unlocked only —
-// a lockout counter has no business migrating to a new device in a backup.
+// This device only, unlocked only — same keychain class as passcode.ts, so the
+// counter never migrates to another device in a backup.
 const OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };

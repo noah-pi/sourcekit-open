@@ -2,9 +2,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
-// Local structural type for the custom tab bar. expo-router supplies the
-// bottom-tabs navigator at runtime; we must not hard-import its package
-// (absent from package.json — an EAS `npm ci` would fail to resolve it).
+// Structural type for the custom tab bar. The bottom-tabs navigator comes
+// from expo-router at runtime; its package is not in package.json, so a hard
+// import would break `npm ci`.
 interface PillTabBarProps {
   state: { index: number; routes: { key: string; name: string }[] };
   descriptors: Record<string, { options: Record<string, unknown> } | undefined>;
@@ -20,10 +20,9 @@ import { colors, useEffectiveScheme } from '../../src/theme';
 import { subscribeSealJobs } from '../../src/provenance/sealQueue';
 import { subscribeVaultNotices } from '../../src/vault/vaultFs';
 
-// The bar overlays content rather than pushing it up.
-// The mockup's #7ED6A4 active green fails WCAG on the
-// light-mode bar (≈1.6:1 on white). Dark mode keeps it; light mode uses the
-// theme accent (#1F6B45, 5.6:1 on white) with accentSoft as the pill wash.
+// Tab bar overlays content rather than pushing it up.
+// Active tint per scheme: #7ED6A4 fails WCAG on the light bar (≈1.6:1 on
+// white), so light mode uses the theme accent (5.6:1) with accentSoft wash.
 const ACTIVE_GREEN_DARK = '#7ED6A4'; // mockup --ok-bright
 const ACTIVE_BG_DARK = 'rgba(126,214,164,0.13)';
 
@@ -43,7 +42,7 @@ function PillTabBar({ state, descriptors, navigation }: PillTabBarProps) {
     () => subscribeSealJobs((jobs) => setFailedSeals(jobs.filter((j) => j.state === 'failed').length)),
     [],
   );
-  // Contrast-safe active treatment, per scheme (see the constants above).
+  // Active tint and pill wash, per scheme.
   const activeTint = scheme === 'dark' ? ACTIVE_GREEN_DARK : colors.accent;
   const activeBg = scheme === 'dark' ? ACTIVE_BG_DARK : colors.accentSoft;
 
@@ -140,8 +139,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: { color: '#141414', fontSize: 9, fontWeight: '800' },
-  // Vault-notice banner — floats above the pill bar, same register (surface,
-  // hairline, soft shadow). Colors inline so a scheme flip re-tints it.
+  // Vault-notice banner, above the pill bar. Colors are set inline so a
+  // scheme flip re-tints it.
   noticeWrap: {
     position: 'absolute',
     left: 14,
@@ -163,11 +162,10 @@ const styles = StyleSheet.create({
 });
 
 export default function TabsLayout() {
-  useEffectiveScheme(); // re-read the palette on flip — tab chrome follows the scheme
+  useEffectiveScheme(); // re-reads the palette on scheme flip
   const insets = useSafeAreaInsets();
-  // Brief vault notices — a quiet
-  // banner above the pill bar, auto-dismissing. This layout is always
-  // mounted, so the notice surfaces whichever tab triggered the read.
+  // Vault notices, auto-dismissed after 4s. This layout is always mounted,
+  // so the banner shows regardless of which tab triggered the read.
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;

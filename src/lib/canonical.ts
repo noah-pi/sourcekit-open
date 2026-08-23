@@ -1,12 +1,8 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Deterministic JSON canonicalization.
- *
- * The signature must cover a byte-for-byte reproducible encoding of the
- * attestation record. JSON.stringify key order is insertion-dependent, so we
- * recursively sort object keys and serialize with no whitespace.
- * (Same rules as JSON Canonicalization Scheme, RFC 8785, for our data types:
- * strings, numbers, booleans, null, arrays, plain objects.)
+ * Deterministic JSON canonicalization: object keys sorted recursively, no
+ * whitespace, so a signature covers a byte-for-byte reproducible encoding.
+ * Same rules as JSON Canonicalization Scheme (RFC 8785) for our value types.
  */
 
 export type JsonValue =

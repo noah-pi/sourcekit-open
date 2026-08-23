@@ -19,7 +19,7 @@ export interface DeviceSigner {
 
 const priv = p256.utils.randomPrivateKey();
 const pub = p256.getPublicKey(priv, false);
-// Mirror the app exactly: every signer normalizes to low-S (deviceKey.ts).
+// Every signer normalizes to low-S, matching deviceKey.ts.
 const signDigest = async (d: Uint8Array) => derNormalizeLowS(p256.sign(d, priv).toDERRawBytes());
 const signPayload = async (p: Uint8Array) => derNormalizeLowS(p256.sign(sha256(p), priv).toDERRawBytes());
 let certCache: Uint8Array | null = null;
@@ -35,9 +35,9 @@ export function labSigner(): DeviceSigner {
   };
 }
 
-/** Mirrors OrgCredential['info'] (src/lib/orgCert.ts) — the fields
- * attest.mts mirrors into the signed record when an org credential is
- * active. The lab never attaches one (org is always null here). */
+/** Mirrors OrgCredential['info'] (src/lib/orgCert.ts): the fields attest.mts
+ * copies into the signed record when an org credential is active. The lab
+ * never attaches one — org is always null here. */
 export interface ShimOrgInfo {
   subjectOrg: string | null;
   subjectCN: string | null;

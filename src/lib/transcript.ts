@@ -1,11 +1,8 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Transcript export formats for signed audio.
- *
- * The transcript of record lives inside the signed file (the
- * com.verify.transcript C2PA assertion); these functions only shape it for
- * humans — plain text for reading, SRT for anything timeline-aware.
- * Pure module — no React Native dependencies.
+ * Transcript export formats for signed audio. The transcript of record lives
+ * in the com.verify.transcript C2PA assertion; these functions only reshape it
+ * as plain text or SRT. Pure module, no React Native dependencies.
  */
 
 export interface TranscriptSegmentLike {

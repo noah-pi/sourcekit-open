@@ -1,9 +1,8 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Lab shim for expo-image-manipulator: vaultFs is staged for the disclosure
- * store hygiene suite (deleteItem / destroyVault), which never touches the
- * thumbnail path. The stub exists so the import resolves; calling it is a
- * test bug — the real thumbnail pipeline is device-only.
+ * Lab shim for expo-image-manipulator. The disclosure store hygiene suite
+ * (deleteItem / destroyVault) never touches the thumbnail path; the stub only
+ * exists so the import resolves. Calling it is a test bug.
  */
 export const SaveFormat = { JPEG: 'jpeg', PNG: 'png' };
 

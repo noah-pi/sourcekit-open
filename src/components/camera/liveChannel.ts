@@ -1,17 +1,11 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Tiny synchronous pub/sub channel for gesture-live values.
- *
- * The camera screen's hard perf rule: a drag gesture must never re-render
- * the viewfinder tree. Gesture sources (pinch, zoom wheel, value ribbon)
- * push their live values into a channel instead of React state; the small
- * leaf components that display them (ZoomHud, ZoomWheel) subscribe via
- * useSyncExternalStore and re-render alone. The screen itself updates only
- * on gesture COMMIT.
- *
- * The snapshot object is replaced wholesale on each emit, so
- * useSyncExternalStore's referential-equality check behaves (no render
- * loop, no stale reads).
+ * Synchronous pub/sub channel for gesture-live values. Gesture sources
+ * (pinch, zoom wheel, value ribbon) push here instead of React state so a
+ * drag never re-renders the viewfinder tree; leaf readouts subscribe via
+ * useSyncExternalStore and the screen updates only on gesture commit.
+ * Emit replaces the snapshot object wholesale, which is what
+ * useSyncExternalStore's referential-equality check requires.
  */
 export class LiveChannel<T> {
   private snapshot: T;

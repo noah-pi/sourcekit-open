@@ -33,7 +33,7 @@ export function deriveLeafSalt(masterSeed: Uint8Array, claimId: string, rung: nu
   return hkdf(sha256, masterSeed, undefined, info, LEAF_SALT_BYTES);
 }
 
-/** The committed leaf digest; the salt binds it to the master seed — no seed, no recomputation. */
+/** Committed leaf digest. The salt binds it to the master seed. */
 export function leafDigest(claim: ContextClaim, salt: Uint8Array): Uint8Array {
   if (!(salt instanceof Uint8Array) || salt.length !== LEAF_SALT_BYTES) {
     throw new Error(`salts: leaf salt must be ${LEAF_SALT_BYTES} bytes`);

@@ -1,16 +1,8 @@
 #!/usr/bin/env node
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Audit gate (supply-chain).
- *
- * `npm audit --audit-level=high` is the right default, but it has no way to
- * say "we looked at this one and it cannot reach the app." Without that, a
- * build-time advisory with no upstream fix leaves the gate permanently red,
- * and a red gate is one nobody reads.
- *
- * So: every high or critical advisory fails the build unless it is declared
- * below with a reason. A new one still fails. Declaring one is a reviewable
- * act — put the reason in the same commit.
+ * Audit gate (supply-chain). Every high or critical npm audit advisory fails
+ * the build unless it is declared in ACCEPTED_BY_DIR below with a reason.
  *
  * Run from the repo root:  node scripts/check-audit.mjs <dir>
  */
@@ -18,12 +10,9 @@ import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 
 /**
- * Accepted advisories, per manifest directory, by the vulnerable package
- * name npm reports.
- *
- * `reaches` records what the package is actually pulled in by — an advisory
- * is only acceptable here if the answer is build tooling. Anything that ends
- * up in the shipped app is not a candidate for this list at any severity.
+ * Accepted advisories, per manifest directory, keyed by the vulnerable
+ * package name npm reports. `reaches` records what pulls the package in;
+ * only build-time tooling qualifies, never anything bundled into the app.
  */
 const ACCEPTED_BY_DIR = {
   '.': {
@@ -46,8 +35,8 @@ if (!ACCEPTED) {
 
 let report;
 try {
-  // npm audit exits non-zero when it finds anything; the JSON is on stdout
-  // either way, so the exit code is not the signal here — the parse is.
+  // npm audit exits non-zero on any finding; the JSON lands on stdout either
+  // way, so the parse is the signal, not the exit code.
   report = JSON.parse(execFileSync('npm', ['audit', '--json'], { cwd: dir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
 } catch (err) {
   if (!err.stdout) { console.error(`${label}: npm audit produced no report — ${err.message}`); process.exit(1); }
@@ -55,10 +44,9 @@ try {
 }
 
 let failures = 0;
-// npm flags the whole chain: a package that merely DEPENDS on a vulnerable
-// package inherits its severity, with `via` naming the dependency by string.
-// Only entries whose `via` carries an advisory object are findings of their
-// own — the rest are the same problem, counted again at each hop.
+// Severity propagates up the dependency chain, with `via` naming the hop as a
+// string. Only entries whose `via` holds an advisory object are distinct
+// findings; the rest are the same advisory recounted.
 const serious = Object.entries(report.vulnerabilities ?? {})
   .filter(([, v]) => (v.severity === 'high' || v.severity === 'critical')
     && (v.via ?? []).some((x) => typeof x === 'object'));
@@ -76,9 +64,8 @@ for (const [name, v] of serious) {
   console.log(`ok   ${label}: ${name} (${v.severity}) — DECLARED: ${accepted.reaches}`);
 }
 
-// A declaration that no longer matches anything is stale: the advisory was
-// fixed upstream, or the dependency is gone. Prune it rather than let the
-// list accumulate exceptions nobody has re-read.
+// A declaration matching nothing is stale (fixed upstream, or dependency
+// gone); the gate fails until it is pruned.
 for (const name of Object.keys(ACCEPTED)) {
   if (!serious.some(([n]) => n === name)) {
     console.error(`${label}: ACCEPTED lists ${name} but npm audit no longer reports it at high or above — prune the declaration`);

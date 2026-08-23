@@ -1,12 +1,9 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * OpenTimestamps network client — hash-only, accountless, free.
- *
- * What leaves the device: a 32-byte SHA-256 digest. Never media, never the
- * record, never a key. Calendars are public goods run by the OTS project
- * and volunteers; if all are down the digest waits in the on-device queue
- * and the delay is recorded in the record (queueDelayMs) — the capture is
- * never blocked on time evidence.
+ * OpenTimestamps network client. Accountless; the only thing that leaves the
+ * device is a 32-byte SHA-256 digest. When every calendar is unreachable the
+ * digest waits in the on-device queue and the wait is recorded as
+ * queueDelayMs; capture is not blocked on it.
  */
 
 import { OTS_CALENDARS, ensureDetachedReceipt } from './ots';
@@ -49,9 +46,9 @@ export async function submitDigestToCalendars(
     );
     if (!res || !res.ok) return null;
     const buf = new Uint8Array(await res.arrayBuffer());
-    // The wire body is a BARE Timestamp (no MAGIC header) whose initial msg
-    // is our digest — wrap it into a DetachedTimestampFile; null when the
-    // result doesn't parse or commits to a different digest.
+    // Wire body is a bare Timestamp (no MAGIC header) whose initial msg is
+    // the digest; wrap it into a DetachedTimestampFile. Null when it does not
+    // parse or commits to a different digest.
     const detached = ensureDetachedReceipt(digest, buf);
     if (!detached) return null;
     return { calendar: base, receipt: detached };
@@ -62,16 +59,12 @@ export async function submitDigestToCalendars(
 
 /**
  * Asks a calendar for the upgraded (Bitcoin-attested) continuation of a
- * timestamp it previously accepted. The endpoint is keyed by the COMMITMENT
- * the pending attestation sits on — the msg after walking the stored
- * receipt's op chain (attestation.msgHex), NOT the originally submitted
- * digest; a digest-keyed GET is answered "Not found" and the upgrade never
- * lands.
- *
- * Returns the raw response (a bare Timestamp continuation, per
- * opentimestamps-server) or null while still pending (the calendar answers
- * with a plain-text "Pending confirmation…" body then) or on any error.
- * The caller splices and re-validates (mergeUpgradedTimestamp).
+ * timestamp it accepted. The endpoint is keyed by the commitment the pending
+ * attestation sits on (attestation.msgHex, the msg after walking the stored
+ * receipt's op chain), not the submitted digest; a digest-keyed GET answers
+ * "Not found". Returns the bare Timestamp continuation, or null while pending
+ * (plain-text body) or on error. Caller splices and re-validates via
+ * mergeUpgradedTimestamp.
  */
 export async function fetchUpgradedReceipt(
   commitmentHex: string,
@@ -81,17 +74,17 @@ export async function fetchUpgradedReceipt(
   const res = await withTimeout((signal) => fetchFn(`${calendarBase}/timestamp/${commitmentHex}`, { signal }), UPGRADE_TIMEOUT_MS);
   if (!res || !res.ok) return null;
   const buf = new Uint8Array(await res.arrayBuffer());
-  // Cheap shape check: a binary timestamp continuation starts with an op or
-  // an attestation marker; the text "still pending" body does not.
+  // Shape check: a binary timestamp continuation starts with an op or an
+  // attestation marker; the pending text body does not.
   if (buf.length === 0 || (buf[0] !== 0x00 && buf[0] !== 0x08 && buf[0] !== 0xf0 && buf[0] !== 0xf1 && buf[0] !== 0xff)) return null;
   return buf;
 }
 
 /**
  * Fetches the 80-byte Bitcoin block header at `height` from an Esplora-
- * compatible API (default mempool.space — public, no key). This is the ONLY
- * way to complete the receipt↔blockchain binding check; without network the
- * receipt is internally consistent but the binding is stated as unchecked.
+ * compatible API (default mempool.space, public, no key). Required to
+ * complete the receipt-to-blockchain binding check; offline, the receipt is
+ * still internally consistent but the binding is reported as unchecked.
  */
 export async function fetchBlockHeader(
   height: number,

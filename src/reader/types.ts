@@ -1,48 +1,37 @@
 /**
- * Reader card model.
+ * Reader card model. A check emits a prediction, a measurement, the gap
+ * between them with an error bound, and what that gap is consistent with.
  *
- * The camera commits, the Reader measures, the human concludes. A check
- * never produces a verdict; it produces a gap between a
- * prediction (what the committed evidence says should hold) and a
- * measurement (what this Reader observed), with an error bound, and an
- * interpretation of what that gap is CONSISTENT WITH — never what it proves.
+ * Vocabulary rules, enforced in interpret/cards.ts: no fused scores; no
+ * verdict words (verified, authentic, trusted, proven, real, secure,
+ * guaranteed) in finding position; a check that could not run renders as a
+ * card with a stated reason rather than being omitted.
  *
- * Vocabulary rules, enforced here and in interpret/cards.ts:
- *   - no fused scores, anywhere;
- *   - no verdict words in finding position (verified / authentic / trusted /
- *     proven / real / secure / guaranteed are banned from findings);
- *   - a check that could not run renders as a card with a stated reason,
- *     never as an absence.
- *
- * Pure types — no React, no DOM, no RN. Platform-agnostic by construction.
+ * Pure types: no React, no DOM, no RN.
  */
 
 /**
  * The five states of one check.
  *
- *   agrees          the gap sits inside the stated error band — the
- *                   measurement is consistent with the prediction
- *   diverges        the gap sits OUTSIDE the band — a finding, stated
- *                   plainly, still never a verdict on the exhibit
- *   insufficient    the check ran but the evidence at hand cannot decide
- *                   either way (absence of proof is neutral, said out loud)
- *   not-run         the check could not run at all — the reason is part of
- *                   the card, never hidden
- *   not-applicable  the check is structurally unavailable for this exhibit
+ *   agrees          gap sits inside the stated error band
+ *   diverges        gap sits outside the band
+ *   insufficient    check ran, evidence cannot decide either way
+ *   not-run         check could not run; the reason goes on the card
+ *   not-applicable  check is structurally unavailable for this exhibit
  *                   (e.g. hardware attestation on a de-identified copy)
  */
 export type CheckState = 'agrees' | 'diverges' | 'insufficient' | 'not-run' | 'not-applicable';
 
 /**
- * The claims a check can bear on. Fixed and small on purpose: the agreement
- * matrix crosses checks against these and nothing else.
+ * The claims a check can bear on. The agreement matrix crosses checks
+ * against these and nothing else.
  */
 export type Claim = 'time' | 'place' | 'device' | 'scene';
 
 export const CLAIMS: readonly Claim[] = ['time', 'place', 'device', 'scene'];
 
 /**
- * One evidence card — the unit the human reads.
+ * One evidence card.
  *
  * Grammar (enforced by interpret/cards.ts):
  *   - state 'agrees' or 'diverges'  → prediction, measurement, gap AND
@@ -63,19 +52,14 @@ export interface EvidenceCard {
   measurement: string;
   /** prediction − measurement, with the error band; or the stated reason. */
   gap: string;
-  /** What the gap is CONSISTENT WITH. Never what it proves. */
+  /** What the gap is consistent with, not what it proves. */
   interpretation: string;
-  /**
-   * The one permitted numeric display: a value on a stated band, in stated
-   * units. Never a score — a position.
-   */
+  /** A value on a stated band, in stated units. A position, not a score. */
   gauge?: { value: number; band: [number, number]; units: string };
   /**
-   * Distribution data for a strip widget (p10 / median / p90) — explicitly
-   * NOT a progress bar: there is no "100%", and a distribution hugging its
-   * own end is suspicious, not good. A null p10 means the underlying
-   * evidence does not carry that percentile — an honest absence in the
-   * data, rendered as a gap in the strip, never interpolated.
+   * Distribution for the strip widget (p10 / median / p90), not a progress
+   * bar. A null p10 means the evidence carries no such percentile; the
+   * strip renders a gap there rather than interpolating.
    */
   strip?: { p10: number | null; median: number; p90: number; units: string };
   /** "Read ▸ …" — how the measurement was made, for the method line. */
@@ -85,9 +69,8 @@ export interface EvidenceCard {
 }
 
 /**
- * One rung of the custody ladder. A rung is a projection of checks already
- * performed by verify-core — it computes no new cryptography and fuses
- * nothing into a score.
+ * One rung of the custody ladder: a projection of checks already performed
+ * by verify-core. Computes no new cryptography.
  */
 export interface RungResult {
   /** 1-based position on the ladder. */
