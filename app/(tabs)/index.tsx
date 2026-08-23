@@ -442,9 +442,8 @@ export default function CaptureScreen() {
   // Sweep ceiling: the current stack's stop times its native quality cap when
   // the caps have reported, else the MAX_RELATIVE_ZOOM fallback. The sweep
   // stays on one stack; crossing into another is an explicit pill tap. On the
-  // virtual dual-wide graph the sweep runs on the virtual device, whose
-  // upscale headroom is the wide stack's, so the cap keys to 'wide' (keying
-  // it to the ultra-wide would clamp the sweep at ~1x).
+  // virtual dual-wide graph the cap keys to 'wide', the virtual device's own
+  // upscale headroom.
   const zoomCeiling = () =>
     stackZoomCeiling(
       stopsRef.current,
@@ -466,10 +465,9 @@ export default function CaptureScreen() {
   const [sessionEpoch, setSessionEpoch] = useState(0);
 
   // ---- PRO strip (spec §14) ----
-  // Per-shoot session state, deliberately not in settings, so a fresh app
-  // session starts fully auto. Capsule values are the bridge's applied
-  // (clamped, round-tripped) values, which is what the metadata block
-  // commits.
+  // Per-shoot session state, not in settings, so a fresh app session starts
+  // fully auto. Capsule values are the bridge's applied (clamped,
+  // round-tripped) values, which is what the metadata block commits.
   const [proCaps, setProCaps] = useState<ExhibitCameraCapabilities | null>(null);
   const [proOpen, setProOpen] = useState(false);
   const proAnim = useRef(new Animated.Value(0)).current;
@@ -531,18 +529,12 @@ export default function CaptureScreen() {
   // The transcript fades on screen when a recording starts, out when it ends.
   const transcriptFade = useRef(new Animated.Value(0)).current;
 
-  // Pinch-to-zoom (dependency-free PanResponder). It claims a gesture only
-  // with two or more fingers down, so single taps (tap-to-focus, shutter,
-  // mode, flip, light) are untouched. Zoom drives the camera's own
-  // optical+digital zoom and never touches pixels after the fact, so the
-  // signing pipeline is unaffected.
-  // Gesture arbitration: a two-finger pinch zooms; a single-finger horizontal
-  // swipe switches capture mode. The responder claims a gesture only once
-  // intent is clear (24 px of dominant horizontal travel).
-  // The pinch target follows the finger ratio 1:1, but the applied factor
-  // lerps toward it on a rAF loop capped at PINCH_MAX_LOG2_PER_FRAME, and the
-  // loop writes the live channel and throttled native calls, never React
-  // state.
+  // Pinch-to-zoom (dependency-free PanResponder). Two fingers pinch; a
+  // single-finger horizontal swipe (24 px of dominant travel) switches capture
+  // mode, so single taps are untouched. Zoom drives the camera's optical and
+  // digital zoom. The applied factor lerps toward the finger ratio on a rAF
+  // loop capped at PINCH_MAX_LOG2_PER_FRAME, writing the live channel and
+  // throttled native calls rather than React state.
   const gestureKind = useRef<'pinch' | 'swipe' | null>(null);
   const swipeFired = useRef(false);
   const modeSwipeRef = useRef<(dir: 1 | -1) => void>(() => {});
@@ -720,9 +712,8 @@ export default function CaptureScreen() {
    * configure, since a fresh session starts at defaults. A wedged native
    * start surfaces as a card after the 10 s watchdog.
    *
-   * The effect keys on `needsCamera`, not `mode`: photo/video hops ride the
-   * same running native session, so rebuilding per hop cost a blocking
-   * startRunning, a calibration one-shot, and PiP teardown on every switch.
+   * The effect keys on `needsCamera`, not `mode`, so photo/video hops ride the
+   * same running native session.
    */
   useFocusEffect(
     useCallback(() => {
@@ -871,10 +862,7 @@ export default function CaptureScreen() {
         }
       };
       // needsCamera collapses photo and video into one session lifetime.
-      // altView is a dep: without it, toggling Multiple Lenses left the old
-      // graph running, so dual-off kept the virtual graph (lens pills became
-      // zoom-stop jumps that switch nothing) and dual-on never attached the
-      // partner.
+      // altView is a dep: toggling Multiple Lenses must rebuild the graph.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [needsCamera, facing, sessionEpoch, settings.captureEvidence.altView])
   );
@@ -972,11 +960,8 @@ export default function CaptureScreen() {
   // Fused DeviceMotion feed while the screen is focused: gyro rotation rate,
   // fused attitude, and gravity-free acceleration, which is the signed pose
   // trace. A null component skips the sample rather than writing zeros.
-  //
-  // This is the committed path: poseBuffer feeds collectContext's signed pose
-  // trace on every capture, so it stays at the full 100 Hz and keeps the full
-  // BUFFER_LIMIT window. There is no display-only IMU subscription in this
-  // file.
+  // poseBuffer feeds collectContext's signed pose trace at the full 100 Hz
+  // over the BUFFER_LIMIT window.
   useFocusEffect(
     useCallback(() => {
       if (!settings.includeSensors || Platform.OS === 'web') return;
@@ -989,15 +974,11 @@ export default function CaptureScreen() {
         sub = DeviceMotion.addListener((m) => {
           if (!m.acceleration || !m.rotationRate || !m.rotation) return;
           const buf = poseBuffer.current;
-          // expo-sensors reports BOTH attitude and rotation rate with
+          // expo-sensors reports both attitude and rotation rate with
           // CoreMotion's axis names: alpha = z (yaw), beta = y (pitch),
-          // gamma = x (roll). Mapped to device axes here so the signed
-          // trace's rx/ry/rz are what a desk expects.
-          // Units: expo's native module converts rotationRate to degrees per
-          // second (radiansToDegrees, DeviceMotionModule.swift) before JS sees
-          // it, while PoseSample.rx/ry/rz are rad/s and every consumer
-          // (motion.ts quantization, the Motion Trace card, desk imuflow) is
-          // built on that. Convert at the edge.
+          // gamma = x (roll). Mapped to device axes here.
+          // Units: expo delivers rotationRate in degrees per second;
+          // PoseSample.rx/ry/rz are rad/s. Convert at the edge.
           const DEG2RAD = Math.PI / 180;
           buf.push({
             t: Date.now(),
@@ -1071,15 +1052,11 @@ export default function CaptureScreen() {
    *  walks the lens down; the .5 pill does that. On a lens whose stop factor
    *  the hardware could not report, the model is the device factor, so the
    *  floor is 1. */
-  // On the dual-wide virtual device the sweep covers both constituents: the
-  // floor is the lowest optical stop (the ultra-wide) and the relative factor
-  // maps to the device factor 1:1, since the virtual device hands off
-  // internally at 1.0. The per-stack divide is the physical-swap model and
+  // On the dual-wide virtual device the floor is the lowest optical stop and
+  // the relative factor maps to the device factor 1:1; the per-stack divide
   // applies only off the virtual graph.
-  // Both helpers take an optional explicit lens. selectLens commits the zoom
-  // for the lens it just switched to, but lensRef only updates in a
-  // post-render effect, so reading it here would clamp against the previous
-  // lens's floor.
+  // Both helpers take an optional explicit lens: lensRef only updates in a
+  // post-render effect, so selectLens must pass the lens it switched to.
   const zoomFloorFor = (c: ReturnType<typeof buildStops>, forLens?: ExhibitLens) =>
     graphRef.current === 'virtual-dual-wide' ? firstOpticalFactor(c) : stackZoomFloor(c, forLens ?? lensRef.current);
   const deviceFactorFor = (relative: number, c: ReturnType<typeof buildStops>, forLens?: ExhibitLens) =>
@@ -1672,13 +1649,9 @@ export default function CaptureScreen() {
   };
 
   const selectLens = async (l: ExhibitLens) => {
-    // A same-lens tap must not return early on the JS state alone: if the
-    // state and the live session drift (a graph teardown, or a rebuild that
-    // landed on a different stack), the pill would go dead and stay dead. The
-    // native call is idempotent, answering 'already-selected' when the session
-    // truly is on that lens, so with a live session even same-lens taps go
-    // native and the chip follows the result, which also re-parks the zoom on
-    // the stop.
+    // Same-lens taps still go native: the call is idempotent and answers
+    // 'already-selected', so the chip follows the session rather than drifting
+    // JS state, and the zoom re-parks on the stop.
     if (l === lens && !sessionActive.current) return;
     if (!sessionActive.current) {
       // No live session, so nothing native to fail. The session lifecycle
@@ -1896,14 +1869,11 @@ export default function CaptureScreen() {
   };
 
   // ------------------------------------------------------------------
-  // The precision bar, the only adjustment surface. Every pro param docks
-  // here: ladder params scrub integer rung indices (snap 1, a detent per rung,
-  // rung 0 = AUTO where the hardware has one), continuous params scrub their
-  // native range (SHTR in stops, so a uniform drag is a uniform exposure
-  // change). Live scrubs apply natively on a throttle without React state,
-  // since the ribbon leaf owns its drag; the commit lands the bridge's applied
-  // value in state. The AUTO pill is the auto/manual toggle, and scrubbing a
-  // value enters manual.
+  // The precision bar. Every pro param docks here: ladder params scrub integer
+  // rung indices (snap 1, rung 0 = AUTO where the hardware has one),
+  // continuous params scrub their native range (SHTR in stops). Live scrubs
+  // apply natively on a throttle; the commit lands the bridge's applied value
+  // in state. The AUTO pill is the auto/manual toggle.
   // ------------------------------------------------------------------
   /** ISO range of the active format (device-reported), else the ladder's own
    *  ends. */
@@ -2089,13 +2059,10 @@ export default function CaptureScreen() {
     }
   };
 
-  // On the dual-view graph the tray stays, filtered to the controls that apply
-  // to the fused virtual device. Flash/torch is an output-level policy and EV
-  // is metering compensation on the virtual device, so both work. The
-  // per-constituent manual controls (focus motor, WB gains, custom
-  // ISO/shutter) target one sensor of a fused pair and error there, so they
-  // hide while dual is live. A ribbon docked on a hidden param is suppressed
-  // with its capsule.
+  // On the dual-view graph the tray filters to the controls that apply to the
+  // fused virtual device: flash/torch and EV. The per-constituent manual
+  // controls (focus motor, WB gains, custom ISO/shutter) error on a fused pair
+  // and hide while dual is live, along with any ribbon docked on them.
   const DUAL_SAFE_PARAMS: readonly ProParamId[] = ['flash', 'ev'];
   const ribbon = ribbonFor(dualLive && ribbonParam && !DUAL_SAFE_PARAMS.includes(ribbonParam) ? null : ribbonParam);
 
@@ -2617,11 +2584,9 @@ export default function CaptureScreen() {
             </TouchableOpacity>
           ) : proAvailable ? (
             // Capture settings: a dials glyph on the shutter row's left slot
-            // opens the pro tray. The light (flash / torch) is the tray's first
-            // chip, not a HUD button. The accent color signals that this
-            // capture's optics were chosen by hand. The button stays while the
-            // dual-view graph is live; the tray narrows to the dual-safe
-            // controls (visibleProParams filters to DUAL_SAFE_PARAMS).
+            // opens the pro tray; the light (flash / torch) is the tray's first
+            // chip. The accent color marks hand-chosen optics. While the
+            // dual-view graph is live the tray narrows to DUAL_SAFE_PARAMS.
             <TouchableOpacity
               style={styles.sideButton}
               hitSlop={8}
