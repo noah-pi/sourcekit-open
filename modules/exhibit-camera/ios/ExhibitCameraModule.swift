@@ -4490,7 +4490,7 @@ extension ExhibitCameraModule {
       guard let self = self else { return }
       self.settleVideoStop(
         writer: writer,
-        outcome: .failure(ExhibitCameraNamedException(ExhibitCameraErrorCode.writer, "Delivery finalize timed out after 10s; file state unknown — stated, not guessed"))
+        outcome: .failure(ExhibitCameraNamedException(ExhibitCameraErrorCode.writer, "Delivery finalize timed out after 10s; file state unknown"))
       )
     }
     stopTimeout = timeout
@@ -5474,14 +5474,14 @@ extension ExhibitCameraModule {
     if let pendingStop = stopPromise {
       pendingStop.reject(ExhibitCameraNamedException(
         ExhibitCameraErrorCode.noSession,
-        "The camera session stopped while the delivery file was finalizing; file state unknown — stated, not guessed"
+        "The camera session stopped while the delivery file was finalizing; file state unknown"
       ))
     }
     stopPromise = nil
     for waiter in stopWaiters {
       waiter.reject(ExhibitCameraNamedException(
         ExhibitCameraErrorCode.noSession,
-        "The camera session stopped while the delivery file was finalizing; file state unknown — stated, not guessed"
+        "The camera session stopped while the delivery file was finalizing; file state unknown"
       ))
     }
     stopWaiters.removeAll()
