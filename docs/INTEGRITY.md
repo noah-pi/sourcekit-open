@@ -225,8 +225,7 @@ the manifest's length that run, so the test pins the high 3 bytes as always
 malleable and the low byte as allowed.
 
 The COSE payload slot is not in this set. C2PA requires a detached payload
-(CBOR null), and a non-conformant embedded payload fails rather than being
-ignored.
+(CBOR null); an embedded one fails.
 
 `Z` carries the packet-sequence number and is fully load-bearing. Reassembly
 enforces the low three bytes — a chain with a gap, a duplicate or

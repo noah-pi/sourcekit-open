@@ -192,10 +192,9 @@ console.log('— strip detection —');
 
 // ---------- the PQ signature lives in the record ----------
 console.log('— record-carried PQ layer —');
-// Captures carry no verifyPq entry in the COSE header: a general-purpose C2PA
-// writer has nowhere to put one, so the record carries the signature alone.
-// The media stays covered — pqSignature signs the record, the record commits
-// asset.sha256, and the verifier compares that against the bytes it read.
+// The record carries the signature. pqSignature signs the record, the record
+// commits asset.sha256, and the verifier compares that against the bytes it
+// read.
 {
   const insertOffset = 2;
   const clean = fs.readFileSync('/tmp/lab/clean.jpg');

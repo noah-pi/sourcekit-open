@@ -39,11 +39,6 @@ Signing is my own COSE/JUMBF builder, and so is verification in the app. The c2p
 is written for both — sign and verify, including Secure Enclave signing — and is not wired into
 any screen ([`upstreamEngineIos.ts`](src/provenance/engine/upstreamEngineIos.ts)).
 
-Nothing about the manifest depends on writing the COSE structure by hand. The ML-DSA-65
-signature lives in the record, and the record commits the media digest, so the post-quantum layer
-needs no entry in the COSE header — which is where a general-purpose C2PA writer could not have
-put one.
-
 What checks that code is a differential oracle in CI: every corpus asset runs through my verifier
 and the official c2pa-rs, and the build fails on any disagreement that isn't whitelisted with a
 written reason. See [`docs/PROVENANCE.md`](docs/PROVENANCE.md) and
