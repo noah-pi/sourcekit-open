@@ -69,7 +69,7 @@ local search.
 Watermarking was considered instead and rejected: visible marks deface the
 evidence, invisible ones are stripped by the same recompressions that make
 recovery necessary in the first place, and both suggest a binding that isn't
-there. A pHash is honest because it only ever claims to be a similarity signal.
+there. A pHash only ever claims to be a similarity signal.
 
 ## Hash-only claims
 
@@ -81,6 +81,6 @@ sealed without handing over the file.
 Recovery against one is exact-match only, because there's nothing else to
 compare. When matching media turns up later, the claim upgrades to a full
 verification. If the media was re-encoded in transit, the claim can never match
-it, and the honest answer is to say so rather than approximate.
+it, and the claim says so rather than approximating.
 
 That cost is stated in the share sheet that creates the claim.

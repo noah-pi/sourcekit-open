@@ -67,7 +67,7 @@ credibility axes (independent of the integrity verdict):
 The two axes are deliberate: a file can be cryptographically INTACT while its
 signer is unknown, its attestation forged, or its timestamps absent — the UI
 shows integrity and credibility independently, and anything present-but-failed
-is a red warning, never silently ignored. Signer *identity* resolves only
+is a red warning. Signer *identity* resolves only
 against anchors outside the file: this device's key, or an org credential
 chained to a real CA. Nothing found inside a file can ever upgrade identity
 to "known". (removed the manual known-signers list — a confirm-by-hand
@@ -102,8 +102,8 @@ list. The copy is independently verifiable — integrity without identity.
   (`clientDataHash = SHA256(challenge ‖ signingPublicKey)`) by walking the
   DER to the nonce extension Apple signed into the leaf certificate, and
   registers the device by its signing-key fingerprint (rate-limited, 2 MB cap)
-No database; device list is a small JSON file on a volume. There is **no
-device-listing endpoint** (a public roster of real journalist hardware is an
-opsec liability, not a feature). the relay does exactly this one
-job — the Google Vision reverse-image route was removed with its app client,
-so no media ever transits the server.
+No database. The registry is an aggregate counter in a small JSON file on a
+volume: no keyIds, no key fingerprints, no timestamps. There is **no
+device-listing endpoint**; `GET /devices` answers 404. Verifying App Attest
+statements and counting registrations is the relay's whole job, and no media
+transits it.
