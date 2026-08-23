@@ -4,6 +4,9 @@
     "strict": true,
     "types": [
       "node"
+    ],
+    "customConditions": [
+      "react-native"
     ]
   },
   "exclude": [

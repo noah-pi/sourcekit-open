@@ -60,7 +60,10 @@ jobs:
           node-version: 20
 
       - name: Install app dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+        # ci, not install: the lockfile is committed, and a resolution that
+        # drifts from it is how CI and a developer's machine end up
+        # typechecking against different react-native type surfaces.
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
 
       - name: Typecheck app/ and src/ on the project toolchain
         # The screens and components, on the TypeScript version package.json
@@ -100,7 +103,10 @@ jobs:
           node-version: 20
 
       - name: Install app dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+        # ci, not install: the lockfile is committed, and a resolution that
+        # drifts from it is how CI and a developer's machine end up
+        # typechecking against different react-native type surfaces.
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
 
       - name: Fetch the C2PA framework
         run: ./scripts/fetch-c2pa-framework.sh
