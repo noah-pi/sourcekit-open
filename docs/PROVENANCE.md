@@ -7,7 +7,7 @@ epistemology anyway. So here's what actually holds the code to account.
 
 ## The test lab
 
-27 suites, 761 checks, all runnable offline against the real shipping code.
+27 suites, 769 checks, all runnable offline against the real shipping code.
 Device-service imports are rewired to documented shims; every cryptographic
 operation runs as shipped.
 
@@ -29,17 +29,18 @@ layer can't explain.
 
 ## Continuous enforcement
 
-CI (`.github/workflows/ci.yml`) runs the full suite list, a strict typecheck of
-the app, a dependency allow-list with per-package caps, and `npm audit` on every
-budgeted manifest — on every push and pull request.
+CI (`.github/workflows/ci.yml`) runs every suite `tests/.staged` discovers, a
+strict typecheck of the staged core, a dependency allow-list with per-package
+caps, and `npm audit` on every budgeted manifest — on every push and pull
+request.
 
 ## What the AI assistance did and didn't do
 
 It wrote drafts, quickly, and sometimes wrong. It didn't merge anything.
 
-Every behaviour this repo claims is pinned by a test that fails loudly when the
-behaviour changes. The design decisions — threat model, key custody, the
+Every behavior this repo claims is pinned by a test that fails loudly when the
+behavior changes. The design decisions — threat model, key custody, the
 vocabulary rules — are documented in `docs/` and were made by the maintainer.
 
-If the tests and the behaviour disagree, the tests are the spec. Please report
+If the tests and the behavior disagree, the tests are the spec. Please report
 it: see [SECURITY.md](../SECURITY.md).

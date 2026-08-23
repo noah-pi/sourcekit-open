@@ -67,24 +67,31 @@ function extractAppleNonce(extnValue: Uint8Array): Uint8Array | null {
 }
 
 /**
- * @param assertionBytes  raw json-box content of com.verify.app-attest (null when absent)
+ * @param assertion  com.verify.app-attest payload: the decoded object, since
+ *                   a 'json' and a 'cbor' content box carry the same map, or
+ *                   the raw content bytes when neither decoder read it. Null
+ *                   when absent.
  * @param signerPublicKey uncompressed point from the manifest's signing cert
  */
 export function verifyAppAttestAssertion(
-  assertionBytes: Uint8Array | null,
+  assertion: Record<string, unknown> | Uint8Array | null,
   signerPublicKey: Uint8Array | null,
 ): AppAttestVerification {
-  if (!assertionBytes) return NOT_PRESENT;
+  if (!assertion) return NOT_PRESENT;
   const checks: string[] = [];
   let attestationEnv: 'production' | 'development' | null = null;
   let mintWindow: { notBeforeMs: number; notAfterMs: number } | null = null;
   const fail = (reason: string): AppAttestVerification => ({ present: true, valid: false, reason, checksPerformed: checks, attestationEnv, mintWindow });
 
   let payload: { format?: string; attestationBase64?: string; challengeBase64?: string; boundFingerprint?: string };
-  try {
-    payload = JSON.parse(bytesToUtf8(assertionBytes));
-  } catch {
-    return fail('attestation assertion is not the expected JSON payload');
+  if (assertion instanceof Uint8Array) {
+    try {
+      payload = JSON.parse(bytesToUtf8(assertion));
+    } catch {
+      return fail('attestation assertion is not the expected JSON payload');
+    }
+  } else {
+    payload = assertion as typeof payload;
   }
   if (payload.format !== 'exhibit-app-attest/2' || !payload.attestationBase64 || !payload.challengeBase64 || !payload.boundFingerprint) {
     return fail('attestation assertion has an unrecognized format');

@@ -262,7 +262,7 @@ three commitments above.
 
 Both paths are pinned by `tests/test-malleability.mts`, so the set can't
 silently grow. `tests/tool-malleable-map.mts` reproduces the token-region
-behaviour.
+behavior.
 
 ## Selective disclosure
 

@@ -48,7 +48,9 @@ written reason. See [`docs/PROVENANCE.md`](docs/PROVENANCE.md) and
 
 All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product
 designer, not a cryptographer or a career engineer. Everything is here: camera, cryptography,
-native modules, interface, test suite.
+native modules, interface, test suite. The one binary that isn't committed is the
+C2PA Rust core, which `scripts/fetch-c2pa-framework.sh` pulls from the c2pa-swift
+release and checks against the SHA-256 upstream publishes.
 
 ## A photograph has never been proof
 
@@ -325,7 +327,7 @@ Parallax range calculator
 19.2 mm 0.6 m SUBJECT DISTANCE
 
 Disparity = focal length in pixels × baseline ÷ distance, with focal length taken from a 70°
-horizontal field of view at the analysed width. A patch has to shift by at least one pixel to be
+horizontal field of view at the analyzed width. A patch has to shift by at least one pixel to be
 measurable, so that is the range floor. Below roughly 9 cm the shift exceeds the ±14 px search
 window and matching fails outright.
 
@@ -524,7 +526,8 @@ capture bytes off the device.
 
 To build it yourself:
 [`docs/BUILDING.md`](docs/BUILDING.md). It's an Expo app: `npm install`, then
-`npx expo run:ios` on a Mac with Xcode. Secure Enclave and App Attest need a real
+`./scripts/fetch-c2pa-framework.sh` for the C2PA Rust core, then `npx expo run:ios`
+on a Mac with Xcode. Secure Enclave and App Attest need a real
 device; the simulator falls back to a software key and labels itself as such. Forking
 for your own build means replacing the EAS project id in `app.json` and the App Attest
 app id in `src/lib/appleAttestRoot.ts`.

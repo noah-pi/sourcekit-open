@@ -1,0 +1,55 @@
+# Why does `tsc -p tsconfig.json` pass on a clean local tree and fail here?
+#
+# The failure is React Native resolving its generated "strict API" types
+# instead of the hand-written ones, which drops StyleSheet.NamedStyles and
+# changes every component ref type. Ruled out so far: a floating dependency
+# (npm ci from the tracked lockfile fails the same way, and a clean local
+# install from that lockfile passes with zero errors, same react-native
+# 0.86.2 and expo 57.0.14).
+#
+# This job measures the runner. It never gates anything: it reports what it
+# finds and exits 0 either way.
+name: diagnose-typecheck
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  diagnose:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+
+      - run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: The decisive facts
+        run: |
+          echo "node        $(node -v)"
+          echo "npm         $(npm -v)"
+          echo "tsc         $(npx tsc -v)"
+          echo "react-native $(node -p "require('./node_modules/react-native/package.json').version")"
+          echo "expo         $(node -p "require('./node_modules/expo/package.json').version")"
+          echo
+          echo "exports['.']:"
+          node -p "JSON.stringify(require('./node_modules/react-native/package.json').exports['.'],null,1)"
+          echo
+          test -f node_modules/react-native/types/index.d.ts \
+            && echo "types/           PRESENT" || echo "types/           ABSENT"
+          test -f node_modules/react-native/types_generated/index.d.ts \
+            && echo "types_generated/ PRESENT" || echo "types_generated/ ABSENT"
+
+      - name: Typecheck
+        run: |
+          if npx tsc --noEmit -p tsconfig.json 2>&1 | tail -3; then
+            echo "RESULT: PASS on node ${{ matrix.node }}"
+          else
+            echo "RESULT: FAIL on node ${{ matrix.node }}"
+          fi

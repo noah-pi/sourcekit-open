@@ -768,9 +768,17 @@ extension ExhibitCameraModule {
   }
 
   func teardownPipConnection(in session: AVCaptureMultiCamSession) {
-    if let pip = pipConnection {
-      session.removeConnection(pip)
-      pipConnection = nil
+    guard let pip = pipConnection else { return }
+    // Clear the reference first: the connection is gone from this module's
+    // point of view whether or not the session still holds it. removeConnection
+    // raises when the session does not, so it goes through the shim.
+    pipConnection = nil
+    guard session.connections.contains(pip) else { return }
+    if let removeError = ExhibitSessionControl.safelyRemoveConnection(session, connection: pip) {
+      sendError(
+        ExhibitCameraErrorCode.platform,
+        "PiP connection removal raised an exception: \(removeError.localizedDescription)"
+      )
     }
   }
 
