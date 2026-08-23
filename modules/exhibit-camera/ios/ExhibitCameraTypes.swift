@@ -905,7 +905,7 @@ enum RotationPolicy {
  *                                 outputs and degraded-path settings. Default
  *                                 true.
  * Backed by a UserDefaults suite, so the flags survive a session rebuild and
- * are readable from any queue. Isolation scaffolding, not a product surface.
+ * are readable from any queue.
  */
 enum ExhibitDebugFlags {
   static let suite = "exhibit.debug"
@@ -924,16 +924,16 @@ enum ExhibitDebugFlags {
   /// A/B switch for the rear-stereo graph. Default false uses the dual-wide
   /// virtual-device path (one input, constituent ports requested by name,
   /// hardware-synced; Apple's AVDualCam architecture, WWDC19-249). True
-  /// restores the two-device-input graph, on which iPhone 17 delivered zero
-  /// secondary frames with no error callbacks.
+  /// selects the two-device-input graph, which delivers no secondary frames on
+  /// iPhone 17.
   static let legacyMultiInputGraphKey = "legacyMultiInputGraph"
 
   static var photoConnectionRotation: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: photoConnectionRotationKey) ?? false
   }
   /// The ≤12 MP maxPhotoDimensions clamp, on by default: an unclamped 48 MP
-  /// photo-stream reservation on a live multi-cam graph is the suspect for the
-  /// photo-path field failures. Settable to false to A/B it.
+  /// photo-stream reservation on a live multi-cam graph starves the video
+  /// streams. Settable to false to A/B it.
   static var photoMaxDimensionsPolicy: Bool {
     guard let defaults = UserDefaults(suiteName: suite),
           defaults.object(forKey: photoMaxDimensionsPolicyKey) != nil else { return true }
@@ -952,10 +952,9 @@ enum ExhibitDebugFlags {
   static var legacyMultiInputGraph: Bool {
     UserDefaults(suiteName: suite)?.bool(forKey: legacyMultiInputGraphKey) ?? false
   }
-  /// D1 depth export. Default true, since depth is a shipped feature, so an
-  /// unset suite means on (the isolation flags above default off). The flag is
-  /// the on-device escape hatch for isolating depth problems without a
-  /// rebuild.
+  /// D1 depth export. Default true: an unset suite reads as on, unlike the
+  /// isolation flags above. The escape hatch for turning depth off on device
+  /// without a rebuild.
   static var depthCapture: Bool {
     guard let defaults = UserDefaults(suiteName: suite),
           defaults.object(forKey: depthCaptureKey) != nil else { return true }

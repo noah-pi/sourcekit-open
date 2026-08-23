@@ -9,8 +9,8 @@
  * (paths below resolve relative to .staged; output lands in ../corpus).
  *
  * Categories: signed, tampered, stripped, hostile, recaptured. A recapture
- * (photo of a photo) verifies INTACT because a signature covers custody
- * only; its expectation file pins that so it is not "fixed" later.
+ * (photo of a photo) verifies INTACT because a signature covers custody only;
+ * its expectation file pins that verdict.
  */
 import * as fs from 'node:fs';
 import { attestPhoto, attestPng } from './attest.mts';

@@ -46,7 +46,7 @@ check('wrong message rejected', !pqVerify(kp.publicKey, utf8ToBytes('one commitm
 check('wrong key rejected', !pqVerify(generatePqKeyPair().publicKey, msg, sig));
 check('truncated signature rejected (length guard)', !pqVerify(kp.publicKey, msg, sig.subarray(0, 100)));
 check('public key derives from secret key', bytesToHex(pqPublicKeyFromSecret(kp.secretKey)) === bytesToHex(kp.publicKey));
-// A signature made without our FIPS 204 context string is not ours.
+// A signature made without the app's FIPS 204 context string must not verify.
 import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';
 const foreignSig = new Uint8Array(ml_dsa65.sign(msg, kp.secretKey));
 check('foreign-context signature rejected (domain separation)', !pqVerify(kp.publicKey, msg, foreignSig));

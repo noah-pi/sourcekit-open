@@ -11,11 +11,9 @@ import simd
 /**
  * ExhibitCamera — the app's single camera session (Spec-Camera-Module-0.13).
  *
- * Captures frames, calibration, timestamps, and metadata; it does no analysis
- * and reaches no verdicts. Every committed artifact is an input the desk can
- * re-derive from. A depth map is committed only when the hardware delivers one
- * with the photo; otherwise the payload states depth-not-recorded with a
- * reason.
+ * Captures frames, calibration, timestamps, and metadata; no analysis, no
+ * verdicts. A depth map is committed only when the hardware delivers one with
+ * the photo; otherwise the payload states depth-not-recorded with a reason.
  *
  * Architecture:
  *   - One AVCaptureMultiCamSession always; single-cam devices run the same

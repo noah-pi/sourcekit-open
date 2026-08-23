@@ -82,7 +82,7 @@ const mkRecord = (ctx: any) => buildRecord({
   check('stripping the wifi key breaks the signature', !verifyRecordSignature(removeWifi).signatureValid);
 }
 
-// ---------- 2. tri-state honesty + legacy neutrality ----------
+// ---------- 2. tri-state + legacy neutrality ----------
 {
   for (const state of ['redacted', 'unavailable'] as const) {
     const signed = await signRecord(mkRecord({ ...ctxWith, wifi: state }), key.signDigest, key.signPayload);

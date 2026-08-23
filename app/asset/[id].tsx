@@ -3,7 +3,7 @@
  * Asset detail — media, live re-verification, sealed metadata, and actions.
  *
  * Opening an item re-runs the full verification against the decrypted bytes,
- * so the badge you see is computed now, not remembered from capture time.
+ * so the badge is computed now rather than read back from capture time.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';

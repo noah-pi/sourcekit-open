@@ -123,7 +123,7 @@ const over = (patch: Partial<LadderInput>): LadderInput => ({ ...base, ...patch 
   check('signer: unevaluable membership is unreached, named', unknownTime.rungs[1].state === 'unreached' && unknownTime.rungs[1].detail.includes('cannot be evaluated'));
 }
 
-// --- 2. integrity failure splits honestly ----------------------------------
+// --- 2. integrity failure splits -------------------------------------------
 {
   const creds = projectTrustLadder(over({ verdict: 'SIGNATURE_INVALID', signatureValid: false }))!;
   check('integrity: broken signature fails rung 1', creds.rungs[0].state === 'failed');

@@ -88,8 +88,6 @@ export default function RootLayout() {
     };
   }, []);
 
-  // No dead-man's switch: no scheduler and no vault upload path exist.
-
   // Background → shred plaintext cache + lock.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {

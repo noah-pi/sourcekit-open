@@ -712,7 +712,7 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
 }
 
 // ---------------------------------------------------------------------------
-// The signed pose trace (gyro evidence replacing the parallax clip).
+// The signed pose trace (gyro evidence).
 // ---------------------------------------------------------------------------
 {
   // 4 s of synthetic 100 Hz DeviceMotion; shutter at t=3500.

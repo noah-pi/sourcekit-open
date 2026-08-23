@@ -1103,7 +1103,9 @@ export interface ExhibitDebugFlags {
   thirdViewEnabled?: boolean;
   /** A/B switch: on runs the two-device-input rear-stereo graph, off (the
    * default) runs the dual-wide virtual-device graph — one input,
-   * constituent ports, hardware-synced. Takes effect at the next
+   * constituent ports, hardware-synced. The legacy graph delivered zero
+   * secondary frames on iPhone 17 with no error callback, which is why the
+   * virtual-device graph is the default. Takes effect at the next
    * configureSession. */
   legacyMultiInputGraph?: boolean;
 }

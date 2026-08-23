@@ -204,7 +204,7 @@ section('golden: the assertion-box layout is byte-stable for fixed inputs');
     JSON.stringify(e1.entries) === JSON.stringify(e2.entries) &&
     JSON.stringify(e1.neverRecorded) === JSON.stringify(e2.neverRecorded));
   // Golden: the exact JSON serialization of the zero-track streamedChunks
-  // assertion. A field rename breaks this on purpose.
+  // assertion. A field rename breaks this check.
   const expectedStill =
     '{"label":"com.verify.streamedChunks","v":2,"alg":"sha256-merkle","chunkBytes":1048576,"tracks":[],' +
     '"superRoot":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","binding":"delivery-file",' +

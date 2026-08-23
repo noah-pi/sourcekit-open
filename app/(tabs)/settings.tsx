@@ -855,8 +855,9 @@ export default function SettingsScreen() {
               on, the others off). A flip takes effect at the next
               configureSession, which only happens in the focus effect of
               the camera tab, so the running session is untouched. */}
-          {/* Rotation, legacy-graph and session-calibration flags have no
-              switch here; they are set natively only. */}
+          {/* Rotation and legacy-graph flags have no switch here; they are
+              set natively only. */}
+          {/* No session-calibration switch either: same reason. */}
           <ToggleRow
             label="12 MP photo clamp"
             detail="Full-resolution photos capped at 12 MP. On by default; off reserves the full 48 MP photo stream on a live dual-camera graph, which costs the pipeline real bandwidth."

@@ -696,9 +696,9 @@ function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta, fa
   overlay: string;
   onOverlay: (key: string) => void;
   juxta: JuxtaInputs | null;
-  /** The manifest's own embedded claim thumbnail, materialized to
-      cache — the preview when this device can't extract a frame from the
-      container. It is sealed content (referenced-gated), not a guess. */
+  /** The manifest's own embedded claim thumbnail, materialized to cache: the
+   *  preview when this device cannot extract a frame from the container.
+   *  Referenced-gated. */
   fallbackUri?: string | null;
 }) {
   const styles = useThemedStyles(buildStyles);

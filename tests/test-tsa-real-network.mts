@@ -58,7 +58,7 @@ check('TSA named from its certificate', result.tsaName === 'www.freetsa.org', St
 const pin = pinnedTsaFor(result.tsaFingerprints);
 check('token chain matches a pinned TSA', pin !== null);
 
-// 4. vacuity guard — a corrupted token must NOT pass
+// 4. vacuity guard: a corrupted token must not pass
 const tampered = new Uint8Array(token);
 tampered[tampered.length - 12] ^= 0x01;
 const tamperedResult = verifyTimestampToken(tampered, message);
