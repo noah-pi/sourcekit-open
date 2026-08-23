@@ -492,8 +492,19 @@ theirs and it is the right one; what a signature adds is that the obscured versi
 original rather than a copy of it. Their [ProofMode](https://proofmode.org) remains the option to
 reach for on iOS today — fully C2PA-compliant, in the field with the people who need it, and the
 project this one keeps learning from.
+- **Asking the scene a question.** Every check here reads what the camera happened to see.
+Firing the flash in a pattern the phone picks at the shutter — seeded from the beacon nonce, so
+it cannot be known in advance — turns that around. A real scene answers with inverse-square
+falloff: near surfaces brighten hard, far ones barely at all, and the shading follows the
+geometry the depth map already commits. A display answers with a specular hotspot and little
+else, because it has no depth to fall off through. Sealing the pattern beside the frames makes
+the answer checkable. Beating it means relighting a three-dimensional scene in real time against
+a sequence nobody could have known, which is a harder problem than holding up a screen. It
+reaches only as far as the flash does, only works in light the flash can compete with, and the
+shutter visibly flickers — so it belongs behind a toggle, for the captures that will be argued
+over.
 - **More ways to catch rephotography.** Moiré from a display's pixel grid, the refresh beat of a
-panel against a rolling shutter, the polarisation signature of an LCD.
+panel against a rolling shutter, the polarization signature of an LCD.
 - **PRNU checks.** Every sensor leaves a fixed noise fingerprint. The useful signals are blunt
 ones: a frame carrying *two* fingerprints has been composited from two cameras, and a frame
 carrying *none* never came off a sensor at all. Neither needs a reference corpus to flag.
