@@ -2,9 +2,12 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "tests"
   ]
 }

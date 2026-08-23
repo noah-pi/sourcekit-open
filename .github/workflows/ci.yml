@@ -161,6 +161,15 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install app dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Typecheck app/ and src/ on the project toolchain
+        # The screens and components, on the TypeScript version package.json
+        # declares. tests/ is excluded here and typechecked below against the
+        # staged tree, where its imports resolve.
+        run: npx tsc --noEmit -p tsconfig.json
+
       - name: Stage the app core (real code + device shims)
         run: node tests/stage.mjs
 
