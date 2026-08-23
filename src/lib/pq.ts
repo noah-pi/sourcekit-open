@@ -1,11 +1,15 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Post-quantum dual-signature layer — ML-DSA-65 (FIPS 204) alongside classical
- * ES256, hedging a future P-256 break. The hedge's teeth: the PQ public key is
- * committed INSIDE the classically signed payload (record.pqKey, OTS-anchored),
- * so stripping the unprotected-header PQ signature is DETECTABLE while forgery
- * stays infeasible. The key is SOFTWARE — no enclave ML-DSA — and no defense
- * against a compromised device. Pure @noble code shared by desk, CLI, and lab.
+ * Post-quantum dual-signature layer: ML-DSA-65 (FIPS 204) alongside classical
+ * ES256, hedging a future P-256 break.
+ *
+ * The signature is carried on the record (record.pqSignature) over the same
+ * canonical payload the ECDSA signature covers. The PQ public key is committed
+ * inside that payload as record.pqKey, so removing the signature and leaving
+ * the key is detectable, and removing the key breaks the classical signature.
+ *
+ * The key is software — there is no enclave ML-DSA — so this is no defense
+ * against a compromised device.
  */
 
 import { ml_dsa65 } from '@noble/post-quantum/ml-dsa.js';

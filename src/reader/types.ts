@@ -1,13 +1,13 @@
 /**
- * @exhibit/reader — M0 card model.
+ * Reader card model.
  *
- * The Reader's religion: the camera commits, the Reader measures, the human
- * concludes. A check never produces a verdict; it produces a GAP between a
+ * The camera commits, the Reader measures, the human concludes. A check
+ * never produces a verdict; it produces a gap between a
  * prediction (what the committed evidence says should hold) and a
  * measurement (what this Reader observed), with an error bound, and an
  * interpretation of what that gap is CONSISTENT WITH — never what it proves.
  *
- * Vocabulary law, enforced here and in interpret/cards.ts:
+ * Vocabulary rules, enforced here and in interpret/cards.ts:
  *   - no fused scores, anywhere;
  *   - no verdict words in finding position (verified / authentic / trusted /
  *     proven / real / secure / guaranteed are banned from findings);
@@ -18,7 +18,7 @@
  */
 
 /**
- * The five honest states of one check.
+ * The five states of one check.
  *
  *   agrees          the gap sits inside the stated error band — the
  *                   measurement is consistent with the prediction

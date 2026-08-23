@@ -3,7 +3,7 @@
  * IOS binding (
  * §2/§7a). Wraps the native module `modules/c2pa-ios` (c2pa-swift v0.0.12,
  * C2PAC.xcframework, iOS 16+) and returns the SAME NORMALIZED result shape
- * as the desk engine (source-kit-open src/provenance/engine/upstreamEngine.ts),
+ * as the desk engine (src/provenance/engine/upstreamEngine.ts),
  * so the shared policy layer (policyLayer.ts — THE verdict authority) is fed
  * identical facts on device and on desk. NO VERDICTS HERE — normalization
  * only.

@@ -1,14 +1,13 @@
 /**
  * Card grammar enforcement + the agreement matrix.
  *
- * makeCard is the ONLY way a card enters the Reader. It refuses, loudly, the
- * two failure shapes the religion forbids:
+ * makeCard is the only way a card enters the Reader. It refuses two shapes:
  *
  *   1. a finding without its full clause — an 'agrees'/'diverges' card
  *      missing prediction, measurement, gap, or interpretation throws;
  *   2. a banned verdict word in finding position — titles and
- *      interpretations are scanned; the scan is a seatbelt, not a license
- *      to write near the line.
+ *      interpretations are scanned. The scan catches slips; it is not a
+ *      substitute for writing the card carefully.
  *
  * A check that could not run is a card with a stated reason — never an
  * absence. makeNotRun / makeInsufficient / makeNotApplicable exist so the

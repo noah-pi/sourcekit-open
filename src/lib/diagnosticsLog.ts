@@ -1,15 +1,15 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Diagnostics log — because a 3-second toast is not a record.
+ * Diagnostics log.
  *
  * Capture and seal failures can evaporate: a toast fades, the queue keeps
  * its error string on a job nobody renders, and the user is left with an
- * empty Exhibits tab and no explanation. This module is the
- * small, plain memory of what happened: a ring buffer of the last 30
+ * empty Exhibits tab and no explanation. This is the record of what
+ * happened: a ring buffer of the last 30
  * capture/seal events, persisted as JSON under documentDirectory, read
  * back newest-first by the Settings screen.
  *
- * Deliberate properties:
+ * Properties:
  *   - Diagnostics NEVER sink anything. Every write is fire-and-forget and
  *     every read failure is an empty list — a logging bug must not become
  *     a capture failure.

@@ -1,6 +1,6 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Capture ≠ seal.
+ * The seal queue — capture and seal are separate steps.
  *
  * The shutter's critical path is: expose → write the raw file → enqueue.
  * Everything slow (hashing, Secure Enclave signing, the TSA network
@@ -8,9 +8,9 @@
  * background queue — so the camera is live again in well under a second and
  * burst shooting just stacks jobs.
  *
- * Correctness properties, held deliberately:
- *   - Serial order: jobs seal in capture order. Provenance is about order;
- *    "what came first" must never race.
+ * Correctness properties:
+ *   - Serial order: jobs seal in capture order, so two captures can never
+ *     race over which came first.
  *   - Capture time is recorded at enqueue, not at seal — the moment that
  *     can't be recreated is preserved even if sealing happens minutes later.
  *   - The queue persists to disk. If the app dies mid-seal, the raw capture

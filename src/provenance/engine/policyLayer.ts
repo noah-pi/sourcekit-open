@@ -35,8 +35,8 @@
  * tri-state): rows are evaluated 1→4, then 6→9, then 5,
  * then the row-10 gate. UNSUPPORTED is composed only when NO positive tamper
  * fact exists — a structure we cannot parse does not launder a rung that was
- * positively checked and FAILED into "unchecked" (project law: a failed rung
- * is proven tamper, never absence-of-proof). An asset that is both
+ * positively checked and FAILED into "unchecked": a failed rung is proven
+ * tamper, never absence-of-proof. An asset that is both
  * unparseable-structure AND proven-tamper is reported as proven tamper, with
  * the unsupported structure still disclosed in the facts.
  *

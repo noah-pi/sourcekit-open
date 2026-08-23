@@ -5,9 +5,9 @@
  * Threat model: a seized device should hold ciphertext the photographer
  * cannot open. When a newsroom roster carries a desk encryption key, captures
  * destined for the desk are sealed to that key: the copy that leaves the
- * vault (the share sheet) is readable ONLY by
- * whoever can reconstruct the desk private key from its Shamir shares —
- * not the photographer, not us, not anyone holding the device.
+ * vault (the share sheet) is readable only by whoever can reconstruct the
+ * desk private key from its Shamir shares. The photographer cannot, and
+ * neither can anyone holding the device.
  *
  * Construction (ECDH + HKDF + AES-256-GCM, all @noble):
  *   ephemeral X25519 keypair
