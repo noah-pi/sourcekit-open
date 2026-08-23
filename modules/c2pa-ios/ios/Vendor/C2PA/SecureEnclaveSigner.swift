@@ -99,7 +99,10 @@ extension Signer {
         ) { data in
             let query: [String: Any] = [
                 kSecClass as String: kSecClassKey,
-                kSecAttrApplicationTag as String: secureEnclaveConfig.keyTag,
+                // kSecAttrApplicationTag is a CFData attribute. A String tag
+                // never matches a key stored with a Data tag, and the
+                // errSecItemNotFound branch below would mint a second key.
+                kSecAttrApplicationTag as String: Data(secureEnclaveConfig.keyTag.utf8),
                 kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
                 kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
                 kSecReturnRef as String: true
@@ -172,7 +175,7 @@ extension Signer {
             kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
             kSecPrivateKeyAttrs as String: [
                 kSecAttrIsPermanent as String: true,
-                kSecAttrApplicationTag as String: config.keyTag,
+                kSecAttrApplicationTag as String: Data(config.keyTag.utf8),
                 kSecAttrAccessControl as String: access
             ]
         ]
@@ -200,7 +203,7 @@ extension Signer {
     public static func deleteSecureEnclaveKey(keyTag: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: keyTag,
+            kSecAttrApplicationTag as String: Data(keyTag.utf8),
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave
         ]

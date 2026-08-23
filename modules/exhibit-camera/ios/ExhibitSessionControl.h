@@ -30,6 +30,13 @@ NS_ASSUME_NONNULL_BEGIN
                                           delegate:(id<AVCapturePhotoCaptureDelegate>)delegate
     NS_SWIFT_NAME(safelyCapturePhoto(output:settings:delegate:));
 
+/// Removes a connection from the session inside @try/@catch. removeConnection:
+/// raises when the session no longer holds the connection, which Swift cannot
+/// catch. The Swift side clears its own reference either way.
++ (nullable NSError *)safelyRemoveConnectionFromSession:(AVCaptureSession *)session
+                                             connection:(AVCaptureConnection *)connection
+    NS_SWIFT_NAME(safelyRemoveConnection(_:connection:));
+
 @end
 
 NS_ASSUME_NONNULL_END

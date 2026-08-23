@@ -45,8 +45,8 @@ over the vendored tree → no matches.
 
 ## Source edits
 
-Two, both confined to imports and access levels. No functional code differs
-from the v0.0.12 tag.
+Three. Two are confined to imports and access levels; the third is a one-word
+type change in a keychain query.
 
 1. **`import C2PAC` → `@_implementationOnly import C2PAC`** in the 11 files
    that import the clang module (Builder, C2PA, C2PASettings, Helpers,
@@ -76,6 +76,15 @@ from the v0.0.12 tag.
 A DocC "SeeAlso" symbol link to an excluded type remains in a doc comment
 (`Signer.swift:64`, `/// - SeeAlso: ... ``WebServiceSigner```) — harmless
 (worst case: a documentation-build warning).
+
+3. **`kSecAttrApplicationTag` passed as `Data`, not `String`**, in
+   `SecureEnclaveSigner.swift` at the key lookup, key creation, and
+   `deleteSecureEnclaveKey`. The attribute is CFData, and a String tag never
+   matches a key stored by `SecureEnclaveModule.swift`, which writes
+   `tag.data(using: .utf8)!`. The lookup missed, and the `errSecItemNotFound`
+   branch minted a second enclave key whose public key does not match the
+   supplied certificate chain, so a signature made with it could not verify
+   against its own x5chain.
 
 ## Module-name note (why `import C2PA` was removed from C2paIosModule.swift)
 

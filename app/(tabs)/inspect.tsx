@@ -566,7 +566,7 @@ function SealRows({ report }: { report: VerificationReport }) {
         : `${chain.reason ?? 'The chain failed verification.'} The signer-identity claims cannot be checked.`;
   const pq = c2pa?.pq;
   const pqAny = pq?.claim?.present || pq?.record?.present;
-  const pqOk = (pq?.claim ? pq.claim.signatureValid && pq.claim.keyFingerprintMatches : true) &&
+  const pqOk = (pq?.claim?.present ? pq.claim.signatureValid && pq.claim.keyFingerprintMatches : true) &&
     (pq?.record ? pq.record.signatureValid && pq.record.keyFingerprintMatches : true);
   const pqText = !pqAny
     ? 'None on this file'

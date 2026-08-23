@@ -49,4 +49,14 @@ static NSError *ExhibitSessionLifecycleError(NSString *operation, NSException *e
   }
 }
 
++ (nullable NSError *)safelyRemoveConnectionFromSession:(AVCaptureSession *)session
+                                             connection:(AVCaptureConnection *)connection {
+  @try {
+    [session removeConnection:connection];
+    return nil;
+  } @catch (NSException *exception) {
+    return ExhibitSessionLifecycleError(@"removeConnection", exception);
+  }
+}
+
 @end
