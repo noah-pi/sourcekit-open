@@ -492,7 +492,7 @@ theirs and it is the right one; what a signature adds is that the obscured versi
 original rather than a copy of it. Their [ProofMode](https://proofmode.org) remains the option to
 reach for on iOS today — fully C2PA-compliant, in the field with the people who need it, and the
 project this one keeps learning from.
-- **Asking the scene a question.** Fire the flash in a pattern picked at the shutter and seal it with the frames. A real scene falls off with depth; a screen has none. Short range, visible flicker, so it sits behind a toggle.
+- **Asking the scene a question.** Every rephotography check here is passive: it reads what the camera happened to see. A flash fired in a pattern picked at the shutter inverts that. The falloff either matches the committed depth map or it does not; a screen has none. Short range, visible flicker, so it sits behind a toggle.
 - **More ways to catch rephotography.** Moiré from a display's pixel grid, the refresh beat of a
 panel against a rolling shutter, the polarization signature of an LCD.
 - **PRNU checks.** Every sensor leaves a fixed noise fingerprint. The useful signals are blunt
