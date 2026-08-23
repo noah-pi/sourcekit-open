@@ -383,7 +383,6 @@ export default function SettingsScreen() {
                   await saveSettings({
                     author: '',
                     identityMode: 'anonymous',
-                    assignmentId: '',
                     saveToCameraRoll: false,
                     biometricsEnabled: false,
                   });

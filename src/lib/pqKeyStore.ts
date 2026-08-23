@@ -4,9 +4,9 @@
  * the keypair derives from it on demand, since the 4032-byte ML-DSA secret key
  * exceeds the keychain's per-item value limit. Losing the seed loses the key.
  * Software-protected, not Secure Enclave: it signs alongside the P-256 device
- * key and gates nothing. Assignment mode and de-identified copies must not use
- * it — a long-lived per-device key would re-link captures meant to be
- * unlinkable. Callers enforce that; the store itself is dumb.
+ * key and gates nothing. De-identified copies must not use it: a long-lived
+ * per-device key would re-link captures meant to be unlinkable. Callers
+ * enforce that; the store itself is dumb.
  */
 
 import * as SecureStore from 'expo-secure-store';

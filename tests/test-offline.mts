@@ -94,7 +94,7 @@ const entry = {
   sha256: signed.record.asset.sha256, bytes: signed.record.asset.bytes,
   fingerprint: signed.record.signer.fingerprint, motionVerdict: 'handheld',
   lat: 37.7749, lon: -122.4194, locationState: 'present' as const,
-  otsState: 'none' as const, otsBlockHeight: null, assignment: null,
+  otsState: 'none' as const, otsBlockHeight: null,
 };
 const csv = exportEntriesToCsv([entry]);
 const geo = exportEntriesToGeoJson([entry]);

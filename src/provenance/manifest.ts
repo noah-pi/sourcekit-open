@@ -370,10 +370,6 @@ export interface AttestationRecord {
   } | null;
   /** True when each signature required Face ID/Touch ID (biometric-bound key). */
   biometricBound?: boolean;
-  /** Present when the capture signed with a per-assignment key instead of the
-      device key. The label is self-asserted; the signature proves only that
-      this key is not the device's long-lived key. */
-  assignment?: { label: string } | null;
   /** Device integrity signals committed at capture. Self-reported: a
       compromised device can lie, so this is commitment, not detection. */
   deviceIntegrity?: {

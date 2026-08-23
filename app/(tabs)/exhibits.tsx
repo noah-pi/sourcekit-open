@@ -387,7 +387,6 @@ export default function VaultScreen() {
           locationState: typeof loc === 'object' ? 'present' : loc === 'redacted' ? 'redacted' : 'unavailable',
           otsState: !rec?.ots ? 'none' : confirmed.length > 0 ? 'confirmed' : 'pending',
           otsBlockHeight: confirmed[0]?.blockHeight ?? null,
-          assignment: rec?.assignment?.label ?? null,
         });
       }
       const body =

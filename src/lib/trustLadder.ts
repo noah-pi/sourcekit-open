@@ -135,10 +135,10 @@ export interface LadderInput {
     attestationEnv?: 'production' | 'development' | null;
   };
   /**
-   * Why rung 3 cannot apply: 'deidentified' (fresh one-time key) or
-   * 'assignment' (unlinkable key). Null when an attestation could be expected.
+   * Why rung 3 cannot apply: 'deidentified' (fresh one-time key). Null when an
+   * attestation could be expected.
    */
-  hardwareNotApplicable: 'deidentified' | 'assignment' | null;
+  hardwareNotApplicable: 'deidentified' | null;
 
   timestamps: {
     present: number;
@@ -293,11 +293,6 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
     hardware = {
       id: 'hardware', label: 'Key attested by Apple hardware', state: 'not-applicable',
       detail: 'Not applicable to de-identified copies: they are signed with a fresh one-time key by design.',
-    };
-  } else if (input.hardwareNotApplicable === 'assignment') {
-    hardware = {
-      id: 'hardware', label: 'Key attested by Apple hardware', state: 'not-applicable',
-      detail: 'Not applicable to assignment keys: no hardware attestation by design.',
     };
   } else if (input.appAttest.valid && input.appAttest.attestationEnv === 'development') {
     // A genuine development attestation is not a failure and is not

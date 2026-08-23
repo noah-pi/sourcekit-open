@@ -57,12 +57,6 @@ export interface Settings {
   biometricsEnabled: boolean;
   biometricSigning: boolean;
   /**
-   * When non-empty, captures sign with a dedicated assignment key instead of
-   * the device key, so assignments can't be linked to each other or to the
-   * device. The key is software-backed and carries no hardware attestation.
-   */
-  assignmentId: string;
-  /**
    * Submits each capture's payload digest to the public OpenTimestamps
    * calendars. Hash only — no media, no account. On by default. When off,
    * captures carry RFC 3161 time only and the record says nothing about OTS.
@@ -127,7 +121,6 @@ export const DEFAULT_SETTINGS: Settings = {
   saveToCameraRoll: false,
   biometricsEnabled: false,
   biometricSigning: false,
-  assignmentId: '',
   otsEnabled: true,
   otsCalendars: null,
   tsaUrls: null,
@@ -185,10 +178,9 @@ export const useStore = create<AppState>((set, get) => ({
         delete stored.includeIdentity;
         // Retired CaptureKit toggle key: dropped from stored settings.
         delete stored.captureKitEnabled;
+        delete stored.assignmentId;
         // One-time migration:
         //   • named identity with a non-empty alias keeps includeByline on.
-        //   • a stale assignmentId is cleared, since there is no assignment UI
-        //     and a leftover id would keep signing in assignment mode.
         //   • otsEnabled forced true to match the always-on Bitcoin anchor.
         const needsMigration_0_11_1 = stored.migrated_0_11_1 !== true;
         if (needsMigration_0_11_1) {
@@ -198,9 +190,6 @@ export const useStore = create<AppState>((set, get) => ({
             stored.author.trim() !== ''
           ) {
             stored.includeByline = true;
-          }
-          if (typeof stored.assignmentId === 'string' && stored.assignmentId !== '') {
-            stored.assignmentId = '';
           }
           stored.otsEnabled = true;
           stored.migrated_0_11_1 = true;

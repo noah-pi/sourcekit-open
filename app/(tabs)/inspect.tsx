@@ -1097,11 +1097,7 @@ export default function InspectScreen() {
             attestationEnv: report.c2pa.appAttest.attestationEnv,
           }
         : { present: false, valid: false },
-      hardwareNotApplicable: record?.deidentified
-        ? 'deidentified'
-        : record?.assignment
-          ? 'assignment'
-          : null,
+      hardwareNotApplicable: record?.deidentified ? 'deidentified' : null,
       timestamps: report.c2pa
         ? { present: report.c2pa.timestamps.present, valid: report.c2pa.timestamps.valid, trusted: report.c2pa.timestamps.trusted, unchecked: report.c2pa.timestamps.unchecked ?? 0 }
         : { present: 0, valid: 0, trusted: 0 },

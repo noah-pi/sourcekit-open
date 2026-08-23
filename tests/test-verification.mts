@@ -676,12 +676,12 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   // Desk export: injection guards and location handling.
   const entries: ExportEntry[] = [
     { id: 'a', createdAt: '2026-08-01T12:00:00Z', kind: 'photo', sha256: 'ab'.repeat(32), bytes: 1,
-      fingerprint: 'cd'.repeat(32), motionVerdict: 'handheld', lat: 40.7, lon: -74.0,
-      locationState: 'present', otsState: 'confirmed', otsBlockHeight: 800000,
-      assignment: '=HYPERLINK("https://evil.example","x")' },
+      fingerprint: 'cd'.repeat(32), motionVerdict: '=HYPERLINK("https://evil.example","x")',
+      lat: 40.7, lon: -74.0,
+      locationState: 'present', otsState: 'confirmed', otsBlockHeight: 800000 },
     { id: 'b', createdAt: '2026-08-01T13:00:00Z', kind: 'photo', sha256: 'ef'.repeat(32), bytes: 2,
       fingerprint: 'cd'.repeat(32), motionVerdict: null, lat: null, lon: null,
-      locationState: 'redacted', otsState: 'pending', otsBlockHeight: null, assignment: null },
+      locationState: 'redacted', otsState: 'pending', otsBlockHeight: null },
   ];
   const csv = exportEntriesToCsv(entries);
   check('proof: CSV neutralizes spreadsheet formula injection',
@@ -691,7 +691,7 @@ console.log('\n— update-chain evaluation + multi-exclusion hash.data —');
   const geo = JSON.parse(exportEntriesToGeoJson(entries));
   check('proof: GeoJSON carries only located items, [lon, lat] order',
     geo.features.length === 1 && geo.features[0].geometry.coordinates[0] === -74.0 && geo.features[0].geometry.coordinates[1] === 40.7);
-  const kml = exportEntriesToKml([{ ...entries[0], assignment: 'R&D <unit> "A"' }]);
+  const kml = exportEntriesToKml([{ ...entries[0], kind: 'R&D <unit> "A"' }]);
   check('proof: KML escapes XML-hostile labels', kml.includes('R&amp;D') && kml.includes('&lt;unit&gt;'));
 }
 

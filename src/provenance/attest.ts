@@ -409,8 +409,6 @@ export async function attestPhoto(params: {
   identity: { author: string | null; organization: string | null } | 'redacted';
   key: DeviceSigner;
   capturedAt?: string;
-  /** Assignment-mode label and cert chain; signs outside the device identity. */
-  assignmentLabel?: string | null;
   certChainOverride?: Uint8Array[];
   /** Device integrity signals, signed as a self-reported assertion. */
   integritySignals?: DeviceIntegritySignals | null;
@@ -462,7 +460,6 @@ export async function attestPhoto(params: {
     fingerprint: params.key.fingerprint,
   });
 
-  record.assignment = params.assignmentLabel ? { label: params.assignmentLabel } : null;
   record.deviceIntegrity = params.integritySignals ?? null;
   // Capture-integrity signals: self-reported, signed.
   record.captureIntegrity = {
@@ -475,8 +472,8 @@ export async function attestPhoto(params: {
   // Never fetched here, so the shutter stays off the network. Absent when
   // nothing is cached.
   record.beacon = params.beacon ?? null;
-  // An assignment-signed capture carries no org credential: the org chain
-  // belongs to the device key and would re-link the assignment.
+  // A capture signed off the device identity carries no org credential: the
+  // org chain belongs to the device key.
   record.orgCredential = params.certChainOverride ? null : await orgCredentialForRecord();
   if (params.key.biometricBound) record.biometricBound = true;
   // The PQ public key is committed inside the signed payload; that binding is
@@ -612,8 +609,8 @@ export async function attestPhoto(params: {
 /**
  * The org identity assertion is emitted exactly when an org credential rides
  * the COSE chain (length > 1) and the record carries the org block. deID
- * copies (ephemeral chain, orgCredential stripped) and personal or assignment
- * captures emit none.
+ * copies (ephemeral chain, orgCredential stripped) and personal captures emit
+ * none.
  */
 function identityAssertionFor(chain: Uint8Array[], record: AttestationRecord): { org: string; role: string } | null {
   if (chain.length < 2 || !record.orgCredential) return null;
@@ -1077,7 +1074,6 @@ export async function attestVideo(params: {
   identity: { author: string | null; organization: string | null } | 'redacted';
   key: DeviceSigner;
   capturedAt?: string;
-  assignmentLabel?: string | null;
   certChainOverride?: Uint8Array[];
   integritySignals?: DeviceIntegritySignals | null;
   /** Cached Bitcoin tip (src/lib/beacon.ts): signed time lower bound. */
@@ -1125,7 +1121,6 @@ export async function attestVideo(params: {
     publicKeyBase64: params.key.publicKeyBase64,
     fingerprint: params.key.fingerprint,
   });
-  record.assignment = params.assignmentLabel ? { label: params.assignmentLabel } : null;
   record.deviceIntegrity = params.integritySignals ?? null;
   // Capture-integrity signals: self-reported, signed.
   record.captureIntegrity = {
@@ -1204,7 +1199,6 @@ export async function attestAudio(params: {
   key: DeviceSigner;
   transcript: TranscriptAssertion | null;
   capturedAt?: string;
-  assignmentLabel?: string | null;
   certChainOverride?: Uint8Array[];
   integritySignals?: DeviceIntegritySignals | null;
   /** Cached Bitcoin tip (src/lib/beacon.ts): signed time lower bound. */
@@ -1238,7 +1232,6 @@ export async function attestAudio(params: {
     publicKeyBase64: params.key.publicKeyBase64,
     fingerprint: params.key.fingerprint,
   });
-  record.assignment = params.assignmentLabel ? { label: params.assignmentLabel } : null;
   record.deviceIntegrity = params.integritySignals ?? null;
   // Capture-integrity signals: self-reported, signed.
   record.captureIntegrity = {

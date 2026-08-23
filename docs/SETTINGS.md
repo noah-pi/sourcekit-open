@@ -155,8 +155,8 @@ Publish the fingerprint so recipients can confirm your signatures.
 Every capture is also signed with ML-DSA-65, a post-quantum algorithm —
 insurance against a future break of P-256. This key is software in the OS
 keychain, not Secure Enclave: it signs alongside the device key, never instead,
-and it is not a hardware anchor. Assignment and de-identified copies
-skip it: a long-lived device key would re-link them.
+and it is not a hardware anchor. De-identified copies skip it: a long-lived
+device key would re-link them.
 
 ### Biometric-bound signing
 

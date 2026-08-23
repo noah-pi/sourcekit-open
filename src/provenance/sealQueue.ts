@@ -34,7 +34,6 @@ import { sha256 } from '@noble/hashes/sha256';
 import type { ContextClaim } from '../disclosure/inventory';
 import { getDeviceKey } from '../lib/deviceKey';
 import { getOrCreatePqKey } from '../lib/pqKeyStore';
-import { assignmentCert, getAssignmentKey } from '../lib/assignmentKeys';
 import { collectIntegritySignals } from '../lib/integrity';
 import { anchorRecordWithOts, drainOtsQueue } from './otsQueue';
 import { currentBeacon } from '../lib/beacon';
@@ -97,11 +96,6 @@ export interface SealJob {
         file, so these events are the anchors. */
     pairEvents?: StereoVideoPairEvent[];
   } | null;
-  /**
-   * Assignment-mode label snapshotted at enqueue, so the capture signs with
-   * the assignment key even if the setting changes before sealing.
-   */
-  assignmentLabel?: string | null;
   /**
    * Result of the OS biometric check run at capture start when the toggle is
    * on; null when off. Signed into the record's captureIntegrity telemetry.
@@ -389,7 +383,6 @@ export async function enqueuePhotoSeal(params: {
     context: params.context,
     identity: params.identity,
     capturedAt: new Date().toISOString(), // the moment that can't be recreated
-    assignmentLabel: useStore.getState().settings.assignmentId.trim() || null,
     exif: params.exif ?? null,
     captureEvidence: params.captureEvidence ?? null,
     exhibitCapture: params.exhibitCapture ?? null,
@@ -435,7 +428,6 @@ export async function enqueueAudioSeal(params: {
     identity: params.identity,
     capturedAt: new Date().toISOString(),
     transcript: params.transcript,
-    assignmentLabel: useStore.getState().settings.assignmentId.trim() || null,
     biometricGatePassed: params.biometricGatePassed ?? null,
     captureEvidence: params.captureEvidence ?? null,
     attempts: 0,
@@ -484,7 +476,6 @@ export async function enqueueVideoSeal(params: {
     context: params.context,
     identity: params.identity,
     capturedAt: new Date().toISOString(), // the moment that can't be recreated
-    assignmentLabel: useStore.getState().settings.assignmentId.trim() || null,
     captureEvidence: params.captureEvidence ?? null,
     exhibitVideo: params.exhibitVideo ?? null,
     biometricGatePassed: params.biometricGatePassed ?? null,
@@ -857,18 +848,9 @@ async function pump(): Promise<void> {
       // re-check and the claim, before any seal work starts.
       if (await abandonIfCancelled(job, null)) continue;
       try {
-        // Assignment mode: sign with the assignment-scoped software key
-        // instead of the device key, so assignments are unlinkable to each
-        // other and to the device. The cert chain is the assignment key's own
-        // self-signed cert, not the device chain or org credential.
-        const assignmentLabel = job.assignmentLabel?.trim() ? job.assignmentLabel.trim() : null;
-        const key = assignmentLabel ? await getAssignmentKey(assignmentLabel) : await getDeviceKey();
-        const certChainOverride = assignmentLabel ? [await assignmentCert(key)] : undefined;
-        // PQ dual-signature layer: every device-identity capture dual-signs.
-        // Assignment mode omits it, since a long-lived per-device key would
-        // re-link captures meant to be unlinkable. A failure here never fails
-        // the capture.
-        const pq = assignmentLabel ? null : await getOrCreatePqKey().catch(() => null);
+        const key = await getDeviceKey();
+        // PQ dual-signature layer. A failure here never fails the capture.
+        const pq = await getOrCreatePqKey().catch(() => null);
         // Device integrity signals, collected at seal time and signed into
         // the record as a self-reported assertion.
         const integritySignals = await collectIntegritySignals().catch(() => null);
@@ -922,8 +904,6 @@ async function pump(): Promise<void> {
             key,
             transcript: job.transcript ?? null,
             capturedAt: job.capturedAt,
-            assignmentLabel,
-            certChainOverride,
             integritySignals,
             beacon,
             pq,
@@ -994,8 +974,6 @@ async function pump(): Promise<void> {
             identity: job.identity,
             key,
             capturedAt: job.capturedAt,
-            assignmentLabel,
-            certChainOverride,
             integritySignals,
             beacon,
             pq,
@@ -1067,8 +1045,6 @@ async function pump(): Promise<void> {
             identity: job.identity,
             key,
             capturedAt: job.capturedAt,
-            assignmentLabel,
-            certChainOverride,
             integritySignals,
             exif: job.exif ?? null,
             beacon,

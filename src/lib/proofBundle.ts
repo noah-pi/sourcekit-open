@@ -195,7 +195,6 @@ export interface ExportEntry {
   locationState: 'present' | 'redacted' | 'unavailable';
   otsState: 'none' | 'pending' | 'confirmed';
   otsBlockHeight: number | null;
-  assignment: string | null;
 }
 
 /**
@@ -209,12 +208,12 @@ export function exportEntriesToCsv(entries: ExportEntry[]): string {
     if (/^[=+\-@]/.test(s)) s = `'${s}`;
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const header = 'id,captured_at,kind,sha256,bytes,signer_fingerprint,motion,lat,lon,location_state,ots_state,ots_block,assignment';
+  const header = 'id,captured_at,kind,sha256,bytes,signer_fingerprint,motion,lat,lon,location_state,ots_state,ots_block';
   const rows = entries.map((e) =>
     [
       e.id, e.createdAt, e.kind, e.sha256, String(e.bytes), e.fingerprint,
       e.motionVerdict ?? '', e.lat?.toString() ?? '', e.lon?.toString() ?? '',
-      e.locationState, e.otsState, e.otsBlockHeight?.toString() ?? '', e.assignment ?? '',
+      e.locationState, e.otsState, e.otsBlockHeight?.toString() ?? '',
     ].map(esc).join(',')
   );
   return [header, ...rows].join('\n') + '\n';
@@ -229,7 +228,6 @@ export function exportEntriesToGeoJson(entries: ExportEntry[]): string {
       properties: {
         id: e.id, capturedAt: e.createdAt, kind: e.kind, sha256: e.sha256,
         signerFingerprint: e.fingerprint, otsState: e.otsState,
-        ...(e.assignment ? { assignment: e.assignment } : {}),
       },
     }));
   return JSON.stringify({ type: 'FeatureCollection', features }, null, 2) + '\n';
@@ -246,8 +244,7 @@ export function exportEntriesToKml(entries: ExportEntry[]): string {
       (e) => `    <Placemark>
       <name>${xmlEscape(e.kind)} ${xmlEscape(e.createdAt)}</name>
       <description>sha256: ${xmlEscape(e.sha256)}
-signer: ${xmlEscape(e.fingerprint)}${e.assignment ? `
-assignment: ${xmlEscape(e.assignment)}` : ''}
+signer: ${xmlEscape(e.fingerprint)}
 anchor: ${e.otsState}${e.otsBlockHeight ? ` #${e.otsBlockHeight}` : ''}</description>
       <Point><coordinates>${e.lon},${e.lat},0</coordinates></Point>
     </Placemark>`
