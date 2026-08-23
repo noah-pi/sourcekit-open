@@ -35,7 +35,7 @@ jobs:
       # to a local typecheck reproduces this job's failure exactly — same
       # files, same lines, same error codes.
       - name: Install
-        run: npm ci --no-audit --no-fund
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
 
       - name: Resolved versions
         run: |
