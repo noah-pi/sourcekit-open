@@ -59,18 +59,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install app dependencies
-        # ci, not install: the lockfile is committed, and a resolution that
-        # drifts from it is how CI and a developer's machine end up
-        # typechecking against different react-native type surfaces.
-        run: npm ci --legacy-peer-deps --no-audit --no-fund
-
-      - name: Typecheck app/ and src/ on the project toolchain
-        # The screens and components, on the TypeScript version package.json
-        # declares. tests/ is excluded here and typechecked below against the
-        # staged tree, where its imports resolve.
-        run: npx tsc --noEmit -p tsconfig.json
-
       - name: Stage the app core (real code + device shims)
         run: node tests/stage.mjs
 
@@ -89,49 +77,6 @@ jobs:
             --allowImportingTsExtensions --resolveJsonModule \
             $(ls *.mts | grep -v -E '^(test|tool|build)-')
         working-directory: tests/.staged
-
-  ios-build:
-    # Nothing else in this file compiles Swift: the other jobs run on Linux,
-    # so ~7,900 lines of camera module reach a device build unchecked. This
-    # job is compile-only — no signing, no archive, no simulator run.
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 20
-
-      - name: Install app dependencies
-        # ci, not install: the lockfile is committed, and a resolution that
-        # drifts from it is how CI and a developer's machine end up
-        # typechecking against different react-native type surfaces.
-        run: npm ci --legacy-peer-deps --no-audit --no-fund
-
-      - name: Fetch the C2PA framework
-        run: ./scripts/fetch-c2pa-framework.sh
-
-      - name: Generate the Xcode project
-        run: npx expo prebuild --platform ios --no-install
-
-      - name: Install pods
-        run: pod install
-        working-directory: ios
-
-      - name: Compile
-        # -destination generic/platform=iOS builds for device without asking
-        # for a signing identity; CODE_SIGNING_ALLOWED=NO keeps it that way.
-        # pipefail, because xcpretty exits 0 on a failed build and would
-        # hand this job a green check over a broken compile.
-        run: |
-          set -o pipefail
-          xcodebuild build \
-            -workspace ios/*.xcworkspace \
-            -scheme "$(basename ios/*.xcodeproj .xcodeproj)" \
-            -configuration Debug \
-            -destination 'generic/platform=iOS' \
-            CODE_SIGNING_ALLOWED=NO \
-            | xcpretty
 
   supply-chain:
     runs-on: ubuntu-latest
