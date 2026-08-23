@@ -879,6 +879,11 @@ function secondCameraCarry(bytes: Uint8Array, container: 'jpeg' | 'bmff'): {
     last. The vault holds every pair. */
 const EMBEDDED_VIDEO_STILLS_MAX = 8;
 
+/**
+ * De-identify and re-sign into PNG: the share flow's privacy-safe format
+ * conversion. Strips the same fields as deidentifyPhoto; the PNG re-encode has
+ * already dropped the JPEG's EXIF.
+ */
 export async function deidentifyPhotoToPng(params: {
   pngBytes: Uint8Array;
   key: DeviceSigner;

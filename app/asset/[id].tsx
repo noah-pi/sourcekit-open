@@ -1236,7 +1236,8 @@ export default function AssetScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.topBar}>
         <Button small tone="ghost" icon="chevron-back" label="Exhibits" onPress={() => router.back()} />
-        {/* No corner status pill: state lives in the trust ladder below. */}
+        {/* No corner status pill: state lives in the trust ladder
+            below. */}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
@@ -1414,7 +1415,8 @@ export default function AssetScreen() {
                 />
                 {/* An absent org credential renders nothing, not a warning. */}
                 {orgValue ? <NlRow label="Organization" value={orgValue} /> : null}
-                {/* Byline renders once, in When & Where above. */}
+                {/* Byline renders once, in When & Where
+                    above. */}
               </View>
 
               {/* Sensors sit at the bottom of Capture; the head carries the
@@ -1652,6 +1654,10 @@ export default function AssetScreen() {
                 <Button small icon="document-text-outline" label="Signed record (.json)" tone="secondary" onPress={() => void exportAttestation()} loading={busy === 'Exporting attestation…'} />
                 <Button small icon="finger-print-outline" label="Hash-only claim" tone="secondary" onPress={() => void shareProofJson('hash-only')} loading={busy === 'Building proof…'} />
               </View>
+
+              {/* No "Full report" drawer: its facts live in the Capture and
+                  Integrity groups above, and again in the raw manifest reel
+                  below. */}
 
               {/* The raw C2PA manifest, shown open at the bottom of Advanced:
                   the full manifest, windowed. Copy is how the manifest leaves

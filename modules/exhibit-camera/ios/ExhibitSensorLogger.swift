@@ -1,4 +1,3 @@
-// UNBUILT — rides EAS build 2; validated by on-device soak checklist, not CI.
 import Foundation
 import CoreMotion
 

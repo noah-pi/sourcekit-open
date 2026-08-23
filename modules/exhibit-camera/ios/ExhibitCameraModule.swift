@@ -74,8 +74,8 @@ final class ExhibitCameraNamedException: Exception {
   override var reason: String { message }
 }
 
-/// AVCaptureDataOutputSynchronizerDelegate forwarder. The Module class is
-/// not an NSObject, so delegate conformance lives here (CaptureKit pattern).
+/// AVCaptureDataOutputSynchronizerDelegate forwarder. The Module class is not
+/// an NSObject, so delegate conformance lives here.
 final class ExhibitSyncHandler: NSObject, AVCaptureDataOutputSynchronizerDelegate {
   var onCollection: ((AVCaptureSynchronizedDataCollection) -> Void)?
 
@@ -1974,13 +1974,10 @@ extension ExhibitCameraModule {
       return (output, pair.1)
     }
     guard !targets.isEmpty else { return }
-    // 0.15.2 health gate (build 26 field report): a calibration photo on a
-    // graph that is ALREADY dropping frames is gasoline on the flood — and
-    // the build-26 "Cannot Record" failures show a photo capture attempted
-    // under pressure can refuse and leave the output unwilling to record
-    // afterward. If the pipeline is unhealthy at fire time, SKIP this
-    // session's one-shot: calibrationSource commits 'unavailable', which is
-    // honest, and the graph keeps every buffer for actual evidence.
+    // Health gate: a photo capture attempted under pressure can refuse and
+    // leave the output unwilling to record afterward, so skip the one-shot when
+    // the pipeline is already dropping frames. calibrationSource then commits
+    // 'unavailable' and the graph keeps every buffer for evidence.
     guard droppedPairCount <= 20 else {
       sendError(
         ExhibitCameraErrorCode.platform,
@@ -3045,9 +3042,7 @@ extension ExhibitCameraModule {
       return .failure(ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Primary frame could not be encoded"))
     }
     do {
-      // `try?`: on a fresh delivery path the remove throws "no such file" —
-      // and it did, failing EVERY still capture on TestFlight 0.13.0 while
-      // video worked (its writer path already used `try?`).
+      // `try?`: on a fresh delivery path the remove throws "no such file".
       try? FileManager.default.removeItem(at: deliveryURL)
       try primaryJPEG.write(to: deliveryURL, options: .atomic)
     } catch {
@@ -5982,25 +5977,21 @@ extension ExhibitCameraModule {
     ])
   }
 
-  /// REVIEW-CHECK (EAS build fix): the iOS 13-era connection HDR
-  /// properties (automaticallyAdjustsVideoHDREnabled / isVideoHDREnabled)
-  /// are marked unavailable in recent SDKs — direct member access failed
-  /// this build. All access goes through responds(to:) + KVC
-  /// (value(forKey:) / setValue(_:forKey:)) so it compiles on any SDK and
-  /// returns nil (stated unknown) where the feature is absent. The
-  /// selector strings are never type-checked by the compiler; next build
-  /// should confirm this compiles, and the on-device soak should confirm
-  /// the selectors respond on HDR-capable hardware.
+  /// The connection HDR properties (automaticallyAdjustsVideoHDREnabled,
+  /// isVideoHDREnabled) are marked unavailable in recent SDKs, so all access
+  /// goes through responds(to:) plus KVC. That compiles on any SDK and returns
+  /// nil where the feature is absent. The selector strings are not
+  /// type-checked.
   private func connectionVideoHDREnabled(_ connection: AVCaptureConnection) -> Bool? {
     guard connection.responds(to: Selector(("isVideoHDREnabled"))) else { return nil }
     return (connection.value(forKey: "videoHDREnabled") as? NSNumber)?.boolValue
   }
 
-  /// Explicit HDR on the primary video connection — never a silent system
-  /// default (spec §14). Disables automatic adjustment first; a format
-  /// without HDR support is a stated no-op. Where the connection HDR
-  /// control surface is absent (SDK-gated), this honestly degrades to
-  /// applied:false — the TS bridge already handles that.
+  /// Explicit HDR on the primary video connection rather than the system
+  /// default (spec §14). Disables automatic adjustment first; a format without
+  /// HDR support is a stated no-op. Where the connection HDR control surface is
+  /// absent (SDK-gated) this resolves applied:false, which the TS bridge
+  /// handles.
   func setHDREnabled(_ enabled: Bool, promise: Promise?) {
     guard let device = primaryDevice,
           let connection = primaryVideoOutput?.connection(with: .video) else {
@@ -6011,7 +6002,7 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "hdr-unsupported-on-active-format"])
       return
     }
-    // Selector-gated KVC writes — see connectionVideoHDREnabled above.
+    // Selector-gated KVC writes; see connectionVideoHDREnabled above.
     let autoSelector = Selector(("setAutomaticallyAdjustsVideoHDREnabled:"))
     let enabledSelector = Selector(("setVideoHDREnabled:"))
     guard connection.responds(to: autoSelector),
@@ -6030,9 +6021,8 @@ extension ExhibitCameraModule {
   }
 
   /// Capability inventory so the UI can hide controls the hardware lacks
-  /// (spec §14 guardrail). Device-level queries; works without a session
-  /// (falls back to the back wide camera). null means "unknown without a
-  /// session", stated — never guessed.
+  /// (spec §14). Device-level queries; works without a session by falling back
+  /// to the back wide camera. null means unknown without a session.
   func capabilities() -> [String: Any] {
     let device = primaryDevice
       ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: facing.position)
@@ -6045,10 +6035,9 @@ extension ExhibitCameraModule {
     }
     let connection = primaryVideoOutput?.connection(with: .video)
     var stabilization: [String] = []
-    // REVIEW-CHECK (EAS build fix): capability check moved to the active
-    // format (the connection-level API was removed in recent SDKs). The
-    // live-connection gate is kept so "unknown without a session → empty
-    // array" semantics hold unchanged.
+    // The capability check lives on the active format; the connection-level API
+    // was removed in recent SDKs. The live-connection gate is kept so "unknown
+    // without a session" still reports an empty array.
     if connection != nil {
       for (name, mode) in [("off", AVCaptureVideoStabilizationMode.off),
                            ("standard", .standard),
@@ -6073,7 +6062,7 @@ extension ExhibitCameraModule {
       "focusModes": [
         "auto": device.isFocusModeSupported(.continuousAutoFocus),
         "locked": device.isFocusModeSupported(.locked),
-        // Manual focus = locked + lensPosition; same support gate.
+        // Manual focus is locked + lensPosition, so the support gate matches.
         "manual": device.isFocusModeSupported(.locked),
       ],
       "focusPointOfInterestSupported": device.isFocusPointOfInterestSupported,
@@ -6085,9 +6074,9 @@ extension ExhibitCameraModule {
       "maxWhiteBalanceGain": Double(device.maxWhiteBalanceGain),
       "torch": [
         "available": device.hasTorch && device.isTorchAvailable,
-        // REVIEW-CHECK (EAS build fix 2): documented API ceiling is 1.0 — see
-        // the setTorchLevel note above. The device enforces its own maximum by
-        // throwing, which setTorchLevel surfaces as applied:false + native error.
+        // Documented API ceiling is 1.0; see setTorchLevel. A device enforces
+        // its own maximum by throwing, which setTorchLevel surfaces as
+        // applied:false plus the native error.
         "maxTorchLevel": device.hasTorch ? Double(1.0) as Any : NSNull(),
       ],
       "activeFormatHDRSupported": device.activeFormat.isVideoHDRSupported,
@@ -6105,13 +6094,11 @@ extension ExhibitCameraModule {
         "max": CMTimeGetSeconds(device.activeFormat.maxExposureDuration),
       ],
       "zoomRange": [
-        // min/max are the ACTIVE device's own supported range, unchanged
-        // (W2.3 keeps the field's hardware semantics). qualityCap is the
-        // app-chosen digital-quality ceiling for this device (see
-        // ExhibitZoomCaps — a quality choice, NOT a hardware limit); the
-        // UI clamps to min(max, qualityCap). switchOverFactors are the
-        // hardware hand-off points of the virtual device that contains
-        // this stack, so the UI's optical stops match them exactly.
+        // min/max are the active device's own supported range. qualityCap is
+        // the app-chosen digital-zoom quality ceiling (see ExhibitZoomCaps),
+        // not a hardware limit; the UI clamps to min(max, qualityCap).
+        // switchOverFactors are the hardware hand-off points of the virtual
+        // device containing this stack, so the UI's optical stops match them.
         "min": Double(device.minAvailableVideoZoomFactor),
         "max": Double(device.maxAvailableVideoZoomFactor),
         "qualityCap": min(
@@ -6120,24 +6107,22 @@ extension ExhibitCameraModule {
         ),
         "switchOverFactors": virtualSwitchOverFactors(for: device),
       ],
-      // Per-constituent-device ceilings (W2.3): every back stack this
-      // hardware actually has, each with its hardware max AND the
-      // app-chosen quality cap. The UI picks its ceiling per lens from
-      // this; an absent lens is absent (unreached, never a zero).
+      // Per-constituent-device ceilings (W2.3): every back stack this hardware
+      // has, each with its hardware max and the app-chosen quality cap. The UI
+      // picks its per-lens ceiling from this; an absent lens is omitted.
       "lensZoomCaps": lensZoomCaps(),
       "zoomQualityNote": "qualityCap values are a conservative app-chosen ceiling for digital-zoom resampling quality — NOT hardware limits; hardwareMax is the device's own maxAvailableVideoZoomFactor",
-      // 0.17.2 (additive): the selectable secondary stack — every rear
-      // stack present on this hardware, the current preference, and the
-      // third-view hardware probe (UNTESTED extension point; the flag is
-      // off by default — see ExhibitDebugFlags.thirdViewEnabled).
+      // Selectable secondary stack: every rear stack present on this hardware,
+      // the current preference, and the third-view hardware probe (untested
+      // extension point, flag off by default).
       "secondaryLensOptions": rearStackOptions(),
       "secondaryLens": secondaryLensPreference?.rawValue ?? "auto",
       "thirdViewCapable": probeThirdViewSupport(),
     ]
   }
 
-  /// The rear stacks present on this hardware, in the bridge's lens
-  /// vocabulary (0.17.2 — the selectable secondary stack's option list).
+  /// The rear stacks present on this hardware, in the bridge's lens vocabulary;
+  /// the secondary-stack option list.
   private func rearStackOptions() -> [String] {
     let specs: [(String, AVCaptureDevice.DeviceType)] = [
       ("ultraWide", .builtInUltraWideCamera),
@@ -6154,10 +6139,10 @@ extension ExhibitCameraModule {
   }
 
   /// Hardware hand-off points (W2.3): virtualDeviceSwitchOverVideoZoomFactors
-  /// of the virtual device containing the active stack. When the primary IS
-  /// a physical device (the usual case here), the factors are read from the
-  /// virtual device (triple/dual-wide/dual) at the same position. Empty
-  /// when no virtual device exists — single-stack hardware has no hand-off.
+  /// of the virtual device containing the active stack. When the primary is a
+  /// physical device the factors are read from the virtual device
+  /// (triple/dual-wide/dual) at the same position. Empty when no virtual device
+  /// exists.
   private func virtualSwitchOverFactors(for device: AVCaptureDevice) -> [Double] {
     if device.isVirtualDevice {
       return device.virtualDeviceSwitchOverVideoZoomFactors.map { $0.doubleValue }
@@ -6173,10 +6158,9 @@ extension ExhibitCameraModule {
     return []
   }
 
-  /// Per-constituent-device zoom ceilings (W2.3). Keyed by the bridge's
-  /// lens vocabulary so the UI never parses deviceType rawValues. Devices
-  /// not present are omitted entirely (absence stated by omission — the
-  /// lens inventory in listFormats is the presence source).
+  /// Per-constituent-device zoom ceilings (W2.3), keyed by the bridge's lens
+  /// vocabulary so the UI never parses deviceType rawValues. Devices not present
+  /// are omitted; listFormats is the presence source.
   private func lensZoomCaps() -> [[String: Any]] {
     let position = facing.position
     let specs: [(String, AVCaptureDevice.DeviceType)] = [
