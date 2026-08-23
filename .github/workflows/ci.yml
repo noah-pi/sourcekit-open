@@ -115,14 +115,17 @@ jobs:
       - name: Compile
         # -destination generic/platform=iOS builds for device without asking
         # for a signing identity; CODE_SIGNING_ALLOWED=NO keeps it that way.
+        # pipefail, because xcpretty exits 0 on a failed build and would
+        # hand this job a green check over a broken compile.
         run: |
+          set -o pipefail
           xcodebuild build \
             -workspace ios/*.xcworkspace \
             -scheme "$(basename ios/*.xcodeproj .xcodeproj)" \
             -configuration Debug \
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty || exit "${PIPESTATUS[0]}"
+            | xcpretty
 
   supply-chain:
     runs-on: ubuntu-latest
