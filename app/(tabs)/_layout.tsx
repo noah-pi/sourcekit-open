@@ -34,7 +34,6 @@ const TAB_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   settings: 'menu-outline',
 };
 
-/** BETA moved off the tab labels onto the screen headers. */
 
 function PillTabBar({ state, descriptors, navigation }: PillTabBarProps) {
   const scheme = useEffectiveScheme();
