@@ -5,11 +5,7 @@
  * where / Device / The seal / Sensors / Camera settings), Capture integrity,
  * the Forensic Checks modules (the same shared cards), the sealing ladder,
  * Signer and Media. Declared edits and the raw manifest sit one drawer down in
- * Full details.
- *
- * Copy: plain declarative facts; icons carry status, words carry facts. All
- * cryptography runs locally, and the strongest claim available is "unchanged
- * since sealing".
+ * Full details. All cryptography runs locally.
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -91,9 +87,9 @@ interface VerdictContext {
 }
 
 /**
- * The headline is a function of the math and the trust tier together. Green
- * requires both: the file verifies and something outside the file vouches for
- * the key. Seven verdicts; icons carry status, words carry facts.
+ * The headline is a function of the math and the trust tier together: green
+ * requires both a verifying file and an outside vouch for the key. Seven
+ * verdicts.
  */
 function verdictCopy(v: VerdictCode, ctx: VerdictContext): { headline: string; subline: string; tone: 'good' | 'bad' | 'warn' | 'neutral'; icon: keyof typeof Ionicons.glyphMap } {
   switch (v) {
@@ -534,8 +530,7 @@ function bitcoinCalendarValue(ots: OtsView): { text: string; color?: string } {
 /**
  * The seal rows: the manifest lines in the Capture claims card, in the exhibit
  * page's row format. Each row carries its own detail copy, so a failure says
- * what failed. These rows report what the seal says and what was mechanically
- * checked about its structure; none of them is a scene verdict.
+ * what failed.
  */
 function SealRows({ report }: { report: VerificationReport }) {
   const c2pa = report.c2pa;
@@ -647,12 +642,8 @@ function VerdictCard({ report, identity, ladder }: { report: VerificationReport;
   });
   // ── Headline/rung coherence ──────────────────────────────────
   // verdictCopy keys on the verdict code alone; the ladder sees the rungs.
-  // Two rules keep the card from contradicting the ladder beneath it:
-  //   1. A failed rung dominates: the headline names the failure and the tone
-  //      goes red even when the verdict is INTACT (a file can be
-  //      byte-identical and carry a countersignature that fails).
-  //   2. "Unchanged"-style headlines require rung 1 to be reached. When it is
-  //      unreached, the headline says so.
+  // A failed rung dominates the headline and tone, and "unchanged"-style
+  // headlines require rung 1 to be reached.
   const failedRung = ladder?.rungs.find((r) => r.state === 'failed') ?? null;
   const bytesRungUnreached = ladder?.rungs[0]?.state === 'unreached';
   if (failedRung && copy.tone !== 'bad') {
@@ -951,8 +942,7 @@ export default function InspectScreen() {
       // Local hand history ("Known hand"): prior exhibits in this device's
       // collection sealed by the same fingerprint. Local evidence only; it
       // never promotes a tier. A locked or empty collection means no history.
-      // Computed for every tier, since the ladder states it on rung 2 for
-      // this-device signers too.
+      // Computed for every tier; the ladder states it on rung 2.
       let localHistory: { priorCaptures: number; firstSeen: string } | null = null;
       try {
         const matches = (await listItems()).filter((i) => i.fingerprint === signerFp);
@@ -1007,7 +997,7 @@ export default function InspectScreen() {
       const height = conf.s.blockHeight;
       if (!height) { if (!cancelled) setOtsView({ state: 'confirmed', binding: 'unchecked', queueDelayMs: delay }); return; }
       // Completing the binding requires fetching the block header — network.
-      // Offline we show the anchor with the binding honestly unchecked.
+      // Offline the anchor shows with the binding unchecked.
       // Every confirmed submission's height is fetched (deduped): the
       // Reader's custody rung 4 consumes the same headers via blockHeaders.
       const heights = [...new Set(
@@ -1066,10 +1056,8 @@ export default function InspectScreen() {
 
   // ── How this was sealed: the four rungs, projected from the evidence by
   //    src/lib/trustLadder. Presentation only; nothing is recomputed here.
-  //    The ladder maps 'this-device' to rung 2 unreached with the
-  //    local-history wording, since a device recognizing its own key is not
-  //    identification. localHand rides along whenever this device's
-  //    collection has seen the key before. ──
+  //    'this-device' maps to rung 2 unreached with the local-history wording;
+  //    localHand rides along when this collection has seen the key before. ──
   const ladder = useMemo(() => {
     if (!report) return null;
     const ots: LadderInput['ots'] = !otsView
