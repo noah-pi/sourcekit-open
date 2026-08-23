@@ -95,7 +95,7 @@ function groupedFingerprint(fp: string): string {
 let settingsScrollY = 0;
 
 export default function SettingsScreen() {
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { settings, saveSettings, passcodeSet, setPasscodeSet, setUnlocked, bumpVault } = useStore();

@@ -86,6 +86,9 @@ function rewrite(src, fname) {
     .replace(/from '\.\.\/src\/core\/rephoto'/g, "from './deskRephoto.mts'")
     .replace(/from '\.\.\/src\/core\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/lib\/(\w+)'/g, "from './$1.mts'")
+    // The reader's card model sits at src/reader/types.ts; '../types' from
+    // reader/verify/ would otherwise flatten onto a generic types.mts.
+    .replace(/from '\.\.\/types'/g, "from './reader-types.mts'")
     .replace(/from '@exhibit\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '@exhibit\/provenance\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/stereo\/(\w+)'/g, "from './$1.mts'")
@@ -123,6 +126,17 @@ for (const rel of STAGE) {
 // Disclosure engine, staged as disclosure-*.mts under the same flattening
 // test-disclosure.mts applies, so both paths produce identical modules.
 // In-disclosure imports ('./tree') map to the disclosure- prefixed names.
+// Reader custody ladder and its card model, staged as reader-*.mts. The
+// ladder projects the verification core's checks onto five rungs; the suite
+// pins that each rung reads only signature-covered evidence.
+for (const [name, rel] of [
+  ['reader-types', 'src/reader/types.ts'],
+  ['reader-ladder', 'src/reader/verify/ladder.ts'],
+]) {
+  const src = fs.readFileSync(path.join(root, rel), 'utf8');
+  fs.writeFileSync(path.join(out, `${name}.mts`), rewrite(src, name));
+}
+
 const DISCLOSURE_STAGE = ['ladder', 'inventory', 'salts', 'tree', 'bundle', 'commit', 'captureCommit', 'burn'];
 for (const name of DISCLOSURE_STAGE) {
   const src = fs.readFileSync(path.join(root, 'src/disclosure', `${name}.ts`), 'utf8')
