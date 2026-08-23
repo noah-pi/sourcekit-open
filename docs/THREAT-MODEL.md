@@ -132,7 +132,7 @@ physical production that has to survive a reader looking at it for four seconds.
 That is the design goal, stated plainly: not detection, but enough clearly
 presented evidence that ordinary human judgment gets traction.
 
-## The AI-assisted attacker (design assumption, noah-pi directive Aug 2026)
+## The AI-assisted attacker
 
 We assume the person attacking this app is aided by frontier AI models with
 complete knowledge of this codebase, these docs, and every comment in the
@@ -182,7 +182,7 @@ cover beside it.
 
 ## The 25 scenarios
 
-### A. Forgery & tamper
+### A. Forgery and tamper
 
 **1. Pixel/content edit after signing.** Any byte of the media changes → the
 asset hash in the signed claim no longer matches → rung 1 failed, CONTENT
@@ -219,7 +219,7 @@ found — this means nothing either way." Absence is never rendered as
 suspicion, and a stripped file can never be passed off *as verified*.
 *Defended (by design — the inverse attacks live in scenario 25).*
 
-### B. Identity & impersonation
+### B. Identity and impersonation
 
 **8. Forged self-issued "organization" certificate.** A self-made
 `O=Reuters` cert → rejected at import (the chain verifier runs at the door);
@@ -288,7 +288,7 @@ rung-5 *unreached* (never failed, never reached), and a *confirmed* binding
 is only counted when the Bitcoin binding itself verifies. *Accepted risk
 (stated in-product).*
 
-### D. Hardware & platform
+### D. Hardware and platform
 
 **18. Secure Enclave key extraction.** Out of scope — we assume the silicon
 (assumption 1). What the app controls is labeling: the key-storage backend
@@ -319,7 +319,7 @@ compromised attestation root can mint rung-4 evidence for non-genuine
 hardware. It cannot mint rungs 1–3 or 5, and no surface lets rung 4 stand
 for them. *Accepted risk (out of scope to fix, in scope to say).*
 
-### E. Privacy & coercion
+### E. Privacy and coercion
 
 **22. Vault extraction from a seized device.** Vault media, records, and the
 seal queue are AES-256-GCM under a keychain-held key
@@ -355,7 +355,7 @@ limits sentence so a cropped screenshot still tells the truth; and the full
 report lists what was *not* checked on every verdict. *Defended (by design —
 the defense is the copy, and the copy is tested).*
 
-## Out of scope (named, not implied)
+## Out of scope
 
 Scene authenticity (no software can check what the camera was pointed at —
 AI-generated or staged content signed by a genuine device is *validly
