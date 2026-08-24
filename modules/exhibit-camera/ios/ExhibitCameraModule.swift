@@ -1,4 +1,6 @@
-// Validated by an on-device soak checklist, not by CI.
+// NOT COMPILED BY CI. No Swift compiler runs against this file in this
+// repository; it is exercised only by an on-device soak run. See
+// docs/PROVENANCE.md for what the test lab does and does not reach.
 import ExpoModulesCore
 import AVFoundation
 import CoreMedia
@@ -996,8 +998,8 @@ public class ExhibitCameraModule: Module {
     sessionQueue.async {
       preview.session = nil
       pip?.session = nil
-      self.boundSessionMap.remove(preview)
-      if let pip = pip { self.boundSessionMap.remove(pip) }
+      self.boundSessionMap.removeObject(forKey: preview)
+      if let pip = pip { self.boundSessionMap.removeObject(forKey: pip) }
     }
   }
 
@@ -1011,10 +1013,14 @@ public class ExhibitCameraModule: Module {
   /// nothing we know about. Runs on sessionQueue — at teardown AND inside
   /// the tomb retry loop before any release.
   private func detachRegisteredLayers(from dead: AVCaptureMultiCamSession) {
+    // The registry is sessionQueue-confined. A caller on another queue races
+    // the sweep against a bind and can leave a layer attached — the exact
+    // precondition AVFoundation asserts on. Debug builds say so here first.
+    dispatchPrecondition(condition: .onQueue(sessionQueue))
     for layer in boundPreviewLayers.allObjects {
       if boundSessionMap.object(forKey: layer) === dead {
         layer.session = nil
-        boundSessionMap.remove(layer)
+        boundSessionMap.removeObject(forKey: layer)
       }
     }
   }
@@ -1027,6 +1033,7 @@ public class ExhibitCameraModule: Module {
   /// prove cleanliness alone: the bookkeeping map is checked too, in case
   /// a bind re-registered against a session mid-teardown.
   private func layersStillAttached(to dead: AVCaptureMultiCamSession) -> Bool {
+    dispatchPrecondition(condition: .onQueue(sessionQueue))
     for layer in boundPreviewLayers.allObjects {
       if layer.session === dead { return true }
       if boundSessionMap.object(forKey: layer) === dead { return true }
@@ -1055,6 +1062,7 @@ public class ExhibitCameraModule: Module {
   /// be detached during dealloc, and a session we cannot prove clean is
   /// never allowed to reach dealloc at all.
   private func releaseTombIfClean(at idx: Int) {
+    dispatchPrecondition(condition: .onQueue(sessionQueue))
     let entry = sessionTomb[idx]
     detachRegisteredLayers(from: entry.session)
     drainFigDetachQueue(of: entry.session)
@@ -1062,6 +1070,12 @@ public class ExhibitCameraModule: Module {
       // PROVABLY clean: the final release is this array removal, on
       // sessionQueue, with nothing attached — the dealloc-time
       // detachFromFigCaptureSession finds no layer and cannot assert.
+      // The invariant, stated where it is relied on: no preview layer may
+      // reference a session that is about to deallocate. Debug builds trap
+      // here if the proof above is ever weakened; release builds keep the
+      // retry-and-graveyard path below.
+      assert(!layersStillAttached(to: entry.session),
+             "tomb released a session with a preview layer still bound")
       sessionTomb.remove(at: idx)
       return
     }
@@ -1154,7 +1168,7 @@ extension ExhibitCameraModule {
       // the discarded inset layer can never carry the session into a
       // workloop dealloc (the SIGABRT class).
       oldLayer?.session = nil
-      if let oldLayer = oldLayer { boundSessionMap.remove(oldLayer) }
+      if let oldLayer = oldLayer { boundSessionMap.removeObject(forKey: oldLayer) }
     }
   }
 

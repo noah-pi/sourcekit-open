@@ -85,6 +85,116 @@ jobs:
           npm ci --legacy-peer-deps --no-audit --no-fund
           npx tsc --noEmit -p tsconfig.json
 
+  ios-build:
+    # The Swift gate. Nothing else in this workflow runs a Swift compiler, so
+    # without this job a type error, a bad selector, or a renamed API in
+    # modules/ reaches a device build and never reaches CI.
+    #
+    # It compiles for the simulator, which typechecks every module against the
+    # iOS SDK. Multi-cam capture itself needs real hardware and is covered by
+    # the on-device soak run, not here. macOS runners are free on public
+    # repositories, so this runs on every change rather than behind a filter:
+    # a gate that can be skipped is a gate that gets skipped.
+    # macos-15 carries exactly two Xcodes, 26.0.1 and 26.3, and the Expo pod
+    # chain needs one between them: 26.0.1 rejects its `weak let`, 26.3 cannot
+    # infer a type in its date coding. A newer image carries a newer set.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Select the Xcode that EAS builds with
+        # Pinned to the toolchain the shipping build uses, so this gate and the
+        # real build cannot drift. Not "newest": Swift's type checker changed
+        # between 26.0.1, 26.3, and 26.6, and each version breaks a different
+        # part of the Expo pod chain. Matching EAS is the only version known to
+        # compile the whole tree.
+        #
+        # If the image stops carrying it, this fails loudly rather than
+        # silently building with something else. Update both sides together.
+        env:
+          EAS_XCODE: '26.6'
+        run: |
+          set -euo pipefail
+          echo "Xcodes on this image:"
+          ls -d /Applications/Xcode*.app
+          APP="/Applications/Xcode_${EAS_XCODE}.app"
+          if [ ! -d "$APP" ]; then
+            echo "Xcode ${EAS_XCODE} is not on this image. EAS builds with it, so" >&2
+            echo "building with anything else would not prove what ships." >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$APP"
+          xcodebuild -version
+          swift --version
+
+      - name: Install
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Fetch the C2PAC xcframework
+        # Not committed. The script checks the download against the SHA-256
+        # upstream pins in c2pa-swift's own Package.swift before unpacking.
+        run: ./scripts/fetch-c2pa-framework.sh
+
+      - name: Generate the iOS project
+        # ios/ is not committed either; prebuild writes it from app.json and
+        # the local modules, which is what a real build does.
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Install pods
+        run: pod install
+        working-directory: ios
+
+      - name: Compile the local Swift modules
+        # The gate compiles OUR modules, not the whole app. Building the app
+        # drags in every upstream pod, and expo-modules-jsi does not compile
+        # on either Xcode these images carry — too old for `weak let`, too new
+        # for its own type inference. That is an upstream problem and it is
+        # not what this job exists to catch.
+        #
+        # Each local module is a pod target, so they can be built directly
+        # against the SDK and ExpoModulesCore. A type error, a bad selector,
+        # or a renamed API under modules/ fails here.
+        run: |
+          set -euo pipefail
+          echo "Xcodes on this image:"; ls -d /Applications/Xcode*.app
+          xcodebuild -version
+          xcodebuild -project ios/Pods/Pods.xcodeproj -list || true
+          for T in ExhibitCamera CaptureKit C2paIos SecureEnclave AudioCapture WifiInfo; do
+            echo "::group::$T"
+            xcodebuild build \
+              -project ios/Pods/Pods.xcodeproj \
+              -target "$T" \
+              -configuration Debug \
+              -sdk iphonesimulator \
+              CODE_SIGNING_ALLOWED=NO \
+              ONLY_ACTIVE_ARCH=NO
+            echo "::endgroup::"
+          done
+
+  dead-code:
+    # Catches the class no compiler and no test reaches: a module nothing
+    # imports. A component wired to a Settings toggle but rendered by nothing
+    # typechecks, passes every suite, and does nothing — this is what names it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Install
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Unreferenced files
+        # knip.json lists the real entry points: expo-router screens, the
+        # server, the scripts, and every module tests/stage.mjs copies into
+        # the lab (the lab copies rather than imports, so knip cannot see
+        # that reach on its own). Anything outside that graph is unreachable.
+        run: npx knip --include files
+
   supply-chain:
     runs-on: ubuntu-latest
     steps:

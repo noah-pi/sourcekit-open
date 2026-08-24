@@ -1,4 +1,7 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
+// NOT COMPILED BY CI. No Swift compiler runs against this file in this
+// repository; it is exercised only by an on-device soak run. See
+// docs/PROVENANCE.md for what the test lab does and does not reach.
 import Foundation
 import Network
 
