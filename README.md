@@ -40,7 +40,8 @@ Verification is always my own code.
 Signing has two paths. With **Seal with the C2PA SDK** on (Settings ▸ Proof, off by default),
 [c2pa-swift](https://github.com/contentauth/c2pa-swift) signs photos and videos; the bytes are
 read back through my verifier and anything that fails is sealed the original way instead. With it
-off — and always for audio and PNG, which have no SDK path — my own COSE/JUMBF builder signs.
+off — and always for audio and PNG, which this app does not route through it — my own COSE/JUMBF
+builder signs.
 Both emit the same assertion labels.
 
 What checks that code is a differential oracle in CI: every corpus asset runs through my verifier
@@ -477,12 +478,9 @@ claim made here.
 - **LiDAR.** Pro iPhones ship a depth scanner and nothing uses it for provenance. A sealed depth
 map answers the flat-screen question directly rather than inferring it from disparity, and it
 works in the dark.
-- **Altitude against terrain.** Every capture already seals a barometric altitude, and nothing
-  checks it against the ground elevation of the coordinate it claims. A GPS spoofer does not
-  reach the barometer, so the two disagree by however far the lie moved you. Arithmetic rather
-  than image interpretation.
-- **Authenticated satellite positioning.** Galileo began signing its navigation messages in 2025. Phones do not
-  expose that to apps yet.
+- **Authenticated satellite positioning.** Galileo began signing its navigation messages in 2025,
+making a position something a receiver can check rather than merely believe. Phones do not
+expose it to apps yet.
 - **Optional face blurring that survives the signature.** A redaction committed at capture — the
 blur applied before signing, the original never written — would let someone publish a crowd
 without publishing the crowd's faces. The Guardian Project and WITNESS worked this out years ago

@@ -1074,7 +1074,10 @@ export function boxExcluded(bytes: Uint8Array, box: RootBox, exclusions: BmffExc
     // c2pa-rs for monolithic files) ever write — left hashed, which fails
     // closed if a foreign manifest relied on it.
     if (ex.xpath !== '/' + box.type) continue;
-    if (ex.length !== undefined && ex.length !== box.size) continue;
+    // c2pa-rs writes an absent length as CBOR null, not by omitting the key,
+    // so `undefined` alone is not the whole absent case: treating null as a
+    // length constraint skips every exclusion a foreign manifest declares.
+    if (ex.length != null && ex.length !== box.size) continue;
     let dataOk = true;
     for (const d of ex.data ?? []) {
       const start = box.start + d.offset;

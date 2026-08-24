@@ -14,7 +14,7 @@
  * Run from tests/.staged:  ./node_modules/.bin/tsx test-foreign.mts
  */
 import * as fs from 'node:fs';
-import { verifyPhotoBytes } from './verifyAsset.mts';
+import { verifyPhotoBytes, verifyVideoBytes } from './verifyAsset.mts';
 
 const CORPUS = new URL('../corpus/foreign/', import.meta.url).pathname;
 
@@ -27,6 +27,8 @@ const check = (name: string, ok: boolean, detail = '') => {
 type Report = Awaited<ReturnType<typeof verifyPhotoBytes>>;
 const read = (f: string): Promise<Report> =>
   verifyPhotoBytes(new Uint8Array(fs.readFileSync(CORPUS + f)));
+const readBmff = (f: string): Promise<Report> =>
+  verifyVideoBytes(new Uint8Array(fs.readFileSync(CORPUS + f)));
 
 console.log('— a foreign v1 claim reads intact —');
 {
@@ -55,6 +57,20 @@ for (const f of ['c2patool-v2.jpg', 'c2patool-v2.png']) {
     r.c2pa?.assetHashFailure === null && r.checks.assetHashMatches === true,
     `assetHashFailure=${r.c2pa?.assetHashFailure}`);
   check(`${f}: assertion hashes cross-check`, r.c2pa?.claimAssertionsMatch === true);
+}
+
+console.log('— a foreign BMFF binding recomputes, in video and audio —');
+// c2pa-rs writes an absent exclusion length as CBOR null rather than omitting
+// the key. Treating null as a length constraint skips every exclusion the
+// manifest declares, which voids the binding on any foreign BMFF file — the
+// app's own writer omits the key, so only foreign media exposes it.
+for (const f of ['c2patool-v1.mp4', 'c2patool-v1.m4a']) {
+  const r = await readBmff(f);
+  check(`${f}: verdict INTACT`, r.verdict === 'INTACT', r.verdict);
+  check(`${f}: c2pa.hash.bmff recomputes over the file bytes`,
+    r.checks.assetHashMatches === true && r.c2pa?.assetHashFailure === null,
+    `assetHashFailure=${r.c2pa?.assetHashFailure}`);
+  check(`${f}: the foreign chain's signature verifies`, r.checks.signatureValid);
 }
 
 console.log('— tamper in a foreign file is caught —');
