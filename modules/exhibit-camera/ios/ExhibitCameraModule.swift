@@ -2172,8 +2172,8 @@ extension ExhibitCameraModule {
     self.sensorLogThermalStopped = false
     self.sensorLogger = nil
 
-    // Focus-settling signal (spec §14): KVO-compliant per AVFoundation
-    // docs; emitted so the UI can avoid capturing mid-adjustment.
+    // Tells the UI when focus is settling, so it can avoid firing the
+    // shutter mid-adjustment.
     focusObserver = primary.observe(\.isAdjustingFocus, options: [.new]) { [weak self] _, change in
       let adjusting = change.newValue ?? false
       self?.sendEvent("onAdjustingFocus", ["adjusting": adjusting])
@@ -2617,16 +2617,12 @@ extension ExhibitCameraModule {
       self.rebuildSynchronizer()
     }
 
-    // SEQUENTIAL captures, one photo at a time ( Drop 2): the old code
-    // fired capturePhoto on BOTH photo outputs back-to-back. A photo capture
-    // on a live multi-cam graph is the documented maximum-resource moment —
-    // the video data outputs drop frames for its duration — and doubling it
-    // is what wedged the sync pipeline on hardware (stale-pair
-    // rejections at shutter; dropped-pair floods starting ~1 s into every
-    // session — exactly when this one-shot fired). One at a time halves the
-    // spike; when the LAST capture returns we rebind the synchronizer once
-    // so any residual delivery weirdness from the stills disruption is reset
-    // instead of lingering for the whole session.
+    // One photo at a time. A photo capture on a live multi-cam graph is the
+    // heaviest moment there is — the video outputs drop frames for its
+    // duration — and firing two back to back wedges the pipeline. Going one
+    // at a time halves the spike, and rebinding the synchronizer after the
+    // last one resets any residual disruption instead of leaving it for the
+    // rest of the session.
     fireNextCalibrationCapture(targets: targets, index: 0, sessionID: id)
   }
 
@@ -4059,14 +4055,11 @@ extension ExhibitCameraModule {
       completion(EvidencePathBuilder.error(ExhibitCameraErrorCode.platform, "No primary photo output in this session"))
       return
     }
-    // REVIEW-CHECK (EAS build fix): availableRawPhotoPixelFormatTypes
-    // elements are already OSType (UInt32) — no.uint32Value. The RAW
-    // settings initializer label is rawPixelFormatType: (per the SDK's
-    // photoSettingsWithRawPixelFormatType:), and flashMode is fully
-    // qualified so the.off member can't lose its contextual base. Next
-    // build should confirm all three sites compile.
+    // The format types here are already OSType values, the RAW settings
+    // initializer takes rawPixelFormatType:, and the flash mode is fully
+    // qualified so it cannot lose its contextual base.
     guard let rawFormat = photoOutput.availableRawPhotoPixelFormatTypes.first else {
-      // Unsupported hardware: unreached, never red (spec §7/§9).
+      // This hardware has no RAW format. Not a failure.
       completion(EvidencePathBuilder.neverRecorded("raw-unsupported"))
       return
     }
@@ -5817,14 +5810,16 @@ extension ExhibitCameraModule {
     ])
   }
 
-  /// Full-sensor stills (W2.1): cap the photo output at its LARGEST
-  /// supported dimensions (iOS 16+; older OSes keep the format default and
-  /// the committed dimensions say what actually arrived). Set once at
-  /// addOutput time — inside the session's begin/commit discipline.
-  /// supportedMaxPhotoDimensions is a property of the DEVICE'S ACTIVE
-  /// FORMAT (not the photo output); the device is passed explicitly from
-  /// each creation site. The "largest" pick is an explicit loop — the
-  /// chained max(by:) closure hit the type-checker's time limit (EAS 27).
+  /// Sets the photo output's still size, once, when the output is added,
+  /// inside the session's begin-and-commit.
+  ///
+  /// The supported sizes are a property of the device's active format, not
+  /// of the photo output, so the device is passed in from each creation
+  /// site. On older systems there is nothing to set and the committed
+  /// dimensions say what arrived.
+  ///
+  /// The largest-under-the-cap pick is an explicit loop; the equivalent
+  /// chained closure pushes the type checker past its budget.
   private func applyFullResPhotoPolicy(to output: AVCapturePhotoOutput, device: AVCaptureDevice) {
     if #available(iOS 16.0, *) {
       // Cap the photo stream at 12 MP.
@@ -6074,13 +6069,16 @@ extension ExhibitCameraModule {
   }
 }
 
-// MARK: - Thermal policy (spec §6) + lifecycle
+// MARK: - Heat, and lifecycle
 
 extension ExhibitCameraModule {
 
-  /// serious → cadence halves (applied in maybeDumpPeriodicPair) + event.
-  /// critical → secondary DETACHED, stated; delivery never dies. Recovery
-  /// is not silent: stereo re-probes on the next configureSession (spec §6).
+  /// Responds to thermal pressure. Serious halves the pair cadence and
+  /// sends an event; critical detaches the secondary camera and says so.
+  /// Delivery never stops either way.
+  ///
+  /// Recovery is not automatic: stereo is probed again at the next
+  /// configureSession, so nothing comes back silently.
   func handleThermalState(_ state: ProcessInfo.ThermalState) {
     switch state {
     case .serious:
@@ -6581,12 +6579,10 @@ extension ExhibitCameraModule {
         device.focusMode = .locked
         promise?.resolve(["applied": true, "focusMode": "locked"])
       case "manual":
-        // crash fix: isFocusModeSupported(.locked) is NOT sufficient
-        // for the custom-lens-position API — the virtual DualWide device
-        // reports.locked supported yet setFocusModeLocked(lensPosition:)
-        // throws an NSException (one report). Swift cannot
-        // catch ObjC exceptions; the custom-position support bit is the
-        // only honest gate.
+        // Supporting the locked mode does not mean supporting a custom
+        // lens position: some devices report the first and throw an
+        // uncatchable exception on the second. The custom-position bit is
+        // the only real gate.
         guard device.isFocusModeSupported(.locked),
               device.isLockingFocusWithCustomLensPositionSupported else {
           promise?.resolve(["applied": false, "reason": "manual-focus-unsupported"])
@@ -6611,15 +6607,17 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "lock-failed: \(error.localizedDescription)"])
       return
     }
-    // mirror the applied focus mode onto the secondary.
+    // Hand the applied mode to the secondary too.
     mirrorProControlsToSecondary()
   }
 
   /// { mode: 'auto'|'locked'|'manual', temperature?, tint? }.
-  /// 'manual' converts temperature+tint → gains via the device's own
-  /// converter, clamps each gain to [1, maxWhiteBalanceGain], locks, and
-  /// reports the round-tripped temperature/tint of the CLAMPED gains so
-  /// the caller sees what the hardware actually accepted.
+  ///
+  /// 'manual' turns temperature and tint into gains using the device's own
+  /// converter, clamps each gain to what the device allows, locks, and then
+  /// converts the clamped gains back — so the caller is told the
+  /// temperature and tint the hardware actually accepted, not the ones that
+  /// were asked for.
   func setWhiteBalanceMode(opts: [String: Any], promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -6645,9 +6643,9 @@ extension ExhibitCameraModule {
         device.whiteBalanceMode = .locked
         promise?.resolve(["applied": true, "whiteBalanceMode": "locked"])
       case "manual":
-        // crash fix: same class as focus —.locked mode support does
-        // NOT imply custom-gains locking; the virtual device throws an
-        // uncatchable NSException. Gate on the custom-gains bit.
+        // Same as focus: supporting the locked mode does not mean
+        // supporting custom gains, and asking anyway throws uncatchably.
+        // Gate on the custom-gains bit.
         guard device.isWhiteBalanceModeSupported(.locked),
               device.isLockingWhiteBalanceWithCustomDeviceGainsSupported else {
           promise?.resolve(["applied": false, "reason": "manual-white-balance-unsupported"])
@@ -6669,8 +6667,8 @@ extension ExhibitCameraModule {
         gains.greenGain = min(max(gains.greenGain, 1.0), maxGain)
         gains.blueGain = min(max(gains.blueGain, 1.0), maxGain)
         device.setWhiteBalanceModeLocked(with: gains, completionHandler: nil)
-        // Round-trip: what temperature/tint do the clamped gains
-        // correspond to? Reported so the UI shows what was applied.
+        // Convert the clamped gains back, so the UI shows what was
+        // applied rather than what was requested.
         let appliedTT = device.temperatureAndTintValues(for: gains)
         promise?.resolve([
           "applied": true,
@@ -6690,18 +6688,13 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "lock-failed: \(error.localizedDescription)"])
       return
     }
-    // mirror the applied white-balance mode onto the secondary.
+    // Hand the applied mode to the secondary too.
     mirrorProControlsToSecondary()
   }
 
-  /// Torch with level: nil → off; otherwise setTorchModeOn(level:)
-  /// clamped to the documented 1.0 API ceiling. Missing torch hardware is a
-  /// stated no-op, never a throw (spec §14 guardrail).
-  // REVIEW-CHECK (EAS build fix): maxTorchLevel is NOT an AVCaptureDevice
-  // member — the documented surface is the global constant
-  // the 1.0 API ceiling (compiler confirmed neither maxTorchLevel symbol exists
-  // exist). Argument label is level:, not withLevel:. Next build should
-  // confirm all three maxTorchLevel sites compile.
+  /// Sets the torch level. nil turns it off; any level is clamped to the
+  /// documented ceiling of 1.0. A device with no torch does nothing and
+  /// says so.
   func setTorchLevel(level: Double?, promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -6719,11 +6712,9 @@ extension ExhibitCameraModule {
         promise?.resolve(["applied": true, "torchLevel": 0.0])
         return
       }
-      // REVIEW-CHECK (EAS build fix 2): neither AVCaptureDevice.maxTorchLevel nor
-      // the global AVCaptureMaxTorchLevel is visible to Swift in this SDK. 1.0 is
-      // the documented torch-level ceiling; if a device enforces a lower maximum,
-      // setTorchModeOn(level:) throws and the catch below returns applied:false
-      // with the native error — the failure is surfaced, never hidden.
+      // There is no torch-level maximum readable from Swift in this SDK.
+      // 1.0 is the documented ceiling; a device that enforces a lower one
+      // throws, and the catch below reports applied:false with its error.
       let clamped = min(max(Float(level), 0.0), Float(1.0))
       guard clamped > 0 else {
         device.torchMode = .off
@@ -6735,7 +6726,7 @@ extension ExhibitCameraModule {
         "applied": true,
         "torchLevel": Double(clamped),
         "levelClamped": clamped != Float(level),
-        "maxTorchLevel": Double(1.0), // documented API ceiling; device max enforced via throw
+        "maxTorchLevel": Double(1.0), // the documented ceiling; a lower device limit surfaces as a throw
       ])
     } catch {
       promise?.resolve(["applied": false, "reason": "torch-failed: \(error.localizedDescription)"])
@@ -6743,16 +6734,16 @@ extension ExhibitCameraModule {
   }
 }
 
-// MARK: - Pro controls II: formats, stabilization, HDR, capabilities (spec §14)
+// MARK: - Formats, stabilization, HDR, and capabilities
 
 extension ExhibitCameraModule {
 
-  /// Per-lens format inventory. No session required — device-level query.
-  /// formatID is "<deviceType.rawValue>:<index>" (stable per device model
-  /// + OS). RAW support is per-OUTPUT, not per-format: it requires a photo
-  /// output connected to the device, so it is reported from the running
-  /// session when available and null with a note otherwise — stated,
-  /// never guessed.
+  /// Lists what each lens can do. No session needed.
+  ///
+  /// RAW support is a property of the output, not the format, and needs a
+  /// photo output connected to the device. So it is reported from a running
+  /// session when there is one, and null with a note otherwise — unknown
+  /// rather than guessed.
   func listFormats() -> [String: Any] {
     let lenses: [(String, AVCaptureDevice.DeviceType, AVCaptureDevice.Position)] = [
       ("ultraWide", .builtInUltraWideCamera, .back),
@@ -6763,7 +6754,7 @@ extension ExhibitCameraModule {
     var result: [String: Any] = [:]
     for (label, type, position) in lenses {
       guard let device = AVCaptureDevice.default(type, for: .video, position: position) else {
-        // Lens absent on this hardware: present:false — unreached, never red.
+        // This hardware does not have that lens.
         result[label] = ["present": false]
         continue
       }
@@ -6795,16 +6786,16 @@ extension ExhibitCameraModule {
     return [
       "lenses": result,
       "multiCamSupported": AVCaptureMultiCamSession.isMultiCamSupported,
-      // RAW is a photo-output property; honest null without a session.
+      // A photo-output property, so null without a session.
       "rawSupported": primaryPhotoOutput.map { !$0.availableRawPhotoPixelFormatTypes.isEmpty } as Any? ?? NSNull(),
       "rawNote": "rawSupported requires a running session (photo-output query); null means unknown, not unsupported",
     ]
   }
 
-  /// { formatID, frameRate? } — applies to the CURRENT primary device
-  /// only (switch lenses first). Both photo and video flow from the device
-  /// format, so one setter covers both — stated in the result. Rolls back
-  /// and reports if the hardware-cost budget would be exceeded (spec §6).
+  /// { formatID, frameRate? }, applied to the current primary device only —
+  /// switch lenses first. Photo and video both come from the device format,
+  /// so this one setter covers both, and the result says so. Rolls back and
+  /// reports if it would exceed the hardware budget.
   func setFormat(opts: [String: Any], promise: Promise?) {
     guard let session = session, let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -6814,7 +6805,7 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "missing-formatID"])
       return
     }
-    // Parse "<deviceType.rawValue>:<index>".
+    // Parse "<deviceType>:<index>".
     let parts = formatID.split(separator: ":")
     guard let last = parts.last, let index = Int(last) else {
       promise?.resolve(["applied": false, "reason": "malformed-formatID"])
@@ -6840,8 +6831,8 @@ extension ExhibitCameraModule {
       device.activeFormat = target
       var appliedFPS = configuredFPS
       if let fps = requestedFPS {
-        // Clamp the requested frame rate into the format's supported
-        // ranges; pin min==max so the synchronizer sees a steady stream.
+        // Clamp the rate to the format's ranges, and pin the minimum and
+        // maximum together so the synchronizer sees a steady stream.
         let maxFPS = target.videoSupportedFrameRateRanges.map { $0.maxFrameRate }.max() ?? fps
         let minFPS = target.videoSupportedFrameRateRanges.map { $0.minFrameRate }.min() ?? fps
         appliedFPS = min(max(fps, minFPS), maxFPS)
@@ -6851,8 +6842,8 @@ extension ExhibitCameraModule {
       }
       device.unlockForConfiguration()
 
-      // Hardware-cost watchdog (spec §6): a format that breaks the budget
-      // is rolled back and reported, never silently throttled.
+      // A format that breaks the budget is rolled back and reported,
+      // never quietly throttled.
       if session.hardwareCost > 1.0 {
         do {
           try device.lockForConfiguration()
@@ -6879,7 +6870,7 @@ extension ExhibitCameraModule {
         "height": Int(dims.height),
         "frameRate": appliedFPS,
         "frameRateClamped": requestedFPS.map { $0 != appliedFPS } ?? false,
-        "appliesTo": "photo-and-video", // device format feeds both paths
+        "appliesTo": "photo-and-video", // the device format feeds both
         "hardwareCost": Double(session.hardwareCost),
       ])
     } catch {
@@ -6887,17 +6878,13 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Video stabilization on the primary video connection. 'auto' is the
-  /// system choice — allowed, but the committed metadata reads the
-  /// connection back so the applied mode is evidence, not assumption.
+  /// Sets stabilization on the primary video connection. 'auto' hands the
+  /// choice to the system, which is allowed — the committed metadata reads
+  /// the connection back, so what was actually used is evidence rather than
+  /// an assumption.
   func setVideoStabilizationMode(_ mode: String, promise: Promise?) {
-    // REVIEW-CHECK (EAS build fix): connection-level
-    // isVideoStabilizationModeSupported(_:) no longer exists in recent
-    // SDKs — the documented capability check is
-    // AVCaptureDevice.Format.isVideoStabilizationModeSupported(_:) on the
-    // active format. preferredVideoStabilizationMode /
-    // activeVideoStabilizationMode stay on the connection. Next build
-    // should confirm this compiles.
+    // The capability check lives on the active format; only the preferred
+    // and active modes live on the connection.
     guard let device = primaryDevice,
           let connection = primaryVideoOutput?.connection(with: .video) else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -6922,30 +6909,29 @@ extension ExhibitCameraModule {
     promise?.resolve([
       "applied": true,
       "stabilizationMode": mode,
-      // Connection read-back: what the pipeline actually has now.
+      // Read back off the connection: what the pipeline has now.
       "activeMode": DeviceModeMapper.stabilizationMode(connection.preferredVideoStabilizationMode),
     ])
   }
 
-  /// REVIEW-CHECK (EAS build fix): the iOS 13-era connection HDR
-  /// properties (automaticallyAdjustsVideoHDREnabled / isVideoHDREnabled)
-  /// are marked unavailable in recent SDKs — direct member access failed
-  /// this build. All access goes through responds(to:) + KVC
-  /// (value(forKey:) / setValue(_:forKey:)) so it compiles on any SDK and
-  /// returns nil (stated unknown) where the feature is absent. The
-  /// selector strings are never type-checked by the compiler; next build
-  /// should confirm this compiles, and the on-device soak should confirm
-  /// the selectors respond on HDR-capable hardware.
+  /// Reads whether HDR is on for a connection.
+  ///
+  /// The connection's HDR properties are marked unavailable in recent SDKs,
+  /// so this goes through responds-to and key-value access instead: it
+  /// compiles on any SDK and returns nil, meaning unknown, where the
+  /// property is absent. The selector strings are not type-checked, so they
+  /// have to be right by inspection.
   private func connectionVideoHDREnabled(_ connection: AVCaptureConnection) -> Bool? {
     guard connection.responds(to: Selector(("isVideoHDREnabled"))) else { return nil }
     return (connection.value(forKey: "videoHDREnabled") as? NSNumber)?.boolValue
   }
 
-  /// Explicit HDR on the primary video connection — never a silent system
-  /// default (spec §14). Disables automatic adjustment first; a format
-  /// without HDR support is a stated no-op. Where the connection HDR
-  /// control surface is absent (SDK-gated), this honestly degrades to
-  /// applied:false — the TS bridge already handles that.
+  /// Sets HDR explicitly on the primary video connection, so the committed
+  /// metadata can state which it was rather than inheriting a system
+  /// default. Turns automatic adjustment off first.
+  ///
+  /// A format without HDR support does nothing and says so, and where the
+  /// control is absent entirely this reports applied:false.
   func setHDREnabled(_ enabled: Bool, promise: Promise?) {
     guard let device = primaryDevice,
           let connection = primaryVideoOutput?.connection(with: .video) else {
@@ -6956,7 +6942,8 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "hdr-unsupported-on-active-format"])
       return
     }
-    // Selector-gated KVC writes — see connectionVideoHDREnabled above.
+    // Key-value writes behind a responds-to check — see
+    // connectionVideoHDREnabled above.
     let autoSelector = Selector(("setAutomaticallyAdjustsVideoHDREnabled:"))
     let enabledSelector = Selector(("setVideoHDREnabled:"))
     guard connection.responds(to: autoSelector),
@@ -6974,10 +6961,10 @@ extension ExhibitCameraModule {
     ])
   }
 
-  /// Capability inventory so the UI can hide controls the hardware lacks
-  /// (spec §14 guardrail). Device-level queries; works without a session
-  /// (falls back to the back wide camera). null means "unknown without a
-  /// session", stated — never guessed.
+  /// What this hardware can do, so the UI can hide controls that could not
+  /// work. Device-level queries, so it works without a session by falling
+  /// back to the rear wide camera. null means unknown without a session,
+  /// never a guess.
   func capabilities() -> [String: Any] {
     let device = primaryDevice
       ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: facing.position)
@@ -6990,10 +6977,9 @@ extension ExhibitCameraModule {
     }
     let connection = primaryVideoOutput?.connection(with: .video)
     var stabilization: [String] = []
-    // REVIEW-CHECK (EAS build fix): capability check moved to the active
-    // format (the connection-level API was removed in recent SDKs). The
-    // live-connection gate is kept so "unknown without a session → empty
-    // array" semantics hold unchanged.
+    // The capability check reads the active format; the live-connection
+    // gate stays so that no session still means an empty array, which is
+    // unknown rather than unsupported.
     if connection != nil {
       for (name, mode) in [("off", AVCaptureVideoStabilizationMode.off),
                            ("standard", .standard),
@@ -7018,7 +7004,7 @@ extension ExhibitCameraModule {
       "focusModes": [
         "auto": device.isFocusModeSupported(.continuousAutoFocus),
         "locked": device.isFocusModeSupported(.locked),
-        // Manual focus = locked + lensPosition; same support gate.
+        // Manual focus is locked plus a lens position, so the same gate.
         "manual": device.isFocusModeSupported(.locked),
       ],
       "focusPointOfInterestSupported": device.isFocusPointOfInterestSupported,
@@ -7030,9 +7016,9 @@ extension ExhibitCameraModule {
       "maxWhiteBalanceGain": Double(device.maxWhiteBalanceGain),
       "torch": [
         "available": device.hasTorch && device.isTorchAvailable,
-        // REVIEW-CHECK (EAS build fix 2): documented API ceiling is 1.0 — see
-        // the setTorchLevel note above. The device enforces its own maximum by
-        // throwing, which setTorchLevel surfaces as applied:false + native error.
+        // 1.0 is the documented ceiling — see setTorchLevel. A device
+        // enforces its own maximum by throwing, which surfaces there as
+        // applied:false with the error.
         "maxTorchLevel": device.hasTorch ? Double(1.0) as Any : NSNull(),
       ],
       "activeFormatHDRSupported": device.activeFormat.isVideoHDRSupported,
@@ -7050,13 +7036,12 @@ extension ExhibitCameraModule {
         "max": CMTimeGetSeconds(device.activeFormat.maxExposureDuration),
       ],
       "zoomRange": [
-        // min/max are the ACTIVE device's own supported range, unchanged
-        // (W2.3 keeps the field's hardware semantics). qualityCap is the
-        // app-chosen digital-quality ceiling for this device (see
-        // ExhibitZoomCaps — a quality choice, NOT a hardware limit); the
-        // UI clamps to min(max, qualityCap). switchOverFactors are the
-        // hardware hand-off points of the virtual device that contains
-        // this stack, so the UI's optical stops match them exactly.
+        // min and max are the device's own supported range. qualityCap is
+        // this app's ceiling on digital-zoom resampling — a quality
+        // choice, not a hardware limit — and the UI clamps to whichever is
+        // lower. switchOverFactors are the hand-off points of the virtual
+        // device containing this lens, so the UI's optical stops land
+        // exactly where the hardware's do.
         "min": Double(device.minAvailableVideoZoomFactor),
         "max": Double(device.maxAvailableVideoZoomFactor),
         "qualityCap": min(
@@ -7065,24 +7050,23 @@ extension ExhibitCameraModule {
         ),
         "switchOverFactors": virtualSwitchOverFactors(for: device),
       ],
-      // Per-constituent-device ceilings (W2.3): every back stack this
-      // hardware actually has, each with its hardware max AND the
-      // app-chosen quality cap. The UI picks its ceiling per lens from
-      // this; an absent lens is absent (unreached, never a zero).
+      // Every rear lens this hardware actually has, each with its hardware
+      // maximum and this app's quality cap. The UI picks its ceiling per
+      // lens from here. A lens that is not present is absent from the list,
+      // never listed with a zero.
       "lensZoomCaps": lensZoomCaps(),
       "zoomQualityNote": "qualityCap values are a conservative app-chosen ceiling for digital-zoom resampling quality — NOT hardware limits; hardwareMax is the device's own maxAvailableVideoZoomFactor",
-      // (additive): the selectable secondary stack — every rear
-      // stack present on this hardware, the current preference, and the
-      // third-view hardware probe (UNTESTED extension point; the flag is
-      // off by default — see ExhibitDebugFlags.thirdViewEnabled).
+      // Every rear lens available as a secondary, the current preference,
+      // and the third-view probe — an untested extension point, off by
+      // default.
       "secondaryLensOptions": rearStackOptions(),
       "secondaryLens": secondaryLensPreference?.rawValue ?? "auto",
       "thirdViewCapable": probeThirdViewSupport(),
     ]
   }
 
-  /// The rear stacks present on this hardware, in the bridge's lens
-  /// vocabulary ( the selectable secondary stack's option list).
+  /// The rear lenses present on this hardware, named the way the bridge
+  /// names them. This is the option list for choosing a secondary.
   private func rearStackOptions() -> [String] {
     let specs: [(String, AVCaptureDevice.DeviceType)] = [
       ("ultraWide", .builtInUltraWideCamera),
@@ -7098,11 +7082,11 @@ extension ExhibitCameraModule {
     return options
   }
 
-  /// Hardware hand-off points (W2.3): virtualDeviceSwitchOverVideoZoomFactors
-  /// of the virtual device containing the active stack. When the primary IS
-  /// a physical device (the usual case here), the factors are read from the
-  /// virtual device (triple/dual-wide/dual) at the same position. Empty
-  /// when no virtual device exists — single-stack hardware has no hand-off.
+  /// The zoom factors at which the hardware hands off between lenses, read
+  /// from the virtual device that contains the active one. When the primary
+  /// is a physical device — the usual case here — the factors come from the
+  /// virtual device at the same position. Empty where no virtual device
+  /// exists: single-lens hardware has nothing to hand off to.
   private func virtualSwitchOverFactors(for device: AVCaptureDevice) -> [Double] {
     if device.isVirtualDevice {
       return device.virtualDeviceSwitchOverVideoZoomFactors.map { $0.doubleValue }
@@ -7118,10 +7102,9 @@ extension ExhibitCameraModule {
     return []
   }
 
-  /// Per-constituent-device zoom ceilings (W2.3). Keyed by the bridge's
-  /// lens vocabulary so the UI never parses deviceType rawValues. Devices
-  /// not present are omitted entirely (absence stated by omission — the
-  /// lens inventory in listFormats is the presence source).
+  /// The zoom ceiling for each lens, keyed the way the bridge names lenses
+  /// so the UI never parses a device type string. A lens that is not
+  /// present is omitted; listFormats is where presence is stated.
   private func lensZoomCaps() -> [[String: Any]] {
     let position = facing.position
     let specs: [(String, AVCaptureDevice.DeviceType)] = [
