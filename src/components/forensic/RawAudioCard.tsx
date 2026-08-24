@@ -574,7 +574,7 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
     };
   }, [recorded, rawPcmPath, enfAnchor]);
 
-  // 0.18.5 post-field (Noah: "a way to export"): the committed master as a
+  // The committed master as a
   // standard PCM16 WAV via the OS share sheet. The CAF + its hash stay the
   // sealed artifact — the WAV is a format conversion for listening, and
   // the button says so.

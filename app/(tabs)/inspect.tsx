@@ -142,7 +142,7 @@ function verdictCopy(v: VerdictCode, ctx: VerdictContext): { headline: string; s
       }
       return {
         headline: 'Unchanged since sealing',
-        subline: 'The seal is valid. Nothing in the file identifies who made it.',
+        subline: 'The seal is valid. The signer is unknown.',
         tone: 'warn',
         icon: 'finger-print-outline',
       };
@@ -591,7 +591,7 @@ function SealRows({ report }: { report: VerificationReport }) {
   const attestDetail = !attest || !attest.present
     ? undefined
     : attest.valid
-      ? `Apple App Attest, ${attest.attestationEnv ?? 'production'} authenticator. Checked on this device, offline.`
+      ? `App Attest · ${attest.attestationEnv ?? 'production'} · checked offline.`
       : `${attest.reason ?? 'The embedded assertion did not verify'}. A genuine attestation verifies offline.`;
   const chain = c2pa?.certChain;
   // checked === false means THIS verifier could not evaluate the chain at
@@ -608,7 +608,7 @@ function SealRows({ report }: { report: VerificationReport }) {
         : `${chain.length} certificate${chain.length === 1 ? '' : 's'} · structure INVALID${chain.topSubject ? ` · top: ${chain.topSubject}` : ''}`;
   const chainFailed = !!chain && chain.length > 1 && !chain.linksValid && !chainUnchecked;
   const chainDetail = !chain || chain.length <= 1
-    ? 'The seal holds, but nothing here says who the key belongs to. Other tools will report "valid signature, untrusted issuer", which is normal for any device certificate.'
+    ? 'Nothing here says who the key belongs to.'
     : chainUnchecked
       ? `${chain.topSubject ? `Top of chain: ${chain.topSubject}. ` : ''}${chain.reason ?? 'This app cannot parse the chain.'} ${GAP_DISCLAIMER}`
       : chain.linksValid
@@ -633,11 +633,11 @@ function SealRows({ report }: { report: VerificationReport }) {
   const pqDetail = !pqAny
     ? undefined
     : pqOk
-      ? 'A second ML-DSA-65 signature, made with a software key rather than a hardware one.'
+      ? 'ML-DSA-65 · software key.'
       : 'A second ML-DSA-65 signature. The raw bytes are in the manifest under Advanced.';
   return (
     <View>
-      <LabelRow label="Signed with" value="ECDSA P-256" detail="ES256 over a COSE claim, the C2PA default." />
+      <LabelRow label="Signed with" value="ECDSA P-256" />
       {/* 0.20.4 (Noah: "I can't tell what the SDK is doing"): which pipeline
           sealed this file. The claim format version is signed content and
           cleanly discriminates — the built-in signer writes claim v1, the
@@ -648,9 +648,6 @@ function SealRows({ report }: { report: VerificationReport }) {
         <LabelRow
           label="Sealing engine"
           value={c2pa.claimVersion === 2 ? 'c2pa-swift SDK · claim v2' : 'Source Kit signer · claim v1'}
-          detail={c2pa.claimVersion === 2
-            ? 'Sealed through the upstream SDK path; the claim format version is signed content.'
-            : 'Sealed by the built-in Source Kit signer; the claim format version is signed content.'}
         />
       ) : null}
       <LabelRow
@@ -675,7 +672,7 @@ function SealRows({ report }: { report: VerificationReport }) {
         detailColor={pqAny && !pqOk ? colors.danger : undefined}
       />
       {rec ? (
-        <LabelRow label="Media SHA-256" value={rec.asset.sha256} mono detail="The fingerprint of the exact bytes that were signed." />
+        <LabelRow label="Media SHA-256" value={rec.asset.sha256} mono />
       ) : null}
     </View>
   );
@@ -1768,8 +1765,7 @@ export default function InspectScreen() {
 
                   {record?.context && (record.context.headingDeg != null || record.context.declinationDeg != null || record.context.pressureHPa != null || record.context.altitudeM != null || record.context.motion || record.context.sensorTiming) ? (
                     <View style={styles.subSection}>
-                      <Text style={styles.subHead}>Sensors</Text>
-                      <Text style={styles.helperText}>Reported by the phone. Nothing here is verified.</Text>
+                      <Text style={styles.subHead}>Sensors (Device reported)</Text>
                       {record.context.headingDeg != null ? (
                         <LabelRow label="Heading" value={`${record.context.headingDeg}° (${compass8(record.context.headingDeg)})`} />
                       ) : null}
@@ -1797,8 +1793,7 @@ export default function InspectScreen() {
                       standalone Media section is gone. */}
                   {(manifestExif && Object.keys(manifestExif.data).filter((k) => k !== 'note').length > 0) || record ? (
                     <View style={styles.subSection}>
-                      <Text style={styles.subHead}>Camera settings</Text>
-                      <Text style={styles.helperText}>Reported by the phone. Not covered by the seal.</Text>
+                      <Text style={styles.subHead}>Camera settings (Device reported)</Text>
                       {/* The sealed block's `note` key is provenance boilerplate
                           ("camera-pipeline-reported, signed as self-reported
                           metadata"), not a camera setting — never a row. The
@@ -1832,7 +1827,7 @@ export default function InspectScreen() {
                 <GroupCard
                   icon="lock-closed-outline"
                   title="Integrity"
-                  peek="How fast it was signed, how the sensors behaved, whether Face ID ran."
+                  peek="How fast it was signed and how the sensors behaved."
                   open={groupOpen.integrity}
                   onToggle={() => toggleGroup('integrity')}
                 >

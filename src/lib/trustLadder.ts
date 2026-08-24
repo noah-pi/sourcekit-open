@@ -3,10 +3,10 @@
  * Trust ladder — a pure projection of the verification
  * evidence into four named rungs:
  *
- *   bytes unchanged → signer identified → hardware-attested →
- *   time-bounded by an independent anchor
+ *   media unchanged → time confirmed by an independent anchor →
+ *   device integrity attested → signer identified
  *
- * 0.18.6 (Noah): the old rungs 2+3 ("known key" / "org-vouched") merged
+ * the old rungs 2+3 ("known key" / "org-vouched") merged
  * into ONE rung. Identity is not knowable from the file at all unless an
  * organization outside the file vouches for the key — a roster entry or a
  * trust-list accession IS the identification, and a self-asserted org root
@@ -30,20 +30,24 @@
  *   credentials themselves unreliable, so every rung above is
  *   not-applicable; changed MEDIA leaves the credentials intact, so
  *   signer, attestation, and time still evaluate.
- * - Rung 2 (signer identified) is earned only by vouching OUTSIDE the
+ * - Rung 2 is earned only by INDEPENDENT time: a pinned-authority
+ *   countersignature or a Bitcoin anchor whose block binding verified.
+ *   The device clock, unpinned TSAs, and unchecked ledger bindings are
+ *   unreached — each with its reason stated.
+ * - Rung 3 names the attestation kind, whatever evidence the file
+ *   carries. App Attest: a genuine production attestation says
+ *   "production"; a genuine DEVELOPMENT attestation is stated as a
+ *   development build and leaves the rung unreached — never red
+ *   (nothing failed), never silent (the fact is on the card). Foreign
+ *   files carry no App Attest: a signing certificate that chains to a
+ *   recognized issuer on the trust list reaches the rung with exactly
+ *   that evidence named — no hardware claim we cannot make.
+ * - Rung 4 (signer identified) is earned only by vouching OUTSIDE the
  *   file — a signed newsroom roster (with timing evaluated) or a curated
  *   trust list. A self-asserted org root names an organization without
  *   vouching for it: unreached with the out-of-band caveat attached.
  *   Roster timing red flags (signed after revocation / before membership
  *   began) are the rung's one failure.
- * - Rung 3 names the attestation environment: a genuine production
- *   attestation says "production"; a genuine DEVELOPMENT attestation is
- *   stated as a development build and leaves the rung unreached — never
- *   red (nothing failed), never silent (the fact is on the card).
- * - Rung 4 is earned only by INDEPENDENT time: a pinned-authority
- *   countersignature or a Bitcoin anchor whose block binding verified.
- *   The device clock, unpinned TSAs, and unchecked ledger bindings are
- *   unreached — each with its reason stated.
  * - The ladder never renders for files with no manifest (absence is
  *   neutral and gets its own card) — projectTrustLadder returns null.
  */
@@ -192,7 +196,7 @@ export interface LadderInput {
 
   /**
    * Local signer history — prior exhibits in THIS device's collection by
-   * the same fingerprint. Enriches rung 2's detail at the unidentified
+   * the same fingerprint. Enriches rung 4's detail at the unidentified
    * floor; NEVER promotes the rung to reached — local history is not
    * vouching. The FIELD name stays `localHand` for stored-data
    * compatibility (string values only); the display term is "signer".
@@ -211,26 +215,26 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   if (credentialsFailed) {
     bytes = {
       id: 'bytes',
-      label: 'File unchanged since signing',
+      label: 'Media unchanged since signing',
       state: 'failed',
       detail: 'The signature itself is not valid; the credentials were altered.',
     };
   } else if (mediaFailed) {
     bytes = {
       id: 'bytes',
-      label: 'File unchanged since signing',
+      label: 'Media unchanged since signing',
       state: 'failed',
       detail: 'The credentials verify, but the file no longer matches what was signed.',
     };
   } else if (input.bindingVoid === true) {
     bytes = {
       id: 'bytes',
-      label: 'File unchanged since signing',
+      label: 'Media unchanged since signing',
       state: 'unreached',
       detail: 'The seal’s own rules exclude the file from what it covers, so the signature proves nothing about the content.',
     };
   } else if (input.signatureValid === true && input.assetHashMatches === true && input.fingerprintMatches !== false) {
-    // 0.22.0 (field finding, third-party C2PA files): fingerprintMatches is
+    // fingerprintMatches is
     // OUR device-key binding — null for every foreign file, which used to
     // force 'unreached' even when the COSE signature and the asset hash
     // both verified (the adobe-20220124-C.JPG all-grey rungs). A null
@@ -238,14 +242,14 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
     // still fails via credentialsFailed above.
     bytes = {
       id: 'bytes',
-      label: 'File unchanged since signing',
+      label: 'Media unchanged since signing',
       state: 'reached',
       detail: 'The signature is valid, and the file is byte-for-byte what was signed.',
     };
   } else {
     bytes = {
       id: 'bytes',
-      label: 'File unchanged since signing',
+      label: 'Media unchanged since signing',
       state: 'unreached',
       detail: 'This app could not finish checking the seal.',
     };
@@ -263,14 +267,14 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
     });
     return finishLadder([
       bytes,
+      blocked('time', 'Time confirmed by independent anchor'),
+      blocked('hardware', 'Device integrity attested'),
       blocked('known-key', 'Signer identified'),
-      blocked('hardware', 'Key attested by Apple hardware'),
-      blocked('time', 'Time bracketed by an independent anchor'),
     ]);
   }
 
-  // --- Rung 2: signer identified -------------------------------------------
-  // 0.18.6 (Noah): one rung, because identification and accession are one
+  // --- Rung 4: signer identified -------------------------------------------
+  // one rung, because identification and accession are one
   // fact — the file alone can never name a signer; only vouching OUTSIDE
   // the file (a roster with timing evaluated, or a curated trust list)
   // identifies anyone. A self-asserted org root is NOT identification.
@@ -334,16 +338,16 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
     };
   }
 
-  // --- Rung 3: hardware-attested -------------------------------------------
+  // --- Rung 3: device integrity attested -------------------------------------------
   let hardware: RungDraft;
   if (input.hardwareNotApplicable === 'deidentified') {
     hardware = {
-      id: 'hardware', label: 'Key attested by Apple hardware', state: 'not-applicable',
+      id: 'hardware', label: 'Device integrity attested', state: 'not-applicable',
       detail: 'Not applicable to de-identified copies: they are signed with a fresh one-time key.',
     };
   } else if (input.hardwareNotApplicable === 'assignment') {
     hardware = {
-      id: 'hardware', label: 'Key attested by Apple hardware', state: 'not-applicable',
+      id: 'hardware', label: 'Device integrity attested', state: 'not-applicable',
       detail: 'Not applicable to assignment keys: no hardware attestation.',
     };
   } else if (input.appAttest.valid && input.appAttest.attestationEnv === 'development') {
@@ -352,29 +356,42 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
     // hardware and the key, but a development build is not the shipping
     // app — the rung stays unreached with the fact stated.
     hardware = {
-      id: 'hardware', label: 'Key attested by Apple hardware', state: 'unreached',
+      id: 'hardware', label: 'Device integrity attested', state: 'unreached',
       detail: 'Verified against Apple’s root, but issued by a development build rather than a shipped app.',
     };
   } else if (input.appAttest.valid) {
     hardware = {
-      id: 'hardware', label: 'Key attested by Apple hardware', state: 'reached',
+      id: 'hardware', label: 'Device integrity attested', state: 'reached',
       detail: input.appAttest.attestationEnv === 'production'
         ? "App Attest checked against Apple's root, offline · production environment."
         : "App Attest checked against Apple's root, offline.",
     };
   } else if (input.appAttest.present) {
     hardware = {
-      id: 'hardware', label: 'Key attested by Apple hardware', state: 'failed',
+      id: 'hardware', label: 'Device integrity attested', state: 'failed',
       detail: 'An attestation is present but failed verification; a genuine one verifies offline.',
+    };
+  } else if (input.orgChain?.linksValid && input.tier === 'trust-list') {
+    // rung 3 is "device integrity attested", not "App
+    // Attest present". Foreign files (Pixel, Canon, newsroom cameras…)
+    // carry no App Attest at all; when the signing certificate chains to
+    // a recognized issuer on the trust list, that chain IS the integrity
+    // evidence the file carries — reached, with exactly that evidence
+    // named and no hardware claim we cannot make. Placed after the App
+    // Attest branches so a failed attestation still fails the rung and a
+    // valid one still wins.
+    hardware = {
+      id: 'hardware', label: 'Device integrity attested', state: 'reached',
+      detail: `No App Attest in this file — the signing certificate chains to ${input.orgChain.topSubject ?? 'a recognized issuer'} on the ${input.trustListName ?? 'curated trust list'}.`,
     };
   } else {
     hardware = {
-      id: 'hardware', label: 'Key attested by Apple hardware', state: 'unreached',
+      id: 'hardware', label: 'Device integrity attested', state: 'unreached',
       detail: 'No attestation in this file.',
     };
   }
 
-  // --- Rung 4: time-bounded --------------------------------------------------
+  // --- Rung 2: time-bounded --------------------------------------------------
   // Independent anchors only. A FAILED attached token is tamper evidence and
   // fails the rung; unpinned tokens and unchecked bindings are unreached
   // with their reasons stated. Tokens the verifier could not EVALUATE
@@ -388,51 +405,51 @@ export function projectTrustLadder(input: LadderInput): TrustLadder | null {
   let time: RungDraft;
   if (checkedFailures > 0 || input.ots === 'invalid') {
     time = {
-      id: 'time', label: 'Time backed by an independent source', state: 'failed',
+      id: 'time', label: 'Time confirmed by independent anchor', state: 'failed',
       detail: input.ots === 'invalid'
         ? 'A ledger receipt failed verification.'
         : 'An attached timestamp token failed verification.',
     };
   } else if (t.trusted > 0 && input.ots === 'confirmed-verified') {
     time = {
-      id: 'time', label: 'Time backed by an independent source', state: 'reached',
+      id: 'time', label: 'Time confirmed by independent anchor', state: 'reached',
       detail: 'Countersigned by a recognized authority and anchored in a Bitcoin block.',
     };
   } else if (t.trusted > 0) {
     time = {
-      id: 'time', label: 'Time backed by an independent source', state: 'reached',
+      id: 'time', label: 'Time confirmed by independent anchor', state: 'reached',
       detail: 'Countersigned by a pinned time authority.',
     };
   } else if (input.ots === 'confirmed-verified') {
     time = {
-      id: 'time', label: 'Time backed by an independent source', state: 'reached',
+      id: 'time', label: 'Time confirmed by independent anchor', state: 'reached',
       detail: 'Anchored in a Bitcoin block; binding verified.',
     };
   } else if (t.valid > 0) {
     time = {
-      id: 'time', label: 'Time backed by an independent source', state: 'unreached',
+      id: 'time', label: 'Time confirmed by independent anchor', state: 'unreached',
       detail: 'The timestamp is genuine. This app does not recognize the authority that issued it, so it does not anchor time.' + uncheckedNote,
     };
   } else if (input.ots === 'confirmed-unchecked') {
     time = {
-      id: 'time', label: 'Time backed by an independent source', state: 'unreached',
+      id: 'time', label: 'Time confirmed by independent anchor', state: 'unreached',
       detail: 'Bitcoin anchor confirmed on-chain; the block binding was not checked here.' + uncheckedNote,
     };
   } else if (input.ots === 'pending') {
     time = {
-      id: 'time', label: 'Time backed by an independent source', state: 'unreached',
+      id: 'time', label: 'Time confirmed by independent anchor', state: 'unreached',
       detail: 'Submitted to the Bitcoin calendars, awaiting confirmation. Device clock only for now.' + uncheckedNote,
     };
   } else {
     time = {
-      id: 'time', label: 'Time backed by an independent source', state: 'unreached',
+      id: 'time', label: 'Time confirmed by independent anchor', state: 'unreached',
       detail: (uncheckedTokens > 0
         ? `${uncheckedTokens} attached timestamp token(s) could not be evaluated by this verifier; device clock only until an anchor verifies.`
         : 'Device clock only · no independent anchor.'),
     };
   }
 
-  return finishLadder([bytes, knownKey, hardware, time]);
+  return finishLadder([bytes, time, hardware, knownKey]);
 }
 
 /** The sentence that travels with the card in every cropped screenshot. */

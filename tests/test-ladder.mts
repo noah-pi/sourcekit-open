@@ -41,6 +41,20 @@ const base: LadderInput = {
 };
 const over = (patch: Partial<LadderInput>): LadderInput => ({ ...base, ...patch });
 
+// Rungs are addressed by id, never by position: the ladder's ORDER is a
+// presentation choice and has changed, but which evidence backs which rung
+// is the thing these checks are about.
+type Ladder = NonNullable<ReturnType<typeof projectTrustLadder>>;
+const rung = (l: Ladder, id: string) => {
+  const r = l.rungs.find((x) => x.id === id);
+  if (!r) throw new Error(`no rung with id ${id}`);
+  return r;
+};
+const bytes = (l: Ladder) => rung(l, 'bytes');
+const signer = (l: Ladder) => rung(l, 'known-key');
+const hardware = (l: Ladder) => rung(l, 'hardware');
+const timeRung = (l: Ladder) => rung(l, 'time');
+
 // --- 1. the full ladder ---------------------------------------------------
 {
   const l = projectTrustLadder(base)!;
@@ -48,88 +62,88 @@ const over = (patch: Partial<LadderInput>): LadderInput => ({ ...base, ...patch 
   check('base: highest reached is rung 4 (ring target)', l.highestReached === 3);
   check('base: nothing failed', l.anyFailed === false);
   check('base: rung order matches the plan vocabulary',
-    l.rungs.map((r) => r.id).join(',') === 'bytes,known-key,hardware,time');
+    l.rungs.map((r) => r.id).join(',') === 'bytes,time,hardware,known-key');
   check('base: rung labels are the short checkable names',
     l.rungs.map((r) => r.label).join(' | ') ===
     // The signer rung merges known-key and org-vouched: a roster entry or
     // trust-list accession is the identification.
-    'File unchanged since signing | Signer identified | Key attested by Apple hardware | Time backed by an independent source');
-  check('base: double anchor says "both sides"', l.rungs[3].detail.includes('Countersigned by a recognized authority') && l.rungs[3].detail.includes('Bitcoin block'));
+    'Media unchanged since signing | Time confirmed by independent anchor | Device integrity attested | Signer identified');
+  check('base: double anchor says "both sides"', timeRung(l).detail.includes('Countersigned by a recognized authority') && timeRung(l).detail.includes('Bitcoin block'));
 }
 
 // --- 4. time rung: independent anchors only --------------------------------
 {
   const trustedOnly = projectTrustLadder(over({ ots: 'none' }))!;
-  check('time: pinned TSA alone reaches', trustedOnly.rungs[3].state === 'reached');
-  check('time: single anchor does NOT claim both sides', !trustedOnly.rungs[3].detail.includes('Bitcoin'));
+  check('time: pinned TSA alone reaches', timeRung(trustedOnly).state === 'reached');
+  check('time: single anchor does NOT claim both sides', !timeRung(trustedOnly).detail.includes('Bitcoin'));
 
   const ledgerOnly = projectTrustLadder(over({ timestamps: { present: 0, valid: 0, trusted: 0 } }))!;
-  check('time: verified Bitcoin anchor alone reaches', ledgerOnly.rungs[3].state === 'reached' && ledgerOnly.rungs[3].detail.includes('Bitcoin'));
+  check('time: verified Bitcoin anchor alone reaches', timeRung(ledgerOnly).state === 'reached' && timeRung(ledgerOnly).detail.includes('Bitcoin'));
 
   const unpinned = projectTrustLadder(over({ timestamps: { present: 1, valid: 1, trusted: 0 }, ots: 'none' }))!;
-  check('time: unpinned TSA is unreached, named', unpinned.rungs[3].state === 'unreached' && unpinned.rungs[3].detail.includes('does not recognize the authority'));
+  check('time: unpinned TSA is unreached, named', timeRung(unpinned).state === 'unreached' && timeRung(unpinned).detail.includes('does not recognize the authority'));
 
   const failedToken = projectTrustLadder(over({ timestamps: { present: 2, valid: 1, trusted: 1 }, ots: 'none' }))!;
-  check('time: a FAILED attached token fails the rung', failedToken.rungs[3].state === 'failed' && failedToken.anyFailed);
+  check('time: a FAILED attached token fails the rung', timeRung(failedToken).state === 'failed' && failedToken.anyFailed);
 
   const badLedger = projectTrustLadder(over({ ots: 'invalid' }))!;
-  check('time: invalid ledger receipt fails the rung', badLedger.rungs[3].state === 'failed');
+  check('time: invalid ledger receipt fails the rung', timeRung(badLedger).state === 'failed');
 
   const pending = projectTrustLadder(over({ timestamps: { present: 0, valid: 0, trusted: 0 }, ots: 'pending' }))!;
-  check('time: pending ledger is unreached ("awaiting confirmation")', pending.rungs[3].state === 'unreached' && pending.rungs[3].detail.includes('awaiting confirmation'));
+  check('time: pending ledger is unreached ("awaiting confirmation")', timeRung(pending).state === 'unreached' && timeRung(pending).detail.includes('awaiting confirmation'));
 
   const unchecked = projectTrustLadder(over({ timestamps: { present: 0, valid: 0, trusted: 0 }, ots: 'confirmed-unchecked' }))!;
-  check('time: confirmed-but-unchecked ledger is unreached, says so', unchecked.rungs[3].state === 'unreached' && unchecked.rungs[3].detail.includes('not checked'));
+  check('time: confirmed-but-unchecked ledger is unreached, says so', timeRung(unchecked).state === 'unreached' && timeRung(unchecked).detail.includes('not checked'));
 
   const clockOnly = projectTrustLadder(over({ timestamps: { present: 0, valid: 0, trusted: 0 }, ots: 'none' }))!;
-  check('time: device clock only is unreached', clockOnly.rungs[3].state === 'unreached' && clockOnly.rungs[3].detail.includes('Device clock'));
+  check('time: device clock only is unreached', timeRung(clockOnly).state === 'unreached' && timeRung(clockOnly).detail.includes('Device clock'));
 }
 
 // --- 3. signer rungs: outside vouching only --------------------------------
 {
   const unknown = projectTrustLadder(over({ tier: 'unknown', rosterState: null, rosterNewsroom: null, orgChain: null }))!;
-  check('signer: unknown key is unreached, NEVER failed', unknown.rungs[1].state === 'unreached' && unknown.rungs[1].detail.includes('vouches for itself and nothing else'));
-  check('signer: unknown key leaves org-vouching unreached', unknown.rungs[1].state === 'unreached');
+  check('signer: unknown key is unreached, NEVER failed', signer(unknown).state === 'unreached' && signer(unknown).detail.includes('vouches for itself and nothing else'));
+  check('signer: unknown key leaves org-vouching unreached', signer(unknown).state === 'unreached');
 
   const own = projectTrustLadder(over({ tier: 'this-device', rosterState: null, rosterNewsroom: null, orgChain: null }))!;
   // Recognizing this device's own key is not identification, so rung 2 stays
   // unreached until something outside the file vouches for the signer.
   check('signer: this-device never reaches rung 2 (self-recognition is not vouching)',
-    own.rungs[1].state === 'unreached' && own.rungs[1].detail.includes("this device's own key"));
-  check('signer: this-device names what is missing', own.rungs[1].detail.includes('Nothing outside the file vouches'));
+    signer(own).state === 'unreached' && signer(own).detail.includes("this device's own key"));
+  check('signer: this-device names what is missing', signer(own).detail.includes('Nothing outside the file vouches'));
 
   const org = projectTrustLadder(over({ tier: 'org', rosterState: null, rosterNewsroom: null }))!;
   // A self-asserted root names an organization without identifying anyone,
   // so the merged signer rung stays unreached with the reason.
-  check('signer: self-asserted org root does NOT reach', org.rungs[1].state === 'unreached' && org.rungs[1].detail.includes('nobody outside the file confirms that name'));
-  check('signer: org root names the out-of-band step', org.rungs[1].detail.includes('Ask the organization for their fingerprint'));
+  check('signer: self-asserted org root does NOT reach', signer(org).state === 'unreached' && signer(org).detail.includes('nobody outside the file confirms that name'));
+  check('signer: org root names the out-of-band step', signer(org).detail.includes('Ask the organization for their fingerprint'));
 
   const list = projectTrustLadder(over({ tier: 'trust-list', rosterState: null, rosterNewsroom: null, trustListName: 'C2PA curated list' }))!;
-  check('signer: a curated trust list reaches the signer rung', list.rungs[1].state === 'reached' && list.rungs[1].detail.includes('trust list'));
+  check('signer: a curated trust list reaches the signer rung', signer(list).state === 'reached' && signer(list).detail.includes('trust list'));
 
   const revoked = projectTrustLadder(over({ rosterState: 'revoked' }))!;
-  check('signer: signed-after-revocation FAILS rung 3', revoked.rungs[1].state === 'failed' && revoked.rungs[1].detail.includes('revoked') && revoked.anyFailed);
+  check('signer: signed-after-revocation FAILS rung 3', signer(revoked).state === 'failed' && signer(revoked).detail.includes('revoked') && revoked.anyFailed);
 
   const tooEarly = projectTrustLadder(over({ rosterState: 'not-yet-valid' }))!;
-  check('signer: signed-before-membership FAILS rung 3', tooEarly.rungs[1].state === 'failed' && tooEarly.rungs[1].detail.includes('before'));
+  check('signer: signed-before-membership FAILS rung 3', signer(tooEarly).state === 'failed' && signer(tooEarly).detail.includes('before'));
 
   const laterRevoked = projectTrustLadder(over({ rosterState: 'active-then-revoked' }))!;
-  check('signer: capture predating a later revocation stays reached', laterRevoked.rungs[1].state === 'reached' && laterRevoked.rungs[1].detail.includes('predates'));
+  check('signer: capture predating a later revocation stays reached', signer(laterRevoked).state === 'reached' && signer(laterRevoked).detail.includes('predates'));
 
   const expired = projectTrustLadder(over({ rosterState: 'expired' }))!;
-  check('signer: expired membership is unreached, named', expired.rungs[1].state === 'unreached' && expired.rungs[1].detail.includes('expired'));
+  check('signer: expired membership is unreached, named', signer(expired).state === 'unreached' && signer(expired).detail.includes('expired'));
 
   const unknownTime = projectTrustLadder(over({ rosterState: 'unknown-time' }))!;
-  check('signer: unevaluable membership is unreached, named', unknownTime.rungs[1].state === 'unreached' && unknownTime.rungs[1].detail.includes('cannot tell whether they were still a member'));
+  check('signer: unevaluable membership is unreached, named', signer(unknownTime).state === 'unreached' && signer(unknownTime).detail.includes('cannot tell whether they were still a member'));
 }
 
 // --- 2. integrity failure splits -------------------------------------------
 {
   const creds = projectTrustLadder(over({ verdict: 'SIGNATURE_INVALID', signatureValid: false }))!;
-  check('integrity: broken signature fails rung 1', creds.rungs[0].state === 'failed');
+  check('integrity: broken signature fails rung 1', bytes(creds).state === 'failed');
   check('integrity: broken credentials block ALL rungs above',
     creds.rungs.slice(1).every((r) => r.state === 'not-applicable'));
-  check('integrity: blocked rungs say why', creds.rungs[1].detail.includes('the seal itself did not verify'));
+  check('integrity: blocked rungs say why', signer(creds).detail.includes('the seal itself did not verify'));
   check('integrity: nothing rings when credentials fail', creds.highestReached === -1 && creds.anyFailed);
 
   const fpBad = projectTrustLadder(over({ fingerprintMatches: false }))!;
@@ -138,44 +152,44 @@ const over = (patch: Partial<LadderInput>): LadderInput => ({ ...base, ...patch 
 
   const media = projectTrustLadder(over({ verdict: 'CONTENT_MODIFIED', assetHashMatches: false }))!;
   check('integrity: changed media fails rung 1 with its own detail',
-    media.rungs[0].state === 'failed' && media.rungs[0].detail.includes('no longer matches'));
+    bytes(media).state === 'failed' && bytes(media).detail.includes('no longer matches'));
   check('integrity: changed media leaves the signer rungs LIVE',
-    media.rungs[1].state === 'reached' && media.rungs[1].state === 'reached');
+    signer(media).state === 'reached' && signer(media).state === 'reached');
 
   const partial = projectTrustLadder(over({ signatureValid: null, fingerprintMatches: null, assetHashMatches: null }))!;
   check('integrity: incomplete verification is unreached, not failed',
-    partial.rungs[0].state === 'unreached' && partial.rungs[0].detail.includes('could not finish checking the seal') && !partial.anyFailed);
+    bytes(partial).state === 'unreached' && bytes(partial).detail.includes('could not finish checking the seal') && !partial.anyFailed);
 }
 
 // --- 1. hardware rung states ------------------------------------------------
 {
   const badAttest = projectTrustLadder(over({ appAttest: { present: true, valid: false } }))!;
-  check('hardware: attestation present-but-invalid FAILS', badAttest.rungs[2].state === 'failed');
+  check('hardware: attestation present-but-invalid FAILS', hardware(badAttest).state === 'failed');
 
   const deid = projectTrustLadder(over({ appAttest: { present: false, valid: false }, hardwareNotApplicable: 'deidentified' }))!;
   check('hardware: de-identified copy is not-applicable, reason named',
-    deid.rungs[2].state === 'not-applicable' && deid.rungs[2].detail.includes('one-time key'));
+    hardware(deid).state === 'not-applicable' && hardware(deid).detail.includes('one-time key'));
 
   const none = projectTrustLadder(over({ appAttest: { present: false, valid: false } }))!;
-  check('hardware: absent attestation is unreached, neutral', none.rungs[2].state === 'unreached');
+  check('hardware: absent attestation is unreached, neutral', hardware(none).state === 'unreached');
 
   // The attestation environment is named; a dev attestation is neither
   // failed nor shown as production.
   const prod = projectTrustLadder(over({ appAttest: { present: true, valid: true, attestationEnv: 'production' } }))!;
   check('hardware: production attestation reaches and names production',
-    prod.rungs[2].state === 'reached' && prod.rungs[2].detail.includes('production'));
+    hardware(prod).state === 'reached' && hardware(prod).detail.includes('production'));
 
   const dev = projectTrustLadder(over({ appAttest: { present: true, valid: true, attestationEnv: 'development' } }))!;
   check('hardware: genuine DEVELOPMENT attestation is never red, never silent',
-    dev.rungs[2].state !== 'failed' && dev.rungs[2].detail.includes('development build'));
+    hardware(dev).state !== 'failed' && hardware(dev).detail.includes('development build'));
   check('hardware: development attestation does not reach the production rung',
-    dev.rungs[2].state === 'unreached');
+    hardware(dev).state === 'unreached');
 
   const envUnknown = projectTrustLadder(over({ appAttest: { present: true, valid: true, attestationEnv: null } }))!;
   // 'verified' is banned in status positions (audit B8), so this pin tracks
   // the replacement string.
   check('hardware: unknown environment stays backward compatible (reached, ban-list wording)',
-    envUnknown.rungs[2].state === 'reached' && envUnknown.rungs[2].detail.includes("App Attest checked against Apple's root, offline"));
+    hardware(envUnknown).state === 'reached' && hardware(envUnknown).detail.includes("App Attest checked against Apple's root, offline"));
 }
 
 // --- 5. absence + the limits sentence ---------------------------------------
@@ -191,11 +205,11 @@ const over = (patch: Partial<LadderInput>): LadderInput => ({ ...base, ...patch 
 // reason, upper rungs stay live.
 {
   const l = projectTrustLadder(over({ assetHashMatches: null, bindingVoid: true }));
-  const b = l!.rungs[0];
+  const b = bytes(l!);
   check('void binding: rung 1 unreached, not failed',
     b.state === 'unreached' && !!b.detail && b.detail.includes('exclude the file from what it covers'));
   check('void binding: rungs above still evaluate',
-    l!.rungs[1].state === 'reached' && l!.rungs[3].state === 'reached');
+    signer(l!).state === 'reached' && timeRung(l!).state === 'reached');
 }
 
 // "Known hand": local collection history adds detail to rung 2 at the
@@ -206,17 +220,17 @@ const over = (patch: Partial<LadderInput>): LadderInput => ({ ...base, ...patch 
     tier: 'unknown', rosterState: null, rosterNewsroom: null, orgChain: null, localHand: hist,
   }))!;
   check('known hand: rung 2 stays UNREACHED (local history is not vouching)',
-    l.rungs[1].state === 'unreached');
+    signer(l).state === 'unreached');
   check('known hand: detail states the count and the device-local scope',
-    l.rungs[1].detail.includes('5 exhibits') && l.rungs[1].detail.includes('on this device'));
+    signer(l).detail.includes('5 exhibits') && signer(l).detail.includes('on this device'));
   check('known hand: detail still says local history is not vouching',
-    l.rungs[1].detail.includes('local history, not vouching'));
+    signer(l).detail.includes('local history, not vouching'));
 
   const noHist = projectTrustLadder(over({
     tier: 'unknown', rosterState: null, rosterNewsroom: null, orgChain: null, localHand: null,
   }))!;
   check('no history: the mint-a-key caveat stands alone',
-    noHist.rungs[1].detail.includes('Anyone can make a key in a second') && !noHist.rungs[1].detail.includes('known signer'));
+    signer(noHist).detail.includes('Anyone can make a key in a second') && !signer(noHist).detail.includes('known signer'));
 }
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
