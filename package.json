@@ -38,7 +38,7 @@
     "jpeg-js": "^0.4.4",
     "react": "19.2.3",
     "react-native": "0.87.0",
-    "react-native-safe-area-context": "~5.7.0",
+    "react-native-safe-area-context": "~5.9.1",
     "react-native-screens": "~4.27.0",
     "zustand": "^5.0.14"
   },
