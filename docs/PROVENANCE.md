@@ -7,9 +7,9 @@ epistemology anyway. So here's what actually holds the code to account.
 
 ## The test lab
 
-29 suites, 791 checks, all runnable offline against the real shipping code.
-Device-service imports are rewired to documented shims; every cryptographic
-operation runs as shipped.
+30 suites, all runnable offline against the real shipping code. Device-service
+imports are rewired to documented shims; every cryptographic operation runs as
+shipped.
 
 The suites include regression tests for real attacks: a self-issued "O=Reuters"
 certificate, forged App Attest assertions, tampered RFC 3161 tokens, manifest
@@ -19,6 +19,28 @@ transplants, truncations. See README ▸ Run the lab.
 c2patool, the C2PA reference implementation, with its own chain and its own
 claim generator. Everything else in the lab verifies media this code signed,
 which cannot show that the reader handles a stranger's output.
+
+## What the lab does not reach
+
+The shims that let every cryptographic operation run offline are also a wall.
+Nothing below the TypeScript layer is tested here, and the gap is not small:
+
+- **The native modules are never compiled.** Around 13,500 lines of Swift
+  across `modules/`, and no job in this repository runs a Swift compiler, a
+  parser, or a linter against any of it. Type errors, API misuse, and bad
+  selectors are caught by a device build, by hand, after the fact.
+- **The camera is never exercised.** `tests/shims/` replaces every native
+  import, so session lifecycle, capture, the ring buffer, and the sensor
+  sinks are absent from the lab by construction. The crash class this app
+  has actually shipped — an AVFoundation session deallocating while a
+  preview layer still references it — is invisible to all 30 suites and
+  would be invisible to a compiler too.
+- **The Secure Enclave and App Attest run against shims.** The verification
+  math is tested against real fixtures; the hardware paths are not.
+
+What covers that ground instead is an on-device soak run and a device build,
+both manual. That is weaker than the checks above, and it is worth knowing
+which half of this system each claim is about.
 
 ## An independent verifier
 

@@ -34,7 +34,13 @@ npm test                                   # every suite
 `npm test` stages the lab and runs all of it. `node tests/run-all.mjs <name>`
 runs the subset whose filename matches, which is faster while you iterate.
 
-The README has more on the lab.
+The README has more on the lab, and
+[`docs/PROVENANCE.md`](docs/PROVENANCE.md) says what the lab does not reach —
+the native modules are not compiled by anything here.
+
+If you are touching verification, sealing, or the network surface, read
+[`docs/INVARIANTS.md`](docs/INVARIANTS.md) first. It lists the rules that must
+not regress, each with the reason and the test that guards it.
 
 ## Security
 

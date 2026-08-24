@@ -13,6 +13,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useStore } from '../src/store/useStore';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { hasPasscode } from '../src/vault/passcode';
 import { ensureVaultDirs, wipePlainCache, releaseVaultKeyIfIdle } from '../src/vault/vaultFs';
 import { startBarometerFeed } from '../src/sensors/context';
@@ -150,6 +151,7 @@ export default function RootLayout() {
     <SafeAreaProvider key={scheme}>
       {/* Status-bar ink follows the effective scheme, not the OS alone. */}
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <ErrorBoundary>
       <Stack
         screenOptions={{
           headerShown: false,
@@ -161,12 +163,12 @@ export default function RootLayout() {
         <Stack.Screen name="lock" />
         <Stack.Screen name="set-passcode" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="(tabs)" />
-        {/* 0.18.6 field fix: the screen-edge swipe-back gesture was
-            stealing horizontal drags from the compare sliders on this
-            screen ("dragging horizontally closed the detail view"). The
+        {/* The screen-edge swipe-back gesture steals horizontal drags from
+            the compare sliders on this screen, so it is off here. The
             Exhibits back button stays the way out. */}
         <Stack.Screen name="asset/[id]" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
       </Stack>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }
