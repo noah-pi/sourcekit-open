@@ -173,8 +173,10 @@ registry, never from `layer.session` — that getter can read nil or stale while
 Fig still considers the layer attached.
 
 `modules/exhibit-camera/ios/ExhibitCameraModule.swift` · guarded by a debug
-assertion and the on-device soak run. `ios-build` compiles this file but
-cannot exercise it: multi-cam needs real hardware.
+assertion, and exercised by **Settings ▸ Diagnostics ▸ Run soak**
+(`src/lib/sessionSoak.ts`): forty open-and-close cycles alternating cameras.
+`ios-build` compiles this file but cannot exercise it — multi-cam needs real
+hardware, so the soak is the only check that reaches this rule.
 
 ### Expo async functions that block declare their own queue
 

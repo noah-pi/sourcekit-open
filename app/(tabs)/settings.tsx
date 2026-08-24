@@ -72,6 +72,7 @@ import { downgradeVaultKeyAcl } from '../../src/vault/vaultFs';
 import { pqEnrollmentInfo } from '../../src/lib/pqKeyStore';
 import { destroyVault } from '../../src/vault/vaultFs';
 import { subscribeDiagnostics, clearDiagnostics, logDiagnostic, type DiagnosticEvent } from '../../src/lib/diagnosticsLog';
+import { runSessionSoak, describeSoak, type SoakReport } from '../../src/lib/sessionSoak';
 import { getExhibitDebugFlags, setExhibitDebugFlag, type ExhibitDebugFlagKey, type ExhibitDebugFlags } from '../../src/lib/exhibitCamera';
 
 /** Fingerprint of the plain Enclave signing key — the key attestation binds. */
@@ -128,6 +129,10 @@ export default function SettingsScreen() {
   // The diagnostics log: the record of capture/seal events that toasts
   // can't be (they fade; this persists).
   const [diagnostics, setDiagnostics] = useState<DiagnosticEvent[]>([]);
+  // Session soak: cycles run so far, and the report when it stops.
+  const [soakProgress, setSoakProgress] = useState<number | null>(null);
+  const [soakResult, setSoakResult] = useState<SoakReport | null>(null);
+  const soakCancel = useRef(false);
   // Wave-7 isolation switches — null until the native flags are read.
   const [debugFlags, setDebugFlags] = useState<ExhibitDebugFlags | null>(null);
 
@@ -982,6 +987,59 @@ export default function SettingsScreen() {
               </View>
             ))
           )}
+          {/* Session soak. The camera's failure mode is an ordering bug
+              between queues, so it only appears when a session is really
+              built and torn down, repeatedly, on real hardware. Nothing in
+              CI reaches it: the suites shim every native import and the
+              compile gate cannot see a lifetime. This is the check that
+              can. */}
+          <View style={styles.soakBlock}>
+            <Text style={styles.rowTitle}>Session soak</Text>
+            <Text style={styles.rowDetail}>
+              Opens and closes the camera 40 times, alternating front and back. On a debug build the
+              native checks stop the app the moment a preview layer outlives its session, which is the
+              point: it fails here instead of in the field. Background and foreground the app while it
+              runs to cover the other path.
+            </Text>
+            {soakProgress !== null ? (
+              <Text style={styles.rowDetail}>{`Running — ${soakProgress} of 40 cycles`}</Text>
+            ) : soakResult ? (
+              <Text style={[styles.rowDetail, soakResult.stoppedBy ? { color: colors.danger } : { color: colors.accent }]}>
+                {describeSoak(soakResult)}
+              </Text>
+            ) : null}
+            <View style={styles.rowButtons}>
+              {soakProgress === null ? (
+                <Button
+                  small
+                  tone="secondary"
+                  icon="repeat-outline"
+                  label="Run soak"
+                  onPress={() => {
+                    soakCancel.current = false;
+                    setSoakResult(null);
+                    setSoakProgress(0);
+                    void runSessionSoak({
+                      cycles: 40,
+                      onCycle: (c) => setSoakProgress(c.index + 1),
+                      shouldStop: () => soakCancel.current,
+                    })
+                      .then((r) => setSoakResult(r))
+                      .catch((e) =>
+                        setSoakResult({
+                          completed: 0, requested: 40, slowestOpenMs: 0, slowestCloseMs: 0, totalMs: 0,
+                          stoppedBy: e instanceof Error ? e.message : String(e),
+                        }),
+                      )
+                      .finally(() => setSoakProgress(null));
+                  }}
+                />
+              ) : (
+                <Button small tone="secondary" icon="stop-outline" label="Stop" onPress={() => { soakCancel.current = true; }} />
+              )}
+            </View>
+          </View>
+
           {diagnostics.length > 0 ? (
             <View style={styles.rowButtons}>
               <Button small tone="secondary" icon="trash-outline" label="Clear" onPress={clearDiagnostics} />
@@ -1151,6 +1209,7 @@ const buildStyles = () => StyleSheet.create({
   registryToggle: { color: colors.textDim, fontSize: fontSize.xs, fontWeight: '600', marginTop: spacing.sm },
   attestPanel: { marginTop: spacing.sm },
   rowButtons: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.sm },
+  soakBlock: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderSoft },
   deviceLine: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: spacing.md, marginBottom: spacing.xs },
   aliasHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   optionalTag: {

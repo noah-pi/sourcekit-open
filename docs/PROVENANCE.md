@@ -40,7 +40,14 @@ and compiling is not the same as testing:
   sinks are absent from the lab by construction. The crash class this app
   has actually shipped — an AVFoundation session deallocating while a
   preview layer still references it — is invisible to all 30 suites and to
-  the compiler alike. Multi-cam needs real hardware; a simulator will not do.
+  the compiler alike, because it is an ordering bug rather than a wrong
+  value. Multi-cam needs real hardware; a simulator will not do.
+
+  What reaches it instead is **Settings ▸ Diagnostics ▸ Run soak**: forty
+  open-and-close cycles alternating cameras, with the native assertions
+  armed. On a debug build it stops the app on the cycle that breaks the
+  rule. A person holding a phone runs that, and it is the only check there
+  is.
 - **The whole app is never built here.** `ios-build` compiles the local
   modules, not the application target. Expo's JavaScript-engine bridge does
   not compile on the Xcode versions these runners carry, so the app build
