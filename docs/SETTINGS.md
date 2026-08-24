@@ -96,12 +96,11 @@ always land.
 
 ## Which code seals a capture
 
-- **Seal with the C2PA SDK** — signs photos and videos with
-  [c2pa-swift](https://github.com/contentauth/c2pa-swift) instead of this app's
-  own builder, then reads the result back through the verifier a recipient
-  runs; anything that fails is sealed the original way instead. Audio and PNG
-  always use this app's builder. Diagnostics names which path sealed each
-  capture. Off by default.
+Not a setting. Photos and videos are signed by
+[c2pa-swift](https://github.com/contentauth/c2pa-swift); audio and PNG are
+signed by this app's own COSE/JUMBF builder. Verification always runs this
+app's own code, whichever path sealed the capture. Diagnostics names the path
+for each one.
 
 ## Trust
 
