@@ -4782,8 +4782,8 @@ extension ExhibitCameraModule {
     // recording started is the one a reviewer always looks at.
     self.lastPairDumpAt = .distantPast
     self.videoStartDate = Date()
-    // IMU sink (0.15): the recording window starts NOW on the mach/boot
-    // clock — the same clock the ring's sample timestamps ride, so stopVideo
+    // The recording window starts now on the boot clock — the same clock
+    // the motion ring's samples ride, so stopVideo
     // slices [this instant, stop instant] with no conversion. The logger
     // itself started at configureSession (CoreMotion is capture-graph
     // independent) and simply keeps running through the take.
@@ -4794,10 +4794,9 @@ extension ExhibitCameraModule {
       self?.handleAudioSample(buffer)
     }
 
-    // Resolve immediately: the session was already proven live by
-    // configureSession's first-frame watchdog. Writer failures surface via
-    // onSessionError (E_WRITER) and the stopVideo payload — delivery never
-    // dies silently.
+    // Resolve now: configureSession's first-frame watchdog already proved
+    // the session live. A writer failure surfaces as an error event and in
+    // the stopVideo payload, so delivery never dies quietly.
     promise.resolve([
       "sessionId": sessionId,
       "startedAtMs": currentEpochMs(),
@@ -4806,9 +4805,9 @@ extension ExhibitCameraModule {
     ])
   }
 
-  /// Primary video frames → delivery writer (CaptureKit pattern: lazy
-  /// input creation from the real stream format; pre-startSession buffers
-  /// are dropped, never appended illegally).
+  /// Feeds primary frames to the delivery writer. The writer input is built
+  /// lazily from the real stream format, and buffers that arrive before the
+  /// writer session starts are dropped rather than appended illegally.
   private func handleVideoFrame(_ sampleBuffer: CMSampleBuffer) {
     guard let writer = writer, !writerFailed else { return }
     let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
@@ -4826,17 +4825,13 @@ extension ExhibitCameraModule {
       ]
       let input = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings, sourceFormatHint: formatDesc)
       input.expectsMediaDataInRealTime = true
-      // ORIENTATION CONTRACT (double-rotation fix): the capture connection
-      // PHYSICALLY rotates these buffers by its videoRotationAngle (the
-      // RotationPolicy coordinator angle — see configureSession's
-      // orientation contract), so the frames are already upright and `dims`
-      // above already reads the rotated dims. The track
-      // transform MUST be identity: stamping the connection's rotation
-      // angle here was a second rotation on top of physically-upright bytes —
-      // sideways playback and sideways thumbnails everywhere the track
-      // metadata is honored. videoRotationTransform is only ever valid for
-      // connections that do NOT physically rotate (metadata-only outputs);
-      // this is not one of them.
+      // The transform must be identity. The capture connection has already
+      // rotated these buffers physically, and the dimensions read above are
+      // the rotated ones. Stamping the connection's angle here would be a
+      // second rotation on top of upright bytes, and playback and
+      // thumbnails would come out sideways wherever the track metadata is
+      // honored. A rotation transform is only ever right for a connection
+      // that does not rotate pixels; this is not one.
       input.transform = .identity
       guard writer.canAdd(input) else {
         writerFailed = true
@@ -4861,26 +4856,29 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Rule 4 tee: the delivery AAC writer consumes the native buffers; the
-  /// PCM master consumes the converted canonical representation of the SAME
-  /// buffers. Runs from the first audio frame (it has its own clock domain —
-  /// no coupling to the delivery writer's session-start timing). Any failure
-  /// fails the SINK (onError E_SINK, rawPcmPath:null at stop), never delivery.
+  /// Tees audio to the raw master. The delivery writer takes the native
+  /// buffers; the master takes a converted, canonical form of the same
+  /// ones.
+  ///
+  /// It runs from the first audio frame and has its own clock domain, so it
+  /// is not coupled to when the delivery writer's session starts. Any
+  /// failure fails this sink alone, never delivery.
   private func teeToPcmMaster(_ sampleBuffer: CMSampleBuffer) {
     guard let pcmWriter = pcmWriter, !pcmWriter.failed else { return }
     do {
       if let converted = try pcmConverter?.convert(sampleBuffer) {
         try pcmWriter.append(pcmBuffer: converted)
         if pcmFirstSampleWallClockUtcMs == nil {
-          // ENF anchor: the absolute wall-clock time of the FIRST
-          // audio sample written to the master. The source buffer's PTS is
-          // mach-clock host seconds — the SAME clock the session's video
-          // PTS and the sensor ring ride (ExhibitMachClock) — so the
-          // host→wall conversion is one subtraction at one instant: the
-          // wall clock NOW minus how long ago the source buffer's PTS was.
-          // (The written frames trail the source PTS by the converter's
-          // SRC delay line — single-digit ms; the anchor is labeled
-          // 'source-pts' so the desk knows which instant is committed.)
+          // The wall-clock time of the first audio sample in the master.
+          //
+          // The source buffer's timestamp is on the same clock the video
+          // timestamps and the motion ring ride, so the conversion is one
+          // subtraction at one instant: now, minus how long ago that
+          // timestamp was.
+          //
+          // Written frames trail the source timestamp by the converter's
+          // delay line, a few milliseconds. The anchor is labeled
+          // 'source-pts' so the desk knows which instant is committed.
           let nowHostSec = ExhibitMachClock.ticksToBootSeconds(ExhibitMachClock.nowTicks())
           let nowMs = currentEpochMs()
           let ptsSec = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
@@ -4888,7 +4886,8 @@ extension ExhibitCameraModule {
             pcmFirstSampleWallClockUtcMs = nowMs - Int64(((nowHostSec - ptsSec) * 1000.0).rounded())
             pcmAnchorSource = "source-pts"
           } else {
-            // PTS invalid: the append instant is the honest anchor, labeled.
+            // No usable timestamp, so the append instant is the anchor,
+            // and it is labeled as such.
             pcmFirstSampleWallClockUtcMs = nowMs
             pcmAnchorSource = "append-instant"
           }
@@ -4900,14 +4899,13 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// diagnostics (the "export WAV doesn't work" report): the
-  /// committed master's CONTAINER facts, read back from the finalized CAF —
-  /// the desc ASBD fields and the frame count the payload itself implies.
-  /// A build-40 field master showed a container frame count exactly 2×
-  /// framesWritten — a divergence no code path here can produce on paper —
-  /// so the container truth is now committed WITH the record as data
-  /// (framesMatchContainer), never guessed at after the fact. Pure
-  /// container walk: no decode, no interpretation, no claims.
+  /// Reads the finished master's container facts back off disk: its format
+  /// description and the frame count its payload size implies.
+  ///
+  /// These are committed with the record so that whether the container
+  /// agrees with what was written is answerable from the data, rather than
+  /// reasoned about afterward. A pure container walk — no decode, no
+  /// interpretation, no claim about the audio itself.
   private func cafContainerFacts(_ url: URL) -> [String: Any]? {
     guard let data = try? Data(contentsOf: url), data.count >= 12 else { return nil }
     guard data[0] == 0x63, data[1] == 0x61, data[2] == 0x66, data[3] == 0x66 else { return nil } // 'caff'
@@ -4925,7 +4923,7 @@ extension ExhibitCameraModule {
       let t0 = data[off], t1 = data[off + 1], t2 = data[off + 2], t3 = data[off + 3]
       let hi = be32(off + 4)
       let lo = be32(off + 8)
-      // A size of -1 (0xFFFFFFFF) means "to end of file" per the CAF spec.
+      // A size of -1 means the chunk runs to the end of the file.
       let size = (hi == 0 && lo != 0xffffffff) ? Int(lo) : data.count - (off + 12)
       let body = off + 12
       if t0 == 0x64, t1 == 0x65, t2 == 0x73, t3 == 0x63, body + 36 <= data.count { // 'desc'
@@ -4943,8 +4941,9 @@ extension ExhibitCameraModule {
       off = body + size
     }
     guard let payload = payloadBytes, bytesPerFrame > 0 else { return nil }
-    // Non-interleaved CAF stores channel blocks: bytesPerFrame is per-channel,
-    // so a full frame spans bytesPerFrame × channels (mirrors the JS reader).
+    // A non-interleaved file stores channel blocks, so bytesPerFrame is
+    // per channel and a whole frame spans that times the channel count.
+    // The JS reader does the same thing.
     let nonInterleaved = (flags & 32) != 0
     let frameBytes = nonInterleaved ? Int(bytesPerFrame) * Int(max(1, channels)) : Int(bytesPerFrame)
     return [
@@ -4960,9 +4959,9 @@ extension ExhibitCameraModule {
 
   private func handleAudioSample(_ sampleBuffer: CMSampleBuffer) {
     guard mode == .video else { return }
-    // diagnostics: the tap-alive counter. pcmEnabled && this stays
-    // 0 for a whole take == the audio tap never delivered (audio-session
-    // configuration / permission suspect) — stated at stop.
+    // Counts that the tap is alive. Enabled and still zero across a whole
+    // take means the audio tap never delivered at all, which points at the
+    // audio session or permissions. Stated at stop.
     audioBufferCount += 1
     teeToPcmMaster(sampleBuffer)
     guard let writer = writer, !writerFailed else { return }
@@ -4998,8 +4997,8 @@ extension ExhibitCameraModule {
       return
     }
 
-    // writerAudioInput == nil after start means the audio-absent fallback
-    // fired — drop late audio honestly; stopVideo reports audioTrack:false.
+    // No audio input after start means the no-audio fallback fired. Drop
+    // late audio; stopVideo reports that the file has no audio track.
     guard writer.status == .writing, let input = writerAudioInput, input.isReadyForMoreMediaData else { return }
     if !input.append(sampleBuffer), writer.status == .failed {
       writerFailed = true
@@ -5015,8 +5014,9 @@ extension ExhibitCameraModule {
     startWriterSession(at: startPTS)
   }
 
-  /// Dead mic must not kill delivery (rule 4): video-only start ~500 ms
-  /// after the first video frame, stated as audioTrack:false at stop.
+  /// A dead microphone must not cost the recording. Starts the writer
+  /// video-only about half a second after the first video frame, and stop
+  /// reports that the file has no audio track.
   private func scheduleAudioFallback() {
     writerAudioFallback?.cancel()
     let item = DispatchWorkItem { [weak self] in
@@ -5042,16 +5042,16 @@ extension ExhibitCameraModule {
     writerStarted = true
   }
 
-  /// Periodic stereo pairs, not continuous (spec §8): thermal/power
-  /// headroom is real, and a burst of timestamped pairs is enough geometry.
-  /// Missed cadence is counted and committed at stop as pairsMissed.
+  /// Commits stereo pairs on a cadence rather than continuously. Heat and
+  /// power headroom are real, and timestamped pairs at intervals are enough
+  /// geometry. A missed interval is counted and committed at stop.
   private func maybeDumpPeriodicPair(force: Bool = false) {
     guard stereoActive, let evidenceDir = evidenceDirURL, let pair = latestPair else { return }
     let interval = ProcessInfo.processInfo.thermalState == .serious
-      ? pairIntervalSec * 2.0   // thermal escalation halves cadence (spec §6)
+      ? pairIntervalSec * 2.0   // halve the rate when the phone is hot
       : pairIntervalSec
-    // `force` is the stop-time dump: the record-end anchor commits even when
-    // the last periodic dump landed inside the cadence window.
+    // force is the stop-time commit: the moment recording ended is
+    // committed even if the last one landed inside the interval.
     guard force || Date().timeIntervalSince(lastPairDumpAt) >= interval else { return }
     lastPairDumpAt = Date()
 
@@ -5062,13 +5062,13 @@ extension ExhibitCameraModule {
 
     let index = pairIndex
     pairIndex += 1
-    // Built here on sessionQueue: it reads sessionQueue-confined calibration
-    // state, and it's cheap (dictionary assembly, no encoding).
+    // Built here on sessionQueue, because it reads state confined to this
+    // queue and costs nothing — dictionary assembly, no encoding.
     let calibrationDict = buildCalibrationDict(pair: pair)
 
-    // Encode + write on the sink I/O queue — JPEG encoding a 720p buffer
-    // plus two file writes can exceed a frame interval and must never run
-    // on sessionQueue.
+    // Encode and write on the sink queue. A 720p encode plus two writes
+    // runs longer than a frame interval and must never happen on
+    // sessionQueue.
     sinkIOQueue.async { [weak self] in
       guard let self = self else { return }
       guard let secondary = pair.secondary,
@@ -5112,12 +5112,14 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Stops video, finalizes the delivery file, returns to preview mode on
-  /// the SAME session (audio input/output removed — they were video-only).
-  /// IDEMPOTENT ( Drop 2): a second stop while the seal is in flight
-  /// joins the in-flight stop and settles with the SAME outcome — it is the
-  /// same stop, never a new one. The seal itself is asynchronous and never
-  /// blocks the state machine; the 10 s watchdog guarantees settlement.
+  /// Stops recording, seals the delivery file, and returns the same session
+  /// to preview mode. The audio input and output are removed, since they
+  /// were only there for the recording.
+  ///
+  /// Idempotent: a second stop while the seal is in flight joins the one
+  /// already running and settles with its outcome. It is the same stop, not
+  /// a new one. The seal is asynchronous and never blocks the state
+  /// machine, and a ten-second watchdog guarantees it settles.
   func stopVideo(promise: Promise) {
     switch videoState {
     case .idle:
@@ -5130,7 +5132,7 @@ extension ExhibitCameraModule {
       break
     }
     guard let writer = writer else {
-      // State said recording but the writer is gone — stated, never guessed.
+      // The state said recording and the writer is gone. Say so.
       videoState = .idle
       promise.reject(ExhibitCameraNamedException(ExhibitCameraErrorCode.noSession, "No video is recording"))
       return
@@ -5141,24 +5143,22 @@ extension ExhibitCameraModule {
     let durationMs = videoStartDate.map { Int((Date().timeIntervalSince($0) * 1000.0).rounded()) } ?? 0
     let audioTrack = writerAudioInput != nil && writerStarted
     let deliveryPath = deliveryURL?.path ?? ""
-    // post-field: the record-END anchor — force one final pair dump
-    // before the counts are read (the encode/write rides sinkIOQueue like
-    // every periodic dump; the event reaches the seal alongside the rest).
+    // One last pair before the counts are read, so the moment recording
+    // ended is anchored. It encodes on the sink queue like every other one.
     maybeDumpPeriodicPair(force: true)
     let pairs = pairIndex
     let missed = pairsMissed
 
-    // PCM sink finalize: drain the SRC delay line, close the CAF, fold into
-    // the three-state vocabulary. A zero-frame master is NOT evidence —
-    // reported via the failed path (null), never as a recorded file. The
-    // disabled case never reaches here as a claim: JS owns the toggle and
-    // states 'never-recorded' itself.
+    // Finish the raw master: drain the converter's delay line, close the
+    // file, and fold the outcome into the three states. A master with no
+    // frames is not evidence and is reported as failed, never as a recorded
+    // file. The disabled case never gets here — JS owns the toggle and
+    // reports never-recorded itself.
     var rawPcmPath: String? = nil
-    // ENF anchor + integrity summary: exposed as rawPcmInfo in the
-    // stop payload whenever the master commits — the anchor lets the desk
-    // cross-correlate the 50/60 Hz mains trace (EvidencePathBuilder.mainsHz
-    // states the region's grid) against a reference ENF series in absolute
-    // time; the sha256 binds the analysis to the exact committed bytes.
+    // The anchor and integrity summary, reported as rawPcmInfo whenever
+    // the master commits. The anchor is what lets the desk line the
+    // recording's mains hum up against a reference series in absolute time;
+    // the digest binds any such analysis to the exact committed bytes.
     var rawPcmInfo: [String: Any]? = nil
     if pcmEnabled, let pcmWriter = pcmWriter, !pcmWriter.failed {
       do {
@@ -5172,16 +5172,14 @@ extension ExhibitCameraModule {
       pcmWriter.finish()
       if !pcmWriter.failed && pcmWriter.framesWritten > 0 {
         rawPcmPath = pcmWriter.url.path
-        // finish finalized the CAF header (AVAudioFile deinit semantics —
-        // the audio-capture module relies on the same behavior), so the
-        // bytes hashed here are the committed bytes.
+        // finish() has written the header, so the bytes hashed here are
+        // the committed bytes.
         var sha: String? = nil
         if let bytes = try? Data(contentsOf: pcmWriter.url) {
           sha = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
         }
-        // Explicit locals: the ternary + `as Any? ?? NSNull` idiom parses
-        // the cast onto the ternary's String? and the compiler rejects
-        // String? ?? NSNull.
+        // An explicit local: inlining the ternary parses the cast onto its
+        // own optional and does not compile.
         let anchorSource: String? = pcmAnchorSource.isEmpty ? nil : pcmAnchorSource
         rawPcmInfo = [
           "firstSampleWallClockUtcMs": (pcmFirstSampleWallClockUtcMs as Any?) ?? NSNull(),
@@ -5190,9 +5188,9 @@ extension ExhibitCameraModule {
           "sampleRate": Int(PcmMasterWriter.sampleRate),
           "fileSha256": (sha as Any?) ?? NSNull(),
         ]
-        // commit the container's own readback alongside the writer's
-        // counters — a divergence (like an earlier build's exact 2×) is then a
-        // committed fact in the sealed record, not a post-hoc riddle.
+        // Commit what the container itself says beside what the writer
+        // counted. If the two disagree, that disagreement is a fact in the
+        // sealed record rather than a puzzle discovered later.
         if var info = rawPcmInfo, let facts = cafContainerFacts(pcmWriter.url) {
           for (key, value) in facts { info[key] = value }
           info["framesMatchContainer"] = (facts["containerFrames"] as? Int) == Int(pcmWriter.framesWritten)
@@ -5200,13 +5198,13 @@ extension ExhibitCameraModule {
         }
       }
     }
-    // diagnostics: distinguish WHY the master is absent. The sink
-    // was requested but the audio tap delivered nothing all take == an
-    // audio-session/tap problem, not a conversion problem — said out loud.
+    // Say why the master is absent. Requested, and the tap delivered
+    // nothing all take, means the audio session or the tap — not the
+    // conversion.
     if pcmEnabled, audioBufferCount == 0 {
-      // state the audio connection's liveness so the field run
-      // discriminates "no connection" from "connection live, no buffers"
-      // (the latter points at the audio session, not the graph).
+      // Report the connection's liveness, so no connection can be told
+      // apart from a live connection delivering nothing. The second points
+      // at the audio session rather than the graph.
       let audioConnState: String
       if let liveAudioOutput = audioOutput, let connection = liveAudioOutput.connection(with: .audio) {
         audioConnState = "enabled=\(connection.isEnabled),active=\(connection.isActive)"
@@ -5222,14 +5220,16 @@ extension ExhibitCameraModule {
     pcmConverter = nil
     pcmEnabled = false
 
-    // IMU sink finalize (0.15): slice the recording window
-    // [videoSensorStartBootSec, now] from the ring, written next to the PCM
-    // master (sensors-<sessionId>.jsonl). A recording longer than the 60 s
-    // ring span commits its TAIL with truncated:true in the file's window
-    // line — stated, never implied to be whole. Same three-state vocabulary
-    // as the still path; a failed log never blocks the stop. The logger
-    // keeps running after the take (the session returns to preview and a
-    // still may follow) — only teardown/thermal stops it.
+    // Slice the recording window out of the motion ring and write it beside
+    // the master.
+    //
+    // A recording longer than the ring commits its tail, marked truncated
+    // in the file's window line — never implied to be the whole thing. Same
+    // three states as the still path, and a failed log never blocks the
+    // stop.
+    //
+    // The logger keeps running afterward: the session returns to preview
+    // and a still may follow. Only teardown or heat stops it.
     var sensorFields = sensorLogFields(state: "unavailable")
     if sensorLogWanted, !sensorLogThermalStopped, let logger = sensorLogger, let evidenceDir = evidenceDirURL {
       sensorFields = sensorWindowFields(
@@ -5237,14 +5237,16 @@ extension ExhibitCameraModule {
         from: videoSensorStartBootSec,
         to: ExhibitMachClock.ticksToBootSeconds(ExhibitMachClock.nowTicks()),
         anchorStartedAtMs: videoStartEpochMs,
-        // The anchor binds the RECORDING START's instant to its wall clock —
-        // not the flush instant (the video motion card re-zeroes on it).
+        // The anchor ties the instant recording started to its wall clock,
+        // not the instant the log was flushed. The motion card re-zeroes on
+        // it.
         anchorBootSec: videoSensorStartBootSec,
         logger: logger
       )
     }
 
-    // Remove the video-only audio nodes; the session keeps running.
+    // Remove the audio nodes that were only there for the recording. The
+    // session keeps running.
     if let session = session {
       session.beginConfiguration()
       if let audioOutput = audioOutput {
@@ -5260,9 +5262,9 @@ extension ExhibitCameraModule {
     audioOutput = nil
     mode = .preview
 
-    // Stop watchdog (spec §6): a hung finishWriting must not hang JS. It
-    // settles through the same single path as the seal — a queued start is
-    // released here too, so a start behind a hung seal waits at most 10 s.
+    // A hung finalize must not hang JS. This settles through the same
+    // single path the seal does, and releases a queued start, so a start
+    // waiting behind a stuck seal waits ten seconds at most.
     stopPromise = promise
     let timeout = DispatchWorkItem { [weak self] in
       guard let self = self else { return }
@@ -5288,36 +5290,33 @@ extension ExhibitCameraModule {
     writerVideoInput?.markAsFinished()
     writerAudioInput?.markAsFinished()
     writer.finishWriting {
-      // finishWriting's callback fires on an internal writer queue; hop.
-      // The seal NEVER blocks the state machine — settlement is a single
-      // sessionQueue hop with no I/O in it.
+      // This callback fires on the writer's own queue, so hop back. The
+      // seal never blocks the state machine: settling is one hop with no
+      // I/O in it.
       self.sessionQueue.async {
         if writer.status == .completed {
           var payload: [String: Any] = [
             "deliveryPath": deliveryPath,
             "durationMs": durationMs,
-            // sealed projection inputs — the session's primary
-            // device, read at finalize on sessionQueue.
+            // The projection inputs, read off the primary device at
+            // finalize.
             "facing": self.primaryDevice.map { $0.position == .front ? "front" : "back" } as Any? ?? NSNull(),
             "primaryHfovDeg": self.primaryDevice.map { Double($0.activeFormat.videoFieldOfView) } as Any? ?? NSNull(),
-            // Structural audio absence is stated EXPLICITLY — never a
-            // silently missing track (rules 3/4).
+            // A missing audio track is stated, never just absent.
             "audioTrack": audioTrack,
             "pairsCommitted": pairs,
             "pairsMissed": missed,
-            // Three-state raw-audio sink: path string = recorded; null =
-            // enabled but failed (the disabled case is stated
-            // 'never-recorded' by JS, which owns the toggle).
+            // A path means recorded; null means enabled and failed. The
+            // disabled case is reported by JS, which owns the toggle.
             "rawPcmPath": rawPcmPath as Any? ?? NSNull(),
-            // (additive): ENF anchor + integrity summary for the
-            // committed master, and the tap-alive counter for diagnostics.
+            // The anchor and integrity summary for the committed master,
+            // plus the tap counter.
             "rawPcmInfo": rawPcmInfo as Any? ?? NSNull(),
             "audioBufferCount": self.audioBufferCount,
             "hardwareCost": self.session.map { Double($0.hardwareCost) } as Any? ?? NSNull(),
           ]
-          // IMU sink (0.15), computed above on sessionQueue before the
-          // finishWriting hop: sensorLogPath / sensorLogState (+
-          // sensorLogError only when 'failed').
+          // The motion fields, computed above on sessionQueue before this
+          // hop: a path, a state, and an error only when it failed.
           for (key, value) in sensorFields { payload[key] = value }
           self.settleVideoStop(writer: writer, outcome: .success(payload))
         } else {
@@ -5328,14 +5327,14 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// The ONE stop-settlement path ( Drop 2): resolves or rejects the
-  /// stop promise AND every joined waiter with the same outcome, tears down
-  /// writer state, returns the machine to.idle, and releases a queued
-  /// startVideo. sessionQueue only. The identity guard is the race fix: a
-  /// stale finishWriting/timeout from the PREVIOUS writer must never touch
-  /// a NEW recording's state — the old code nil'ed self.writer
-  /// unconditionally, which orphaned the new writer when a start had
-  /// already re-armed one.
+  /// The one place a stop settles. Resolves or rejects the stop promise and
+  /// every joined waiter with the same outcome, tears down writer state,
+  /// returns the machine to idle, and releases a queued start. sessionQueue
+  /// only.
+  ///
+  /// The identity check at the top matters: a stale finalize or timeout
+  /// belonging to a previous writer must never touch a new recording's
+  /// state.
   private func settleVideoStop(
     writer: AVAssetWriter,
     outcome: Result<[String: Any], ExhibitCameraNamedException>
@@ -5362,29 +5361,29 @@ extension ExhibitCameraModule {
     flushPendingStartVideo()
   }
 
-  /// Runs a startVideo that queued behind the just-settled stop, if any.
-  /// sessionQueue only. Re-enters startVideo so every guard and honest
-  /// rejection of the normal path applies verbatim — a queued start is a
-  /// real start, just later.
+  /// Runs a start that queued behind the stop just settled, if there is
+  /// one. It re-enters startVideo, so every guard and every rejection of
+  /// the normal path applies unchanged: a queued start is a real start,
+  /// only later.
   private func flushPendingStartVideo() {
     guard videoState == .idle, let pending = pendingStartVideo else { return }
     pendingStartVideo = nil
     startVideo(opts: pending.opts, promise: pending.promise)
   }
 
-  /// ORIENTATION CONTRACT — READ BEFORE CALLING: this transform may ONLY
-  /// ever be applied to a connection whose rotation is METADATA-ONLY (an
-  /// output that tags orientation without touching pixels, e.g. a movie-
-  /// file output). AVCaptureVideoDataOutput connections PHYSICALLY rotate
-  /// their delivered buffers (the RotationPolicy coordinator angle applied
-  /// in configureSession / applyConnectionPolicies), so their frames are
-  /// already upright — passing
-  /// such a connection here and stamping the result on a writer input was
-  /// the double-rotation bug (sideways playback + thumbnails). Currently
-  /// has NO call sites: every writer/sink in this module consumes physically
-  /// rotated buffers and must use.identity / no extra rotation. Kept (and
-  /// documented) for any future metadata-only output; if you add a call
-  /// site, prove the connection does not physically rotate first.
+  /// Read this before calling. This transform is valid only for a
+  /// connection whose rotation is metadata — an output that tags
+  /// orientation without touching pixels.
+  ///
+  /// Video data output connections rotate their buffers physically, so
+  /// their frames are already upright. Passing one here and stamping the
+  /// result on a writer input rotates twice, and playback and thumbnails
+  /// come out sideways.
+  ///
+  /// It has no call sites: every sink in this module consumes physically
+  /// rotated buffers and uses identity. Kept for a future metadata-only
+  /// output. If you add a call site, prove the connection does not rotate
+  /// pixels first.
   private func videoRotationTransform(for connection: AVCaptureConnection) -> CGAffineTransform {
     if #available(iOS 17.0, *) {
       let angle = connection.videoRotationAngle
@@ -5400,31 +5399,32 @@ extension ExhibitCameraModule {
   }
 }
 
-// MARK: - Chrome (spec §3) — all sessionQueue, all clamped, all honest no-ops
+// MARK: - Camera controls
 
 extension ExhibitCameraModule {
 
-  /// Lens switch on the RUNNING session: swap the primary input, then
-  /// re-derive the stereo partner around it (UW↔W, UW↔T). The bug
-  /// (iPhone 17, dual-camera): the old code asked canAddInput BEFORE
-  /// removing anything — and the requested lens was the STEREO PARTNER,
-  /// already in the session. A session can never hold two inputs for one
-  /// device, so every switch on dual-camera hardware failed E_PLATFORM.
-  /// The swap now runs as two atomic configurations: detach the
-  /// partner if it conflicts + swap the primary, best-effort re-attach
-  /// the re-derived partner. Failure at restores the old primary AND
-  /// its partner; failure at is an honest single-cam session, stated
-  /// in the resolve payload. Never a dead session.
+  /// Switches lens on a running session: swap the primary input, then work
+  /// out the stereo partner again around it.
+  ///
+  /// The order matters. The requested lens is often the current stereo
+  /// partner, already in the session, and a session cannot hold two inputs
+  /// for one device. So the partner is detached before the primary is
+  /// asked for.
+  ///
+  /// Two configurations: detach the conflicting partner and swap the
+  /// primary, then re-attach a partner around the new primary. A failure in
+  /// the first restores both the old primary and its partner; a failure in
+  /// the second is a single-cam session, stated in the payload. Never a
+  /// dead session.
   func setLens(_ lens: ExhibitLens, promise: Promise?) {
     guard let session = session, facing == .back else {
       promise?.resolve(["applied": false, "reason": "no-session-or-front-facing"])
       return
     }
-    // on the virtual graph the primary IS the dual-wide virtual
-    // device — wide and ultra-wide are both live at once, so a "wide"
-    // request is already satisfied and any other primary-lens swap would
-    // tear down the working pair. Refused with a stated reason; the
-    // ultra-wide view is the 0.5x zoom stop on the same live graph.
+    // On the virtual graph the primary is the dual-wide device, so wide
+    // and ultra-wide are both already live. A wide request is satisfied,
+    // and any other swap would tear down a working pair. Refused with the
+    // reason: the ultra-wide view is the 0.5x stop on this same graph.
     if virtualGraphActive {
       if lens == .wide {
         promise?.resolve(["applied": true, "reason": "already-selected"])
@@ -5438,7 +5438,7 @@ extension ExhibitCameraModule {
       return
     }
     guard let newDevice = AVCaptureDevice.default(lens.deviceType, for: .video, position: .back) else {
-      // Requested lens not present on this hardware — stated, not faked.
+      // This hardware does not have that lens.
       promise?.reject(ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Lens \(lens.rawValue) is not available on this device"))
       return
     }
@@ -5446,13 +5446,13 @@ extension ExhibitCameraModule {
       let newInput = try AVCaptureDeviceInput(device: newDevice)
       let oldInput = primaryInput
       let oldDevice = current
-      // If the requested device is plumbed as the stereo partner it must
-      // leave the session before it can become the primary — duplicate-
-      // device inputs are illegal.
+      // If the requested device is currently the stereo partner it has to
+      // leave the session before it can be the primary: two inputs for one
+      // device are illegal.
       let partnerConflict = secondaryDevice?.deviceType == newDevice.deviceType
-      // Rollback helper: put the old partner back AND rebind the
-      // synchronizer to the restored topology (a synchronizer left pointing
-      // at a removed output stalls the whole frame pipeline).
+      // Rollback: put the old partner back and rebind the synchronizer to
+      // the restored topology. A synchronizer left pointing at a removed
+      // output stalls the whole pipeline.
       let restorePartner: () -> Void = { [weak self] in
         guard let self = self, partnerConflict else { return }
         _ = self.ensureStereoPartner(excluding: oldDevice.deviceType)
@@ -5469,15 +5469,15 @@ extension ExhibitCameraModule {
         throw ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Cannot add input for lens \(lens.rawValue)")
       }
       session.addInput(newInput)
-      // the 30 fps billing promise follows the new input too —
-      // adding an input resets the override (documented), so a mid-session
-      // lens swap would silently return to worst-case billing without it.
+      // The 30 fps billing promise follows the new input. Adding an input
+      // resets the override, so without this a mid-session swap quietly
+      // returns to worst-case billing.
       newInput.videoMinFrameDurationOverride = CMTime(value: 1, timescale: 30)
-      // requireMultiCam mirrors configureSession: whenever stereo is on,
-      // the new primary's format must be multi-cam-legal so the partner
-      // re-attach right after this swap can actually stream.
+      // Same rule as configureSession: with stereo on, the new primary's
+      // format has to be multi-cam legal, or the partner re-attached just
+      // below cannot stream.
       if configureFormat(device: newDevice, maxWidth: 3840, maxHeight: 2160, requireMultiCam: stereoActive) == false {
-        // Roll back: restore the old primary AND its partner.
+        // Restore the old primary and its partner.
         session.removeInput(newInput)
         if let oldInput = oldInput, session.canAddInput(oldInput) {
           session.addInput(oldInput)
@@ -5488,7 +5488,7 @@ extension ExhibitCameraModule {
       }
       session.commitConfiguration()
       guard session.hardwareCost <= 1.0 else {
-        // Roll back a configuration the OS would throttle (spec §6).
+        // Roll back a configuration the OS would throttle.
         session.beginConfiguration()
         session.removeInput(newInput)
         if let oldInput = oldInput, session.canAddInput(oldInput) {
@@ -5501,8 +5501,8 @@ extension ExhibitCameraModule {
       primaryInput = newInput
       primaryDevice = newDevice
       currentFormatID = formatID(for: newDevice)
-      // The input swap recreates the outputs' connections: re-apply the
-      // rotation + mirroring + per-frame intrinsics policies on them.
+      // Swapping the input recreated the outputs' connections, so rotation,
+      // mirroring, and intrinsics delivery all have to be applied again.
       if let primaryOut = primaryVideoOutput { applyConnectionPolicies(to: primaryOut, device: newDevice) }
       if #available(iOS 17.0, *), let photoConnection = primaryPhotoOutput?.connection(with: .video) {
         // W7 isolation: default off — wave-5/6 suspect, flip via Settings ▸ Diagnostics when testing
@@ -5512,20 +5512,19 @@ extension ExhibitCameraModule {
           photoConnection.videoOrientation = .portrait
         }
       }
-      // Re-derive the partner around the NEW primary. When the swap
-      // consumed the old partner (dual-camera hardware), this is what
-      // restores stereo; when attach fails the payload says single-cam.
+      // Work out the partner for the new primary. When the swap consumed
+      // the old partner, this is what brings stereo back; when it fails,
+      // the payload says single-cam.
       let stereoNote: String
       if stereoDetachedForThermal {
         stereoNote = "degraded-thermal"
       } else {
         stereoNote = ensureStereoPartner(excluding: newDevice.deviceType) ? "available" : "unsupported"
       }
-      // The synchronizer cannot track topology changes — recreate it over
-      // the CURRENT outputs after any swap/detach/attach.
+      // The synchronizer cannot follow topology changes, so recreate it
+      // over the current outputs after any swap, detach, or attach.
       rebuildSynchronizer()
-      // no scheduleSessionCalibrationCapture — the one-shot is
-      // retired (see its doc).
+      // No calibration one-shot here — see scheduleSessionCalibrationCapture.
       promise?.resolve([
         "applied": true,
         "lens": lens.rawValue,
