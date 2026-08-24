@@ -97,18 +97,11 @@ always land.
 ## Which code seals a capture
 
 - **Seal with the C2PA SDK** — signs photos and videos with
-  [c2pa-swift](https://github.com/contentauth/c2pa-swift), the official library
-  over the C2PA Rust core, instead of this app's own COSE/JUMBF builder. The
-  signed bytes are read back through the same verifier a recipient runs, and
-  anything that does not come back intact is discarded and sealed the original
-  way instead. Diagnostics names the path that sealed each capture, so the
-  comparison never has to be guessed at.
-
-  Audio always uses this app's builder — there is no c2pa-swift path for the
-  m4a container — and so does PNG. Both paths emit the same assertion labels,
-  so a file is the same shape to a verifier either way.
-
-  Off by default.
+  [c2pa-swift](https://github.com/contentauth/c2pa-swift) instead of this app's
+  own builder, then reads the result back through the verifier a recipient
+  runs; anything that fails is sealed the original way instead. Audio and PNG
+  always use this app's builder — neither has an SDK path. Diagnostics names
+  which path sealed each capture. Off by default.
 
 ## Trust
 
