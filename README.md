@@ -35,14 +35,9 @@ and says so.
 
 ## Which C2PA code this actually runs
 
-Verification is always my own code.
-
-Signing has two paths. With **Seal with the C2PA SDK** on (Settings ▸ Proof, off by default),
-[c2pa-swift](https://github.com/contentauth/c2pa-swift) signs photos and videos; the bytes are
-read back through my verifier and anything that fails is sealed the original way instead. With it
-off — and always for audio and PNG, which this app does not route through it — my own COSE/JUMBF
-builder signs.
-Both emit the same assertion labels.
+[c2pa-swift](https://github.com/contentauth/c2pa-swift) signs photos and videos. Audio and PNG
+are signed by my own COSE/JUMBF builder, which is also what verifies every file. Both paths emit
+the same assertion labels.
 
 What checks that code is a differential oracle in CI: every corpus asset runs through my verifier
 and the official c2pa-rs, and the build fails on any disagreement that isn't whitelisted with a

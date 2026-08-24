@@ -45,6 +45,10 @@ list and point here.
   `'never-recorded'`) states exactly which case it is. The declared sample
   rate is measured from the trace's own intervals, never from the 100 Hz
   target.
+- **Signed by this app's own builder.** Photos and videos are signed by
+  c2pa-swift; audio is signed by the COSE/JUMBF builder in src/c2pa. The
+  assertion set, the schema and the verification math are identical either
+  way — the divergence is which code writes the container.
 
 ## Video
 
