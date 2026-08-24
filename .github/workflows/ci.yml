@@ -95,7 +95,10 @@ jobs:
     # the on-device soak run, not here. macOS runners are free on public
     # repositories, so this runs on every change rather than behind a filter:
     # a gate that can be skipped is a gate that gets skipped.
-    runs-on: macos-15
+    # macos-15 carries exactly two Xcodes, 26.0.1 and 26.3, and the Expo pod
+    # chain needs one between them: 26.0.1 rejects its `weak let`, 26.3 cannot
+    # infer a type in its date coding. A newer image carries a newer set.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
