@@ -53,6 +53,13 @@ const STAGE = [
   'src/lib/roster.ts', 'src/lib/ots.ts', 'src/lib/proofBundle.ts',
   'src/lib/seal.ts', 'src/lib/shamir.ts', 'src/lib/pq.ts',
   'src/lib/trustLadder.ts', 'src/lib/trustProvider.ts', 'src/lib/rosterStore.ts',
+  // Runtime gate for the c2pa-swift signing arm. Staged so attest.ts resolves;
+  // off in the lab, which is the hand-rolled path the suites pin.
+  'src/lib/sdkSigningGate.ts',
+  // The c2pa-swift engine wrapper. attest.ts imports it unconditionally, so it
+  // has to resolve; the native module is absent in the lab, which is the
+  // nativeLoadError branch, and the gate above is off, so nothing calls it.
+  'src/provenance/engine/upstreamEngineIos.ts',
   // Persistent on-device diagnostics log; attest.ts appends to it at seal
   // time, so the lab stages it too (filesystem via shim-fs).
   'src/lib/diagnosticsLog.ts',
@@ -96,6 +103,9 @@ function rewrite(src, fname) {
     .replace(/from '\.\.\/provenance\/(\w+)'/g, "from './$1.mts'")
     // provenance/disclosure cross-imports flatten to the disclosure-*.mts names.
     .replace(/from '\.\.\/disclosure\/(\w+)'/g, "from './disclosure-$1.mts'")
+    // provenance/ modules reach the engine layer as './engine/x'; the generic
+    // './x' rule below cannot match a path segment.
+    .replace(/from '\.\/engine\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\/(\w+)'/g, "from './$1.mts'")
     // Inline type imports (import('./x')) need their own rules; the
     // 'from'-anchored rules above never match them.

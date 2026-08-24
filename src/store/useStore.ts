@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setTsaUrls } from '../lib/timestamp';
+import { setSdkSigningExperiment } from '../lib/sdkSigningGate';
 import { setAppearancePreference, type AppearancePreference } from '../theme';
 
 const SETTINGS_FILE = `${FileSystem.documentDirectory}settings.json`;
@@ -56,6 +57,14 @@ export interface Settings {
   saveToCameraRoll: boolean;
   biometricsEnabled: boolean;
   biometricSigning: boolean;
+  /**
+   * Seals photos and videos through the c2pa-swift path instead of the
+   * hand-rolled builder. Real, not decoration: on means the SDK signs, then
+   * self-verifies through the same verifier a recipient runs, and falls back
+   * to the hand-rolled builder with a diagnostics entry on any failure. Audio
+   * and PNG always take the hand-rolled path.
+   */
+  sdkSigning: boolean;
   /**
    * Submits each capture's payload digest to the public OpenTimestamps
    * calendars. Hash only — no media, no account. On by default. When off,
@@ -121,6 +130,7 @@ export const DEFAULT_SETTINGS: Settings = {
   saveToCameraRoll: false,
   biometricsEnabled: false,
   biometricSigning: false,
+  sdkSigning: false,
   otsEnabled: true,
   otsCalendars: null,
   tsaUrls: null,
@@ -210,6 +220,7 @@ export const useStore = create<AppState>((set, get) => ({
         // and existing choices survive verbatim.
         merged.captureEvidence = { ...DEFAULT_SETTINGS.captureEvidence, ...(stored.captureEvidence ?? {}) };
         setTsaUrls(merged.tsaUrls);
+        setSdkSigningExperiment(merged.sdkSigning === true);
         // Push the persisted appearance into the theme before first paint.
         setAppearancePreference(merged.appearance);
         set({
@@ -231,6 +242,7 @@ export const useStore = create<AppState>((set, get) => ({
   saveSettings: async (patch) => {
     const settings = { ...get().settings, ...patch };
     if (patch.tsaUrls !== undefined) setTsaUrls(settings.tsaUrls);
+    if (patch.sdkSigning !== undefined) setSdkSigningExperiment(settings.sdkSigning);
     if (patch.appearance !== undefined) setAppearancePreference(settings.appearance);
     set({ settings });
     await persist(settings, get().onboarded);

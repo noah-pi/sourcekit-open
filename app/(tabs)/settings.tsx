@@ -765,6 +765,23 @@ export default function SettingsScreen() {
             value={settings.otsEnabled}
             onChange={(v) => saveSettings({ otsEnabled: v })}
           />
+
+          <Divider />
+          {/* Signing-path switch. Off means the hand-rolled builder seals
+              everything, which is what every test suite pins. */}
+          <ProofToggle
+            icon="construct-outline"
+            label="Seal with the C2PA SDK"
+            tint={EVIDENCE_TINT}
+            sub={
+              'Seals photos and videos with the official c2pa-swift library instead of this app\'s own builder, ' +
+              'then reads the result back with the same verifier a recipient runs. Anything it cannot read back is ' +
+              'sealed the original way instead, and Diagnostics names which path sealed each capture. ' +
+              'Audio always uses the original builder.'
+            }
+            value={settings.sdkSigning}
+            onChange={(v) => saveSettings({ sdkSigning: v })}
+          />
         </Card>
 
         {/* 5. Privacy & Security */}
