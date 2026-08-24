@@ -466,26 +466,27 @@ field withheld today can be revealed years later and still verify against the or
 
 ## Things I have not built yet
 
+<!-- Hand-maintained. Keep in step with the section of the same name in
+     site/index.html; do not regenerate either from the closed tree. -->
+
 - **Android.** StrongBox gets closer to the sensor than the Secure Enclave allows, and the
-platform exposes sensors iOS keeps to itself — raw barometric pressure, per-frame camera
+platform exposes sensors iOS keeps to itself: raw barometric pressure, per-frame camera
 timestamps, a real multi-camera API. Anything committed there would be stronger than the same
 claim made here.
 - **LiDAR.** Pro iPhones ship a depth scanner and nothing uses it for provenance. A sealed depth
 map answers the flat-screen question directly rather than inferring it from disparity, and it
 works in the dark.
 - **Authenticated satellite positioning.** Galileo began signing its navigation messages in 2025,
-making a position something a receiver can check rather than merely believe. Phones do not
-expose it to apps yet.
+which for the first time uses an encryption that evades traditional (but not all) spoofing.
+However phones do not yet expose it to apps.
 - **Optional face blurring that survives the signature.** A redaction committed at capture — the
 blur applied before signing, the original never written — would let someone publish a crowd
 without publishing the crowd's faces. The Guardian Project and WITNESS worked this out years ago
 in [ObscuraCam](https://guardianproject.info/apps/org.witness.sscphase1/), which finds faces
 automatically, lets you obscure them, and strips the metadata on the way out.
 - **More ways to catch rephotography.** Moiré from a display's pixel grid, the refresh beat of a
-panel against a rolling shutter, the polarization signature of an LCD.
-- **PRNU checks.** Every sensor leaves a fixed noise fingerprint. The useful signals are blunt
-ones: a frame carrying *two* fingerprints has been composited from two cameras, and a frame
-carrying *none* never came off a sensor at all. 
+panel against a rolling shutter, the polarization signature of an LCD, multiple or missing PRNU
+fingerprints, AV desynchronization — none a slam dunk.
 - **Soft binding, and formats that outlive the file.** The perceptual fingerprint is already
 committed. What is missing is somewhere to look it up.
 

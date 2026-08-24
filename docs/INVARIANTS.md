@@ -10,6 +10,19 @@ message. An invariant with no test is a wish.
 
 ---
 
+## Prose that is not generated
+
+Two sections are written by hand and must survive any port from the closed
+tree: **Things I have not built yet**, in both `README.md` and
+`site/index.html`. They are a roadmap and an argument, not a description of
+the code, so nothing in the closed tree is a source of truth for them. Both
+carry a comment saying so.
+
+A port that rewrites either one has overwritten an edit, not updated a fact.
+Diff them before committing a bulk adoption.
+
+---
+
 ## Verification
 
 ### A receipt must commit to the digest the signature covers
