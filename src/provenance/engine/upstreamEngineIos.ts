@@ -21,6 +21,7 @@ import { Platform } from 'react-native';
 import { requireNativeModule } from 'expo-modules-core';
 import * as FileSystem from 'expo-file-system/legacy';
 import { base64ToBytes, bytesToBase64 } from '../../lib/bytes';
+import { SOFT_BINDING_ALG_PHASH } from '../../c2pa/c2pa';
 
 // ---------------------------------------------------------------------------
 // Normalized result shape, identical to the desk engine's. policyLayer.ts
@@ -129,6 +130,7 @@ interface C2paIosNative {
   signFileSecureEnclave(
     sourcePath: string, destPath: string, format: string, manifestJSON: string,
     certificateChainPEM: string, keyTag: string, requireBiometric: boolean,
+    tsaUrl: string | null, resourcesJson: string | null, useHeldBioContext: boolean,
   ): Promise<string>;
 }
 
@@ -627,12 +629,23 @@ export type IosSigner =
       keyTag?: string;
       /** Biometric-bound key: per-use Face ID/Touch ID (new keys only). */
       requireBiometric?: boolean;
+      /** Sign under the LAContext the caller vaulted with enclaveSealBioHold,
+       *  so one Face ID scan covers the record and the COSE claim. Native
+       *  throws when set with no hold live, rather than prompting again. */
+      useHeldBioContext?: boolean;
     };
 
 export interface IosSignOptions {
   /** C2PA manifest definition JSON (claim_generator, title, format, assertions…). */
   manifestJSON: string;
   signer: IosSigner;
+  /** RFC 3161 endpoint for the claim-layer timestamp (sigTst2, applied by
+   *  c2pa-swift itself), or null for an honestly untimed capture. Only
+   *  meaningful for the secure-enclave signer. */
+  tsaUrl?: string | null;
+  /** JSON array of {identifier, contentType, dataBase64} — binary resources
+   *  (thumbnails) for Builder.addResource. Secure-enclave signer only. */
+  resourcesJson?: string | null;
 }
 
 export interface IosSignResult {
@@ -643,9 +656,9 @@ export interface IosSignResult {
 }
 
 /**
- * Sign `bytes` (JPEG/PNG/MP4/MOV/M4A per `mime`) with a C2PA manifest. Offline:
- * no TSA. Throws on any engine error rather than emitting a half-signed
- * artifact.
+ * Sign `bytes` (JPEG/PNG/MP4/MOV/M4A per `mime`) with a C2PA manifest.
+ * `tsaUrl` null keeps the offline invariant. Throws on any engine error
+ * rather than emitting a half-signed artifact.
  */
 export async function sign(
   bytes: Uint8Array,
@@ -678,6 +691,9 @@ export async function sign(
           opts.signer.certificateChainPEM,
           opts.signer.keyTag ?? DEFAULT_ENCLAVE_KEY_TAG,
           opts.signer.requireBiometric ?? false,
+          opts.tsaUrl ?? null,
+          opts.resourcesJson ?? null,
+          opts.signer.useHeldBioContext ?? false,
         );
       }
       const signedBase64 = await FileSystem.readAsStringAsync(destPath, {
@@ -691,4 +707,319 @@ export async function sign(
       await FileSystem.deleteAsync(destPath, { idempotent: true }).catch(() => undefined);
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// c2pa-swift signing path: JPEG/PNG/BMFF bytes in, signed bytes out.
+// Gated behind UPSTREAM_SIGNING_EXPERIMENT, a compile-time flag rather than a
+// UI toggle.
+//
+// What the SDK manifest carries vs. the hand-rolled builder:
+//   CARRIED (JSON assertions, labels unchanged — the verifier reads by label):
+//     com.verify.telemetry (the signed attestation record), com.verify.app-attest,
+//     com.verify.transcript, com.verify.exif, com.verify.identity, and the
+//     JSON custom assertions (streamedChunks/contextTree/poseTrace/…).
+//   BINARY PAYLOADS : the SDK embeds binary blobs as
+//   RESOURCES (Builder.addResource + manifest identifier references — the
+//   C2PA-conventional bfdb/bidb layout, verified against the reference implementation): claim thumbnail via manifest.thumbnail,
+//   secondary-view still via a v3 ingredient's thumbnail. Depth maps ride
+//   as the standard c2pa.depthmap.GDepth assertion (its map image is
+//   base64-inside-payload already — no resource needed). pHash rides as
+//   com.verify.phash (JSON) — the SDK has no slot for raw CBOR soft-binding
+//   blocks; the verifier surfaces it through the same report field.
+//   Custom assertion URI references to arbitrary resources are NOT used:
+//   c2pa-rs only embeds resources referenced by thumbnail identifiers
+//   , so nothing references a resource the store lacks.
+//   PQ: record-only by design () — the SDK has no claim-PQ slot and
+//   none is needed; the record's pqScope: 'record' says so.
+//   RFC 3161: the caller's configured TSA endpoint is handed to c2pa-swift
+//   (sigTst2, applied by the SDK at sign time) — the same authority the
+//   hand-rolled path fetched from; null when none is configured, and the
+//   capture is then honestly untimed ("Not countersigned — device clock only").
+// ---------------------------------------------------------------------------
+
+/**
+ * Compile-time master gate for the SDK signing path. Even with this true,
+ * every capture additionally requires the runtime settings switch in
+ * src/lib/sdkSigningGate.ts before the SDK path runs. Both gates are real:
+ * on and on means the SDK signs, self-verifies, and falls back to the
+ * hand-rolled builder with a diagnostic entry on any failure.
+ */
+export const UPSTREAM_SIGNING_EXPERIMENT = true;
+
+/** DER → PEM (64-col base64), leaf first when mapping a chain. */
+export function derToPem(der: Uint8Array): string {
+  const b64 = bytesToBase64(der);
+  const lines = b64.match(/.{1,64}/g) ?? [];
+  return `-----BEGIN CERTIFICATE-----\n${lines.join('\n')}\n-----END CERTIFICATE-----\n`;
+}
+
+export interface SourceKitManifestSpec {
+  /** e.g. "Source Kit/1.0.0 (com.verify.camera)". */
+  appName: string;
+  title: string;
+  /** MIME format string for the SDK ('image/jpeg', 'video/mp4', …). */
+  format: string;
+  /** The signed attestation record (pqScope already declared inside it). */
+  telemetry: Record<string, unknown>;
+  appAttest?: Record<string, unknown> | null;
+  transcript?: unknown | null;
+  exif?: Record<string, number | string> | null;
+  identity?: { org: string; role: string } | null;
+  customAssertions?: { label: string; data: unknown }[] | null;
+  /** Claim thumbnail (≤512px JPEG), embedded as a c2pa.thumbnail.claim resource. */
+  thumbnailJpeg?: Uint8Array | null;
+  /**
+   * Secondary camera view: embedded as a v3 ingredient (title + thumbnail
+   * resource). The full-res commitment rides in com.verify.secondary-view
+   * (JSON) — c2pa-rs only embeds resources referenced by thumbnail
+   * identifiers, so the still's own bytes are not embeddable; the hash
+   * commitment is what the verifier checks on the desk side.
+   */
+  secondaryView?: { thumbnailJpeg: Uint8Array; fullResSha256: string; title: string } | null;
+  /**
+   * Video pair stills : each becomes a v3 ingredient with a
+   * thumbnail resource; the full-res hash commitments (pairIndex /
+   * hostSeconds anchors) ride in com.verify.video-stills (JSON) — c2pa-rs
+   * embeds only thumbnail-referenced resources, so the commitment data is
+   * the JSON assertion, exactly the split the photo path uses.
+   */
+  videoStills?: { thumbnailJpeg: Uint8Array; fullResSha256: string; pairIndex: number; hostSeconds: number | null }[] | null;
+  /**
+   * Depth map, GDepth-envelope fields exactly as the hand-rolled builder's
+   * c2pa.depthmap.GDepth CBOR (map image base64 inside — no resource needed).
+   * Emitted under the SAME standard label; the verifier reads CBOR payloads.
+   */
+  depthGdepth?: Record<string, unknown> | null;
+  /** Perceptual hash of the asset (com.verify.phash JSON: { alg, hex }). */
+  phashHex?: string | null;
+}
+
+/** A binary resource for the SDK Builder (embedded as bfdb/bidb). */
+export interface SourceKitResource {
+  /** Manifest identifier (thumbnail.identifier / ingredient thumbnail identifier). */
+  identifier: string;
+  contentType: string;
+  bytes: Uint8Array;
+}
+
+/**
+ * The manifestJSON the SDK Builder consumes, plus the binary resources the
+ * bridge must hand to Builder.addResource. Assertion LABELS are byte-for-byte
+ * the labels the hand-rolled builder emits — the verifier walks boxes by
+ * label, so a SDK-signed file is indistinguishable in structure from a
+ * hand-rolled one.
+ */
+export function buildSourceKitManifestJSON(spec: SourceKitManifestSpec): { manifestJSON: string; resources: SourceKitResource[] } {
+  const assertions: { label: string; data: unknown }[] = [
+    { label: 'com.verify.telemetry', data: spec.telemetry },
+  ];
+  const resources: SourceKitResource[] = [];
+  if (spec.appAttest) assertions.push({ label: 'com.verify.app-attest', data: spec.appAttest });
+  if (spec.transcript) assertions.push({ label: 'com.verify.transcript', data: spec.transcript });
+  if (spec.exif && Object.keys(spec.exif).length > 0) {
+    assertions.push({
+      label: 'com.verify.exif',
+      data: { note: 'camera-pipeline-reported, signed as self-reported metadata', ...spec.exif },
+    });
+  }
+  if (spec.identity) assertions.push({ label: 'com.verify.identity', data: spec.identity });
+  if (spec.depthGdepth) assertions.push({ label: 'c2pa.depthmap.GDepth', data: spec.depthGdepth });
+  // The alg identifier and the length guard are the hand-rolled builder's
+  // constant: two Source Kit files signed by different paths have to compare
+  // on the recovery primitive, and a malformed hash is dropped the same way
+  // on both sides.
+  if (spec.phashHex && /^[0-9a-f]{16}$/i.test(spec.phashHex)) {
+    assertions.push({ label: 'com.verify.phash', data: { alg: SOFT_BINDING_ALG_PHASH, hex: spec.phashHex } });
+  }
+  if (spec.secondaryView && /^[0-9a-f]{64}$/i.test(spec.secondaryView.fullResSha256)) {
+    assertions.push({
+      label: 'com.verify.secondary-view',
+      data: {
+        fullResSha256: spec.secondaryView.fullResSha256,
+        note: 'thumbnail is a lead, not the measurement pixels; the data hash commits the full-res still',
+      },
+    });
+  }
+  const stills = (spec.videoStills ?? []).filter(
+    (s) => s && s.thumbnailJpeg.length > 0 && /^[0-9a-f]{64}$/i.test(s.fullResSha256),
+  );
+  if (stills.length > 0) {
+    assertions.push({
+      label: 'com.verify.video-stills',
+      data: {
+        stills: stills.map((s) => ({ fullResSha256: s.fullResSha256, pairIndex: s.pairIndex, hostSeconds: s.hostSeconds })),
+        note: 'thumbnails are leads, not the measurement pixels; each data hash commits the vaulted pair frame',
+      },
+    });
+  }
+  for (const ca of spec.customAssertions ?? []) assertions.push({ label: ca.label, data: ca.data });
+
+  const manifest: Record<string, unknown> = {
+    claim_generator: spec.appName,
+    title: spec.title,
+    format: spec.format,
+    assertions,
+  };
+  if (spec.thumbnailJpeg && spec.thumbnailJpeg.length > 0) {
+    manifest.thumbnail = { identifier: 'com.verify.claim-thumbnail', format: 'image/jpeg' };
+    resources.push({ identifier: 'com.verify.claim-thumbnail', contentType: 'image/jpeg', bytes: spec.thumbnailJpeg });
+  }
+  const ingredients: Record<string, unknown>[] = [];
+  if (spec.secondaryView && spec.secondaryView.thumbnailJpeg.length > 0) {
+    ingredients.push({
+      title: spec.secondaryView.title,
+      format: 'image/jpeg',
+      relationship: 'inputTo',
+      thumbnail: { identifier: 'com.verify.secondary-thumbnail', format: 'image/jpeg' },
+    });
+    resources.push({ identifier: 'com.verify.secondary-thumbnail', contentType: 'image/jpeg', bytes: spec.secondaryView.thumbnailJpeg });
+  }
+  stills.forEach((s, i) => {
+    const identifier = `com.verify.pair-thumbnail-${s.pairIndex ?? i}`;
+    ingredients.push({
+      title: `verify-pair-${s.pairIndex ?? i}.jpg`,
+      format: 'image/jpeg',
+      relationship: 'componentOf',
+      thumbnail: { identifier, format: 'image/jpeg' },
+    });
+    resources.push({ identifier, contentType: 'image/jpeg', bytes: s.thumbnailJpeg });
+  });
+  if (ingredients.length > 0) manifest.ingredients = ingredients;
+  return { manifestJSON: JSON.stringify(manifest), resources };
+}
+
+export interface SourceKitSdkSignParams {
+  appName: string;
+  title: string;
+  telemetry: Record<string, unknown>;
+  appAttest?: Record<string, unknown> | null;
+  transcript?: unknown | null;
+  exif?: Record<string, number | string> | null;
+  identity?: { org: string; role: string } | null;
+  customAssertions?: { label: string; data: unknown }[] | null;
+  thumbnailJpeg?: Uint8Array | null;
+  secondaryView?: { thumbnailJpeg: Uint8Array; fullResSha256: string; title: string } | null;
+  videoStills?: { thumbnailJpeg: Uint8Array; fullResSha256: string; pairIndex: number; hostSeconds: number | null }[] | null;
+  depthGdepth?: Record<string, unknown> | null;
+  phashHex?: string | null;
+  /** DER chain, leaf first (the app's existing identity flow — never minted here). */
+  certChainDer: Uint8Array[];
+  /** Keychain tag of the enclave key the certChainDer leaf belongs to
+   * : without it, sign() falls back to the default
+   * tag and a biometric capture signs with the non-bio key against the
+   * bio cert. */
+  enclaveKeyTag?: string | null;
+  /** Configured RFC 3161 endpoint, or null for an honestly untimed capture. */
+  tsaUrl?: string | null;
+  /** the full witness pool in fallback order (timestamp.ts
+   * configuredTsaUrls) — each endpoint gets its own attempt through the
+   * loopback relay before the untimed retry fires. When present this
+   * supersedes tsaUrl. */
+  tsaUrls?: string[];
+  /** the caller holds a vaulted Face ID evaluation
+   * (enclaveSealBioHold) covering this sign — forwarded to the native
+   * signer's keychain query. Only set for biometric-bound keys. */
+  heldBioContext?: boolean;
+}
+
+export interface SourceKitSdkSignResult extends IosSignResult {
+  /** true when the configured TSA was unreachable and the seal was
+   * completed untimed on the single permitted retry. The claim then carries
+   * no RFC 3161 countersignature — the same honestly-untimed shape the
+   * hand-rolled path seals offline — and the caller's diagnostic names it. */
+  untimedTsaRetry: boolean;
+  /** the verbatim error string from the TIMED attempt when
+   * untimedTsaRetry fired (relay lastError + upstream text — see
+   * TsaLoopbackRelay.swift). Null on a timed success. Never read for
+   * control flow — diagnostics only. */
+  tsaError: string | null;
+  /** the witness URL whose RFC 3161 token countersigned this seal
+   * (null on an untimed seal — pool empty or every witness failed). The
+   * caller's diagnostic names the answering witness so a field run shows
+   * pool iteration on SUCCESS, not only on failure. Never read for control
+   * flow — diagnostics only. */
+  tsaWitness: string | null;
+}
+
+/**
+ * Sign media bytes with c2pa-swift using the app's Secure Enclave key and
+ * cert chain. Throws on any engine error — the caller's fallback decides what
+ * happens next; this function never degrades silently.
+ *
+ * The only network call inside a c2pa-rs sign is the RFC 3161 fetch, so a
+ * resolver-class throw with a TSA configured means the witness was
+ * unreachable rather than that signing failed.
+ *
+ * Witness-pool parity with the hand-rolled path: each configured endpoint
+ * gets its own one-shot relay attempt, only a TSA-class failure advances to
+ * the next witness, and the single permitted untimed retry fires only once
+ * every witness has failed that way. One authority being unreachable from a
+ * given network must not cost the countersignature while another answers.
+ * Any other failure — or the untimed retry's failure — propagates to the
+ * caller's fallback unchanged.
+ */
+export async function signSourceKitAssetSecureEnclave(
+  bytes: Uint8Array,
+  mime: string,
+  p: SourceKitSdkSignParams,
+): Promise<SourceKitSdkSignResult> {
+  const { manifestJSON, resources } = buildSourceKitManifestJSON({
+    appName: p.appName,
+    title: p.title,
+    format: mime,
+    telemetry: p.telemetry,
+    appAttest: p.appAttest ?? null,
+    transcript: p.transcript ?? null,
+    exif: p.exif ?? null,
+    identity: p.identity ?? null,
+    customAssertions: p.customAssertions ?? null,
+    thumbnailJpeg: p.thumbnailJpeg ?? null,
+    secondaryView: p.secondaryView ?? null,
+    videoStills: p.videoStills ?? null,
+    depthGdepth: p.depthGdepth ?? null,
+    phashHex: p.phashHex ?? null,
+  });
+  const resourcesJson = resources.length > 0
+    ? JSON.stringify(resources.map((r) => ({
+        identifier: r.identifier,
+        contentType: r.contentType,
+        dataBase64: bytesToBase64(r.bytes),
+      })))
+    : null;
+  const signer = {
+    kind: 'secure-enclave' as const,
+    certificateChainPEM: p.certChainDer.map(derToPem).join(''),
+    keyTag: p.enclaveKeyTag ?? undefined,
+    useHeldBioContext: p.heldBioContext ?? false,
+  };
+  // the witness pool, in order. tsaUrls supersedes tsaUrl; an
+  // empty/absent pool is an honestly untimed sign, not a retry case.
+  const tsaUrls = p.tsaUrls ?? (p.tsaUrl ? [p.tsaUrl] : []);
+  if (tsaUrls.length === 0) {
+    const result = await sign(bytes, mime, { manifestJSON, resourcesJson, signer, tsaUrl: null });
+    return { ...result, untimedTsaRetry: false, tsaError: null, tsaWitness: null };
+  }
+  // Each witness's failure text, verbatim, in the order tried — the
+  // untimed-retry diagnostic carries all of them, not just the last.
+  const tsaFailures: string[] = [];
+  for (const url of tsaUrls) {
+    try {
+      const result = await sign(bytes, mime, { manifestJSON, resourcesJson, signer, tsaUrl: url });
+      return { ...result, untimedTsaRetry: false, tsaError: null, tsaWitness: url };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      // 'TSA relay' — the loopback relay names itself in the error it
+      // appends (TsaLoopbackRelay.lastError), so a relay-side failure
+      // (listener, forward hop, upstream non-200) classifies here too.
+      const tsaUnreachable =
+        message.includes('http resolver') || message.includes('error sending request') || message.includes('TSA relay');
+      if (!tsaUnreachable) throw e; // a signing/manifest failure — never reclassify
+      tsaFailures.push(`${url}: ${message}`);
+    }
+  }
+  // Every configured witness failed TSA-class — seal untimed on the single
+  // permitted retry, with each witness's reason preserved.
+  const result = await sign(bytes, mime, { manifestJSON, resourcesJson, signer, tsaUrl: null });
+  return { ...result, untimedTsaRetry: true, tsaError: tsaFailures.join(' | '), tsaWitness: null };
 }

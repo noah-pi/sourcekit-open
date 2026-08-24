@@ -38,7 +38,12 @@ Pod::Spec.new do |s|
     'OTHER_SWIFT_FLAGS[sdk=iphonesimulator*]' => '$(inherited) -Xcc -fmodule-map-file=$(PODS_TARGET_SRCROOT)/Frameworks/C2PAC.xcframework/ios-arm64_x86_64-simulator/C2PAC.framework/Modules/module.modulemap -Xcc -I$(PODS_TARGET_SRCROOT)/Frameworks/C2PAC.xcframework/ios-arm64_x86_64-simulator/C2PAC.framework/Headers',
   }
 
-  s.frameworks = 'Security'
+  # Network for the loopback TSA relay's NWListener; LocalAuthentication for
+  # the vaulted biometric context. The SecureEnclave pod owns that vault, so
+  # this pod depends on it — two pod targets, one process.
+  s.frameworks = 'Security', 'Network', 'LocalAuthentication'
+
+  s.dependency 'SecureEnclave'
 
   # The module's own sources plus the vendored c2pa-swift API layer.
   s.source_files = '**/*.{h,m,mm,swift,hpp,cpp}'
