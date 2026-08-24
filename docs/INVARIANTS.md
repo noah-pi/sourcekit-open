@@ -160,7 +160,8 @@ registry, never from `layer.session` — that getter can read nil or stale while
 Fig still considers the layer attached.
 
 `modules/exhibit-camera/ios/ExhibitCameraModule.swift` · guarded by a debug
-assertion and the on-device soak run. **No CI job compiles or runs this code.**
+assertion and the on-device soak run. `ios-build` compiles this file but
+cannot exercise it: multi-cam needs real hardware.
 
 ### Expo async functions that block declare their own queue
 
