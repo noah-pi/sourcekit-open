@@ -478,10 +478,6 @@ claim made here.
 - **LiDAR.** Pro iPhones ship a depth scanner and nothing uses it for provenance. A sealed depth
 map answers the flat-screen question directly rather than inferring it from disparity, and it
 works in the dark.
-- **Altitude against terrain.** Every capture already seals a barometric altitude, and nothing
-  checks it against the ground elevation of the coordinate it claims. A GPS spoofer does not
-  reach the barometer, so the two disagree by however far the lie moved you. Arithmetic rather
-  than image interpretation.
 - **Wi-Fi networks against a public location database.** The network the phone was joined to is
   already sealed, and access point identifiers are broadly mapped by public wardriving projects.
   A sealed network four thousand miles from the sealed coordinate is a contradiction in plain
