@@ -7,7 +7,6 @@ import Security
  * App Attest (DCAppAttestService). Apple's App Attest CA signs an attestation
  * object stating that this is genuine Apple hardware running an unmodified
  * install of this app.
- *
  * App Attest keys have no SecKey access and can only be used through
  * DCAppAttestService, so they never sign manifests. The attestation is instead
  * bound to the app's own Secure Enclave signing key: the caller passes
@@ -15,13 +14,12 @@ import Security
  * attestation), and Apple's nonce extension in the attestation leaf
  * certificate certifies that binding. The registry server re-derives the same
  * construction.
- *
  * API:
- *   isSupported                        -> Bool
- *   hasAttestedKey                     -> Bool
- *   generateAttestKey                  -> String (keyId)
- *   attestKey(keyId, clientDataHashB64)  -> String (attestation object, base64)
- *   deleteAttestKey                    -> Void
+ * isSupported -> Bool
+ * hasAttestedKey -> Bool
+ * generateAttestKey -> String (keyId)
+ * attestKey(keyId, clientDataHashB64) -> String (attestation object, base64)
+ * deleteAttestKey -> Void
  */
 /**
  * SDK 57 workaround: promise.reject(code, description) drops the description,

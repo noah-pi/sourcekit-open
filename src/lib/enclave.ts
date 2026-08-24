@@ -2,12 +2,23 @@
 /**
  * Bridge to the native Secure Enclave module (modules/secure-enclave).
  * Absent on web, Expo Go, Android, or old builds — callers must check
- * `enclaveAvailable` and fall back to the software signer.
+ * `enclaveAvailable()` and fall back to the software signer.
  */
 
 import { Platform } from 'react-native';
 import { requireNativeModule } from 'expo-modules-core';
 import { base64ToBytes, bytesToBase64 } from './bytes';
+
+/**
+ * The Keychain application tags of the two enclave keys, exactly as
+ * SecureEnclaveModule.swift (the owner of these literals) writes them —
+ * `keyTag` / `bioKeyTag` there. The SDK signing path (c2pa-swift) queries
+ * the keychain by tag, so the tag has to be nameable on this side of the
+ * bridge: a signer that can't name its key would let the SDK fall back to
+ * its default tag and sign with the WRONG key (0.20.1 audit, Patch 2).
+ */
+export const ENCLAVE_KEY_TAG = 'com.verify.camera.signing-key';
+export const ENCLAVE_BIO_KEY_TAG = 'com.verify.camera.signing-key-bio';
 
 interface SecureEnclaveNative {
   isAvailable(): boolean;
@@ -24,19 +35,23 @@ interface SecureEnclaveNative {
   signBio(digestBase64: string): string;
   deleteBioKey(): void;
   /**
-   * Native seal: SHA-256(payload) plus the Enclave signature in one native
-   * call, so the payload is never hashed in JS. Returns DER base64.
+   * Native seal: SHA-256(payload) AND the Enclave signature in
+   * one native call — the payload is never hashed in JS. Returns DER base64.
    */
   seal(payloadBase64: string): string;
   /**
-   * Biometric seal: one Face ID/Touch ID evaluation covers all payloads in
-   * the call; the context is invalidated before it returns.
+   * Biometric seal: ONE Face ID/Touch ID evaluation, then every payload is
+   * signed with that freshly evaluated context, which is invalidated before
+   * the call returns. Per-use evaluation — there is no reusable session.
    */
   sealBio(payloadsBase64: string[], reason: string): Promise<string[]>;
-  /** One evaluation, vaulted, so the SDK arm's COSE signature rides the
-   *  same scan as the record signature. */
+  /**
+   * 0.20.5: ONE biometric evaluation vaulted for 30 s (SealContextVault) so
+   * the c2pa-swift arm's COSE signature rides the same scan as the record
+   * signature. sealBio calls made while a hold is live are covered by it.
+   */
   sealBioHold(reason: string): Promise<boolean>;
-  /** Releases and invalidates the held context. Safe when empty. */
+  /** Releases + invalidates the held context. Safe when empty. */
   sealBioRelease(): void;
   /** Active runtime-instrumentation findings. */
   deviceIntegrity(): { debuggerAttached: boolean; injectedLibraries: string[] };
@@ -102,10 +117,11 @@ export function enclaveBioDeleteKey(): void {
 }
 
 /**
- * Native seal: SHA-256 plus Enclave signature in one native call, so the
- * payload is hashed inside the module rather than in JS. Returns the DER
- * signature, or null when the native module lacks `seal` and the caller
- * should use the JS digest path.
+ * Native seal: SHA-256 + Enclave signature in one native
+ * call — the payload is hashed inside the native module, never in JS, which
+ * narrows the runtime-instrumentation hook surface. Returns the DER
+ * signature. Falls back to null on old native builds so callers can use the
+ * JS digest path.
  */
 export function enclaveSeal(payload: Uint8Array): Uint8Array | null {
   if (!native || typeof native.seal !== 'function') return null;
@@ -113,15 +129,11 @@ export function enclaveSeal(payload: Uint8Array): Uint8Array | null {
 }
 
 /**
- * Biometric native seal: one Face ID/Touch ID evaluation covers exactly the
- * payloads in this call, and the authenticated context is invalidated
- * natively before it returns, so no primed window survives.
- *
- * The exception is a live hold (enclaveSealBioHold): this call then signs
- * under that hold's evaluation instead of prompting, which is the whole
- * point of the one-prompt ceremony. The hold owns the window in that case.
- *
- * Null when the native module lacks `sealBio`.
+ * Biometric native seal: ONE Face ID/Touch ID evaluation covers exactly the
+ * payloads in this call; the authenticated context is invalidated natively
+ * before the call returns — per-use evaluation, no reusable session (a
+ * reusable primed window would let a runtime-instrumented process mint
+ * extra signatures silently inside the window). Null on old native builds.
  */
 export async function enclaveSealBio(payloads: Uint8Array[], reason: string): Promise<Uint8Array[] | null> {
   if (!native || typeof native.sealBio !== 'function') return null;
@@ -130,14 +142,11 @@ export async function enclaveSealBio(payloads: Uint8Array[], reason: string): Pr
 }
 
 /**
- * Biometric hold: evaluates Face ID or Touch ID once and vaults the context
- * natively, tag-scoped to the bio key and expiring on its own. While it is
- * held, both enclaveSealBio and the c2pa-swift arm sign without prompting
- * again, so a biometric capture costs one scan rather than two.
- *
- * Returns false when the native module predates the ceremony; callers then
- * skip the SDK arm and let the hand-rolled path prompt as before. Rejects,
- * like sealBio, when the scan itself fails or is cancelled.
+ * 0.20.5 biometric hold: evaluates Face ID/Touch ID ONCE and vaults the
+ * LAContext natively (30 s TTL, tag-scoped to the bio key). While held,
+ * enclaveSealBio AND the c2pa-swift arm (useHeldBioContext) sign without
+ * re-prompting. Returns false on old native builds — callers then skip the
+ * SDK arm and let the hand-rolled path prompt as before.
  */
 export async function enclaveSealBioHold(reason: string): Promise<boolean> {
   if (!native || typeof native.sealBioHold !== 'function') return false;
@@ -145,7 +154,7 @@ export async function enclaveSealBioHold(reason: string): Promise<boolean> {
   return true;
 }
 
-/** Releases the held context, invalidating it natively. Safe when empty. */
+/** Releases the held context (invalidated natively). Null-safe on old builds. */
 export function enclaveSealBioRelease(): void {
   if (!native || typeof native.sealBioRelease !== 'function') return;
   native.sealBioRelease();

@@ -2,40 +2,55 @@
 /**
  * Stereo-capture artifact ingestion (Spec-Camera-Module-0.13 §5 → seal).
  *
- * The native stereo module emits five optional artifacts per capture
- * alongside the primary delivery file, each a three-state evidence path
- * (EvidencePath semantics in src/provenance/manifest.ts, E.04):
+ * The native stereo module emits, per capture, five optional artifacts
+ * alongside the primary delivery file — each a THREE-STATE evidence path
+ * (src/provenance/manifest.ts EvidencePath semantics, E.04):
  *
- *   string (a path)   recorded; the bytes are read, hashed, and committed
- *   null              the sink was enabled but failed; the native error
- *                     string is committed verbatim
- *   'never-recorded'  the sink never ran (stereo unsupported, raw not
- *                     requested); the reason is committed at seal time
+ *   string (a path)   — recorded; the bytes are read, hashed, and committed
+ *   null              — the sink was ENABLED but failed; the native error
+ *                       string is committed, verbatim. A failure, stated.
+ *   'never-recorded'  — the sink never ran (stereo unsupported, raw not
+ *                       requested, …) — an unreached state, never suspicion,
+ *                       never red. The declaration is committed with its
+ *                       reason at seal time.
  *
- * Every artifact lands in exactly one state, and the state is committed two
- * ways:
+ * NO SILENT ABSENCE: every artifact of every stereo capture lands in exactly
+ * one of those states, and the state itself is committed two ways:
  *
  *   1. a `context.stereo-*` claim in the capture's disclosure context tree
- *      (disclosure/captureCommit.ts). The claim value is 'sha256:<hex>',
- *      'error:<string>', or 'never-recorded[:<reason>]', and the inventory
- *      meta-leaf at tree index 0 (disclosure/inventory.ts) binds the full
- *      entries list into the signed root. Immutable after commit time.
+ *      (disclosure/captureCommit.ts). The claim VALUE states the outcome —
+ *      'sha256:<hex>' when recorded, 'error:<string>' when the sink failed,
+ *      'never-recorded[:<reason>]' when unreached — and the inventory
+ *      meta-leaf at tree index 0 (disclosure/inventory.ts, audit A-01)
+ *      binds the full entries list into the signed root. The declaration is
+ *      made AT COMMIT TIME and is immutable after — the same binding the
+ *      fixed-ladder never-recorded states get. (The context family is
+ *      free-form: these five claims are committed leaves rather than
+ *      never-recorded STATES, which the fixed schema reserves for ladder
+ *      rungs; the committed-value form is strictly stronger — the state is
+ *      a signed value, not just an entry flag.)
  *
- *   2. a `stereo` section in the proof bundle (lib/proofBundle.ts, format
- *      'exhibit-proof-bundle/2') carrying per-artifact state, hash, byte
- *      count, and, for every artifact except the multi-megabyte DNG, the
- *      bytes inline as base64. The stereo check needs the pixels and never
- *      accepts a hash-only secondary frame. The raw DNG is hash-only; its
- *      bytes stay in the vault.
+ *   2. a `stereo` section in the proof bundle (lib/proofBundle.ts,
+ *      format 'exhibit-proof-bundle/2') carrying per-artifact state, hash,
+ *      byte count, and — for every artifact except the multi-megabyte DNG —
+ *      the bytes themselves, inline as base64. The desk needs the PIXELS:
+ *      the stereo verifier never accepts a hash-only secondary frame
+ *      (desk/stereo/types.ts). The raw DNG rides hash-only; its bytes stay
+ *      in the vault (stated in the entry, never implied).
  *
- * This module also builds the StereoCommitment that verifyStereoCommitment
- * consumes. The interfaces here mirror that contract structurally so this
- * file stays importable from the app tree with no extra dependency;
- * tests/test-stereo-bundle.mts runs the output through the real verifier.
+ * This module also builds the StereoCommitment the desk feeds to
+ * verifyStereoCommitment. desk/stereo/types.ts is the CANONICAL contract;
+ * the interfaces here mirror it structurally (this file must stay importable
+ * from the app tree, which does not carry desk/). The desk command
+ * (desk/cli/stereoVerify.ts) assigns the result to the canonical type, so
+ * drift fails the desk's own typecheck — and the bundle suite
+ * (tests/test-stereo-bundle.mts) runs the result through the real verifier.
  *
- * A hash mismatch between the bundle's embedded bytes and the committed hash
- * is a red-class tamper failure, distinct from absence and from a stated
- * record error. This module commits inputs and draws no conclusions.
+ * HONESTY RULES (standing): absence is never suspicion; a hash mismatch
+ * between the bundle's embedded bytes and the committed hash is PROVEN
+ * TAMPER — a red-class failure, distinct from absence and from a stated
+ * record error; nothing here says "passed" or "authentic". This module
+ * commits inputs; it never concludes.
  */
 
 import { sha256 } from '@noble/hashes/sha256';
@@ -44,7 +59,7 @@ import type { EvidencePath } from './manifest';
 import type { ContextClaim } from '../disclosure/inventory';
 
 // ---------------------------------------------------------------------------
-// The artifact set (Spec-Camera-Module-0.13 §5, commitment contract).
+// The artifact set (Spec-Camera-Module-0.13 §5 "The COMMITMENT CONTRACT").
 // ---------------------------------------------------------------------------
 
 export type StereoArtifactId = 'secondaryFrame' | 'calibration' | 'timestamps' | 'metadata' | 'rawDng';
@@ -72,9 +87,9 @@ const ARTIFACT_MIME: Record<StereoArtifactId, string> = {
 
 /**
  * Artifacts whose bytes ride the proof bundle inline. The secondary frame
- * (~200 KB) and the three small JSON blocks are geometry inputs the desk
- * recomputes from, so they travel with the proof. The raw DNG (tens of MB)
- * is hash-only: committed and vault-held.
+ * (~200 KB) and the three small JSON blocks are geometry INPUTS — the desk
+ * recomputes from them, so they must travel with the proof. The raw DNG
+ * (tens of MB) is hash-only: committed, vault-held, stated as such.
  */
 const INLINE_IN_BUNDLE: Record<StereoArtifactId, boolean> = {
   secondaryFrame: true,
@@ -85,21 +100,21 @@ const INLINE_IN_BUNDLE: Record<StereoArtifactId, boolean> = {
 };
 
 // ---------------------------------------------------------------------------
-// Input: the CaptureResult handoff. The wiring layer (capture screen → seal
-// queue) maps the native module's per-capture payload onto this shape: each
-// artifact's three-state path as reported, the bytes read from the path when
-// recorded, the native error string when the sink failed, and the reason when
-// never recorded.
+// Input — the CaptureResult handoff. The wiring layer (capture screen →
+// seal queue) maps the native module's per-capture payload onto this shape:
+// each artifact's three-state path exactly as reported, the bytes read from
+// the path when recorded, the native error string when the sink failed, and
+// the stated reason when never recorded.
 // ---------------------------------------------------------------------------
 
 export interface StereoArtifactInput {
   /** The native module's three-state path for this artifact (E.04). */
   path: EvidencePath;
-  /** The artifact bytes, read from `path`. Required when path is a real path. */
+  /** The artifact bytes, read from `path`. REQUIRED when path is a real path. */
   bytes?: Uint8Array | null;
-  /** The native error string. Required when path === null (enabled but failed). */
+  /** The native error string — REQUIRED when path === null (enabled-but-failed). */
   error?: string | null;
-  /** The reason (e.g. 'stereo-unsupported', 'raw-unsupported') when 'never-recorded'. */
+  /** The stated reason (e.g. 'stereo-unsupported', 'raw-unsupported') when 'never-recorded'. */
   reason?: string | null;
 }
 
@@ -111,27 +126,28 @@ export type StereoCaptureArtifacts = Record<StereoArtifactId, StereoArtifactInpu
 
 export interface StereoArtifactBundleEntry {
   state: 'recorded' | 'error' | 'never-recorded';
-  /** SHA-256 (hex) of the artifact bytes. Present iff state === 'recorded'. */
+  /** SHA-256 (hex) of the artifact bytes — present iff state === 'recorded'. */
   sha256?: string;
-  /** Artifact byte count. Present iff state === 'recorded'. */
+  /** Artifact byte count — present iff state === 'recorded'. */
   bytes?: number;
   mime?: string;
   /**
-   * The artifact bytes, base64. Present when recorded and small enough to
-   * ride the bundle (everything except rawDng, which is hash-only).
+   * The artifact bytes, base64 — present when recorded AND the artifact is
+   * small enough to ride the bundle (everything except rawDng). ABSENT for
+   * rawDng is a stated hash-only commitment, never a silent omission.
    */
   dataBase64?: string;
-  /** The committed native error string. Present iff state === 'error'. */
+  /** The committed native error string — present iff state === 'error'. */
   error?: string;
-  /** The reason, when state === 'never-recorded' and the module gave one. */
+  /** The stated reason — present when state === 'never-recorded' and the module gave one. */
   reason?: string;
 }
 
 export interface StereoBundleSection {
-  /** SHA-256 (hex) of the primary delivery file; the record's asset hash. */
+  /** SHA-256 (hex) of the primary delivery file — the record's asset hash. */
   primaryFrameSha256: string;
   artifacts: Record<StereoArtifactId, StereoArtifactBundleEntry>;
-  /** The context-tree claimIds whose committed values restate these states. */
+  /** The context-tree claimIds whose committed VALUES restate these states (binding 1, header). */
   contextClaimIds: string[];
   note: string;
 }
@@ -144,7 +160,7 @@ export const STEREO_BUNDLE_NOTE =
   'same states are committed as context.stereo-* claim values in the capture\'s context tree ' +
   '(com.verify.contextTree), so the signed root binds them.';
 
-/** Length cap on committed error strings. */
+/** Cap on committed error strings — committed verbatim, but bounded. */
 const MAX_ERROR_CHARS = 500;
 
 function claimValueFor(id: StereoArtifactId, input: StereoArtifactInput, sha256Hex?: string): string {
@@ -155,12 +171,13 @@ function claimValueFor(id: StereoArtifactId, input: StereoArtifactInput, sha256H
 
 /**
  * Commit one capture's stereo artifacts: hash what was recorded, carry the
- * error strings verbatim, declare the never-recorded states, and produce both
- * commitment surfaces (bundle section and context-tree claims).
+ * error strings verbatim, declare the never-recorded states — and produce
+ * both commitment surfaces (bundle section + context-tree claims).
  *
  * Throws on any violation of the three-state contract: a recorded path
- * without bytes, a null path without its error string, or an unknown path
- * value.
+ * without bytes, a null path without its error string, an unknown path
+ * value. A capture that cannot say which state an artifact is in must not
+ * commit — the same rule the disclosure inventory enforces for claims.
  */
 export function commitStereoArtifacts(
   artifacts: StereoCaptureArtifacts,
@@ -193,7 +210,7 @@ export function commitStereoArtifacts(
       contextClaims.push({ claimId: STEREO_CLAIM_IDS[id], family: 'context', rung: 0, value: claimValueFor(id, input, digest) });
     } else if (path === null) {
       if (typeof input.error !== 'string' || input.error.length === 0) {
-        throw new Error(`stereoArtifacts: artifact '${id}' is null (enabled-but-failed) but carries no error string`);
+        throw new Error(`stereoArtifacts: artifact '${id}' is null (enabled-but-failed) but carries no error string — the failure must be stated`);
       }
       entries[id] = { state: 'error', error: input.error.slice(0, MAX_ERROR_CHARS), mime: ARTIFACT_MIME[id] };
       contextClaims.push({ claimId: STEREO_CLAIM_IDS[id], family: 'context', rung: 0, value: claimValueFor(id, input) });
@@ -220,10 +237,10 @@ export function commitStereoArtifacts(
 }
 
 // ---------------------------------------------------------------------------
-// Output (b): the StereoCommitment. These types mirror what
-// verifyStereoCommitment expects; keep them field-for-field identical. The
-// bundle suite runs the real verifier on this output, so drift shows up as a
-// test failure.
+// Output (b): the StereoCommitment. MIRRORED types — canonical contract is
+// desk/stereo/types.ts; keep field-for-field identical (the desk command
+// assigns through the canonical type, and the bundle suite exercises the
+// real verifier on this output).
 // ---------------------------------------------------------------------------
 
 export interface CameraIntrinsicsShape {
@@ -263,9 +280,10 @@ export interface StereoCommitmentShape {
     distortionLut?: DistortionLutShape;
   };
   syncTimestampDeltaMs: number;
-  /** Photo commitments carry the per-capture metadata block; video pair
-      commitments carry none, so the distance gate weighs the disparity cue
-      alone. */
+  /** Photo commitments carry the per-capture metadata block; VIDEO pair
+      commitments carry none (the module commits no per-pair block), so the
+      distance gate weighs the disparity cue alone. Optional since 0.13.0 —
+      the desk's use was already optional-chained. */
   metadataBlock?: StereoMetadataBlockShape;
 }
 
@@ -273,12 +291,13 @@ export interface StereoCommitmentShape {
 
 /**
  * The committed calibration JSON (Spec §4.2 point 3, JSON-serialized for the
- * seal path): both devices' intrinsics in pixels, the rig extrinsics with the
- * baseline in meters, the ultra-wide forward distortion LUT in the
+ * seal path): both devices' intrinsics in pixels, the rig extrinsics with
+ * the baseline in meters, the ultra-wide forward distortion LUT in the
  * desk-normalized {width,height,domainRadius,values} form, and a
- * `calibrationSource` label naming where the numbers came from (e.g.
- * 'avcamera-calibration-data' for OS frame attachments). The label is carried
- * through only; it never changes how a number is weighed.
+ * `calibrationSource` label stating WHERE the numbers came from (e.g.
+ * 'avcamera-calibration-data' — OS frame attachments; a future static
+ * fallback must say so). The label rides along; the desk never upgrades a
+ * number because of it.
  */
 export interface StereoCalibrationJson {
   calibrationSource: string;
@@ -287,10 +306,10 @@ export interface StereoCalibrationJson {
   extrinsics: {
     rotation: number[];
     translationM: [number, number, number];
-    /** |translationM| as committed by the device; cross-checked downstream. */
+    /** |translationM| as committed by the device — cross-checked, not trusted. */
     baselineMeters?: number;
   };
-  /** Forward LUT (undistorted → distorted), desk-normalized. The UW lens. */
+  /** Forward LUT (undistorted → distorted), desk-normalized — the UW lens. */
   distortionLut?: DistortionLutShape;
 }
 
@@ -361,7 +380,8 @@ export function parseStereoCalibration(jsonText: string): StereoCalibrationJson 
 /**
  * The committed sync timestamps (Spec §4.2 point 4): each frame's PTS in
  * host-clock seconds, the wall-clock anchor, and the inter-frame delta in
- * milliseconds. Committed uninterpreted.
+ * milliseconds — the sync CLAIM, committed uninterpreted (what it means is
+ * the desk's problem).
  */
 export interface StereoTimestampsJson {
   primaryPtsSeconds: number;
@@ -396,15 +416,16 @@ export function parseStereoTimestamps(jsonText: string): StereoTimestampsJson {
 // ---- metadata JSON (CameraMetadataBlock, Spec §5) → StereoMetadataBlock ---
 
 /**
- * The committed camera metadata block (Spec §5 plus 0.13 §5 additions).
- * Every field is a read value or explicit null. `focusDistanceMeters` is
- * always null because iOS exposes no focus-distance API, so the desk's
- * distance gate weighs only the geometry it recomputes.
- * `controlsReportedBy: 'device'` labels every control value as a read-back.
+ * The committed camera metadata block (Spec §5 + 0.13 §5 additions). Every
+ * field is literally true or explicit null; `focusDistanceMeters` is null BY
+ * CONSTRUCTION (iOS exposes no focus-distance API — stated, never fabricated
+ * from lensPosition), so the desk's distance gate weighs only the geometry
+ * it recomputes. `controlsReportedBy: 'device'` labels every control value
+ * as a device read-back.
  */
 export interface CameraMetadataBlock {
   controlsReportedBy: 'device';
-  /** Always null on this platform (Spec §5). */
+  /** Always null on this platform (Spec §5) — the honesty rule, committed. */
   focusDistanceMeters: number | null;
   /** Millimeter focal length (EXIF FocalLength read-back). */
   focalLengthMm: number;
@@ -413,9 +434,9 @@ export interface CameraMetadataBlock {
   iso: number;
   /** Which physical device fired as primary (e.g. 'wide'). */
   physicalDevice: string;
-  /** Mains-frequency hint, labeled 'region-derived' (Spec §5; no flicker API). */
+  /** Mains-frequency hint, labeled 'region-derived' (Spec §5 — no flicker API). */
   antiBanding: string;
-  /** Remaining committed fields ride through untyped. */
+  /** Remaining committed fields ride through untyped — the desk reads what it needs. */
   [k: string]: unknown;
 }
 
@@ -431,8 +452,8 @@ export function stereoMetadataFromBlock(block: CameraMetadataBlock): StereoMetad
     return v;
   };
   return {
-    // Null focus distance means the field is absent from the block the desk
-    // weighs, leaving the triangulation cue alone.
+    // null-by-construction → the field is simply absent from the block the
+    // desk weighs; the gate's geometry cue (triangulation) stands alone.
     ...(typeof block.focusDistanceMeters === 'number' ? { focusDistanceM: block.focusDistanceMeters } : {}),
     focalLengthMm: num(block.focalLengthMm, 'focalLengthMm'),
     aperture: num(block.apertureFNumber, 'apertureFNumber'),
@@ -456,16 +477,17 @@ export function stereoEntryBytes(entry: StereoArtifactBundleEntry, id: StereoArt
 }
 
 /**
- * Build the StereoCommitment from a bundle section. Requires recorded and
- * intact secondaryFrame, calibration, timestamps, and metadata; anything less
- * and the caller reports the per-artifact states instead. Hash integrity is
- * checked first, so a tampered section throws before reaching the verifier.
+ * Build the StereoCommitment (desk/stereo/types.ts shape) from a bundle
+ * section. Requires recorded+intact secondaryFrame, calibration, timestamps,
+ * and metadata — anything less and the caller reports the per-artifact
+ * states instead of fabricating geometry inputs. Hash integrity is checked
+ * FIRST: a tampered section throws rather than reaching the verifier.
  */
 export function buildStereoCommitment(section: StereoBundleSection): StereoCommitmentShape {
   for (const id of ['secondaryFrame', 'calibration', 'timestamps', 'metadata'] as const) {
     const state = section.artifacts[id]?.state;
     if (state !== 'recorded') {
-      throw new Error(`stereo commitment cannot be built: artifact '${id}' is ${state ?? 'absent'} — its state cannot be patched over`);
+      throw new Error(`stereo commitment cannot be built: artifact '${id}' is ${state ?? 'absent'}`);
     }
   }
   const integrity = checkStereoSectionIntegrity(section);
@@ -494,19 +516,20 @@ export function buildStereoCommitment(section: StereoBundleSection): StereoCommi
 }
 
 // ---------------------------------------------------------------------------
-// Integrity: committed hash vs embedded bytes. A mismatch is proven tamper
-// (red-class, fail-closed), distinct from the absence states never-recorded
-// and error.
+// Integrity: committed hash vs embedded bytes. A mismatch is PROVEN TAMPER —
+// the bundle's own commitment is violated; red-class, fail-closed, and
+// DISTINCT from absence (never-recorded / error are gray/amber statements,
+// never suspicion).
 // ---------------------------------------------------------------------------
 
 export type StereoArtifactIntegrity =
   /** Embedded bytes hash to the committed value. */
   | 'hash-match'
-  /** Embedded bytes do not hash to the committed value: proven tamper. */
+  /** Embedded bytes do NOT hash to the committed value — proven tamper. */
   | 'PROVEN-TAMPER'
-  /** Recorded but hash-only (rawDng): the bytes are not inline. */
+  /** Recorded but hash-only (rawDng): the bytes are not inline; stated. */
   | 'hash-only'
-  /** Declared unreached at commit time. */
+  /** Declared unreached at commit time — never suspicion. */
   | 'never-recorded'
   /** The sink failed; the committed error string stands. */
   | 'record-error';
@@ -520,7 +543,7 @@ export interface StereoIntegrityResult {
     photo section and the per-pair video entries. */
 function stereoEntryIntegrity(id: string, e: StereoArtifactBundleEntry): StereoIntegrityResult {
   if (e.state === 'never-recorded') {
-    return { integrity: 'never-recorded', detail: `never-recorded${e.reason ? ` (${e.reason})` : ''} — an unreached state` };
+    return { integrity: 'never-recorded', detail: `never-recorded${e.reason ? ` (${e.reason})` : ''} — an unreached state, not suspicion` };
   }
   if (e.state === 'error') {
     return { integrity: 'record-error', detail: `record error, committed verbatim: ${e.error}` };
@@ -545,8 +568,8 @@ export function checkStereoSectionIntegrity(section: StereoBundleSection): Recor
   for (const id of STEREO_ARTIFACT_IDS) {
     const e = section.artifacts[id];
     if (!e) {
-      // A missing entry in a /2 bundle section is a malformed bundle, not an
-      // absence state; the commit path never produces it.
+      // A missing entry in a /2 bundle section is a MALFORMED bundle, not an
+      // absence state — the commit path never produces it.
       out[id] = { integrity: 'PROVEN-TAMPER', detail: `entry for '${id}' is missing from the stereo section — the commit path accounts for every artifact; this section was altered` };
       continue;
     }
@@ -590,28 +613,31 @@ export function hashArtifactBytes(bytes: Uint8Array): string {
   return bytesToHex(sha256(bytes));
 }
 
-/** Re-exports for the wiring layer so it does not re-derive encodings. */
+/** Re-exports used by the wiring layer so it never re-derives encodings. */
 export { utf8ToBytes, bytesToUtf8 };
 
 // ---------------------------------------------------------------------------
-// Video stereo pairs (Spec-Camera-Module-0.13 §8): the periodic pairs the
-// module dumps during video recording, at a cadence rather than continuously,
-// for thermal headroom. Per pair the module writes:
+// VIDEO stereo pairs (Spec-Camera-Module-0.13 §8): the periodic pairs the
+// module dumps during video recording (pair cadence, never continuous, for
+// thermal headroom). What the module actually writes per pair:
 //   pairs/pair-%04d-secondary.jpg     (downsampled ~640×480 ultra-wide JPEG)
 //   pairs/pair-%04d-calibration.json  (the native calibration shape)
-// The per-pair PTS anchors land in no file; they ride the
+// The per-pair PTS anchors do NOT land in a file — they ride the
 // onStereoPairCaptured event ({index, primaryHostSeconds,
-// synchronizedDeltaMs}) and are committed as entry fields verbatim, nulls
-// included. Missed pairs consume no pairIndex natively, so they are declared
-// by the committed pairsMissed count.
+// synchronizedDeltaMs}), so they are committed as entry FIELDS, verbatim,
+// with nulls stated (a null anchor is what the module reported, never a gap
+// the glue invented). Missed pairs carry no index natively (the module
+// counts them without consuming a pairIndex) — a missed pair is therefore
+// declared by the committed pairsMissed COUNT, printed verbatim desk-side:
+// a stated fact, never suspicion, never silently absent.
 // ---------------------------------------------------------------------------
 
 export type StereoVideoArtifactId = 'secondaryFrame' | 'calibration';
 export const STEREO_VIDEO_ARTIFACT_IDS: readonly StereoVideoArtifactId[] = ['secondaryFrame', 'calibration'];
 
-/** The signed context.stereo-video-* claim ids: the counts plus a root over
-    every pair entry's committed states and hashes, so one claim binds the
-    whole list. */
+/** The signed context.stereo-video-* claim ids (binding: the counts AND a
+    root over every pair entry's committed states/hashes, so one signed
+    claim binds the whole list without 2N claims). */
 export const STEREO_VIDEO_CLAIM_IDS = {
   pairsCommitted: 'context.stereo-video-pairs-committed',
   pairsMissed: 'context.stereo-video-pairs-missed',
@@ -619,15 +645,15 @@ export const STEREO_VIDEO_CLAIM_IDS = {
   pairsRoot: 'context.stereo-video-pairs-root',
 } as const;
 
-/** PTS anchors from the native onStereoPairCaptured event, verbatim. Null is
-    the module's own report (non-finite PTS or no delta). */
+/** PTS anchors from the native onStereoPairCaptured event — verbatim; null
+    is the module's own report (non-finite PTS / no delta), stated. */
 export interface StereoVideoPairAnchors {
   primaryHostSeconds: number | null;
   synchronizedDeltaMs: number | null;
 }
 
-/** One pair at commit time: the event's anchors plus the two on-disk
-    artifacts, in the photo path's three-state input contract. */
+/** One pair at commit time: the event's anchors + the two on-disk artifacts
+    in the same three-state input contract as the photo path. */
 export interface StereoVideoPairInput {
   pairIndex: number;
   anchors: StereoVideoPairAnchors;
@@ -642,15 +668,15 @@ export interface StereoVideoPairEntry {
 }
 
 export interface VideoStereoBundleSection {
-  /** SHA-256 (hex) of the stripped delivery video file (record.asset.sha256). */
+  /** SHA-256 (hex) of the stripped delivery VIDEO file (record.asset.sha256). */
   primaryVideoSha256: string;
-  /** Counts committed verbatim from the native stop result, not recomputed. */
+  /** Counts committed VERBATIM from the native stop result — never recomputed. */
   pairsCommitted: number;
   pairsMissed: number;
   hardwareCost: number | null;
   /** Ordered committed pair entries (ascending pairIndex, as reported). */
   pairs: StereoVideoPairEntry[];
-  /** The context-tree claimIds whose committed values restate the counts and root. */
+  /** The context-tree claimIds whose committed VALUES restate the counts + root. */
   contextClaimIds: string[];
   note: string;
 }
@@ -660,16 +686,16 @@ export const STEREO_VIDEO_BUNDLE_NOTE =
   'recording. Each pair carries the two artifacts the module writes (secondary frame + calibration) ' +
   'in the same three-state contract as the photo path, plus the PTS anchors from the pair event, ' +
   'verbatim. pairsCommitted / pairsMissed / hardwareCost are the native stop result, restated as ' +
-  'signed context.stereo-video-* claims; a missed pair is a declared count, never ' +
-  'silently absent. The pairs-root claim binds every entry\'s committed states and hashes.';
+  'signed context.stereo-video-* claims; a missed pair is a declared count. ' +
+  'The pairs-root claim binds every entry\'s committed states and hashes.';
 
 function isFiniteOrNull(v: unknown): v is number | null {
   return v === null || (typeof v === 'number' && Number.isFinite(v));
 }
 
 /** Canonical form of the committed pair entries for the pairs-root claim:
-    every committed field except the inline bytes (the hashes bind those),
-    keys in construction order, pairs in ascending pairIndex. */
+    every committed field EXCEPT the inline bytes (the hashes already bind
+    them), keys in construction order, pairs in ascending pairIndex. */
 export function canonicalVideoPairs(pairs: StereoVideoPairEntry[]): string {
   return JSON.stringify(
     pairs.map((p) => ({
@@ -693,13 +719,15 @@ export function canonicalVideoPairs(pairs: StereoVideoPairEntry[]): string {
 }
 
 /**
- * Commit one video capture's periodic stereo pairs. Same fail-closed rule as
- * the photo path: a recorded path without bytes, a null path without its
- * error string, an unknown path value, or a malformed anchor throws.
+ * Commit one video capture's periodic stereo pairs. Same fail-closed rule
+ * as the photo path: a recorded path without bytes, a null path without its
+ * error string, an unknown path value, or a malformed anchor throws — a
+ * capture that cannot state a pair must not commit.
  *
  * `counts` is the native stop result (pairsCommitted / pairsMissed /
- * hardwareCost), committed verbatim rather than recomputed from the pair
- * list, so pairs.length and pairsCommitted are both visible downstream.
+ * hardwareCost), committed VERBATIM — never recomputed from the pair list
+ * (a dropped event stream is itself visible: pairs.length vs pairsCommitted
+ * are both committed, and the desk prints both).
  */
 export function commitStereoVideoArtifacts(
   pairs: StereoVideoPairInput[],
@@ -746,7 +774,7 @@ export function commitStereoVideoArtifacts(
         };
       } else if (input.path === null) {
         if (typeof input.error !== 'string' || input.error.length === 0) {
-          throw new Error(`stereoArtifacts: pair ${p.pairIndex} artifact '${id}' is null (enabled-but-failed) but carries no error string`);
+          throw new Error(`stereoArtifacts: pair ${p.pairIndex} artifact '${id}' is null (enabled-but-failed) but carries no error string — the failure must be stated`);
         }
         artifacts[id] = { state: 'error', error: input.error.slice(0, MAX_ERROR_CHARS), mime: ARTIFACT_MIME[id] };
       } else if (input.path === 'never-recorded') {
@@ -785,8 +813,8 @@ export function commitStereoVideoArtifacts(
   };
 }
 
-/** Per-pair integrity: the photo section's committed-hash-vs-embedded-bytes
-    rule, keyed by pairIndex so a mismatch names its pair. */
+/** Per-pair integrity — the same committed-hash-vs-embedded-bytes rule as
+    the photo section, keyed by pairIndex so a tamper NAMES its pair. */
 export function checkVideoStereoSectionIntegrity(
   section: VideoStereoBundleSection,
 ): Array<{ pairIndex: number; results: Record<StereoVideoArtifactId, StereoIntegrityResult> }> {
@@ -803,11 +831,13 @@ export function checkVideoStereoSectionIntegrity(
 }
 
 /**
- * The StereoCommitment for one video pair; the desk's planarity signal runs
- * per pair. Same shape as the photo commitment except metadataBlock, which
- * the module does not commit per pair, so the distance gate weighs the
- * disparity cue alone. Throws when the pair's secondary or calibration is not
- * recorded, when integrity fails, or when the sync delta anchor is null.
+ * The StereoCommitment for ONE video pair — the desk's planarity signal runs
+ * per pair. Same mirrored shape as the photo commitment EXCEPT metadataBlock
+ * is absent: the module commits no per-pair metadata block, so the distance
+ * gate weighs the disparity cue alone (stated in the signal text).
+ * Throws — stated, never patched over — when the pair's secondary or
+ * calibration is not recorded, when integrity fails, or when the sync delta
+ * anchor is null (the pair's own report).
  */
 export function buildStereoVideoPairCommitment(
   section: VideoStereoBundleSection,
@@ -820,7 +850,7 @@ export function buildStereoVideoPairCommitment(
   for (const id of STEREO_VIDEO_ARTIFACT_IDS) {
     const state = pair.artifacts[id]?.state;
     if (state !== 'recorded') {
-      throw new Error(`stereo commitment cannot be built for pair ${pairIndex}: artifact '${id}' is ${state ?? 'absent'} — its state cannot be patched over`);
+      throw new Error(`stereo commitment cannot be built for pair ${pairIndex}: artifact '${id}' is ${state ?? 'absent'}`);
     }
   }
   const integrity = checkVideoStereoSectionIntegrity(section).find((r) => r.pairIndex === pairIndex)!;
@@ -829,7 +859,7 @@ export function buildStereoVideoPairCommitment(
     throw new Error(`stereo commitment refused for pair ${pairIndex}: PROVEN TAMPER on ${tampered.join(', ')} — embedded bytes do not match the committed hash`);
   }
   if (pair.anchors.synchronizedDeltaMs === null) {
-    throw new Error(`stereo commitment cannot be built for pair ${pairIndex}: the pair event reported no sync delta — a stated gap, not a number to invent`);
+    throw new Error(`stereo commitment cannot be built for pair ${pairIndex}: the pair event reported no sync delta — a stated gap, never a number to invent`);
   }
   const calibration = parseStereoCalibration(bytesToUtf8(stereoEntryBytes(pair.artifacts.calibration, 'calibration')));
   return {
@@ -845,7 +875,7 @@ export function buildStereoVideoPairCommitment(
       ...(calibration.distortionLut ? { distortionLut: calibration.distortionLut } : {}),
     },
     syncTimestampDeltaMs: pair.anchors.synchronizedDeltaMs,
-    // The module commits no per-pair metadata block.
+    // No per-pair metadata block exists — the module commits none for pairs.
   };
 }
 

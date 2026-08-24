@@ -1,26 +1,56 @@
 /**
- * Custody ladder for proof bundles — five rungs projecting checks the
- * verification core already performs. Nothing here computes new cryptography
- * or fuses rungs into a score. Not reachable from the app: nothing imports
- * this module, and the app's verdict surface is src/lib/trustLadder.ts.
+ * The custody ladder (M0) — five rungs, each a projection of checks
+ * verify-core ALREADY performs. Nothing here computes new cryptography and
+ * nothing fuses rungs into a score: a rung states what was compared, how it
+ * landed, or why it could not run. Absence of proof is neutral and said out
+ * loud; a check that could not run is a rung with a stated reason, never an
+ * absence.
  *
- * Rung 1 — Seal intact.        Record signature and payload digest, plus the
- *                              media re-hash comparison.
- * Rung 2 — Device credential.  The record's own custody commitments:
- *                              orgCredential, biometricBound, deviceIntegrity,
- *                              captureIntegrity. These are self-reported, not
- *                              hardware proof; the x5chain and App Attest
- *                              checks run in the verification report.
- * Rung 3 — Roster.             Roster signature, resolution and membership.
- *                              Proof artifacts carry no pinned-authority time,
- *                              so membership evaluates at atMs = null and
- *                              reports 'unknown-time'. Callers pass in the
- *                              rosters they hold (src/lib/rosterStore); there
- *                              is no fetch here.
- * Rung 4 — Countersigned time. OTS set check over the ots primitives, plus the
- *                              beacon lower bound from lib/beacon.ts.
- * Rung 5 — Notices.            Always 'not-run': no notices or corrections
- *                              feed exists. Roster revocations are rung 3.
+ * APP SUBSET LEDGER (this copy lives in exhibit-app/src/reader — the app
+ * surface of the one-reader design; the desk original lives at
+ * app/src/reader/verify/ladder.ts). Rung logic is byte-faithful to the desk
+ * engine; the differences are exactly these:
+ *
+ *   - Imports point at the app's own verification core (src/lib/*,
+ *     src/provenance/manifest.ts) — the same functions the desk's
+ *     verify-core mirrors, already exercised by the app's verifiers.
+ *   - The ASYNC ladder, rosterFetch (TLS well-known resolution + Node fs
+ *     snapshot cache), and the NoticesSource seam stay WEB-SIDE: they need
+ *     network/Node. Rung 3 here is the caller path only — the app hands in
+ *     the rosters it holds (src/lib/rosterStore). Rung 5 is the honest
+ *     not-run stub. The stale-cache cap is web-only machinery and is
+ *     removed with the async path.
+ *   - The format-gate message names the app's bundle format
+ *     ('exhibit-proof-bundle/2'), built on-device by src/lib/proofBundle.
+ *
+ * DESK EXTRACTION LEDGER (what the desk original reused vs wrapped vs
+ * stubbed — kept verbatim so the two copies can be diffed):
+ *
+ *   Rung 1 — Seal intact        EXTRACTED from verify-core/lib/sign.ts
+ *     (verifyRecordSignature, payloadDigest) + the digest/equality semantics
+ *     of verify-core/lib/proofBundle.ts (buildProofBundle) and the media
+ *     re-hash comparison of the archived verifier's verifyWithSidecarBytes.
+ *
+ *   Rung 2 — Device credential  PARTIAL EXTRACTION from the AttestationRecord
+ *     schema (verify-core/provenance/manifest.ts): orgCredential mirror,
+ *     biometricBound, deviceIntegrity, captureIntegrity — each labeled with
+ *     the custody the repo itself assigns it (self-reported commitment,
+ *     never hardware proof). The full device-credential check (x5chain +
+ *     App Attest) runs in the app's verification report; this rung states
+ *     the record's own custody commitments and says so.
+ *
+ *   Rung 3 — Roster             EXTRACTED from verify-core/lib/roster.ts
+ *     (verifyRosterSignature, resolveInRoster, membershipState semantics),
+ *     with the desk's atMs convention: proof artifacts carry no
+ *     pinned-authority time, so membership evaluates at atMs = null →
+ *     'unknown-time', stated, never assumed.
+ *
+ *   Rung 4 — Countersigned time WRAPPED from deskCore.checkOtsSet over the
+ *     same ots primitives; beacon lower bound from lib/beacon.ts isValidTip.
+ *
+ *   Rung 5 — Notices            STUB, honestly stated: no notices/corrections
+ *     feed exists today, so the rung is always 'not-run' with that reason.
+ *     Roster revocations are rung-3 territory, not a notice feed.
  */
 
 import { verifyRecordSignature, payloadDigest, sha256Hex } from '../../lib/sign';
@@ -37,20 +67,23 @@ export interface CustodyInput {
   /** The sealed exhibit's proof half — exhibit-proof-bundle/2 (app format). */
   bundle: unknown;
   /**
-   * Signed newsroom rosters supplied by the caller; on device, the ones the
-   * app holds in src/lib/rosterStore. The Reader holds no trust store of its
-   * own, so with none supplied rung 3 reports not-run.
+   * Outside anchors supplied by the caller (signed newsroom rosters — on
+   * device, the rosters the app holds in src/lib/rosterStore). The Reader
+   * holds no trust store of its own — vouching arrives from outside the
+   * file or the rung says it never ran.
    */
   rosters?: Roster[];
-  /** The media, when it has arrived; enables the byte-binding row. */
+  /** The media, when it has arrived — enables the byte-binding row. */
   mediaBytes?: Uint8Array | null;
   /**
-   * Bitcoin block headers by height, when the caller has fetched them. Absent
-   * (the offline default) the block binding is unchecked and the rung says so.
+   * Bitcoin block headers by height, when the caller has fetched them.
+   * Absent (the offline default) the block binding is UNCHECKED and the
+   * rung says so — never silently treated as anchored.
    */
   blockHeaders?: Record<number, Uint8Array>;
 }
 
+const HEX64 = /^[0-9a-f]{64}$/;
 const short = (hex: string): string => `${hex.slice(0, 12)}…${hex.slice(-8)}`;
 
 function rung(rung: number, title: string, state: CheckState, detail: string,
@@ -58,7 +91,7 @@ function rung(rung: number, title: string, state: CheckState, detail: string,
   return rows && rows.length > 0 ? { rung, title, state, detail, rows } : { rung, title, state, detail };
 }
 
-/** A bad input shape: a divergent first rung plus four stated non-runs. */
+/** A single bad input shape is a divergent first rung plus four stated non-runs. */
 function malformedExhibit(reason: string): RungResult[] {
   return [
     rung(1, 'Seal intact', 'not-run', `the exhibit could not be read: ${reason}`),
@@ -70,7 +103,7 @@ function malformedExhibit(reason: string): RungResult[] {
 }
 
 // ---------------------------------------------------------------------------
-// Rung 1 — Seal intact (lib/sign.ts + lib/proofBundle.ts)
+// Rung 1 — Seal intact (EXTRACTED: verify-core/lib/sign.ts + proofBundle.ts)
 // ---------------------------------------------------------------------------
 
 function rungSeal(bundle: ProofBundle, input: CustodyInput): { result: RungResult; credentialsFailed: boolean } {
@@ -85,14 +118,15 @@ function rungSeal(bundle: ProofBundle, input: CustodyInput): { result: RungResul
     { label: 'payload digest (recomputed)', value: short(digestHex) },
   ];
 
-  // PQ dual layer, same rule as verifyAsset: a PQ failure never flips the
-  // classical seal, but a stripped layer is tamper evidence, since the
-  // committed key cannot leave the signed payload.
+  // PQ dual layer — the repo's own rule (verifyAsset): a PQ failure never
+  // flips the classical seal, but a STRIPPED layer is tamper evidence,
+  // because the committed key cannot leave the signed payload.
   const pq = rec.pq;
   if (pq && !pq.present && pq.keyCommitted) {
     rows.push({ label: 'post-quantum layer', value: 'STRIPPED · key committed in the signed payload, signature missing' });
-    // pqSignature rides outside the signed payload (like ots), so the
-    // classical seal is intact and the rungs above still evaluate.
+    // The stripped layer rides OUTSIDE the signed payload (pqSignature is
+    // excluded, like ots) — the classical seal is intact, so credentials
+    // above still evaluate.
     return { result: rung(1, 'Seal intact', 'diverges',
       'a post-quantum key is committed inside the signed payload but the PQ signature is missing. The commitment cannot be removed without breaking the classical signature, so this exhibit was altered after sealing',
       rows), credentialsFailed: false };
@@ -122,14 +156,14 @@ function rungSeal(bundle: ProofBundle, input: CustodyInput): { result: RungResul
       rows));
   }
 
-  // Media byte-binding: runs only when the media has arrived. Proof-only
-  // exhibits bind by hash and state the wait.
+  // Media byte-binding — runs only when the media has arrived (proof-only
+  // exhibits bind by hash and wait; the wait is stated, never hidden).
   if (input.mediaBytes) {
     const mediaHex = sha256Hex(input.mediaBytes);
     rows.push({ label: 'media sha-256 (recomputed)', value: short(mediaHex) });
     if (mediaHex !== bundle.media.sha256) {
-      // Changed media leaves the credentials intact (same rule as
-      // trustLadder), so the rungs above still evaluate.
+      // Changed media leaves the CREDENTIALS intact (the repo's own
+      // trustLadder rule) — rungs above still evaluate.
       return { result: rung(1, 'Seal intact', 'diverges',
         'the credentials hold, but the media bytes no longer match what was sealed; the media changed after signing',
         rows), credentialsFailed: false };
@@ -145,8 +179,8 @@ function rungSeal(bundle: ProofBundle, input: CustodyInput): { result: RungResul
 }
 
 // ---------------------------------------------------------------------------
-// Rung 2 — Device credential (AttestationRecord custody signals only; the
-// x5chain and App Attest checks live in the verification report)
+// Rung 2 — Device credential (PARTIAL EXTRACTION: AttestationRecord custody
+// signals; full x5chain/App-Attest wrap deferred to M1 — see header ledger)
 // ---------------------------------------------------------------------------
 
 function rungDeviceCredential(bundle: ProofBundle): RungResult {
@@ -155,14 +189,14 @@ function rungDeviceCredential(bundle: ProofBundle): RungResult {
 
   if (record.deidentified?.rekeyed) {
     return rung(2, 'Device credential', 'not-applicable',
-      'not applicable to de-identified copies: sealed with a fresh one-time key, so its fingerprint differs from the device key',
+      'not applicable to de-identified copies: sealed with a fresh one-time key',
       rows);
   }
 
   if (record.orgCredential) {
     rows.push({
       label: 'org credential (mirror)',
-      value: `${record.orgCredential.subject ?? 'unnamed subject'} · issuer ${record.orgCredential.issuer ?? 'unnamed'} · the x5chain itself is not checked`,
+      value: `${record.orgCredential.subject ?? 'unnamed subject'} · issuer ${record.orgCredential.issuer ?? 'unnamed'} · the x5chain itself is not checked in M0`,
     });
   }
   if (record.biometricBound) {
@@ -188,13 +222,13 @@ function rungDeviceCredential(bundle: ProofBundle): RungResult {
       rows);
   }
   return rung(2, 'Device credential', 'agrees',
-    'the record carries signed custody commitments (listed below). Each is a commitment the signer made about itself, consistent with careful capture; none is hardware proof, and the full credential chain check is not run here',
+    'the record carries signed custody commitments (listed below). Each is a commitment the signer made about itself, consistent with careful capture; none is hardware proof, and the full credential chain check is deferred to M1',
     rows);
 }
 
 // ---------------------------------------------------------------------------
-// Rung 3 — Roster (lib/roster.ts; caller-supplied rosters only, the TLS
-// well-known resolution and snapshot cache are web-side)
+// Rung 3 — Roster (EXTRACTED: lib/roster.ts; caller path only on device —
+// the TLS well-known resolution and snapshot cache stay web-side)
 // ---------------------------------------------------------------------------
 
 function rungRoster(bundle: ProofBundle, rosters: Roster[] | undefined): RungResult {
@@ -213,8 +247,9 @@ function rungRoster(bundle: ProofBundle, rosters: Roster[] | undefined): RungRes
       rows.push({ label: `roster "${roster.newsroom}"`, value: `editor signature ${sig.reason ?? 'invalid'}; a roster that fails this is not a roster` });
       continue;
     }
-    // Artifacts carry no pinned-authority time, so membership evaluates at
-    // atMs = null and resolves to 'unknown-time'.
+    // Desk convention: artifacts carry no pinned-authority time, so
+    // membership evaluates at atMs = null and resolves to 'unknown-time'
+    // — stated, never assumed.
     const hit = resolveInRoster(roster, fp, null);
     if (!hit) {
       rows.push({ label: `roster "${roster.newsroom}"`, value: 'editor signature valid · this hand is not listed' });
@@ -255,8 +290,8 @@ function rungRoster(bundle: ProofBundle, rosters: Roster[] | undefined): RungRes
 
 
 // ---------------------------------------------------------------------------
-// Rung 4 — Countersigned time (deskCore.checkOtsSet, plus the beacon lower
-// bound from lib/beacon.ts)
+// Rung 4 — Countersigned time (WRAPPED from deskCore.checkOtsSet, PROVISIONAL;
+// beacon lower bound EXTRACTED from verify-core/lib/beacon.ts)
 // ---------------------------------------------------------------------------
 
 function rungTime(bundle: ProofBundle, input: CustodyInput): RungResult {
@@ -265,8 +300,9 @@ function rungTime(bundle: ProofBundle, input: CustodyInput): RungResult {
     { label: 'device clock at capture (a claim)', value: record.capturedAt },
   ];
 
-  // Signed time lower bound: the beacon block hash could not have been known
-  // before that block was mined. Shape-checked only.
+  // Signed time LOWER bound — the beacon block hash could not have been
+  // known before that block was mined. Shape-checked only, exactly as the
+  // archived verifier treats it.
   let lowerBound: string | null = null;
   if (record.beacon) {
     if (isValidTip(record.beacon.blockHash, record.beacon.blockHeight)) {
@@ -371,13 +407,16 @@ function rungTime(bundle: ProofBundle, input: CustodyInput): RungResult {
   return rung(4, 'Countersigned time', 'insufficient', 'no usable ledger receipt · device clock only', rows);
 }
 
+
 // ---------------------------------------------------------------------------
-// Rung 5 — Notices (stub: no corrections feed exists on either surface)
+// Rung 5 — Notices (STUB, honestly stated; no feed exists on either surface
+// today — the source-aware seam stays web-side with the async ladder)
 // ---------------------------------------------------------------------------
 
 /**
- * No notices/corrections feed exists, so the rung is always 'not-run' with
- * this reason. Roster revocations are rung 3, not a notice feed.
+ * The stub's reason: no notices/corrections feed exists today, so the rung
+ * is always 'not-run' with that reason. Roster revocations are rung-3
+ * territory, not a notice feed.
  */
 const NOTICES_STUB_DETAIL =
   'no corrections/revocations feed exists for exhibits yet, so there is nothing to check against, and the rung says so instead of vanishing';
@@ -406,9 +445,11 @@ export function runCustodyLadder(input: CustodyInput): RungResult[] {
   const bundle = input.bundle;
   const seal = rungSeal(bundle, input);
 
-  // Same rule as trustLadder: when the credentials fail, the key, roster
-  // entry, and receipts all arrive through the same broken envelope, so every
-  // rung above is not-applicable. Changed media does not trigger this.
+  // The repo's own trustLadder rule: when the credentials themselves fail,
+  // nothing above can be evaluated — the key, the roster entry, and the
+  // receipts all arrive through the same broken envelope. Marked
+  // not-applicable and said out loud. Changed MEDIA leaves the credentials
+  // intact, so rungs above still evaluate.
   if (seal.credentialsFailed) {
     return blockedLadder(seal.result);
   }
@@ -418,8 +459,9 @@ export function runCustodyLadder(input: CustodyInput): RungResult[] {
     rungDeviceCredential(bundle),
     rungRoster(bundle, input.rosters),
     rungTime(bundle, input),
-    // Rung 5 is a stub: no corrections feed exists, so it renders not-run
-    // with the reason.
+    // Rung 5 — STUB, stated: no notices/corrections feed exists in
+    // verify-core today. The rung renders as not-run with the reason,
+    // never as an absence. Roster revocations are rung-3 territory.
     rung(5, 'Notices', 'not-run', NOTICES_STUB_DETAIL),
   ];
 }

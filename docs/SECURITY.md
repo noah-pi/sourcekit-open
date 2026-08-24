@@ -98,7 +98,7 @@ on-device cryptographic check.
 1. **Hardware attested** requires a full offline verification: a chain to the
    pinned Apple root, `rpIdHash` bound to this app, and Apple's nonce extension
    recomputed against `SHA256(authData ‖ SHA256(challenge ‖ signingPublicKey))`
-   for exactly the manifest's signing key (`src/c2pa/verifyAppAttest.ts`).
+   for exactly the manifest's signing key (`archive/handrolled-verifier/verifyAppAttest.ts`).
 2. **Timestamped** means real RFC 3161 verification per token. A displayed
    capture time uses only cryptographically valid tokens, never a scrape of
    genTime.

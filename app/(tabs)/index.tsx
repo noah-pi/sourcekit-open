@@ -2,11 +2,11 @@
 /**
  * Capture — the cryptographic camera.
  *
- * Pipeline, entirely on-device:
+ * Pipeline (entirely on-device):
  *   shutter → sensor context snapshot → SHA-256 → ECDSA sign →
  *   C2PA embed (JPEG APP11 / BMFF uuid box) → AES-GCM vault.
  *
- * No network call in this file.
+ * No network call exists in this file. That is a feature.
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -27,7 +27,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { DeviceMotion } from 'expo-sensors';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as LocalAuthentication from 'expo-local-authentication';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -115,12 +114,16 @@ import {
 } from '../../src/components/camera/zoomModel';
 
 /**
- * Signed-EXIF assembly. Standard EXIF tags from the capture's committed
- * settings, carried to the com.verify.exif assertion by the seal job.
- * Values come from the photo's own EXIF first, then AVCaptureDevice
- * read-backs for gaps; a field with no real value is omitted.
- * FocalLength and FocalLengthIn35mmFilm come only from the photo's own
- * metadata. sanitizeExif's closed allowlist is the final gate.
+ * Signed-EXIF assembly (W2.4): the standard-tag subset of the capture's
+ * committed settings, destined for the com.verify.exif assertion via the
+ * seal job. Source discipline (never synthesized):
+ *  - the full-res photo's OWN OS-written EXIF numbers win verbatim;
+ *  - AVCaptureDevice read-backs (ISO / exposure / aperture / bias) fill
+ *    only gaps the photo EXIF didn't write;
+ *  - a field with no real value is simply absent (absence, never a guess).
+ * FocalLength/FocalLengthIn35mmFilm ride ONLY from the photo's metadata —
+ * the device reports no mm number itself. sanitizeExif's closed allowlist
+ * is the final gate.
  */
 function buildCaptureExif(cs: CaptureResult['captureSettings']): Record<string, number | string> | null {
   if (!cs || 'unavailable' in cs) return null;
@@ -136,8 +139,8 @@ function buildCaptureExif(cs: CaptureResult['captureSettings']): Record<string, 
   }
   if (raw.FNumber === undefined && Number.isFinite(cs.apertureFNumber)) raw.FNumber = cs.apertureFNumber;
   if (raw.ExposureBiasValue === undefined && Number.isFinite(cs.exposureTargetBias)) raw.ExposureBiasValue = cs.exposureTargetBias;
-  // EXIF WhiteBalance: 0 = auto, 1 = manual, mapped from the device-reported
-  // mode ('locked' is manual-with-gains).
+  // EXIF WhiteBalance: 0 = auto, 1 = manual — a mapping of the
+  // device-reported mode ('locked' covers the manual-with-gains intent).
   if (raw.WhiteBalance === undefined) raw.WhiteBalance = cs.whiteBalanceMode === 'locked' ? 1 : 0;
   const exif = sanitizeExif(raw);
   return Object.keys(exif).length > 0 ? exif : null;
@@ -145,30 +148,36 @@ function buildCaptureExif(cs: CaptureResult['captureSettings']): Record<string, 
 
 const BUFFER_LIMIT = 13000; // ~2.2 min at 100 Hz — covers a max-length video clip
 
-// Video length cap (see toggleVideo): the seal path reads the whole file
-// into memory for AES-GCM. The cap is stated to the user when it stops a take.
+// Video length cap (see toggleVideo): the current seal path reads the whole
+// file into memory for AES-GCM, so clips are capped in THIS build. The cap
+// lifts when sealing moves native. Stated to the user verbatim at the cap —
+// never a silent stop.
 const MAX_VIDEO_SECONDS = 120;
 const VIDEO_CAP_NOTICE =
   "Clips are capped at two minutes in this build: sealing currently reads the whole file into memory. The cap lifts when sealing moves native. It's a limit of this build, not of the evidence.";
 
-// HUD color language, inlined here rather than in src/theme.ts. The
-// identifying chips (Location, Byline) share a warm clay; the sage green is
-// reserved for "locked and sealed". No pure yellow or blue in the HUD.
+// HUD color language (0.18.1 — the landed palette of the app icon: sage
+// green, cream, charcoal, warm neutrals). Inlined here rather than in
+// src/theme.ts. The identifying chips (Location, Byline) share a muted
+// warm clay; the seal green is the icon's sage and stays RESERVED for
+// "locked and sealed". No pure yellow, no pure blue anywhere in the HUD.
 const HUD_IDENT_ON = '#C08552'; // clay/terracotta — the embedding chips
 const HUD_SEAL_GREEN = '#809263'; // sage, matched to the aperture mark
 const HUD_INK = '#0A0D10'; // label/icon ink on a filled ON pill
 
-// Mode-transition veil. BlurView intensity is a plain prop, so the 380 ms
-// pulse runs on the JS driver.
+// Mode-transition veil. BlurView's intensity is a plain prop, so the pulse
+// runs on the JS driver — a 380 ms transition, not a hot path.
 const AnimatedBlur = Animated.createAnimatedComponent(BlurView);
 
 type Mode = 'audio' | 'picture' | 'video';
 
 // ---------------------------------------------------------------------------
-// Pro-param model. Every tray capsule and precision-bar session uses this
-// shape. 'ladder' params (FLASH/FOCUS/WB) ride the bar as integer rung
-// indices with a detent per rung; 'continuous' params (EV/ISO/SHTR) scrub
-// their native range. Auto/manual is two-state: the AUTO pill on the bar.
+// The single pro-param model (0.18.2). Every capsule in the tray and every
+// precision-bar session is described by this ONE uniform shape — no
+// special-cased dials, no per-param control types. 'ladder' params (FLASH/
+// FOCUS/WB) ride the bar as integer rung indices with a detent per rung;
+// 'continuous' params (EV/ISO/SHTR) scrub their native range. Auto/manual
+// is two-state by design: the bar's AUTO pill is the only toggle.
 // ---------------------------------------------------------------------------
 type ProParamId = 'flash' | 'ev' | 'focus' | 'wb' | 'iso' | 'shtr';
 interface ProParam {
@@ -177,56 +186,64 @@ interface ProParam {
   valueText: string;
   mode: 'auto' | 'manual';
   kind: 'ladder' | 'continuous';
-  /** Set when another param holds the hardware (EV under manual ISO+shutter).
-   *  The capsule stays, dimmed with value '—', and explains itself on tap. */
+  /** Set when another param holds the hardware (EV under manual
+   *  ISO+shutter): the capsule stays — dimmed, value '—' — and explains
+   *  itself on tap instead of silently scrubbing a value the device is
+   *  ignoring. Never a fake control. */
   overridden?: boolean;
 }
 
 /**
- * Maps the audio recorder's IMU-sink report onto the three-state
- * EvidencePath vocabulary: a path, null for enabled-but-failed, or
- * 'never-recorded'.
+ * Media parity: map the audio recorder's IMU-sink report onto the
+ * three-state EvidencePath vocabulary — path / enabled-but-failed
+ * null / 'never-recorded'. No silent middle states: a desk never has to
+ * guess which case an audio exhibit's poseTrace absence is.
  */
 function audioSensorLogEvidence(result: AudioStopResult, sensorsEnabled: boolean): EvidencePath {
   if (!sensorsEnabled) return 'never-recorded'; // capture-evidence sensors toggle off
-  if (result.sensorLogState === undefined) return 'never-recorded'; // older native build: no IMU sink
+  if (result.sensorLogState === undefined) return 'never-recorded'; // pre-parity native build: no IMU sink exists
   if (result.sensorLogState === 'recorded' && typeof result.sensorLogPath === 'string') {
     return result.sensorLogPath;
   }
-  if (result.sensorLogState === 'unavailable') return 'never-recorded'; // the device provided no motion data
-  return null; // 'failed': the sink was enabled and errored
+  if (result.sensorLogState === 'unavailable') return 'never-recorded'; // the device could not provide motion data
+  return null; // 'failed' — the sink was enabled and died: a failure, stated as one
 }
 
 /**
- * Camera counterpart of audioSensorLogEvidence. Maps a stills or video
- * session's IMU sensor-log report onto the same three-state EvidencePath
- * vocabulary. Every SensorLogEvidence field is optional, so an older native
- * build's absence commits 'never-recorded'.
+ * Camera counterpart of audioSensorLogEvidence: map a stills/video
+ * session's IMU sensor-log report (the FROZEN SensorLogEvidence contract —
+ * all fields optional so this type-checks against pre-parity native builds,
+ * where absence commits 'never-recorded', never a silent gap) onto the same
+ * three-state EvidencePath vocabulary — path / enabled-but-failed null /
+ * 'never-recorded'. One vocabulary per sink; a desk never has to guess
+ * which case an absence is.
  */
 function cameraSensorLogEvidence(result: SensorLogEvidence, sensorsEnabled: boolean): EvidencePath {
   if (!sensorsEnabled) return 'never-recorded'; // capture-evidence sensors toggle off
-  if (result.sensorLogState === undefined) return 'never-recorded'; // older native build: no IMU sink
+  if (result.sensorLogState === undefined) return 'never-recorded'; // pre-parity native build: no IMU sink exists
   if (result.sensorLogState === 'recorded' && typeof result.sensorLogPath === 'string') {
     return result.sensorLogPath;
   }
-  if (result.sensorLogState === 'unavailable') return 'never-recorded'; // the device provided no motion data
-  return null; // 'failed': the sink was enabled and errored
+  if (result.sensorLogState === 'unavailable') return 'never-recorded'; // the device could not provide motion data
+  return null; // 'failed' — the sink was enabled and died: a failure, stated as one
 }
 
 /**
- * Shutter-burst sink, mapped onto the same three-state EvidencePath
- * vocabulary. Toggle off, or a native build without the sink, commits
- * 'never-recorded', as does a native 'never-recorded' state (its reason
- * rides the CaptureResult into the record's exhibitCapture). A native
- * 'error' state commits null.
+ * Shutter-burst sink (native 0.17.2+) mapped onto the same three-state
+ * EvidencePath vocabulary: toggle off or a pre-0.17.2 build (field absent)
+ * commits 'never-recorded'; a native 'never-recorded' state (e.g. no
+ * synchronized pair at shutter) is also 'never-recorded' — its reason rides
+ * the CaptureResult into the record's exhibitCapture; a native 'error'
+ * state is enabled-but-failed → null (a failure, stated as one — the
+ * capture itself still landed).
  */
 function ringBufferEvidence(result: CaptureResult, ringEnabled: boolean): EvidencePath {
   if (!ringEnabled) return 'never-recorded'; // capture-evidence ring toggle off
   const ep = result.ringBufferDir;
-  if (ep === undefined) return 'never-recorded'; // older native build: no ring sink
+  if (ep === undefined) return 'never-recorded'; // pre-0.17.2 native build: no ring sink exists
   if (ep.state === 'path') return ep.path;
-  if (ep.state === 'error') return null; // the sink was enabled and errored
-  return 'never-recorded'; // native-stated reason (e.g. no synchronized pair at shutter)
+  if (ep.state === 'error') return null; // the sink was enabled and died: a failure, stated as one
+  return 'never-recorded'; // native-stated reason (e.g. no-synchronized-pair-at-shutter)
 }
 
 /** Distance between the first two active touches (for pinch). */
@@ -240,24 +257,26 @@ function pinchDistance(evt: GestureResponderEvent): number {
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
-// Physical lens stack selection (ExhibitCamera): optical devices, not crops.
-// Reported per device by the native module's listFormats().
+// Physical lens stack selection (ExhibitCamera): genuine optical devices,
+// never a crop. Reported per device by the native module's listFormats().
 const LENS_ORDER: ExhibitLens[] = ['ultraWide', 'wide', 'telephoto'];
 
-/** Single-stack zoom model (front camera, or a back inventory not yet
- *  reported): one 1x stop, no crossing, everything above 1x is digital. */
+/** The single-stack zoom model (front camera, or a back inventory not yet
+ *  reported): one 1x stop, no crossing, everything above 1x is DIGITAL. */
 const FRONT_STOPS = [{ lens: 'wide' as ExhibitLens, factor: 1, label: '1x' }];
 
 /** The mode row's visual order — horizontal swipes walk this list. */
 const MODE_ORDER: Mode[] = ['audio', 'picture', 'video'];
 
 /**
- * Lens chip labels ('.5', '1x', '4'). Display-only: the record commits the
- * true per-format field of view. The ultra-wide is labeled ".5" on every
- * model to date; the telephoto factor comes from the FOV ratio (tan cancels
- * the sensor-width term), snapped to whole steps within tolerance. A naive
- * wide-FOV/lens-FOV ratio reads wrong when the active format crops the
- * sensor.
+ * Apple-style chip labels ('.5', '1x', '4'). Display-only chrome — the
+ * record commits the true per-format field of view; the chip just says
+ * which physical stack is live, the way Apple's own camera labels them.
+ * (0.14.0 lesson: a naive wide-FOV÷lens-FOV ratio reads '.7' on iPhone 17
+ * because the reported active format crops the sensor. The ultra-wide is
+ * Apple's ".5" on every model to date; the telephoto factor comes from the
+ * FOVs via the focal-length ratio — tan cancels the sensor-width term —
+ * snapped to Apple's whole steps when within tolerance.)
  */
 function computeLensLabels(fmts: ListFormatsResult): Partial<Record<ExhibitLens, string>> {
   const fov = (l: ExhibitLens): number | null => fmts.lenses[l]?.formats?.[0]?.fieldOfViewDegrees ?? null;
@@ -280,36 +299,41 @@ function computeLensLabels(fmts: ListFormatsResult): Partial<Record<ExhibitLens,
 }
 
 // ---------------------------------------------------------------------------
-// Pro param ladders. Ladder params ride the precision bar as integer rung
-// indices (rung 0 = AUTO where the hardware has one); continuous params
-// scrub their native range. The bridge clamps to the active format's range,
-// not the device-global range, and hands the clamped value back, so the
-// capsule shows what was applied.
+// PRO param ladders (0.18.2 — the single param model). Ladder params ride
+// the precision bar as integer rung indices (rung 0 = AUTO where the
+// hardware has one); continuous params scrub their native range. The
+// bridge clamps to the ACTIVE FORMAT's range (not the device-global range)
+// and hands the clamped values back — the capsule always shows what was
+// applied, so a clamped value is the truth of what will be committed, not
+// an error to decorate.
 // ---------------------------------------------------------------------------
 
-/** ISO ladder: tick marks on the ISO ribbon, clamped per device to the
- *  active format's range. */
+/** Log-ish ISO ladder — tick marks on the ISO ribbon, clamped per device
+ *  to the active format's range. */
 const ISO_LADDER = [32, 50, 80, 125, 200, 400, 800, 1600, 3200];
-/** Exposure-duration ladder in seconds, ascending (1/8000 … 1 s): the SHTR
- *  ribbon's tick marks. The scrub itself is continuous, in stops. */
+/** Exposure-duration ladder in SECONDS, ascending (1/8000 … 1 s) — the
+ *  SHTR ribbon's tick marks (the scrub itself is continuous in stops). */
 const SHUTTER_LADDER = [
   1 / 8000, 1 / 4000, 1 / 2000, 1 / 1000, 1 / 500, 1 / 250, 1 / 125,
   1 / 60, 1 / 30, 1 / 15, 1 / 8, 1 / 4, 1 / 2, 1,
 ];
 /** Manual focus: the lens-motor positions the FOCUS ladder offers (rung 0
- *  is AUTO). iOS exposes no focus-distance-in-meters API, so the metadata
- *  block commits focusDistanceMeters: null. */
+ *  of the ribbon is AUTO). iOS exposes no focus-distance-in-meters API
+ *  (the metadata block commits focusDistanceMeters: null) — the motor
+ *  position is the honest control, never a fabricated distance. */
 const FOCUS_LADDER = [0, 0.25, 0.5, 0.75, 1];
-/** Manual white balance: temperature only, tint fixed at 0 (the bridge
- *  round-trips and reports the applied tint ≈ 0). The ladder is the common
- *  presets plus the 2500/7500 K ends. */
+/** Manual white balance: temperature only, one honest axis (tint fixed at
+ *  0 — green–magenta is a correction control, not a scene choice; the
+ *  bridge still round-trips and reports the applied tint ≈ 0). The WB
+ *  ladder is the common presets plus the 2500/7500 K ends. */
 const WB_LADDER = [2500, 3200, 4000, 5000, 5500, 6500, 7500];
 /** Exposure compensation (precision bar): −2…+2 EV, continuous with
  *  1/10-stop snap. The bridge clamps to the device's real bias range. */
 const BIAS_MIN = -2;
 const BIAS_MAX = 2;
-// Pinch zoom speed limit: the target follows the fingers 1:1, but the
-// applied factor lerps toward it at ~2.6 octaves/s at most.
+// Pinch zoom speed limit (the "too quickly" complaint): the target follows
+// the fingers 1:1, but the applied factor lerps toward it at at most
+// ~2.6 octaves/s — a fast pinch can no longer slam the zoom end-to-end.
 const PINCH_LERP = 0.32; // per-frame approach toward the target (60 fps)
 const PINCH_MAX_LOG2_PER_FRAME = 2.6 / 60;
 
@@ -345,10 +369,11 @@ function toFileUri(p: string): string {
 }
 
 /**
- * Watchdog for native ExhibitCamera awaits, so a call that never settles
- * cannot freeze the app. On timeout the abandoned promise is swallowed, so
- * it raises no unhandled rejection when it eventually settles, and the
- * caller surfaces the failure.
+ * Watchdog for native ExhibitCamera awaits: a native call that never settles
+ * must never freeze the app (the 0.12.0/0.12.1 lesson — a wedged session
+ * owner froze capture). On timeout the abandoned promise is swallowed (no
+ * unhandled rejection when it eventually settles) and the caller surfaces
+ * the failure honestly.
  */
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -378,10 +403,10 @@ export default function CaptureScreen() {
   // True exactly while the native ExhibitCamera session is configured
   // (screen focused, photo/video mode). Chrome calls no-op without it.
   const sessionActive = useRef(false);
-  // Native graph signal: on 'virtual-dual-wide' the wide and ultra-wide
-  // constituents are both live on one virtual device, so the device zoom
-  // factor is the relative factor across the sweep and the lens pills are
-  // zoom-stop jumps, not input swaps.
+  // 0.18.4 graph signal (native, additive): on 'virtual-dual-wide' the
+  // wide AND ultra-wide constituents are both live on one virtual device —
+  // device zoom factor IS the relative factor across the whole sweep, and
+  // the lens pills are zoom-stop jumps, not input swaps.
   const graphRef = useRef<'virtual-dual-wide' | 'multi-input' | null>(null);
   // The MAX_VIDEO_SECONDS video cap drives a JS-side stopVideo; the UI
   // stopwatch is <RecordTimer/>, mounted exactly while `recording` is true.
@@ -392,24 +417,25 @@ export default function CaptureScreen() {
   const [mode, setMode] = useState<Mode>('picture');
   const modeRef = useRef<Mode>('picture');
   const [facing, setFacing] = useState<'back' | 'front'>('back');
-  // The light is per mode. PHOTO keeps a flash preference (auto/on/off, the
-  // photo output's strobe flashMode via setPhotoFlashMode); VIDEO keeps a
-  // torch on/off. `torch` is the continuous light applied to the session
-  // right now: always off in photo mode, and re-derived from the incoming
-  // mode's preference on every mode switch.
+  // The light is PER MODE (0.15.0 Drop 2; W2.2): PHOTO keeps a flash
+  // preference (auto/on/off — the photo output's real strobe flashMode via
+  // setPhotoFlashMode, since Native Wave 2), VIDEO keeps a torch on/off.
+  // `torch` is the CONTINUOUS light actually applied to the session right
+  // now; it is always off in photo mode (the strobe does the lighting) and
+  // re-derived from the incoming mode's preference on every mode switch.
   const [torch, setTorch] = useState(false);
-  // Zoom is tracked as the factor relative to the wide lens's 1x, the number
-  // on the pills. `zoomFactor` is the committed value (gesture end or lens
-  // switch); live gesture values ride zoomChannel, so a pinch or wheel scrub
-  // never re-renders the viewfinder tree.
+  // Zoom (0.15.0 Drop 2): tracked as the factor RELATIVE to the wide lens's
+  // 1x — the number on the pills. `zoomFactor` is the COMMITTED value
+  // (gesture end / lens switch); live gesture values ride zoomChannel so a
+  // pinch or wheel scrub never re-renders the viewfinder tree.
   const [zoomFactor, setZoomFactor] = useState(1);
   const zoomFactorRef = useRef(1);
   const zoomChannel = useRef(new LiveChannel<LiveZoom>({ factor: 1, active: false })).current;
-  // Device-reported zoom range of the active lens (capabilities()); {1,1}
-  // until known.
+  // Device-reported zoom range of the ACTIVE lens (capabilities());
+  // {1,1} until known — mapping onto an unknown range would be a guess.
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number; qualityCap?: number }>({ min: 1, max: 1 });
-  // Per-constituent-device quality caps from capabilities(). null until
-  // fetched, or on older builds, where maxRelativeZoom falls back to
+  // W2.3: per-constituent-device quality caps from capabilities(). null
+  // until fetched / on pre-W2 builds — maxRelativeZoom then falls back to
   // MAX_RELATIVE_ZOOM.
   const [lensCaps, setLensCaps] = useState<LensZoomCap[] | null>(null);
   const lensCapsRef = useRef<LensZoomCap[] | null>(null);
@@ -420,59 +446,66 @@ export default function CaptureScreen() {
   const pinchCurrentLog = useRef(0);
   const pinchRaf = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
   const pinchRef = useRef(false);
-  // Physical lens selection: listFormats() reports which lens stacks this
-  // hardware has, and absent lenses are hidden. Switching lenses is optical
-  // zoom (a different sensor and lens stack), not a crop.
+  // Physical lens selection: the native module's listFormats() reports which
+  // lens stacks this hardware genuinely has; absent lenses are hidden
+  // (unreached, never red). Switching lenses is genuine optical zoom (a
+  // different sensor+lens stack), not a crop.
   const [lenses, setLenses] = useState<ExhibitLens[]>([]);
-  // Lens chip labels derived from the hardware's reported FOVs
-  // (computeLensLabels). buildStops() falls back to '.5'/'1x'/'T' labels when
-  // the FOVs are unreported.
+  // Apple-style chip labels derived from the hardware's reported FOVs
+  // (computeLensLabels); buildStops() falls back to '.5'/'1x'/'T' labels
+  // when unreported — never a number that could be wrong.
   const [lensLabels, setLensLabels] = useState<Partial<Record<ExhibitLens, string>>>({});
   const [lens, setLens] = useState<ExhibitLens>('wide');
   const lensRef = useRef<ExhibitLens>('wide');
-  // Optical stops (lens, relative factor, label) the zoom wheel and pinch
-  // cross through. The telephoto factor is null when the hardware reported no
-  // FOVs; the pill shows its label and crossing through it is disabled.
+  // Optical stops (lens + relative factor + label) the zoom wheel/pinch
+  // cross through; the telephoto factor is null when the hardware didn't
+  // report FOVs (pill shows its label, crossing through it is disabled).
   const stops = buildStops(lenses, lensLabels);
-  // The front camera is one stack, so the zoom model collapses to a single
-  // 1x stop with floor 1.
+  // The front camera is one stack: the zoom model collapses to a single
+  // 1x stop (no crossing, floor 1) — the readout never claims a ".5×" the
+  // front camera can't deliver.
   const activeStops = facing === 'back' && stops.length > 0 ? stops : FRONT_STOPS;
   const stopsRef = useRef(activeStops);
   stopsRef.current = activeStops;
-  // Sweep ceiling: the current stack's stop times its native quality cap when
-  // the caps have reported, else the MAX_RELATIVE_ZOOM fallback. The sweep
-  // stays on one stack; crossing into another is an explicit pill tap. On the
-  // virtual dual-wide graph the cap keys to 'wide', the virtual device's own
-  // upscale headroom.
+  // W2.3 sweep ceiling: the native per-device quality-cap ceiling when the
+  // caps have reported (a quality choice, honestly exposed by the bridge),
+  // else the MAX_RELATIVE_ZOOM fallback — never a guessed-tight cap.
+  // 0.17.1 (the Halide model): the sweep's ceiling is per-stack — the
+  // current lens's stop × its quality cap. Crossing into another stack is
+  // an explicit pill tap, never an automatic mid-gesture hand-off.
+  // 0.18.6: on the virtual dual-wide graph the sweep runs on the virtual
+  // device whose upscale headroom is the WIDE stack's — keying the cap to
+  // the ultra-wide (whose own cap is small) would clamp the sweep at ~1x.
   const zoomCeiling = () =>
     stackZoomCeiling(
       stopsRef.current,
       lensCapsRef.current,
       graphRef.current === 'virtual-dual-wide' ? 'wide' : lensRef.current,
     );
-  // 35mm-equivalent of the wide stack, from its reported FOV; the basis of
-  // the effective-mm readout. null when unreported.
+  // 35mm-equivalent of the wide stack, from its reported FOV — the basis
+  // of the effective-mm readout. null when unreported (never a guess).
   const [baseMm, setBaseMm] = useState<number | null>(null);
   // The precision bar: which pro param is docked (null = closed).
   const [ribbonParam, setRibbonParam] = useState<ProParamId | null>(null);
-  // Session lifecycle: null = no probe yet; 'unsupported' renders one quiet
-  // gray caption; 'unreached' renders nothing.
+  // Session lifecycle honesty: null = no probe yet; 'unsupported' renders one
+  // quiet gray caption (never red); 'unreached' renders nothing.
   const [stereo, setStereo] = useState<StereoAvailability>('unreached');
-  // Native session failures surface as a card (audioBlocked pattern).
+  // Native session failures surface as an honest card (audioBlocked pattern).
   const [sessionError, setSessionError] = useState<string | null>(null);
   // Bumped when the native stall watchdog escalates: the session-lifecycle
   // effect re-runs and rebuilds the capture session from scratch.
   const [sessionEpoch, setSessionEpoch] = useState(0);
 
   // ---- PRO strip (spec §14) ----
-  // Per-shoot session state, not in settings, so a fresh app session starts
-  // fully auto. Capsule values are the bridge's applied (clamped,
-  // round-tripped) values, which is what the metadata block commits.
+  // Per-shoot session state, deliberately NOT in settings: pro choices belong
+  // to this capture session, so a fresh app session starts fully auto. The
+  // capsule values are the bridge's APPLIED (clamped / round-tripped) values —
+  // what the hardware accepted, which is what the metadata block will commit.
   const [proCaps, setProCaps] = useState<ExhibitCameraCapabilities | null>(null);
   const [proOpen, setProOpen] = useState(false);
   const proAnim = useRef(new Animated.Value(0)).current;
-  // Mode-transition veil: a short blur pulse while the fresh session settles.
-  // JS driver, since BlurView intensity is not native-animatable.
+  // Mode-transition veil (Apple-style): a short blur pulse while the fresh
+  // session settles. JS driver — BlurView intensity is not native-animatable.
   const modeBlurAnim = useRef(new Animated.Value(0)).current;
   const [exposureMode, setExposureModeState] = useState<ExposureModeSetting>('auto');
   const [iso, setIso] = useState(200);
@@ -482,7 +515,7 @@ export default function CaptureScreen() {
   const [focusAdjusting, setFocusAdjusting] = useState(false);
   const [wbMode, setWbModeState] = useState<WhiteBalanceModeSetting>('auto');
   const [wbTemp, setWbTemp] = useState(5000);
-  // EV bias is continuous (Value Ribbon, 1/10-stop snap); no ladder.
+  // EV bias is continuous now (Value Ribbon, 1/10-stop snap) — no ladder.
   const [bias, setBias] = useState(0);
   // Ref mirror so the session-lifecycle effect (deps only mode/facing) can
   // re-apply the current pro state after a fresh configure.
@@ -492,31 +525,32 @@ export default function CaptureScreen() {
   const [capturing, setCapturing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [fingerprint, setFingerprint] = useState<string>('');
-  // The seal pill, the camera's one status element. Three states: steady
-  // ("Sealing on · key"), busy ("Sealing…" while the queue drains), and the
-  // completion flash ("Sealed"), fired only by the queue's completion
-  // signal, never by enqueue.
+  // The camera's ONE status element: the seal pill. Three honest
+  // states — steady ("Sealing on · key"), busy ("Sealing…" while the queue
+  // drains), and the completion flash ("Sealed", fired ONLY by the queue's
+  // completion signal, never by enqueue). No GPS/motion/key chips: the info
+  // pile is cut, the proof is in the file.
   const [pendingSeals, setPendingSeals] = useState(0);
   const [sealedFlash, setSealedFlash] = useState(false);
-  // Face check: with the toggle on, capture start runs an OS biometric check
-  // and the boolean outcome rides to the seal as an event record
-  // (captureIntegrity.biometricGatePassed). Null means the toggle is off.
+  // Face check: when the toggle is on, capture START runs an OS
+  // biometric check; the boolean outcome rides to the seal as an event
+  // record (captureIntegrity.biometricGatePassed). Null = toggle off.
   const faceGateFlag = useRef<boolean | null>(null);
 
   // ---- Audio mode (the standalone Audio tab, folded in as a camera mode) ----
-  // `recording` is shared with video; the modes are mutually exclusive and the
-  // mode row is locked while any recording runs. The stopwatch and level meter
-  // are leaf components (<RecordTimer/>, <LevelMeter/>, bottom of file) that
-  // own their ticking state, so their updates never re-render this screen.
+  // `recording` is shared with video — the modes are mutually exclusive
+  // (the mode row is locked while any recording runs). The stopwatch and
+  // level meter are leaf components (<RecordTimer/>/<LevelMeter/>, bottom
+  // of file) that own their own ticking state (render-storm fix).
   const [audioStopping, setAudioStopping] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
-  // Why transcription is off, verbatim from the native layer.
+  // Why transcription is off, verbatim from the native layer — never a guess.
   const [transcriptOffReason, setTranscriptOffReason] = useState<TranscriptionOffReason>(null);
   // Set when the recognizer dies mid-recording (the recording itself is fine).
   const [transcriptionIssue, setTranscriptionIssue] = useState<string | null>(null);
-  // The audio level meter lives in <LevelMeter/> (bottom of file): it owns the
-  // onLevel subscription and its own dB state, so ~30 updates/s re-render that
-  // leaf only.
+  // The audio level meter lives in <LevelMeter/> (bottom of file): it owns
+  // the onLevel subscription and its own dB state — ~30 updates/s re-render
+  // that leaf only, never this screen (render-storm fix).
   const [partial, setPartial] = useState('');
   const [committed, setCommitted] = useState('');
   const [audioBlocked, setAudioBlocked] = useState<{ message: string; needsSettings: boolean } | null>(null);
@@ -529,19 +563,29 @@ export default function CaptureScreen() {
   // The transcript fades on screen when a recording starts, out when it ends.
   const transcriptFade = useRef(new Animated.Value(0)).current;
 
-  // Pinch-to-zoom (dependency-free PanResponder). Two fingers pinch; a
-  // single-finger horizontal swipe (24 px of dominant travel) switches capture
-  // mode, so single taps are untouched. Zoom drives the camera's optical and
-  // digital zoom. The applied factor lerps toward the finger ratio on a rAF
-  // loop capped at PINCH_MAX_LOG2_PER_FRAME, writing the live channel and
-  // throttled native calls rather than React state.
+  // Pinch-to-zoom (dependency-free PanResponder). Only claims a gesture when
+  // two or more fingers are down, so single taps (tap-to-focus, shutter,
+  // mode, flip, light buttons) are untouched. Zoom is a factor relative to
+  // wide 1x driving the camera's own optical+digital zoom — it never touches
+  // the pixels-after-the-fact, so the signing pipeline is unaffected.
+  // Gesture arbitration (0.14.0): two-finger pinch zooms; a single-finger
+  // HORIZONTAL swipe switches capture mode (the Apple Camera pattern —
+  // TestFlight 0.13.0 had tap-only mode switching). The responder claims a
+  // gesture only once intent is clear (24 px of dominant horizontal travel),
+  // so taps still reach tap-to-focus untouched.
+  // 0.15.0 Drop 2 ("too quickly, no in-between"): the pinch target follows
+  // the finger ratio 1:1, but the APPLIED factor lerps toward it on a rAF
+  // loop capped at PINCH_MAX_LOG2_PER_FRAME — and the loop writes the live
+  // channel + throttled native calls, never React state.
   const gestureKind = useRef<'pinch' | 'swipe' | null>(null);
   const swipeFired = useRef(false);
   const modeSwipeRef = useRef<(dir: 1 | -1) => void>(() => {});
-  // Mode-swipe exclusion zones: a horizontal drag starting on the pro tray or
-  // the docked precision bar is a dial adjustment, not a mode switch. The
-  // zones are window-Y spans measured off the wrappers at render, each
-  // consulted only while its control is open.
+  // Mode-swipe exclusion zones (0.18.1): a horizontal drag that STARTS on
+  // the pro tray or the docked precision bar is a dial adjustment, never a
+  // mode switch — the root responder used to claim those drags mid-dial
+  // ("adjusting the dials gets interpreted as slide between modes"). The
+  // zones are window-Y spans measured off the wrappers at render; each is
+  // consulted only while its control is actually open.
   const trayZone = useRef<{ y0: number; y1: number } | null>(null);
   const ribbonZone = useRef<{ y0: number; y1: number } | null>(null);
   const trayWrapRef = useRef<React.ComponentRef<typeof View>>(null);
@@ -558,9 +602,10 @@ export default function CaptureScreen() {
       ribbonZone.current = { y0: y - 8, y1: y + h + 8 };
     });
   };
-  // onLayout reports parent-relative geometry only: docking the ribbon shifts
-  // the tray's window position without firing it, so re-measure one frame
-  // later whenever either control mounts, docks, or the mode hides them.
+  // onLayout only reports parent-relative geometry: docking the ribbon
+  // shifts the tray's WINDOW position without firing it, so re-measure
+  // (post-layout, one frame later) whenever either control mounts, docks
+  // or the mode hides them.
   useEffect(() => {
     const raf = requestAnimationFrame(measureGestureZones);
     return () => cancelAnimationFrame(raf);
@@ -568,23 +613,24 @@ export default function CaptureScreen() {
   }, [proOpen, ribbonParam, mode]);
   const applyLiveZoomRef = useRef<(relative: number) => void>(() => {});
   const commitZoomRef = useRef<(relative: number) => void>(() => {});
-  // Pinch floor tracks the current stack's optical stop; the sweep never
-  // leaves the stack, and the lens inventory arrives async.
+  // Pinch floor tracks the CURRENT stack's optical stop (0.17.1 — the
+  // sweep never leaves the stack; the lens inventory arrives async).
   const zoomFloorLog = useRef(Math.log2(1));
   zoomFloorLog.current = Math.log2(
     graphRef.current === 'virtual-dual-wide' ? firstOpticalFactor(activeStops) : stackZoomFloor(activeStops, lens),
   );
   // The lerp tick, hoisted so a move event can restart the loop after it
-  // converged: fingers held still park the loop, fingers moving wake it.
+  // converged (fingers held still → loop parks; fingers move → loop wakes).
   const pinchTickRef = useRef<() => void>(() => {});
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length >= 2,
       onMoveShouldSetPanResponder: (evt, g) => {
         if (evt.nativeEvent.touches.length >= 2) return true;
-        // classifyGesture (gestureClassify.ts) decides: a drag that started on
-        // the pro tray or the precision bar belongs to that control, and while
-        // the bar is docked the mode swipe is disabled entirely.
+        // ONE pure classifier decides (gestureClassify.ts): a drag that
+        // STARTED on the pro tray or the precision bar is that control's
+        // business, never a mode swipe; and while the bar is docked the
+        // mode swipe is disabled entirely — the simplest correct gate.
         const startY = evt.nativeEvent.pageY - g.dy;
         const zone: GestureZone =
           proOpenRef.current && trayZone.current && startY >= trayZone.current.y0 && startY <= trayZone.current.y1
@@ -603,9 +649,9 @@ export default function CaptureScreen() {
           pinchCurrentLog.current = pinchStartLog.current;
           pinchRef.current = true;
           zoomChannel.emit({ factor: zoomFactorRef.current, active: true });
-          // Speed-limited lerp loop. JS-side, but it only emits the channel
-          // and throttled native calls; React renders nothing outside the
-          // zoom leaves.
+          // Speed-limited lerp loop — JS-side, but it only emits the
+          // channel and (throttled) native calls; React renders nothing
+          // outside the zoom leaves.
           pinchTickRef.current = () => {
             if (gestureKind.current !== 'pinch') { pinchRaf.current = null; return; }
             const target = pinchTargetLog.current;
@@ -631,8 +677,9 @@ export default function CaptureScreen() {
       },
       onPanResponderMove: (evt, g) => {
         if (gestureKind.current === 'swipe') {
-          // One switch per gesture, at a decisive 64 px. switchMode's own
-          // guards (recording lock, pro reset) apply unchanged.
+          // One switch per gesture, at a decisive 64 px — like paging, not
+          // scrubbing. switchMode's own guards (recording lock, pro reset)
+          // apply unchanged.
           if (!swipeFired.current && Math.abs(g.dx) > 64) {
             swipeFired.current = true;
             modeSwipeRef.current(g.dx < 0 ? 1 : -1);
@@ -641,13 +688,14 @@ export default function CaptureScreen() {
         }
         const d = pinchDistance(evt);
         if (d > 0 && pinchStartDist.current > 0) {
-          // Multiplicative ratio, clamped to the optical floor and the
-          // digital ceiling.
+          // Multiplicative ratio — the natural pinch mapping — clamped to
+          // the optical floor and the digital ceiling.
           pinchTargetLog.current = Math.min(
             Math.log2(zoomCeiling()),
             Math.max(zoomFloorLog.current, pinchStartLog.current + Math.log2(d / pinchStartDist.current)),
           );
-          // The loop parks once converged; a new move target wakes it.
+          // The loop parks once converged (fingers held still); a new move
+          // target wakes it again.
           if (gestureKind.current === 'pinch' && !pinchRaf.current) {
             pinchRaf.current = requestAnimationFrame(pinchTickRef.current);
           }
@@ -660,7 +708,7 @@ export default function CaptureScreen() {
           pinchRaf.current = null;
           commitZoomRef.current(Math.pow(2, pinchCurrentLog.current));
           // The ref clears a beat later so a tap-to-focus onTouchEnd trailing
-          // the pinch's finger-lift is not mistaken for a focus tap.
+          // the pinch's finger-lift isn't mistaken for a focus tap.
           setTimeout(() => { pinchRef.current = false; }, 250);
         }
         gestureKind.current = null;
@@ -678,8 +726,8 @@ export default function CaptureScreen() {
     })
   ).current;
 
-  // Permissions on first focus, via the ExhibitCamera bridge; the native
-  // module owns both the camera and mic prompts.
+  // Permissions on first focus, via the ExhibitCamera bridge (the native
+  // module owns both camera and mic prompts now — one session owner).
   useEffect(() => {
     if (!isExhibitCameraAvailable()) {
       setPerms({ camera: false, microphone: false });
@@ -701,19 +749,23 @@ export default function CaptureScreen() {
   useEffect(() => { torchRef.current = torch; }, [torch]);
   useEffect(() => { recordingRef.current = recording; }, [recording]);
 
-  // Photo and video ride one native session (startVideo/stopVideo reconfigure
-  // it in place); only audio mode needs the camera torn down.
+  // 0.14.2: photo and video ride ONE native session (startVideo/stopVideo
+  // reconfigure it in place); only audio mode needs the camera torn down.
   const needsCamera = mode !== 'audio';
 
   /**
-   * Session lifecycle: one native session, configured when the screen is
-   * focused in photo/video mode, stopped on blur and whenever audio mode owns
-   * the microphone. Chrome state (torch, zoom) is re-applied after each
-   * configure, since a fresh session starts at defaults. A wedged native
-   * start surfaces as a card after the 10 s watchdog.
+   * Session lifecycle (0.13.0): ONE native session, configured when the
+   * screen is focused in photo/video mode, stopped on blur and whenever
+   * audio mode owns the microphone. Chrome state (torch, zoom) is
+   * re-applied after each configure — a fresh session starts at defaults.
+   * The 10 s watchdog is the 0.12.x lesson: a wedged native start must
+   * surface as an honest card, never a frozen screen.
    *
-   * The effect keys on `needsCamera`, not `mode`, so photo/video hops ride the
-   * same running native session.
+   * 0.14.2: the effect keys on `needsCamera`, not `mode` — photo↔video hops
+   * ride the SAME running native session (startVideo/stopVideo reconfigure
+   * in place), so rebuilding per hop was pure churn: blocking startRunning,
+   * a calibration one-shot, and PiP death on every switch, i.e. the
+   * mode-switch freeze.
    */
   useFocusEffect(
     useCallback(() => {
@@ -725,31 +777,33 @@ export default function CaptureScreen() {
           return;
         }
         const doConfigure = () => withTimeout(
-          // Alternate view off means do not collect: the secondary camera is
-          // never attached and the record's stereo sections commit their
-          // never-recorded states. Applies from the next session configure
-          // (screen re-enter), like lens.
-          // IMU evidence sink: the top-level includeSensors toggle arms the
-          // session's 60 s sensor ring. Per-session flag, same lifecycle as
-          // stereo; older native builds ignore it and report nothing, which
-          // commits 'never-recorded' by absence.
+          // Alternate view (0.14.0 toggle): OFF means DO NOT COLLECT — the
+          // secondary camera is never attached, and the record's stereo
+          // sections commit their honest never-recorded states. Applies
+          // from the next session configure (screen re-enter), like lens.
+          // IMU evidence sink (frozen A1 contract, native 0.15+): the
+          // sensors toggle (top-level includeSensors) arms the session's
+          // 60 s sensor ring — per-session flag, same lifecycle as stereo
+          // (applies from this configure; older native builds ignore it and
+          // report nothing, which commits 'never-recorded' by absence).
           configureSession({
-            // On the virtual dual-wide graph (stereo on) the ultra-wide
-            // "lens" is a zoom stop, not an input: the graph only forms from a
-            // wide anchor (native gates on lens == .wide). Reconfiguring with
-            // ultraWide here would tear the pair down to the multi-input graph
-            // on every blur or refocus. The parked 0.5 zoom is re-applied
-            // after start.
+            // 0.18.6: on the virtual dual-wide graph (stereo on) the
+            // ultra-wide "lens" is a zoom stop, not an input — the graph
+            // only forms from a wide anchor (native 0.18.4: lens == .wide
+            // gate). Reconfiguring with ultraWide here would tear the
+            // pair down to the multi-input graph on every blur/refocus.
+            // The parked 0.5 zoom is re-applied after start, unchanged.
             lens: settings.captureEvidence.altView && lensRef.current === 'ultraWide' ? 'wide' : lensRef.current,
             facing,
             stereo: settings.captureEvidence.altView,
             sensorLog: settings.includeSensors,
-            // Shutter-burst sink: arms the 3 pre + 4 post frame commit per
-            // still. Older builds ignore the flag and the record commits
-            // 'never-recorded' by absence.
+            // Shutter-burst sink (native 0.17.2+): arms the 3 pre + 4 post
+            // frame commit per still; older builds ignore the flag and the
+            // record commits 'never-recorded' by absence.
             ring: settings.captureEvidence.ring,
-            // Stereo partner is always 'auto', which keeps the native UW/W/T
-            // pairing. Older builds ignore the key.
+            // Stereo partner (native 0.17.2+): always 'auto' — the picker
+            // is gone; 'auto' keeps the native UW↔W/T pairing. Older
+            // builds ignore the key.
             secondaryLens: 'auto',
           }),
           10000,
@@ -760,10 +814,11 @@ export default function CaptureScreen() {
           try {
             start = await doConfigure();
           } catch (e) {
-            // A session orphaned by an interrupted teardown rejects E_BUSY
-            // "already running", after which every capture and mode tap
-            // dead-loops until an app restart. Force-stop the orphan and retry
-            // once; a failed retry still shows the error card.
+            // 0.14.1 wedge: a session orphaned by an interrupted teardown
+            // rejects E_BUSY "already running", after which every capture
+            // and mode tap dead-loops until an app restart. Force-stop the
+            // orphan and retry ONCE; if the retry fails, the honest error
+            // card still shows (never a silent wedge).
             if (e instanceof Error && e.message.includes('already running')) {
               await stopVideo().catch(() => {});
               await stopSession().catch(() => {});
@@ -782,13 +837,13 @@ export default function CaptureScreen() {
           setStereo(start.stereo);
           graphRef.current = start.graph ?? null;
           void setTorchLevel(torchRef.current ? 1.0 : null);
-          // The persisted photo-strobe preference rides the photo output's
-          // flashMode, never the torch. A fresh session inherits the stored
-          // native preference; re-apply it explicitly.
+          // W2.2: the persisted photo-strobe preference rides the photo
+          // output (real flashMode), never the torch. A fresh session
+          // inherits the stored native preference; re-apply to be explicit.
           void setPhotoFlashMode(settings.photoFlash).catch(() => {});
-          // A fresh session starts at 1x device zoom, so re-apply the
-          // committed factor. It survives photo/video hops; lens switches and
-          // flips reset it to the stop.
+          // A fresh session starts at 1x device zoom: re-apply the
+          // committed factor (it survives photo↔video hops; lens switches
+          // and flips reset it to the stop).
           {
             const device = clampZoom(
               deviceFactorFor(zoomFactorRef.current, stopsRef.current),
@@ -797,11 +852,13 @@ export default function CaptureScreen() {
             );
             if (Math.abs(device - 1) > 0.001) void setNativeZoom(device).catch(() => {});
           }
-          // Re-apply the pro strip's session state after a fresh configure,
-          // same rule as torch and zoom. Pro choices are per-shoot: they
-          // survive a flip or a photo/video hop, and only the trip to audio
-          // resets them (see switchMode). Skipped while the dual-view graph is
-          // armed, where manual per-device controls are not offered.
+          // Re-apply the pro strip's session state after a fresh configure
+          // (same rule as torch/zoom: the new session starts at defaults).
+          // Pro choices are per-shoot — they survive a flip or a photo↔video
+          // hop; only the trip to audio resets them (see switchMode).
+          // 0.18.6: skipped while the dual-view graph is armed — manual
+          // per-device controls aren't offered there (the strip hides), so
+          // nothing is re-applied onto the virtual device either.
           const p = proStateRef.current;
           if (!settings.captureEvidence.altView) {
           if (p.exposureMode !== 'auto') {
@@ -824,20 +881,21 @@ export default function CaptureScreen() {
           const caps = await capabilities().catch(() => null);
           if (cancelled) return;
           if (caps?.zoomRange) setZoomRange(caps.zoomRange);
-          // Per-device quality caps drive the sweep ceiling (maxRelativeZoom);
-          // absent on older builds, which fall back to the constant.
+          // W2.3: per-device quality caps drive the sweep ceiling
+          // (maxRelativeZoom); absent on pre-W2 builds → fallback constant.
           setLensCaps(caps?.lensZoomCaps ?? null);
           // Pro-strip capability inventory: the strip hides any control the
-          // hardware does not report, and the PRO button itself when nothing
-          // manual exists. Re-fetched per session, since front/back and lens
-          // changes can change the active format's ISO and duration ranges.
+          // hardware doesn't report (and the PRO button itself when nothing
+          // manual exists). Re-fetched per session — front/back and lens
+          // changes can change the active format's ISO/duration ranges.
           setProCaps(caps);
           const fmts = await listFormats().catch(() => null);
           if (!cancelled && fmts) {
             setLenses(LENS_ORDER.filter((l) => fmts.lenses[l]?.present === true));
             setLensLabels(computeLensLabels(fmts));
-            // Basis for the effective-mm readout: the wide stack's reported
-            // FOV. Unreported leaves it null and the readout hidden.
+            // The effective-mm readout's basis: the wide stack's reported
+            // FOV. Unreported → null → the readout stays hidden (never a
+            // guessed focal length).
             setBaseMm(baseMmFromFov(fmts.lenses.wide?.formats?.[0]?.fieldOfViewDegrees));
           }
         } catch (e) {
@@ -852,31 +910,39 @@ export default function CaptureScreen() {
         cancelled = true;
         sessionActive.current = false;
         graphRef.current = null;
-        // Blur or an audio-mode switch mid-video finalizes the take through
-        // the normal stop path before the session stops. Keys off the
-        // recording ref, not the possibly stale mode closure.
+        // Blur (or audio-mode switch) mid-video: finalize the take through
+        // the normal stop path BEFORE the session stops — a recording in
+        // flight is never dropped silently. Keys off the recording ref, not
+        // the (possibly stale) mode closure — photo↔video hops no longer
+        // re-run this cleanup at all, but a focused-blur mid-take still
+        // finalizes.
         if (recordingRef.current) {
           void finishVideoRef.current().then(() => stopSession().catch(() => {}));
         } else {
           void stopSession().catch(() => {});
         }
       };
-      // needsCamera collapses photo and video into one session lifetime.
-      // altView is a dep: toggling Multiple Lenses must rebuild the graph.
+      // needsCamera collapses photo+video into one session lifetime —
+      // photo↔video hops no longer rebuild the native session (0.14.2).
+      // 0.18.6 (Noah): altView IS a dep — without it, toggling Multiple
+      // lenses left the old graph running: dual-off kept the virtual graph
+      // (lens pills became zoom-stop jumps that switch nothing — "the lens
+      // switch doesn't work even when dual lens is off"), dual-on never
+      // attached the partner.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [needsCamera, facing, sessionEpoch, settings.captureEvidence.altView])
   );
 
-  // Torch: the toggle is a level, 1.0 on and null off. Native clamps to
-  // maxTorchLevel; hardware without a torch no-ops with applied:false.
+  // Torch: the toggle is a level — 1.0 on, null off (native clamps to
+  // maxTorchLevel; no torch hardware no-ops with applied:false).
   useEffect(() => {
     if (sessionActive.current) void setTorchLevel(torch ? 1.0 : null);
   }, [torch]);
 
-  // Native session errors surface as a card. A terminal error mid-recording
-  // (E_WRITER / E_PLATFORM / E_NO_SESSION) runs the same stop path as a manual
-  // stop, so no JS promise is left pending. Sink-level degradations never stop
-  // a recording.
+  // Native session errors surface as an honest card. A terminal error
+  // mid-recording (E_WRITER / E_PLATFORM / E_NO_SESSION) triggers the same
+  // stop path as a manual stop so no JS promise is left pending; sink-level
+  // degradations never stop a recording.
   useEffect(() => {
     return onSessionError((e) => {
       setSessionError(`${e.code}: ${e.message}`);
@@ -890,14 +956,14 @@ export default function CaptureScreen() {
   }, []);
 
   // Focus-settling signal (spec §14): a quiet "focusing…" state on the focus
-  // capsule while the lens motor moves. Also the capture guardrail, since the
+  // capsule while the lens motor is moving. Also the capture guardrail — the
   // UI avoids capturing mid-adjustment.
   useEffect(() => {
     return onAdjustingFocus((e) => setFocusAdjusting(e.adjusting));
   }, []);
 
-  // Thermal and system pressure, stated quietly: the recording continues and
-  // only the stereo partner detaches.
+  // Thermal/system pressure: stated quietly, never red — the recording
+  // itself continues; only the stereo partner detaches.
   useEffect(() => {
     return onHardwarePressure((e) => {
       if (e.degraded === 'stereo-detached' || e.action === 'stereo-detached') {
@@ -907,10 +973,10 @@ export default function CaptureScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Stall escalation: the native watchdog already tried one cheap synchronizer
-  // rebind, so a still-stalled pipeline rebuilds the session by bumping the
-  // epoch. Skipped mid-recording, where a rebuild would kill the take and
-  // failures surface through their own error path.
+  // Stall escalation (0.14.0): the native watchdog already tried one cheap
+  // synchronizer rebind; still stalled → rebuild the session by bumping the
+  // epoch. Skipped mid-recording: a rebuild would kill the take, and
+  // recording failures surface through their own error path.
   useEffect(() => {
     return onSyncStalled(() => {
       if (recordingRef.current) return;
@@ -918,9 +984,9 @@ export default function CaptureScreen() {
     });
   }, []);
 
-  // Native pipeline diagnostics (graph wiring outcomes, format picks, the live
-  // connection census, interruption boundaries) forwarded verbatim into the
-  // persistent log, so a field screenshot self-explains.
+  // Native pipeline diagnostics (0.18.2): graph wiring outcomes, format
+  // picks, the live connection census, interruption boundaries — forwarded
+  // verbatim into the persistent log so a field screenshot self-explains.
   useEffect(() => {
     return onCameraDiagnostic((e) => {
       logDiagnostic({ t: Date.now(), kind: 'camera', outcome: 'info', message: e.message });
@@ -929,9 +995,9 @@ export default function CaptureScreen() {
 
   // Periodic stereo pairs (video, spec §8): the module dumps
   // pair-%04d-{secondary.jpg,calibration.json} under the evidence dir and
-  // reports each dump here. The events are the per-pair anchors; no
-  // per-pair timestamps file exists. Collected while recording; the seal job
-  // carries them to the stereo ingestion path.
+  // reports each dump here — the events ARE the per-pair anchors (no
+  // timestamps file exists per pair). Collected while recording; the seal
+  // job carries them to the stereo ingestion path.
   const videoPairEvents = useRef<StereoPairCapturedEvent[]>([]);
   useEffect(() => {
     return onStereoPairCaptured((e) => {
@@ -939,7 +1005,7 @@ export default function CaptureScreen() {
     });
   }, []);
 
-  // Device fingerprint for the seal pill, plus queue wiring for its states.
+  // Device fingerprint for the seal pill + queue wiring for its three states.
   useEffect(() => {
     getDeviceKey().then((k) => setFingerprint(k.fingerprint.slice(0, 12))).catch(() => {});
     void resumeSealQueue();
@@ -957,11 +1023,17 @@ export default function CaptureScreen() {
     };
   }, []);
 
-  // Fused DeviceMotion feed while the screen is focused: gyro rotation rate,
-  // fused attitude, and gravity-free acceleration, which is the signed pose
-  // trace. A null component skips the sample rather than writing zeros.
-  // poseBuffer feeds collectContext's signed pose trace at the full 100 Hz
-  // over the BUFFER_LIMIT window.
+  // Fused DeviceMotion feed while the screen is focused: true gyro
+  // rotation rate + fused attitude + gravity-free acceleration — the signed
+  // pose trace. A null component skips
+  // the sample rather than fabricating zeros.
+  //
+  // RATE AUDIT (0.14.3): this is the COMMITTED path — poseBuffer feeds
+  // collectContext's signed pose trace on every capture — so it stays at
+  // the full 100 Hz and keeps the full BUFFER_LIMIT window. Slowing it
+  // would thin the evidence. There is no display-only IMU subscription in
+  // this file (the HUD renders no live motion readout), so nothing here
+  // drops to a display rate.
   useFocusEffect(
     useCallback(() => {
       if (!settings.includeSensors || Platform.OS === 'web') return;
@@ -974,11 +1046,17 @@ export default function CaptureScreen() {
         sub = DeviceMotion.addListener((m) => {
           if (!m.acceleration || !m.rotationRate || !m.rotation) return;
           const buf = poseBuffer.current;
-          // expo-sensors reports both attitude and rotation rate with
+          // expo-sensors reports BOTH attitude and rotation rate with
           // CoreMotion's axis names: alpha = z (yaw), beta = y (pitch),
-          // gamma = x (roll). Mapped to device axes here.
-          // Units: expo delivers rotationRate in degrees per second;
-          // PoseSample.rx/ry/rz are rad/s. Convert at the edge.
+          // gamma = x (roll). Mapped to device axes here so the signed
+          // trace's rx/ry/rz are what a desk expects.
+          // UNITS (0.18.4-R5): expo's native module converts rotationRate to
+          // DEGREES per second (radiansToDegrees, DeviceMotionModule.swift)
+          // before JS sees it; PoseSample.rx/ry/rz are documented rad/s and
+          // every consumer (motion.ts quantization, the Motion Trace card,
+          // desk imuflow) is built on that. Convert at the edge. Captures
+          // sealed before this fix carry deg/s mislabeled as rad/s — their
+          // displayed °/s figures read 57.3× high.
           const DEG2RAD = Math.PI / 180;
           buf.push({
             t: Date.now(),
@@ -988,10 +1066,12 @@ export default function CaptureScreen() {
             pitch: (m.rotation.beta * 180) / Math.PI,
             yaw: (m.rotation.alpha * 180) / Math.PI,
           });
-          // Trim in chunks, not per sample: splicing a ~13k array every 10 ms
-          // is O(n) each time. Letting the buffer run to BUFFER_LIMIT + 1000
-          // before trimming keeps every sample inside the same window at a
-          // fraction of the housekeeping cost.
+          // Trim in chunks, not per sample: splicing a ~13k array on every
+          // 10 ms tick is O(n) each time. Letting the buffer run up to
+          // BUFFER_LIMIT + 1000 before trimming back cuts that work ~1000×
+          // while keeping every sample inside the same ~2.2 min window —
+          // the committed data is unchanged, only the housekeeping is
+          // cheaper.
           if (buf.length > BUFFER_LIMIT + 1000) buf.splice(0, buf.length - BUFFER_LIMIT);
         });
       })();
@@ -1015,15 +1095,15 @@ export default function CaptureScreen() {
   };
 
   // ------------------------------------------------------------------
-  // Zoom engine. One path for pinch and wheel:
-  //   applyLiveZoom(relative) — clamps to the current stack, emits the live
-  //     channel, applies natively ramped (setZoomSmooth), throttled and
-  //     trailing. Never switches lenses.
-  //   commitZoom(relative)    — gesture end: an instant native apply
-  //     (setZoom) plus the committed React state.
-  // The relative ceiling is the current stack's native quality-cap ceiling
-  // when the caps have reported, else the MAX_RELATIVE_ZOOM fallback
-  // (zoomModel).
+  // Zoom engine (0.15.0 Drop 2; W2.3). ONE path for pinch and wheel:
+  //   applyLiveZoom(relative) — clamps to the current stack, emits the
+  //     live channel, applies natively RAMPED (setZoomSmooth) throttled,
+  //     trailing. Never switches lenses (0.17.1, the Halide model).
+  //   commitZoom(relative)    — gesture end: final INSTANT native apply
+  //     (setZoom) + the committed React state.
+  // The relative ceiling is the current stack's native per-device
+  // quality-cap ceiling when the caps have reported, else the
+  // MAX_RELATIVE_ZOOM fallback (zoomModel).
   // ------------------------------------------------------------------
   const zoomNativeAt = useRef(0);
   const zoomNativeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1031,7 +1111,11 @@ export default function CaptureScreen() {
     if (!sessionActive.current) return;
     const d = clampZoom(device, zoomRange.min, Math.min(zoomRange.max, zoomRange.qualityCap ?? MAX_RELATIVE_ZOOM));
     const now = Date.now();
-    if (now - zoomNativeAt.current >= 50) {
+    // 0.20.3 (field, 0.20.2: "zoom works but very jerky"): native retarget
+    // cadence 50 ms → 33 ms. With the ramp rate raised to 24 (exhibitCamera
+    // .ts) the device tracks the lerp target closely; a 20 Hz retarget was
+    // the remaining visible quantization.
+    if (now - zoomNativeAt.current >= 33) {
       zoomNativeAt.current = now;
       void setNativeZoomSmooth(d).catch(() => {});
     } else if (!zoomNativeTimer.current) {
@@ -1044,19 +1128,27 @@ export default function CaptureScreen() {
           Math.min(zoomRange.max, zoomRange.qualityCap ?? MAX_RELATIVE_ZOOM),
         );
         void setNativeZoomSmooth(dd).catch(() => {});
-      }, 50);
+      }, 33);
     }
   };
 
-  /** Zoom floor for the current lens: its own optical stop. A pinch never
-   *  walks the lens down; the .5 pill does that. On a lens whose stop factor
-   *  the hardware could not report, the model is the device factor, so the
-   *  floor is 1. */
-  // On the dual-wide virtual device the floor is the lowest optical stop and
-  // the relative factor maps to the device factor 1:1; the per-stack divide
-  // applies only off the virtual graph.
-  // Both helpers take an optional explicit lens: lensRef only updates in a
-  // post-render effect, so selectLens must pass the lens it switched to.
+  /** Zoom floor for the CURRENT lens: its own optical stop (pinch never
+   *  walks the lens down — a tap on the .5 pill does that); on a lens
+   *  whose stop factor the hardware couldn't report (e.g. an FOV-less
+   *  telephoto) the model IS the device factor, so the floor is 1 —
+   *  never a ".5×" on a tele. */
+  // 0.18.6 (field: the 0.5 pill errored on the virtual graph): on the
+  // dual-wide virtual device the sweep covers BOTH constituent cameras —
+  // the floor is the lowest optical stop (the ultra-wide), and the
+  // relative factor maps to the device factor 1:1 (the virtual device
+  // hands off internally at 1.0). The per-stack divide is the physical
+  // -swap model and only applies off the virtual graph.
+  // 0.18.8 (field: "touch 0.5, the camera changes but the button doesn't"):
+  // both helpers take an OPTIONAL explicit lens. selectLens commits the zoom
+  // for the lens it just switched to, but lensRef only updates in a
+  // post-render effect — reading it here clamped 0.5 against the OLD lens's
+  // floor (1), the emit carried factor 1, and the "1" pill stayed lit while
+  // the hardware genuinely jumped. Pass the target lens explicitly.
   const zoomFloorFor = (c: ReturnType<typeof buildStops>, forLens?: ExhibitLens) =>
     graphRef.current === 'virtual-dual-wide' ? firstOpticalFactor(c) : stackZoomFloor(c, forLens ?? lensRef.current);
   const deviceFactorFor = (relative: number, c: ReturnType<typeof buildStops>, forLens?: ExhibitLens) =>
@@ -1064,9 +1156,9 @@ export default function CaptureScreen() {
 
   const applyLiveZoom = (relativeIn: number) => {
     const c = stopsRef.current;
-    // The sweep stays on the current physical stack: no lens crossing
-    // mid-gesture, so the session never reconfigures under the user's
-    // fingers.
+    // The sweep stays on the current physical stack (the Halide model):
+    // no lens crossing mid-gesture — the session never reconfigures under
+    // the user's fingers.
     const relative = clampZoom(relativeIn, zoomFloorFor(c), zoomCeiling());
     zoomFactorRef.current = relative;
     zoomChannel.emit({ factor: relative, active: true });
@@ -1079,10 +1171,10 @@ export default function CaptureScreen() {
     const relative = clampZoom(relativeIn, zoomFloorFor(c, forLens), zoomCeiling());
     zoomFactorRef.current = relative;
     // Virtual graph: the pill label tracks the constituent the device is
-    // showing, since a pinch across the 1.0 hand-off crosses cameras with no
-    // pill tap.
+    // actually showing — a pinch across the 1.0 hand-off crosses cameras
+    // without any pill tap, and the label must not claim otherwise.
     if (graphRef.current === 'virtual-dual-wide') setLens(relative < 1 ? 'ultraWide' : 'wide');
-    // An explicit lens switch carries its target synchronously; the state
+    // An explicit lens switch carries its target synchronously — the state
     // effect lands post-render, too late for this commit's floor math.
     if (forLens) lensRef.current = forLens;
     setZoomFactor(relative);
@@ -1090,10 +1182,12 @@ export default function CaptureScreen() {
     if (sessionActive.current) {
       const requested = clampZoom(deviceFactorFor(relative, c, forLens), zoomRange.min, Math.min(zoomRange.max, zoomRange.qualityCap ?? MAX_RELATIVE_ZOOM));
       void setNativeZoom(requested).then((res) => {
-        // The committed number rests on what the device reports it applied,
-        // never the request. A zoom-locked multi-cam format (native resolves
-        // applied:false, reason 'format-zoom-locked') snaps the HUD back to
-        // the real factor.
+        // 0.18.9 honesty (field: "zoom number moves, camera doesn't zoom"
+        // with Multiple Lenses on): the committed number rests on what the
+        // DEVICE reports it applied — never the optimistic request. A
+        // zoom-locked multi-cam format (native resolves applied:false,
+        // reason 'format-zoom-locked') snaps the HUD back to the real
+        // factor instead of claiming a sweep that didn't happen.
         const appliedDevice = typeof res?.zoomFactor === 'number'
           ? res.zoomFactor
           : (!res?.applied && typeof res?.maxZoom === 'number' ? res.maxZoom : null);
@@ -1110,35 +1204,30 @@ export default function CaptureScreen() {
   };
   commitZoomRef.current = commitZoom;
 
-  // Byline is self-asserted. Organization affiliation is not typed in: it
-  // rides the org credential's X.509 chain, embedded in the signature when one
-  // is installed. Disclosure level is the CAWG-aligned per-capture identity
-  // mode; the byline embeds only while the Name HUD toggle is on.
+  // Byline is self-asserted (a name, never proof of identity). Organization
+  // affiliation is not typed in — it is carried by a real org credential's
+  // X.509 chain, which is embedded in the signature itself when one is installed.
+  // Disclosure level is the CAWG-aligned per-capture identity mode;
+  // the byline itself embeds only while the Name HUD toggle is on.
   const identity = identityForCapture(settings);
 
   /**
-   * Face check: the OS biometric check, run at capture start when the toggle
-   * is on. Capture proceeds either way; the seal records the outcome as a
-   * boolean event record and never any biometric data. Returns null when the
-   * toggle is off.
+   * Face check — REMOVED in 0.22.0 (field finding: the LA prompt contended
+   * with the live multicam session and dual camera died on every capture
+   * with the toggle on). The stub stays so the sealed record keeps its
+   * honest semantics: null = "not requested", which is now always the case
+   * at capture. The seal-time biometric hold and app-lock Face ID never
+   * touch the camera path and are unaffected.
    */
-  const runFaceGate = async (): Promise<boolean | null> => {
-    if (!settings.faceCheckEnabled) return null;
-    try {
-      const res = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Face check: a face match is required for this capture',
-        cancelLabel: 'Cancel',
-      });
-      return res.success === true;
-    } catch {
-      return false; // an errored check is an honest 'did not pass'
-    }
-  };
+  const runFaceGate = async (): Promise<boolean | null> => null;
 
   const motionSamplesNow = () =>
     poseBuffer.current.map((s) => ({ x: s.ax, y: s.ay, z: s.az, t: s.t }));
 
-  const snapshotContext = async (capturedAtMs: number = Date.now()) =>
+  const snapshotContext = async (
+    capturedAtMs: number = Date.now(),
+    captureInfo?: { facing?: 'front' | 'back' | null; hfovDeg?: number | null },
+  ) =>
     collectContext({
       includeLocation: settings.includeLocation,
       includeSensors: settings.includeSensors,
@@ -1146,18 +1235,34 @@ export default function CaptureScreen() {
       motionSamples: motionSamplesNow(),
       poseSamples: [...poseBuffer.current],
       capturedAtMs,
+      // 0.20.5: sealed projection inputs — the native payload's facing/hfov
+      // when present (pre-0.20.5 native builds: the UI facing state is the
+      // honest fallback — it IS the session's configured camera).
+      cameraFacing: captureInfo?.facing ?? (facing === 'front' ? 'front' : 'back'),
+      hfovDeg: captureInfo?.hfovDeg ?? null,
     });
 
-  // Burst intent queue: a shutter tap during an in-flight capture enqueues an
-  // intent (cap 5) with a haptic ack, and each queued shot fires sequentially
-  // as the previous settles. Every queued shot is a real capture with its own
-  // seal job.
+  // Burst intent queue (0.16.2, field report 8/13): rapid shutter taps used
+  // to be silently dropped while a capture was in flight — burst felt
+  // broken. Now a tap during an in-flight capture enqueues an intent (cap
+  // 5) with a haptic ack; each queued shot fires sequentially as the
+  // previous settles. Every queued shot is a REAL capture with its own seal
+  // job — the shutter never dead-ends, and nothing is ever fabricated.
   const captureQueue = useRef(0);
   const capturePhotoRef = useRef<() => void>(() => {});
+  // 0.20.6: the in-flight gate is a REF, not the React state — two taps
+  // inside one render window both saw capturing=false, and the second
+  // native capture() rejected E_BUSY straight to a raw toast (field,
+  // 0.20.5/59). The ref flips synchronously, so the second tap takes the
+  // burst-queue branch like any tap during a visible capture.
+  const capturingRef = useRef(false);
+  // E_BUSY requeue streak — bounded so a genuinely wedged pipeline cannot
+  // spin the queue forever; reset on any capture that reaches native.
+  const busyStreak = useRef(0);
 
   const capturePhoto = async () => {
     if (!sessionActive.current) return;
-    if (capturing) {
+    if (capturingRef.current) {
       if (captureQueue.current < 5) {
         captureQueue.current += 1;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1167,28 +1272,31 @@ export default function CaptureScreen() {
       }
       return;
     }
+    capturingRef.current = true;
     setCapturing(true);
     try {
       shutterFlash();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      // Face check at capture start, before any bytes exist.
+      // Face check at capture start — before any bytes exist.
       faceGateFlag.current = await runFaceGate();
 
-      // ExhibitCamera stills path: the delivery still plus the synchronized
-      // stereo partner, committed calibration, timestamps, and per-device
-      // metadata, each a three-state EvidencePath. Adds full-sensor stills
-      // (own hash), the committed capture-settings block, and photo EXIF. The
-      // full CaptureResult rides the seal job; the pump stores the artifact
+      // ExhibitCamera stills path (0.13.0 — the ONE camera session): the
+      // delivery still plus the synchronized stereo partner, committed
+      // calibration, timestamps, and per-device metadata, each a three-state
+      // EvidencePath. W2.1 adds full-sensor stills (own hash) and W2.4 the
+      // committed capture-settings block + photo EXIF. The full
+      // CaptureResult rides the seal job; the pump stores the artifact
       // files under the sealed record's evidence dir.
       const stamp = Date.now();
       const evidenceDir = `${FileSystem.documentDirectory}capture/evidence-${stamp}/`;
       await FileSystem.makeDirectoryAsync(evidenceDir, { intermediates: true }).catch(() => {});
-      // A stalled pipeline kicks its own synchronizer rebind at the freshness
-      // deadline, so one retry after a beat usually lands on a live frame.
-      // Only genuinely fresh pairs commit; the retry changes when we ask, not
-      // which pixels get sealed. With the IMU sink armed the native call gains
-      // ~0.55 s of post-shutter ring drain, so the 20 s watchdog must not be
-      // tightened.
+      // 0.14.2: a stalled pipeline now kicks its own synchronizer rebind at
+      // the freshness deadline, so one quiet retry after a beat usually lands
+      // on a live frame. Only genuinely fresh pairs ever commit — the retry
+      // changes WHEN we ask, never which pixels get sealed.
+      // With the IMU sink armed (0.15+), the native call gains ~0.55 s of
+      // post-shutter ring drain — the 20 s watchdog has ample headroom and
+      // must NOT be tightened into fighting it.
       const attemptCapture = () => withTimeout(
         capture({
           deliveryPath: `${FileSystem.cacheDirectory}capture-${stamp}.jpg`,
@@ -1206,26 +1314,32 @@ export default function CaptureScreen() {
         await new Promise((r) => setTimeout(r, 700));
         result = await attemptCapture();
       }
+      busyStreak.current = 0; // a capture reached native and answered
 
-      // Capture is not seal: enqueue the raw frame with the sensor context and
-      // the exact moment. Hashing, Enclave signing, TSA countersigning, C2PA
-      // embedding and vault encryption run in the background queue while the
-      // camera stays live for the next shot.
-      const context = await snapshotContext(result.capturedAtMs);
+      // Capture ≠ seal: enqueue the raw frame with the sensor context and
+      // the exact moment — hashing, Enclave signing, TSA countersigning,
+      // C2PA embedding and vault encryption all run in the background queue
+      // while the camera stays live for the next shot.
+      const context = await snapshotContext(result.capturedAtMs, {
+        facing: result.facing ?? null,
+        hfovDeg: result.primaryHfovDeg ?? null,
+      });
       await enqueuePhotoSeal({
         photoUri: toFileUri(result.deliveryPath),
         context,
         identity,
-        // The standard-EXIF subset of the committed capture settings: the
-        // photo's own EXIF first, device read-backs filling gaps, a field with
-        // no real value absent. Signed as com.verify.exif by attestPhoto.
+        // W2.4: the standard-EXIF subset of the committed capture settings
+        // (the full-res photo's own OS-written EXIF first, device
+        // read-backs filling gaps; nothing synthesized — a field with no
+        // real value is absent). Signed as com.verify.exif by attestPhoto.
         exif: buildCaptureExif(result.captureSettings),
-        // Three state per sink. The PCM master is a video-session sink, so
-        // stills commit 'never-recorded' structurally. The stills ring maps
-        // the capture result's own three-state report through the shared
-        // vocabulary; a build without the sink reports nothing and commits
-        // 'never-recorded'. The IMU sensor log rides the SensorLogEvidence
-        // contract. Stereo artifacts carry their own three-state vocabulary in
+        // Three-state honesty per sink. The PCM master is a video-session
+        // sink — structural 'never-recorded' on stills. The stills ring is
+        // REAL as of native 0.17.2 — the capture result's own three-state
+        // report, mapped through the shared vocabulary; a pre-0.17.2 build
+        // reports nothing and commits 'never-recorded'. The IMU sensor log
+        // rides the frozen SensorLogEvidence contract (native 0.15+). The
+        // stereo artifacts carry their own three-state vocabulary in
         // exhibitCapture.
         captureEvidence: {
           rawPcmPath: 'never-recorded',
@@ -1237,12 +1351,13 @@ export default function CaptureScreen() {
       });
       showToast(
         result.stereoStatus === 'unavailable'
-          // The still landed as a single-lens, full-sensor photo; the toast
-          // states the degradation.
+          // 0.15.1 degraded fallback: the still LANDED (single-lens,
+          // full-sensor photo) — the toast states the degradation, it
+          // never pretends stereo happened.
           ? 'Captured · single-lens; stereo unavailable at shutter'
           : 'Captured',
       );
-      // The toast fades in 3 s; the diagnostics log keeps the fact.
+      // The toast fades in 3 s — the diagnostics log keeps the fact.
       if (result.stereoStatus === 'unavailable') {
         logDiagnostic({
           t: Date.now(),
@@ -1254,12 +1369,32 @@ export default function CaptureScreen() {
         logDiagnostic({ t: Date.now(), kind: 'photo', outcome: 'captured' });
       }
     } catch (e) {
-      logDiagnostic({ t: Date.now(), kind: 'photo', outcome: 'failed', message: e instanceof Error ? e.message : String(e) });
-      showToast(e instanceof Error ? `Capture failed: ${e.message}` : 'Capture failed');
+      const msg = e instanceof Error ? e.message : String(e);
+      // 0.20.6: E_BUSY is not a raw-toast failure — the native side is
+      // still finishing the previous shot (e.g. a watchdog-abandoned call
+      // whose native watchdog has not fired yet). Requeue the intent
+      // quietly (the burst machinery fires it when the pipeline settles),
+      // bounded so a genuinely wedged pipeline cannot spin forever; past
+      // the bound, say so plainly instead of stacking silent retries.
+      if (msg.includes('E_BUSY')) {
+        logDiagnostic({ t: Date.now(), kind: 'photo', outcome: 'retry', message: msg });
+        busyStreak.current += 1;
+        if (busyStreak.current <= 3 && captureQueue.current < 5) {
+          captureQueue.current += 1;
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        } else {
+          showToast('Camera is still finishing the previous shot — tap again in a moment');
+        }
+      } else {
+        logDiagnostic({ t: Date.now(), kind: 'photo', outcome: 'failed', message: msg });
+        showToast(e instanceof Error ? `Capture failed: ${msg}` : 'Capture failed');
+      }
     } finally {
+      capturingRef.current = false;
       setCapturing(false);
-      // Fire the next queued burst intent. A short beat lets the pipeline
-      // breathe; the native ring drain already keeps captures sequential.
+      // Fire the next queued burst intent — a short beat lets the pipeline
+      // breathe between captures (the native ring drain already keeps them
+      // strictly sequential).
       if (captureQueue.current > 0) {
         captureQueue.current -= 1;
         setTimeout(() => capturePhotoRef.current(), 200);
@@ -1269,13 +1404,13 @@ export default function CaptureScreen() {
   capturePhotoRef.current = () => { void capturePhoto(); };
 
   /**
-   * Video stop, reached by a manual stop, the cap timer, and terminal native
-   * errors. The native module finalizes the delivery file; the pose trace
-   * spans the whole clip at an adaptive rate (<= 240 samples), anchored to the
-   * native session's first-frame clock rather than the JS stopwatch. Periodic
-   * stereo pairs were committed into the evidence dir during recording, and
-   * the seal job carries the session facts (audio track presence, pair
-   * counts).
+   * Video stop — manual stop, the 120 s cap timer, and terminal native
+   * errors all land here. The native module finalizes the delivery file;
+   * the pose trace spans the whole clip at an adaptive rate (≤ 240 samples),
+   * anchored to the native session's first-frame clock, not the JS
+   * stopwatch. Periodic stereo pairs (pairIntervalSec default) were
+   * committed into the evidence dir during recording; the seal job carries
+   * the honest session facts (audio track presence, pair counts).
    */
   const finishVideo = async () => {
     if (videoStopping.current) return; // a double stop must not double-finalize
@@ -1294,6 +1429,10 @@ export default function CaptureScreen() {
         motionSamples: motionSamplesNow(),
         poseSamples: [...poseBuffer.current],
         capturedAtMs: recordStartMs.current,
+        // 0.20.5: sealed projection inputs (native payload; UI facing as
+        // the honest fallback) — same threading as the photo path.
+        cameraFacing: v.facing ?? (facing === 'front' ? 'front' : 'back'),
+        hfovDeg: v.primaryHfovDeg ?? null,
         poseTraceOpts: {
           beforeMs: 1000,
           afterMs: v.durationMs + 500,
@@ -1301,11 +1440,11 @@ export default function CaptureScreen() {
           maxSamples: 240,
         },
       });
-      // ENF anchor: when the PCM master committed, its first-sample
-      // wall-clock anchor and integrity summary ride the sealed context, so
-      // the details screen (and a desk with a reference ENF series) can place
-      // the mains trace in absolute time. Absent when no master committed;
-      // captureEvidence.rawPcmPath states which case.
+      // ENF anchor (0.18.0, native 0.17.2): when the PCM master committed,
+      // its first-sample wall-clock anchor + integrity summary ride the
+      // sealed context so the details screen (and a desk with a reference
+      // ENF series) can place the mains trace in absolute time. Absent when
+      // no master committed — captureEvidence.rawPcmPath states which case.
       if (v.rawPcmInfo && typeof v.rawPcmPath === 'string') {
         context.enfAnchor = v.rawPcmInfo;
       }
@@ -1313,12 +1452,14 @@ export default function CaptureScreen() {
         videoUri: toFileUri(v.deliveryPath),
         context,
         identity,
-        // Three state per sink. The native stop payload reports the recorded
-        // raw-audio path or null (enabled-but-failed); the toggle-off case
-        // commits 'never-recorded' here. The IMU sensor log rides the same
-        // SensorLogEvidence contract as stills; a build without it reports
-        // nothing and commits 'never-recorded'. The ring sink is stills-only,
-        // so video commits 'never-recorded' structurally.
+        // Three-state honesty per sink: the raw-audio master is REAL as of
+        // 0.14.0 — the native stop payload reports the recorded path or
+        // null (enabled-but-failed); the toggle-off case is stated
+        // 'never-recorded' here. The IMU sensor log rides the same frozen
+        // SensorLogEvidence contract as stills (native 0.15+) — a pre-parity
+        // build reports nothing and commits 'never-recorded'. The ring sink
+        // is stills-only — structural 'never-recorded' on videos, stated,
+        // never silently absent.
         captureEvidence: {
           rawPcmPath: settings.captureEvidence.rawPcm ? v.rawPcmPath ?? null : 'never-recorded',
           sensorLogPath: cameraSensorLogEvidence(v, settings.includeSensors),
@@ -1330,9 +1471,9 @@ export default function CaptureScreen() {
           pairsMissed: v.pairsMissed,
           hardwareCost: v.hardwareCost,
           evidenceDir: videoEvidenceDir.current,
-          // Session stereo availability as probed at configure time, plus the
-          // collected pair events (the per-pair enumeration and anchors for
-          // the stereo ingestion path).
+          // Session stereo availability as probed at configure time, plus
+          // the collected pair events (the per-pair enumeration + anchors
+          // for the stereo ingestion path).
           stereo,
           pairEvents: [...videoPairEvents.current],
         },
@@ -1340,13 +1481,14 @@ export default function CaptureScreen() {
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast('Captured');
-      // VideoResult carries no stereoStatus field, since stereo session state
-      // is probed at configure time rather than in the stop payload, so
-      // 'captured' is the only outcome to log here.
+      // VideoResult carries no stereoStatus field (stereo session state is
+      // probed at configure time, not in the stop payload) — so there is no
+      // degraded branch to log here; 'captured' is the honest outcome.
       logDiagnostic({ t: Date.now(), kind: 'video', outcome: 'captured' });
     } catch (e) {
-      // A session stopped before its first frame rejects E_WRITER
-      // ("no frames"), surfaced as a "too short" message.
+      // Fail-closed native contract: a session stopped before its first
+      // frame rejects E_WRITER ("no frames") — a user-facing "too short",
+      // not a crash.
       const code = (e as { code?: string } | null)?.code;
       const msg = e instanceof Error ? e.message : '';
       const tooShort = code === 'E_WRITER' && /no frames/i.test(msg);
@@ -1358,13 +1500,23 @@ export default function CaptureScreen() {
   };
   const finishVideoRef = useRef(finishVideo);
   finishVideoRef.current = finishVideo;
-  // Re-entrancy guard for finishVideo, plus the evidence dir of the in-flight
+  // Re-entrancy guard for finishVideo + the evidence dir of the in-flight
   // video session (set at startVideo).
   const videoStopping = useRef(false);
   const videoEvidenceDir = useRef<string>('');
 
+  // 0.21.0 (field, 6:14 PM 8/23: an E_BUSY "Video is already recording"
+  // toast while the UI timer showed 00:02): `recording` is React state and
+  // only flips AFTER the face gate + the native start settle, so a second
+  // shutter tap inside that window double-started — the first start ran
+  // the timer Noah saw, the second hit the native state machine's E_BUSY
+  // reject. An in-flight ref closes the window; a tap during start is
+  // ignored (the recording can be stopped normally once it begins).
+  const videoStarting = useRef(false);
+
   const toggleVideo = async () => {
     if (!recording) {
+      if (videoStarting.current) return;
       if (!sessionActive.current) {
         showToast('The camera session is not running, so recording cannot start.');
         return;
@@ -1377,39 +1529,45 @@ export default function CaptureScreen() {
           return;
         }
       }
-      faceGateFlag.current = await runFaceGate(); // face check at capture start
+      videoStarting.current = true;
       try {
-        const stamp = Date.now();
-        const evidenceDir = `${FileSystem.documentDirectory}capture/evidence-${stamp}/`;
-        await FileSystem.makeDirectoryAsync(evidenceDir, { intermediates: true }).catch(() => {});
-        // pairIntervalSec left at the native default (5 s, min 2): periodic
-        // stereo pairs, not continuous, for thermal headroom.
-        const start = await withTimeout(
-          startVideo({
-            deliveryPath: `${FileSystem.cacheDirectory}capture-${stamp}.mp4`,
-            evidenceDir,
-            // The settings toggle drives a real sink: the module tees PCM, so
-            // the record can say more than 'never-recorded'.
-            rawPcm: settings.captureEvidence.rawPcm,
-          }),
-          15000,
-          'Video start',
-        );
-        videoEvidenceDir.current = evidenceDir;
-        videoPairEvents.current = []; // pair events accumulate per recording
-        setRibbonParam(null); // recording safety: the wheel/ribbon park while rolling
-        setRecording(true);
-        recordStartMs.current = start.startedAtMs;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        // The MAX_VIDEO_SECONDS cap keeps the whole-file AES-GCM seal in
-        // memory. The timer runs the same stop path as a manual tap and states
-        // the reason on screen.
-        videoStopTimer.current = setTimeout(() => {
-          showToast(VIDEO_CAP_NOTICE, 7000);
-          void finishVideoRef.current();
-        }, MAX_VIDEO_SECONDS * 1000);
-      } catch (e) {
-        showToast(e instanceof Error ? `Recording failed: ${e.message}` : 'Recording failed');
+        faceGateFlag.current = await runFaceGate(); // face check at capture start
+        try {
+          const stamp = Date.now();
+          const evidenceDir = `${FileSystem.documentDirectory}capture/evidence-${stamp}/`;
+          await FileSystem.makeDirectoryAsync(evidenceDir, { intermediates: true }).catch(() => {});
+          // pairIntervalSec left at the native default (5 s, min 2) — periodic
+          // stereo pairs, never continuous, for thermal headroom.
+          const start = await withTimeout(
+            startVideo({
+              deliveryPath: `${FileSystem.cacheDirectory}capture-${stamp}.mp4`,
+              evidenceDir,
+              // The settings toggle drives a REAL sink (0.13.0: it was a dead
+              // control — the module had no PCM tee, so the record could only
+              // ever say 'never-recorded').
+              rawPcm: settings.captureEvidence.rawPcm,
+            }),
+            15000,
+            'Video start',
+          );
+          videoEvidenceDir.current = evidenceDir;
+          videoPairEvents.current = []; // pair events accumulate per recording
+          setRibbonParam(null); // recording safety: the wheel/ribbon park while rolling
+          setRecording(true);
+          recordStartMs.current = start.startedAtMs;
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          // MAX_VIDEO_SECONDS cap keeps the whole-file AES-GCM seal comfortably
+          // in memory; the timer runs the same stop path as a manual tap and
+          // states the reason verbatim on screen — never a silent stop.
+          videoStopTimer.current = setTimeout(() => {
+            showToast(VIDEO_CAP_NOTICE, 7000);
+            void finishVideoRef.current();
+          }, MAX_VIDEO_SECONDS * 1000);
+        } catch (e) {
+          showToast(e instanceof Error ? `Recording failed: ${e.message}` : 'Recording failed');
+        }
+      } finally {
+        videoStarting.current = false;
       }
     } else {
       void finishVideoRef.current();
@@ -1417,9 +1575,9 @@ export default function CaptureScreen() {
   };
 
   /**
-   * The one audio save path; manual stop and interruption both land here. The
-   * native module has already finalized the .m4a, and it seals like any
-   * completed recording.
+   * The single audio save path — manual stop and interruption both land here.
+   * The native module finalized the .m4a already (or just did, for a manual
+   * stop); we seal it like any completed recording.
    */
   const saveAudioResult = useCallback(async (result: AudioStopResult, interrupted: boolean) => {
     audioSubs.current.forEach((s) => s?.remove());
@@ -1427,9 +1585,9 @@ export default function CaptureScreen() {
     setRecording(false);
     Animated.timing(transcriptFade, { toValue: 0, duration: 200, useNativeDriver: true }).start();
 
-    // Delivery-file sink, declared natively: nothing durable reached disk, so
-    // there is no take to seal and this fails loudly rather than minting an
-    // empty exhibit.
+    // Delivery-file sink, declared natively: nothing durable reached disk →
+    // there is no take to seal, and pretending otherwise would mint an empty
+    // exhibit. Fail loudly, in the user's favor.
     if (result.fileState === 'failed' || !result.path) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       logDiagnostic({ t: Date.now(), kind: 'audio', outcome: 'failed', message: result.fileError ?? 'nothing reached storage' });
@@ -1443,19 +1601,29 @@ export default function CaptureScreen() {
       includeWifi: settings.includeWifi,
       motionSamples: [],
     });
+    // ENF anchor (0.20.1, media parity with the video flow's rawPcmInfo):
+    // when the raw master committed, its first-sample wall-clock anchor +
+    // integrity summary ride the sealed context so the details screen's CAF
+    // reader has a sealed interpretation to arbitrate against (the 0.20.0
+    // field report: an audio-mode float32 master the reader could not
+    // decode) and a desk can place the mains trace in absolute time.
+    if (result.rawPcmInfo && typeof result.rawPcmPath === 'string') {
+      context.enfAnchor = result.rawPcmInfo;
+    }
 
     // A manual stop waits ~4s for the final transcript; an interruption does
-    // not, so fall back to the last live partial for the words cut off.
+    // not, so fall back to the last live partial for the words cut off mid-way.
     const fallback = interrupted
       ? [committedRef.current.trim(), partialRef.current.trim()].filter(Boolean).join(' ')
       : committedRef.current.trim();
     const text = result.transcript.trim() || fallback;
     const segments = result.segments ?? [];
-    // The take's gyro JSONL rides into the seal like a video sensor log. The
-    // ring stays a stills sink, so audio commits 'never-recorded'
-    // structurally. The raw PCM master is real for audio takes: the stop
-    // result's three-state report, mapped through the shared vocabulary as in
-    // video (toggle off commits 'never-recorded', enabled-but-failed null).
+    // Media parity: the take's gyro JSONL rides into the seal exactly like a
+    // CaptureKit video sensor log. The ring stays a stills sink (structural
+    // 'never-recorded'); the raw PCM master is real for audio takes as of
+    // native 0.18.3 — the stop result's three-state report, mapped through
+    // the shared vocabulary exactly like video (toggle off commits
+    // 'never-recorded'; enabled-but-failed commits null).
     const captureEvidence: CaptureEvidencePaths = {
       rawPcmPath: settings.captureEvidence.rawPcm ? result.rawPcmPath ?? null : 'never-recorded',
       ringBufferDir: 'never-recorded',
@@ -1465,21 +1633,22 @@ export default function CaptureScreen() {
       audioUri: result.path,
       context,
       identity,
-      // The transcription toggle decides whether the words ride inside the
-      // signed file; off means audio-only.
+      // The transcription toggle decides whether the words ride inside
+      // the signed file — off means audio-only, no silent embedding.
       transcript: settings.includeTranscript && text ? { text, segments, engine: 'apple-speech-ondevice' } : null,
       biometricGatePassed: faceGateFlag.current,
       captureEvidence,
     });
-    // The queue copied the draft, so the raw capture file has no further job.
+    // The queue copied the draft — the raw capture file has no further job.
     await FileSystem.deleteAsync(result.path, { idempotent: true }).catch(() => {});
 
-    // A partial take still seals, keeping custody of what survived, with the
-    // truncation stated.
+    // A partial take still seals (custody of what survived is the user's to
+    // keep) — but the truncation is stated plainly, never passed off as the
+    // whole recording.
     const isPartial = result.fileState === 'partial';
     Haptics.notificationAsync(isPartial ? Haptics.NotificationFeedbackType.Warning : Haptics.NotificationFeedbackType.Success);
-    // A partial take still sealed, stated on the toast, with the truncation
-    // reason kept verbatim in the log.
+    // A partial take still sealed (stated on the toast) — captured, with
+    // the truncation reason kept verbatim in the log.
     logDiagnostic({
       t: Date.now(),
       kind: 'audio',
@@ -1513,13 +1682,14 @@ export default function CaptureScreen() {
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
       const stamp = Date.now();
       const path = `${dir}note-${stamp}.m4a`;
-      // The recorder's gyro sink writes the take's IMU trace here, anchor line
-      // first, spanning exactly the recorded window. Only when the
-      // capture-evidence sensors toggle is on; off commits 'never-recorded'.
+      // Media parity: the recorder's gyro sink writes the take's IMU trace
+      // here (anchor line first, exactly the recorded window). Only when the
+      // capture-evidence sensors toggle is on — off means 'never-recorded',
+      // stated as such, never silently skipped.
       const sensorLogPath = settings.includeSensors ? `${dir}note-${stamp}.sensors.jsonl` : null;
-      // Raw-audio sink: the toggle video honors also records an uncompressed
-      // LPCM master for audio takes, the tap's hardware frames written
-      // straight through and sealed as captureEvidence.rawPcmPath.
+      // Raw-audio sink (0.18.3): the toggle that video honors now records an
+      // uncompressed LPCM master for audio takes too — the tap's hardware
+      // frames written straight through, sealed as captureEvidence.rawPcmPath.
       const rawPcmPath = settings.captureEvidence.rawPcm ? `${dir}note-${stamp}.raw.caf` : null;
 
       // Face check at capture start, same contract as photo and video.
@@ -1542,10 +1712,10 @@ export default function CaptureScreen() {
             partialRef.current = e.text;
           }
         }),
-        // The level meter subscribes itself (<LevelMeter/>), keeping ~30 dB
-        // updates/s out of this component's render path.
+        // The level meter subscribes itself (<LevelMeter/>) — keeping ~30
+        // dB updates/s out of this component's render path.
         // iOS seized the session (phone call, Siri, alarm): the native module
-        // already finalized the file at the last good frame, so save it like a
+        // already finalized the file at the last good frame — save it like a
         // manual stop.
         onInterrupted((e) => {
           void saveAudioResult(e, true).catch((err) => {
@@ -1553,8 +1723,9 @@ export default function CaptureScreen() {
             showToast(err instanceof Error ? `Save failed: ${err.message}` : 'Save failed');
           });
         }),
-        // Native-side hiccups (speech service, session) are surfaced rather
-        // than swallowed.
+        // Native-side hiccups (speech service, session) are surfaced, not
+        // swallowed — silent failures are how "transcription isn't working"
+        // reports happen.
         onCaptureError((e) => {
           setTranscriptionIssue(e.message);
           showToast(`Audio warning: ${e.message}`);
@@ -1588,8 +1759,8 @@ export default function CaptureScreen() {
       const result = await stopCapture();
       await saveAudioResult(result, false);
     } catch (e) {
-      // An interruption that beat the tap already saved the take natively, so
-      // "Not recording" here is a no-op, not a failure.
+      // An interruption that beat the tap already saved the take natively —
+      // "Not recording" then is a no-op, not a failure.
       if (!(e instanceof Error && e.message.includes('Not recording'))) {
         logDiagnostic({ t: Date.now(), kind: 'audio', outcome: 'failed', message: e instanceof Error ? e.message : 'Save failed' });
         showToast(e instanceof Error ? `Save failed: ${e.message}` : 'Save failed');
@@ -1601,27 +1772,30 @@ export default function CaptureScreen() {
 
   const switchMode = (m: Mode) => {
     if (recording) return;
-    // The light is per mode: entering a mode re-derives the applied light from
-    // that mode's persisted preference, and audio always goes dark. Photo and
-    // video hops ride the same native session, so this is a chrome call, not a
-    // rebuild.
+    // The light is per mode (0.15.0 Drop 2): entering a mode re-derives
+    // the applied light from THAT mode's persisted preference — photo's
+    // flash pref and video's torch never carry into each other, and the
+    // trip to audio always goes dark. (0.14.2: photo↔video hops ride the
+    // same native session, so this is a chrome call, not a rebuild.)
     setRibbonParam(null);
     if (m === 'audio') setTorch(false);
     else if (m === 'video') setTorch(settings.videoTorch);
     else {
-      // Entering photo mode turns the continuous light off and re-applies the
-      // persisted strobe preference to the photo output.
+      // W2.2: entering PHOTO mode goes dark (continuous light off) and
+      // re-applies the persisted strobe preference to the photo output —
+      // the flash strobe does photo lighting now, never the torch.
       setTorch(false);
       void setPhotoFlashMode(settings.photoFlash).catch(() => {});
     }
     if (m === 'audio') {
-      // The pro strip is per-shoot session state. Switching to audio collapses
-      // it and returns exposure, focus, WB and bias to auto.
+      // Fresh capture, fresh state: the pro strip is per-shoot session state.
+      // Switching to audio collapses it and returns exposure/focus/WB (+bias)
+      // to auto — manual optics never silently carry into the next capture.
       resetProControls();
     }
     setMode(m);
-    // A short blur veil over the preview while the fresh session settles,
-    // hiding the reconfigure pop between modes.
+    // Apple-style transition: a short blur veil over the preview while the
+    // fresh session settles — hides the reconfigure pop between modes.
     modeBlurAnim.setValue(0);
     Animated.sequence([
       Animated.timing(modeBlurAnim, { toValue: 30, duration: 120, useNativeDriver: false }),
@@ -1630,8 +1804,8 @@ export default function CaptureScreen() {
   };
 
   // Swipe-to-switch wiring: a leftward swipe advances AUDIO → PHOTO → VIDEO
-  // (the mode row's visual order), rightward retreats. Assigned per render, so
-  // the once-created PanResponder always reads the current closure.
+  // (the mode row's visual order), rightward retreats. Assigned per render —
+  // the PanResponder (created once) always reads the current closure.
   modeSwipeRef.current = (dir) => {
     const i = MODE_ORDER.indexOf(mode);
     const next = MODE_ORDER[i + dir];
@@ -1649,21 +1823,30 @@ export default function CaptureScreen() {
   };
 
   const selectLens = async (l: ExhibitLens) => {
-    // Same-lens taps still go native: the call is idempotent and answers
-    // 'already-selected', so the chip follows the session rather than drifting
-    // JS state, and the zoom re-parks on the stop.
+    // 0.18.7 (field: "the 0.5 doesn't work when the multiple lenses is
+    // off"): a same-lens tap used to return early on the JS state alone —
+    // if the state and the live session ever drifted (a graph teardown or
+    // a rebuild that landed on a different stack), the pill went dead and
+    // stayed dead. The native call is idempotent (it answers
+    // 'already-selected' when the session truly is on that lens), so with
+    // a live session even same-lens taps go native: the session is the
+    // truth and the chip follows the result, which also re-parks the zoom
+    // on the stop.
     if (l === lens && !sessionActive.current) return;
     if (!sessionActive.current) {
-      // No live session, so nothing native to fail. The session lifecycle
+      // No live session: nothing native to fail. The session lifecycle
       // effect applies the stored lens when the next session configures.
       setLens(l);
       commitZoom(factorForLens(stopsRef.current, l), l);
       return;
     }
-    // On the virtual dual-wide graph both lenses are already live and the
-    // native swap refuses every non-wide request, so the 0.5 pill is a
-    // zoom-stop jump instead: the device hands off to the ultra-wide
-    // constituent at 0.5 by itself. The telephoto is not on this graph.
+    // 0.18.6 (field: "the 0.5 still doesn't work — same error"): on the
+    // virtual dual-wide graph BOTH lenses are already live and the native
+    // swap refuses every non-wide request ("both lenses are live — zoom
+    // to 0.5x…"), so the 0.5 pill read as a permanent error. On this
+    // graph the pill is a zoom-stop JUMP: the device hands off to the
+    // ultra-wide constituent at 0.5 by itself. The telephoto is genuinely
+    // not on this graph — stated, with the way out.
     if (graphRef.current === 'virtual-dual-wide') {
       if (l === 'telephoto') {
         showToast('The telephoto can\u2019t join while Multiple lenses is on — turn it off in Settings to use the telephoto');
@@ -1674,36 +1857,38 @@ export default function CaptureScreen() {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       return;
     }
-    // The native switch can resolve applied:false or reject outright, so the
-    // chip label updates only on applied:true and states the reason
-    // otherwise.
+    // Honesty fix (TestFlight 0.13.0): the native switch can resolve
+    // applied:false or reject outright. Updating the chip before the result
+    // made the buttons look dead — or worse, lie about which lens sealed
+    // the capture. Apply the label only on applied:true; say why otherwise.
     try {
       const res = await setNativeLens(l);
       if (!res.applied) {
-        // Refusals go to the diagnostics log verbatim, so a field report after
-        // a dead-pill tap carries the native reason.
+        // 0.18.7: refusals go to the diagnostics log verbatim — the field
+        // report after a dead-pill tap then carries the native reason.
         logDiagnostic({ t: Date.now(), kind: 'camera', outcome: 'info', message: `lens switch to ${l} refused: ${res.reason ?? 'no reason'}` });
         showToast(res.reason === 'no-session-or-front-facing'
           ? 'Lens switch is only available on the back camera'
           : `Lens not applied${res.reason ? `: ${res.reason}` : ''}`);
         return;
       }
-      // The partner stack is re-derived natively, and the old partner can be
-      // the lens just switched to. Adopt the reported stereo state so the PiP
-      // and the stereo caption never claim a partner that is gone.
+      // The partner stack was re-derived natively (the old partner can be
+      // the lens we just switched TO). Adopt the reported stereo state so
+      // the PiP and the stereo caption never claim a partner that is gone.
       if (res.stereo === 'available' || res.stereo === 'unsupported') setStereo(res.stereo);
     } catch (e) {
       logDiagnostic({ t: Date.now(), kind: 'camera', outcome: 'info', message: `lens switch to ${l} errored: ${e instanceof Error ? e.message : String(e)}` });
       showToast(e instanceof Error ? `Lens unavailable: ${e.message}` : 'Lens unavailable on this device');
       return;
     }
-    // An explicit lens switch taps back.
+    // Halide's tactile lens switcher: an explicit lens switch taps back.
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    // A tapped pill parks the zoom at that lens's optical stop.
+    // A tapped pill parks the zoom at that lens's optical stop — the pill
+    // jump is the optical detent, never a carried-over crop.
     setLens(l);
     commitZoom(factorForLens(stopsRef.current, l), l);
-    // The new device stack has its own active format, so refresh the pro
-    // ranges and zoom range to clamp against this lens.
+    // The new device stack has its own active format — refresh the pro
+    // ranges and zoom range so they clamp to THIS lens's truth.
     void capabilities()
       .then((c) => {
         if (!c) return;
@@ -1715,11 +1900,11 @@ export default function CaptureScreen() {
   };
 
   /**
-   * Tap-to-focus: a single-finger tap on the preview sets the focus and
-   * exposure points together (normalized 0-1, top-left origin). The pinch
+   * Tap-to-focus: a single-finger tap on the preview sets the focus AND
+   * exposure points together (normalized 0–1, top-left origin). The pinch
    * guard keeps the trailing finger-lift of a zoom gesture from re-focusing.
-   * With the Value Ribbon docked, the first preview tap closes it and does not
-   * move the focus point.
+   * Tap-elsewhere dismisses the Value Ribbon: with the ribbon docked, the
+   * first preview tap closes it and does NOT move the focus point.
    */
   const previewSize = useRef({ w: 0, h: 0 });
   const handlePreviewTap = (e: GestureResponderEvent) => {
@@ -1737,37 +1922,39 @@ export default function CaptureScreen() {
   };
 
   // ------------------------------------------------------------------
-  // Pro strip logic (spec §14). Every setter goes through withTimeout, so a
-  // wedged native call surfaces as a one-line toast rather than a frozen
-  // strip. Capsules store the bridge's applied values (clamped ISO, duration
-  // and lensPosition, round-tripped WB temperature), which is what the next
-  // capture's metadata block commits.
+  // PRO strip logic (spec §14). Every setter goes through withTimeout —
+  // a wedged native call surfaces as a one-line toast, never a frozen
+  // strip. Capsules store the bridge's APPLIED values (clamped ISO /
+  // duration / lensPosition, round-tripped WB temperature): the value on
+  // screen is what the next capture's metadata block will commit, so a
+  // clamped value needs no label — it is simply honest.
   // ------------------------------------------------------------------
 
-  /** The strip renders only when the hardware reports a manual control. */
+  /** The strip renders only when the hardware reports ANY manual control. */
   const proAvailable = !!proCaps && !!(
     proCaps.exposureModes?.locked || proCaps.exposureModes?.custom ||
     proCaps.focusModes?.locked || proCaps.focusModes?.manual ||
     proCaps.whiteBalanceModes?.locked || proCaps.whiteBalanceModes?.manual
   );
-  /** True while the dual-view graph is live: second camera attached, both
-   *  lenses streaming. The 0.5/1 pills are zoom stops on this graph rather
-   *  than switches, so they hide while this holds. The pro tray stays; only
-   *  the per-constituent controls (focus/WB/ISO/shutter) hide, while
-   *  flash/torch and EV keep working on the fused device (see
-   *  visibleProParams). Turning Multiple Lenses off rebuilds the session
-   *  (altView is a lifecycle dep) and everything returns. */
+  /** 0.18.6 (Noah): the dual-view graph is LIVE — second camera attached,
+   *  both lenses streaming. The 0.5/1 pills are zoom stops on this graph,
+   *  not switches, so they hide exactly while this holds. 0.20.5: the pro
+   *  tray is FULL again while dual is live — the 0.18.7/0.18.8 narrowing
+   *  was virtual-graph-era (per-constituent controls errored on the fused
+   *  device); the multi-input graph's native setters target the physical
+   *  primary. Everything returns when Multiple lenses turns off (the
+   *  session rebuilds — altView is a lifecycle dep). */
   const dualLive = facing === 'back' && stereo === 'available' && settings.captureEvidence.altView;
-  /** True when this capture's optics were chosen by hand; the metadata
-   *  carries the device read-back values. */
+  /** One glance on the PRO button: this capture's optics were chosen, and
+   *  the record will say so (metadata carries device-read-back values). */
   const proManualActive =
     exposureMode !== 'auto' || focusMode !== 'auto' || wbMode !== 'auto' || bias !== 0;
 
   const togglePro = () => {
     if (proOpen) {
-      // Collapsing keeps the applied settings: the strip is a view onto
-      // session state, not the state itself. The precision bar docks with a
-      // capsule, so it closes with the tray.
+      // Collapsing KEEPS the applied settings — the strip is a view onto
+      // session state, not the state itself. The precision bar docks with
+      // a capsule, so it closes with the tray (no orphan surface).
       setRibbonParam(null);
       Animated.timing(proAnim, { toValue: 0, duration: 160, useNativeDriver: true })
         .start(() => setProOpen(false));
@@ -1869,14 +2056,17 @@ export default function CaptureScreen() {
   };
 
   // ------------------------------------------------------------------
-  // The precision bar. Every pro param docks here: ladder params scrub integer
-  // rung indices (snap 1, rung 0 = AUTO where the hardware has one),
-  // continuous params scrub their native range (SHTR in stops). Live scrubs
-  // apply natively on a throttle; the commit lands the bridge's applied value
-  // in state. The AUTO pill is the auto/manual toggle.
+  // The precision bar (0.18.2) — the ONLY adjustment surface. Every pro
+  // param docks here: ladder params scrub integer rung indices (snap 1, a
+  // detent per rung, rung 0 = AUTO where the hardware has one), continuous
+  // params scrub their native range (SHTR in stops, so a uniform drag is a
+  // uniform exposure change). Live scrubs apply natively on a throttle
+  // WITHOUT React state (the ribbon leaf owns its drag); the commit lands
+  // the bridge's APPLIED value in state. The AUTO pill on the bar is the
+  // one auto/manual toggle; scrubbing a value IS entering manual.
   // ------------------------------------------------------------------
-  /** ISO range of the active format (device-reported), else the ladder's own
-   *  ends. */
+  /** ISO range of the ACTIVE FORMAT (device-reported), else the ladder's
+   *  own ends — never a guessed-tight range. */
   const isoRange: [number, number] = proCaps?.activeFormatISO
     ? [proCaps.activeFormatISO.min, proCaps.activeFormatISO.max]
     : [ISO_LADDER[0], ISO_LADDER[ISO_LADDER.length - 1]];
@@ -1892,15 +2082,16 @@ export default function CaptureScreen() {
     fn();
   };
 
-  /** Builds every param's ribbon session: config plus handlers, described
-   *  uniformly per the pro-param model. */
+  /** One builder for every param's ribbon session — config + handlers
+   *  described uniformly, per the single param model. */
   const ribbonFor = (
     p: ProParamId | null,
   ): { config: RibbonConfig; onLive: (v: number) => void; onCommit: (v: number) => void; onReset: () => void } | null => {
     switch (p) {
-      // FLASH/TORCH has no ribbon; it is a two- or three-state preference and
-      // the capsule alternates on tap (see cycleLight). The default arm keeps
-      // ribbonFor correct if a stale ribbonParam ever names it.
+      // 0.18.4-R5 (owner directive): FLASH/TORCH has no ribbon — it is a
+      // preference with two or three states, so the capsule itself
+      // alternates on tap (see cycleLight). The default arm keeps
+      // ribbonFor honest if a stale ribbonParam ever names it.
       case 'ev':
         return {
           config: {
@@ -1913,8 +2104,8 @@ export default function CaptureScreen() {
             ticks: [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2],
             format: formatBias,
             isAuto: bias === 0,
-            // EV's auto is zero compensation, a value, so the bar stays
-            // docked.
+            // EV's "auto" is zero compensation — a value, so the bar
+            // stays docked.
             onAuto: () => void applyBias(0),
           },
           onLive: (v) => ribbonLive(() => void setExposureBias(v).catch(() => {})),
@@ -1922,10 +2113,11 @@ export default function CaptureScreen() {
           onReset: () => void applyBias(0),
         };
       case 'focus': {
-        // A five-rung ladder would make the whole manual range four coarse
-        // jumps. [0,1) is the AUTO zone; [1, 11] is continuous lensPosition
-        // ((v-1)/10 with snap 0.05 = 0.005 motor steps), with haptic detents
-        // and tick marks at the ladder positions as landmarks.
+        // 0.18.4 (Noah: "the focus has huge jumps"): the five-rung ladder
+        // made the whole manual range four coarse jumps. [0,1) stays the
+        // AUTO zone; [1, 11] is now CONTINUOUS lensPosition ((v−1)/10 with
+        // snap 0.05 = 0.005 motor steps), with haptic detents and tick marks
+        // at the old ladder positions so the familiar landmarks remain.
         const AUTO_ZONE = 1;
         const domain = { min: 0, max: 11 };
         const toLens = (v: number) => Math.min(1, Math.max(0, (v - AUTO_ZONE) / 10));
@@ -1998,9 +2190,11 @@ export default function CaptureScreen() {
           void applyExposure('auto');
           setRibbonParam(null);
         };
-        // ISO rides a log2 domain like SHTR: one doubling is one stop and a
-        // uniform drag step, the ladder ticks space evenly instead of bunching
-        // at the low end, and 1/3-stop snap matches the shutter ribbon.
+        // 0.18.4 (Noah: "ISO moves exponentially", "sliders need to be more
+        // consistently sized"): ISO rides a log2 domain exactly like SHTR —
+        // one doubling = one stop = a uniform drag step, the ladder ticks
+        // space evenly instead of bunching at the low end, and 1/3-stop snap
+        // matches the shutter ribbon's granularity.
         const loL = Math.log2(lo);
         const hiL = Math.log2(hi);
         const ticks = ISO_LADDER.filter((v) => v >= lo && v <= hi).map((v) => Math.log2(v));
@@ -2014,7 +2208,7 @@ export default function CaptureScreen() {
             detents: ticks,
             ticks,
             format: (v) => String(Math.round(Math.pow(2, v))),
-            // Scrubbing ISO puts the exposure in custom mode, which is
+            // Scrubbing ISO puts the exposure in custom mode — that IS
             // manual. AUTO returns the whole exposure to auto.
             isAuto: exposureMode !== 'custom',
             onAuto: toAuto,
@@ -2026,8 +2220,8 @@ export default function CaptureScreen() {
         };
       }
       case 'shtr': {
-        // Stop domain: log2(seconds), so a uniform drag is a uniform exposure
-        // change across 1/8000…1 s; 1/3-stop snap.
+        // Stop domain: log2(seconds), so a uniform drag is a uniform
+        // exposure change across 1/8000…1 s; 1/3-stop snap.
         const lo = Math.log2(durRange[0]);
         const hi = Math.log2(durRange[1]);
         const ticks = SHUTTER_LADDER.filter((d) => d >= durRange[0] && d <= durRange[1]).map((d) => Math.log2(d));
@@ -2059,21 +2253,27 @@ export default function CaptureScreen() {
     }
   };
 
-  // On the dual-view graph the tray filters to the controls that apply to the
-  // fused virtual device: flash/torch and EV. The per-constituent manual
-  // controls (focus motor, WB gains, custom ISO/shutter) error on a fused pair
-  // and hide while dual is live, along with any ribbon docked on them.
-  const DUAL_SAFE_PARAMS: readonly ProParamId[] = ['flash', 'ev'];
-  const ribbon = ribbonFor(dualLive && ribbonParam && !DUAL_SAFE_PARAMS.includes(ribbonParam) ? null : ribbonParam);
+  // 0.20.5 (pipeline audit, Noah): the DUAL_SAFE_PARAMS narrowing is GONE.
+  // It was a virtual-graph-era restriction — per-constituent focus/WB/ISO/
+  // shutter errored in the field when they targeted one constituent of the
+  // FUSED virtual device. On the multi-input graph (default since 0.20.2)
+  // the native setters (ExhibitCameraModule setExposureMode/setFocusMode/
+  // setWhiteBalanceMode/setExposureBias) target primaryDevice — the
+  // PHYSICAL wide camera — so the whole tray applies. FIELD-TEST NOTE: if
+  // any manual control misbehaves on the dual live view, the answer is a
+  // device-read-back diagnostic, not re-hiding the control. A docked
+  // ribbon rides its param unconditionally now.
+  const ribbon = ribbonFor(ribbonParam);
 
-  /** Capsule tap docks the precision bar with that param; re-tap dismisses. */
+  /** Capsule tap → dock the precision bar with that param; re-tap dismisses. */
   const toggleRibbon = (p: ProParamId) => {
     Haptics.selectionAsync();
     setRibbonParam((cur) => (cur === p ? null : p));
   };
 
-  /** Swipe-down dismiss is not a commit: live scrubs already reached the
-   *  device, so re-apply the committed pro state on the way out. */
+  /** Swipe-down dismiss is NOT a commit: live scrubs already reached the
+   *  device, so re-apply the COMMITTED pro state on the way out — the
+   *  capsules never display one thing while the hardware holds another. */
   const dismissRibbon = () => {
     const p = proStateRef.current;
     if (sessionActive.current) {
@@ -2091,10 +2291,10 @@ export default function CaptureScreen() {
     setRibbonParam(null);
   };
 
-  // The tray: one row of equal-width capsules built from the pro-param model.
-  // Capability-gated, so a control the hardware does not report is not shown.
-  // Geometry is flex-equalized, so widths never change on tap, on value, or on
-  // active state.
+  // The tray: ONE row of equal-width capsules built from the single param
+  // model. Capability-gated (a control the hardware doesn't report is
+  // never shown); geometry is flex-equalized so widths never change on
+  // tap, on value, or on active state.
   const proParams: ProParam[] = [
     {
       id: 'flash',
@@ -2107,8 +2307,8 @@ export default function CaptureScreen() {
       id: 'ev',
       label: 'EV',
       // Manual ISO+shutter supersedes metering compensation: while the
-      // exposure is custom, EV shows as overruled (value '—') and its capsule
-      // explains itself on tap instead of scrubbing a dead value.
+      // exposure is custom, EV is stated as overruled (value '—') and its
+      // capsule explains itself on tap instead of scrubbing a dead value.
       valueText: exposureMode === 'custom' ? '—' : formatBias(bias),
       mode: bias !== 0 ? 'manual' : 'auto',
       kind: 'continuous',
@@ -2152,40 +2352,43 @@ export default function CaptureScreen() {
     );
   }
 
-  // Declared after proParams is fully built, so the dual-live filter reads
-  // the complete param list.
-  const visibleProParams = dualLive ? proParams.filter((p) => DUAL_SAFE_PARAMS.includes(p.id)) : proParams;
+  // Declared after proParams is fully built (0.18.7 ordering fix). 0.20.5:
+  // no dual-live filter anymore — the multi-input graph's pro controls act
+  // on the physical primary, so the complete list is always the tray.
+  const visibleProParams = proParams;
 
   // ------------------------------------------------------------------
-  // Light, per mode: PHOTO has a flash preference (auto/on/off, bolt glyph
-  // plus state badge), VIDEO has the torch (on/off, flashlight glyph). Both
-  // persist in settings and never share a light state.
+  // Light, per mode (0.15.0 Drop 2): PHOTO has a flash preference
+  // (auto/on/off, bolt glyph + state badge), VIDEO has the torch (on/off,
+  // flashlight glyph). The preferences persist in settings; the two modes
+  // never share a light state and never conflate icons.
   // ------------------------------------------------------------------
 
   /**
-   * Photo-flash preference: persists in settings and drives the photo output's
-   * flashMode via the native setPhotoFlashMode bridge. It never drives the
-   * torch, which stays the video-only continuous light. The preference is
-   * validated natively against supportedFlashModes at capture time, and the
-   * capture commits what happened (captureSettings.photoFlashApplied and
-   * .flashFired).
+   * Photo-flash preference (W2.2 — REAL strobe path): the preference
+   * persists in settings and drives the photo output's flashMode via the
+   * native setPhotoFlashMode bridge. The torch is NEVER driven by this —
+   * it stays the video-only continuous light. The preference itself is
+   * validated natively against supportedFlashModes at capture time, and
+   * the capture commits what actually happened (captureSettings
+   * .photoFlashApplied/.flashFired).
    */
   const setPhotoFlashPreference = (pref: 'auto' | 'on' | 'off') => {
     void saveSettings({ photoFlash: pref });
     if (modeRef.current === 'picture') void setPhotoFlashMode(pref).catch(() => {});
   };
 
-  /** Video continuous light: persist the preference and apply it while the
-   *  video session is live. */
+  /** VIDEO continuous light: persist the preference and apply it when the
+   *  video session is the live one. */
   const setVideoTorchPreference = (on: boolean) => {
     void saveSettings({ videoTorch: on });
     if (modeRef.current === 'video') setTorch(on);
   };
 
-  // The light capsule is an alternating button, not a slider: each tap
-  // advances the mode's preference one rung and applies it immediately (photo
-  // auto → on → off → auto; video torch off → on → off). The capsule's
-  // valueText states the new rung.
+  // 0.18.4-R5 (owner directive): the light capsule is an alternating
+  // BUTTON, not a slider — each tap advances the mode's preference one
+  // rung and applies it immediately: photo auto → on → off → auto; video
+  // torch off → on → off. The capsule's valueText states the new rung.
   const cycleLight = () => {
     if (mode === 'video') {
       setVideoTorchPreference(!settings.videoTorch);
@@ -2196,8 +2399,8 @@ export default function CaptureScreen() {
     setPhotoFlashPreference(next);
   };
 
-  // Audio subscriptions, the video cap timer, the pinch lerp loop and the zoom
-  // throttle timer all die with the screen.
+  // Audio subscriptions, the video cap timer, the pinch lerp loop and the
+  // zoom throttle timer all die with the screen.
   useEffect(() => () => {
     audioSubs.current.forEach((s) => s?.remove());
     if (videoStopTimer.current) clearTimeout(videoStopTimer.current);
@@ -2236,11 +2439,11 @@ export default function CaptureScreen() {
 
   return (
     <View style={styles.root} {...panResponder.panHandlers}>
-      {/* The native ExhibitCamera preview. Grid, HUD and controls are JS
-          overlays drawn above it, never in the committed pixels. Single-finger
-          taps here are tap-to-focus (focus and exposure point together);
-          pinches are claimed by the root PanResponder before they reach this
-          wrapper. */}
+      {/* The native ExhibitCamera preview — the ONE camera session. Grid,
+          HUD and controls are JS overlays drawn above it, never in the
+          committed pixels. Single-finger taps here are tap-to-focus (focus
+          + exposure point together); pinches are claimed by the root
+          PanResponder before they reach this wrapper. */}
       <View
         style={StyleSheet.absoluteFill}
         onLayout={(e) => {
@@ -2252,9 +2455,9 @@ export default function CaptureScreen() {
           <ExhibitCameraPreview
             style={StyleSheet.absoluteFill}
             lens={lens}
-            // Alt-view PiP: the second camera's live feed in a corner inset,
-            // shown while it is attached. Natively bound to the secondary
-            // input.
+            // Alt-view PiP (transparency): the second camera's live feed in
+            // a corner inset, shown exactly while it is attached — native
+            // bound to the secondary input, so it can never fabricate a feed.
             altPreview={
               facing === 'back' && mode !== 'audio' && stereo === 'available' && settings.captureEvidence.altView
             }
@@ -2264,8 +2467,8 @@ export default function CaptureScreen() {
         )}
       </View>
 
-      {/* Mode-transition veil: a short blur pulse while the fresh session
-          settles. Renders under the scrims and chrome. */}
+      {/* Mode-transition veil (Apple-style): a short blur pulse while the
+          fresh session settles. Renders under the scrims and chrome. */}
       <AnimatedBlur
         intensity={modeBlurAnim}
         tint="dark"
@@ -2273,9 +2476,9 @@ export default function CaptureScreen() {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Gradient translucency: the chrome floats on near-black scrims that
-          fade into the viewfinder. No solid bars, no card backgrounds under
-          the shutter row. */}
+      {/* Apple-style gradient translucency: the chrome floats on
+          near-black scrims that fade into the viewfinder — no solid bars,
+          no card backgrounds under the shutter row. */}
       <LinearGradient
         colors={['rgba(0,0,0,0.55)', 'transparent']}
         style={styles.scrimTop}
@@ -2287,12 +2490,13 @@ export default function CaptureScreen() {
         pointerEvents="none"
       />
 
-      {/* Audio mode: the viewfinder dims and the recording stage floats over
-          it, with no header and no separate screen. The transcript fades on as
-          you speak; the words seal inside the file only while the
+      {/* Audio mode: the viewfinder dims and the recording stage floats
+          over it — no header, no separate screen. The transcript fades on
+          as you speak; the words seal inside the file only while the
           transcription toggle beside the shutter is on.
-          Z-order: this full-screen dim renders before the HUD, so the seal
-          pill, lock badge, toggles and timer sit above it. */}
+          Z-ORDER RULE (TestFlight 0.13.0: "all the top ui should be on
+          top"): this full-screen dim renders BEFORE the HUD — the seal
+          pill, lock badge, toggles and timer always sit above it. */}
       {mode === 'audio' ? (
         <View style={styles.audioStage} pointerEvents="none">
           {recording ? (
@@ -2340,14 +2544,18 @@ export default function CaptureScreen() {
         </View>
       ) : null}
 
-      {/* The top HUD is one column stack, laid out by flexbox, so the seal
-          pill and the proof-toggle row cannot overlap; the toggle row wraps
-          and its pills shrink rather than spilling off the edges.
-          The seal pill is the camera's one status element, with three states:
-          Sealing on / Sealing… / Sealed. Every pill is the hudpill:
-          translucent dark glass (blur 8), a 1px hairline, a status dot and a
-          10.5/700 label. The "Sealed" flash is a green gradient, fired only on
-          a real completion. */}
+      {/* The top HUD is ONE column stack (0.15.0 overlap fix): the seal pill
+          and the proof toggles were two independently-positioned rows
+          (top:0 and top:52), so a long fingerprint pill or a narrow device
+          could land the toggle row ON the pill. One stack, laid out by
+          flexbox, can never overlap itself; the toggle row wraps and its
+          pills shrink instead of spilling off the edges.
+          The seal pill is the camera's ONE status element.
+          Deadpan states only: Sealing on / Sealing… / Sealed. Every pill is
+          the mockup's hudpill — translucent dark glass (blur 8), a 1px
+          hairline, a status dot and a 10.5/700 label. The "Sealed" flash
+          stays the camera's one moment of glow — a green gradient, earned
+          only on a real completion (never on enqueue, never on failure). */}
       <SafeAreaView edges={['top']} style={styles.hudStack} pointerEvents="box-none">
         {sealedFlash ? (
           <LinearGradient
@@ -2361,8 +2569,8 @@ export default function CaptureScreen() {
           </LinearGradient>
         ) : (
           <BlurView intensity={8} tint="dark" style={[styles.hudPill, styles.sealPill]}>
-            {/* Sage = sealing armed (steady),
-                clay = the queue is draining. */}
+            {/* Sage = sealing armed (steady), clay = the queue is
+                draining — the palette's two status-dot colors. */}
             <View style={[styles.hudDot, pendingSeals > 0 ? styles.hudDotBusy : styles.hudDotGreen]} />
             <Text style={styles.hudPillText}>
               {pendingSeals > 0 ? 'Sealing…' : 'Sealing on'}
@@ -2373,9 +2581,10 @@ export default function CaptureScreen() {
           </BlurView>
         )}
 
-        {/* Proof HUD: what will be embedded, visible before the shutter.
-            Each is a glass pill with a status dot, filled and tinted when on,
-            a hollow ring when off, so the dot's shape carries the state. */}
+        {/* Proof HUD: what will be embedded, visible BEFORE the shutter.
+            Mockup hudpill language: a glass pill with a status dot — filled
+            + tinted when ON, a hollow ring when OFF (the dot's SHAPE says
+            the state, never color alone). */}
         <View style={styles.hudToggleRow}>
           <HudPillToggle
             label="Location"
@@ -2396,8 +2605,8 @@ export default function CaptureScreen() {
               void saveSettings(
                 settings.includeByline
                   ? { includeByline: false }
-                  // Turning Byline on sets the capture identity to 'named' so
-                  // the byline genuinely embeds.
+                  // Turning Byline on opts the capture identity into 'named' so
+                  // the byline genuinely embeds — the toggle never lies.
                   : { includeByline: true, identityMode: 'named' }
               )
             }
@@ -2405,9 +2614,14 @@ export default function CaptureScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Top-left HUD column: the sealing lock, green whenever sealing is on.
-          Tapping the lock replays the onboarding tour. The flash/torch control
-          is not here; it is the first chip of the pro strip. */}
+      {/* Top-left HUD column: the sealing lock. The lock is green whenever
+          sealing is on — the capture is being cryptographically sealed.
+          Green is the reserved locked-and-sealed color; the seal pill stays
+          as-is. Tapping the lock replays the onboarding (the honest-limits
+          tour).
+          The HUD is exactly the mockup: the lock badge, the seal pills,
+          nothing else. The flash/torch control is NOT here — it is the
+          first chip of the pro strip (0.17.1, owner directive). */}
       <SafeAreaView edges={['top']} style={styles.hudLock} pointerEvents="box-none">
         <TouchableOpacity
           style={styles.hudLockBadge}
@@ -2419,10 +2633,12 @@ export default function CaptureScreen() {
         </TouchableOpacity>
       </SafeAreaView>
 
-      {/* Recording indicator (photo/video; the audio stage carries its own).
-          Safe-area wrapped: the HUD stack above it is inset-padded, and top:96
-          clears the stack (seal pill, toggle row, breathing room) in the same
-          inset space, including on Dynamic-Island devices. */}
+      {/* Recording indicator (photo/video — the audio stage carries its
+          own). Safe-area wrapped: the HUD stack above it is inset-padded,
+          and an unadjusted top:110 landed exactly ON it on Dynamic-Island
+          devices (TestFlight 0.13.0 overlap). top:96 clears the stack
+          (seal pill + toggle row + breathing room) in the same inset
+          space. */}
       {recording && mode !== 'audio' ? (
         <SafeAreaView edges={['top']} style={styles.recWrap} pointerEvents="none">
           <View style={styles.recIndicator}>
@@ -2432,11 +2648,12 @@ export default function CaptureScreen() {
         </SafeAreaView>
       ) : null}
 
-      {/* Zoom readout: the 35mm-equivalent focal length ("≈27mm") only, while
-          a pinch or wheel drives the zoom, or whenever zoomed off an optical
-          stop. No x factor and no digital marker; the lens pills below carry
-          the factor. Stacks under the recording pill (96 + pill height) in
-          shared inset space. It is a leaf on the live channel, so the
+      {/* Zoom readout: ONLY the 35mm-equivalent focal length ("≈27mm")
+          while a pinch/wheel drives the zoom (or whenever zoomed off an
+          optical stop) — no × factor, no DIGITAL marker; the lens pills
+          below already carry the factor. Same safe-area discipline as the
+          timer: it stacks UNDER the recording pill (96 + pill height) in
+          shared inset space. The HUD is a leaf on the live channel — the
           viewfinder tree never re-renders for it. */}
       {mode !== 'audio' ? (
         <SafeAreaView edges={['top']} style={styles.zoomWrap} pointerEvents="none">
@@ -2444,29 +2661,36 @@ export default function CaptureScreen() {
         </SafeAreaView>
       ) : null}
 
-      {/* Bottom controls, lifted clear of the floating pill tab bar (dock
-          offset 12 + pill height 64 + 14 breathing room), honoring the
-          home-indicator inset when it is larger. */}
+      {/* Bottom controls — lifted clear of the floating pill tab bar
+          (dock offset 12 + pill height 64 + 14 breathing room), honoring
+          the home-indicator inset when it's larger. */}
       <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, 12) + 64 + 14 }]}>
-        {/* Selfie camera with the second-lens toggle on but no partner stack
-            on the front camera. Shown only while the toggle is on, and the
-            longer stereo caption never shows on the selfie camera. */}
+        {/* Dual-camera honesty, selfie camera: the second-lens toggle is ON
+            but the front camera has no partner stack. Exactly five words,
+            shown ONLY while the toggle is on (owner directive) — and the
+            longer stereo caption never shows on the selfie camera, so this
+            is the one message here. */}
         {facing === 'front' && settings.captureEvidence.altView && mode !== 'audio' ? (
           <Text style={styles.stereoCaption}>Dual camera not available</Text>
-        ) : /* Stereo availability: 'unsupported' is one quiet gray caption;
-               'unreached' (not probed, or no permission) renders nothing.
-               One wording everywhere. Gated on the Multiple Lenses toggle,
-               since with it off the dual path is not expected. */
+        ) : /* Stereo availability honesty: 'unsupported' is one quiet gray
+               caption, never red; 'unreached' (not probed / no permission)
+               renders nothing — absence is stated, never suspicion.
+               0.18.6 (Noah): one wording everywhere — "Dual camera not
+               available", no "on this device" tail, no second vocabulary.
+               0.18.8 (Noah): gated on the Multiple Lenses toggle — with the
+               toggle OFF the dual path is not expected, so its absence is
+               not stated. */
         stereo === 'unsupported' && facing === 'back' && mode !== 'audio' && settings.captureEvidence.altView ? (
           <Text style={styles.stereoCaption}>Dual camera not available</Text>
         ) : null}
 
-        {/* Zoom control: optical pills for the lenses the hardware reports (a
-            tap is a genuine optical jump between real cameras, not a crop),
-            and a horizontal drag anywhere on the row turns it into the smooth
-            zoom wheel. Hidden while recording and in audio mode. On the
-            single-stack front camera the wheel sweeps 1x to the digital
-            cap. */}
+        {/* Zoom control (0.15.0 Drop 2): optical pills for the lenses the
+            hardware reports (a tap is a genuine optical jump — these are
+            real cameras, never crops), and a horizontal drag anywhere on
+            the row turns it into the smooth zoom wheel (the "no
+            in-between" fix). Hidden while recording (Kino-style recording
+            safety) and in audio mode. On the single-stack front camera the
+            wheel still sweeps 1x → the digital cap. */}
         {!recording && mode !== 'audio' ? (
           <ZoomWheel
             channel={zoomChannel}
@@ -2476,22 +2700,26 @@ export default function CaptureScreen() {
             onJump={(l) => void selectLens(l)}
             onLive={applyLiveZoom}
             onCommit={commitZoom}
-            // No .5/1 pills while the dual-view graph is live, the same
-            // condition as the PiP: they vanish while the second camera is
-            // attached and return when Multiple Lenses is off.
+            // 0.18.6 (Noah): no .5/1 pills while the dual-view graph is
+            // live — same condition as the PiP, so the pills vanish exactly
+            // while the second camera is attached and return when Multiple
+            // lenses is off (real lens switches again).
             hidePills={dualLive}
           />
         ) : null}
-        {/* Pro tray: quiet and horizontal, above the mode/shutter cluster.
-            Equal-width capsules built from the pro-param model; a tap docks the
-            precision bar, the only adjustment surface. Values are the bridge's
-            applied values, so a device clamp shows the clamped number. The row
-            leads with the mode's light (FLASH / TORCH), then EV, FOCUS, WB,
-            ISO, SHTR as the hardware reports them. */}
+        {/* Pro tray — quiet, horizontal, above the mode/shutter cluster.
+            ONE capsule language (0.18.2): equal-width capsules built from
+            the single param model; a tap docks the precision bar, which is
+            the only adjustment surface. Values are the bridge's APPLIED
+            values; a device clamp shows the clamped number, which is the
+            truth of what will be committed. The row leads with the mode's
+            light (FLASH / TORCH), then EV, FOCUS, WB, ISO, SHTR as the
+            hardware reports them. */}
         {proOpen && (proAvailable || dualLive) && mode !== 'audio' ? (
-          // alignSelf stretch is required here: `controls` centers its
-          // children, and an unstyled wrapper shrink-wraps to content, which
-          // collapses the capsules to strips.
+          // alignSelf stretch is mandatory here: `controls` centers its
+          // children, and an unstyled wrapper shrink-wraps to content —
+          // which is exactly how the capsules collapsed to strips in the
+          // 0.18.2 field build.
           <View ref={trayWrapRef} onLayout={measureGestureZones} collapsable={false} style={styles.trayWrap}>
           <Animated.View
             style={[
@@ -2502,14 +2730,16 @@ export default function CaptureScreen() {
               },
             ]}
           >
-            {/* One row of equal-width capsules from the pro-param model: flex:1
-                each, same padding, typography, radius and hairline, with a 5px
-                clay dot when manual. A tap docks the precision bar; the capsule
-                has no gestures of its own.
-                Manual ISO+shutter supersedes metering compensation, so the EV
-                capsule shows as overruled (dimmed, '—') while the exposure is
-                custom. FLASH/TORCH leads the row, and the label says TORCH in
-                video mode. */}
+            {/* ONE row of equal-width capsules (0.18.2), built from the
+                single param model: flex:1 each, same padding/typography/
+                radius/hairline, a 5px clay dot when manual. A tap docks
+                the precision bar — the capsule itself has no gestures.
+                Manual ISO+shutter supersedes metering compensation, so the
+                EV capsule is stated as overruled (dimmed, '—') while the
+                exposure is custom — never a silent dead control.
+                FLASH/TORCH first (owner directive): the mode's light leads
+                the row. The label says TORCH in video mode — a continuous
+                light is never passed off as a strobe. */}
             <View style={styles.proTrayRow}>
               {visibleProParams.map((p) => (
                 <ParamCapsule
@@ -2545,9 +2775,9 @@ export default function CaptureScreen() {
           </View>
         ) : null}
 
-        {/* The precision-bar dock, directly above the mode/shutter cluster.
-            One param at a time, keyed so a param switch remounts the bar at
-            the right value. */}
+        {/* The precision-bar dock — directly above the mode/shutter
+            cluster. One param at a time, keyed so a param switch remounts
+            the bar at the right value. */}
         {ribbon && mode !== 'audio' ? (
           <View ref={ribbonWrapRef} onLayout={measureGestureZones} collapsable={false} style={styles.trayWrap}>
             <ValueRibbon
@@ -2561,14 +2791,14 @@ export default function CaptureScreen() {
           </View>
         ) : null}
 
-        {/* Mode labels with the sliding highlight pill: crossfade and
-            translate on the native driver, traveling toward the newly active
-            label. */}
+        {/* Mode labels with the sliding highlight pill (0.15.0 Drop 2,
+            research §7): crossfade/translate on the native driver, travel
+            always toward the newly active label — never inverted. */}
         <ModeSwitcher mode={mode} onSwitch={switchMode} disabled={recording} />
 
         <View style={styles.shutterRow}>
           {mode === 'audio' ? (
-            // Transcription toggle: the same pill language as the HUD, filled
+            // Transcription toggle: same pill language as the HUD — filled
             // with dark ink when on, dim outline icon when off.
             <TouchableOpacity
               style={[styles.sideButton, styles.transcriptToggle, settings.includeTranscript && styles.transcriptToggleOn]}
@@ -2583,10 +2813,15 @@ export default function CaptureScreen() {
               />
             </TouchableOpacity>
           ) : proAvailable ? (
-            // Capture settings: a dials glyph on the shutter row's left slot
-            // opens the pro tray; the light (flash / torch) is the tray's first
-            // chip. The accent color marks hand-chosen optics. While the
-            // dual-view graph is live the tray narrows to DUAL_SAFE_PARAMS.
+            // Capture settings: a dials glyph on the shutter row's left
+            // slot opens the pro tray. The light (flash / torch) is the
+            // tray's FIRST chip, not a HUD button (0.17.1, owner
+            // directive). The accent color is the one-glance signal: this
+            // capture's optics were chosen by hand, and the record says so.
+            // 0.18.8 (Noah): the button STAYS while the dual-view graph is
+            // live. 0.20.5: the tray is no longer narrowed on that graph —
+            // pro controls target the physical primary (see the
+            // DUAL_SAFE_PARAMS removal note above).
             <TouchableOpacity
               style={styles.sideButton}
               hitSlop={8}
@@ -2615,8 +2850,8 @@ export default function CaptureScreen() {
           </TouchableOpacity>
 
           {mode === 'audio' ? (
-            // Layout placeholder, keeping the shutter centered without a
-            // camera-flip in audio mode.
+            // Layout placeholder — keeps the shutter centered without a
+            // meaningless camera-flip in audio mode.
             <View style={styles.sideButton} />
           ) : (
             <TouchableOpacity style={styles.sideButton} onPress={flipCamera} disabled={recording}>
@@ -2626,7 +2861,7 @@ export default function CaptureScreen() {
         </View>
       </View>
 
-      {/* Audio start failure: a card, not a one-line footnote. */}
+      {/* Audio start failure — a proper card, not a one-line footnote. */}
       {audioBlocked ? (
         <View style={styles.audioBlockedCard}>
           <Ionicons name="warning-outline" size={18} color={colors.warn} />
@@ -2642,8 +2877,8 @@ export default function CaptureScreen() {
         </View>
       ) : null}
 
-      {/* Native session failure, same card pattern as the audio start
-          failure: a card with a dismiss. */}
+      {/* Native session failure — same honest-card pattern as the audio
+          start failure: a real card with a dismiss, never a silent state. */}
       {sessionError ? (
         <View style={styles.audioBlockedCard}>
           <Ionicons name="warning-outline" size={18} color={colors.warn} />
@@ -2670,9 +2905,10 @@ export default function CaptureScreen() {
 }
 
 /**
- * Recording stopwatch. Owns its own 1 s interval and seconds state, so the
- * tick re-renders this leaf only, never the camera screen. Mounted exactly
- * while a recording runs, so mount time is zero for both audio and video.
+ * Recording stopwatch (render-storm fix): owns its own 1 s interval and
+ * seconds state, so the tick re-renders this leaf only, never the camera
+ * screen. Mounted exactly while a recording runs — mount time IS zero, for
+ * both audio and video.
  */
 function RecordTimer({ style }: { style?: TextStyle }) {
   const [seconds, setSeconds] = useState(0);
@@ -2688,10 +2924,11 @@ function RecordTimer({ style }: { style?: TextStyle }) {
 }
 
 /**
- * Audio level meter. Owns the onLevel subscription and its own dB state, so
- * ~30 metering updates/s re-render this leaf only. Mounted exactly while an
- * audio recording runs; unmount removes the subscription. Maps −60…0 dB to a
- * 0…1 fill, so quiet speech is still visible.
+ * Audio level meter (render-storm fix): owns the onLevel subscription and
+ * its own dB state, so ~30 metering updates/s re-render this leaf only,
+ * never the camera screen. Mounted exactly while an audio recording runs —
+ * unmount removes the subscription. Audio level: map −60…0 dB to a 0…1
+ * fill, quiet speech still visible.
  */
 function LevelMeter() {
   const styles = useThemedStyles(buildStyles);
@@ -2708,17 +2945,17 @@ function LevelMeter() {
   );
 }
 
-/** '#C08552' + 0.35 → 'rgba(192,133,82,0.35)', a status color's hairline tint. */
+/** '#C08552' + 0.35 → 'rgba(192,133,82,0.35)' — a status color's hairline tint. */
 function withAlpha(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
 /**
- * HUD proof toggle (.hudpill): a translucent glass pill with blur 8, a 1px
- * hairline, a status dot and a 10.5/700 label. On fills the dot with the
- * toggle's state color and tints the label and hairline; off is a hollow
- * ring, so the dot's shape carries the state.
+ * HUD proof toggle (mockup .hudpill): one translucent glass pill — blur 8,
+ * a 1px hairline, a status dot and a 10.5/700 label. ON fills the dot with
+ * the toggle's state color and tints the label + hairline; OFF is a hollow
+ * ring — the dot's SHAPE carries the state, never color alone.
  */
 function HudPillToggle({
   label,
@@ -2755,12 +2992,14 @@ function HudPillToggle({
 }
 
 /**
- * Param capsule: an equal-width (flex:1) glass capsule with the param's label,
- * its bridge-applied value in mono, and a 5px clay state dot when the param is
- * manual. It has no gestures of its own; the tap docks the precision bar.
- * Widths never change on tap, on value, or on active state. An overridden
- * param (EV under manual ISO+shutter) renders dimmed and explains itself on
- * tap.
+ * Param capsule (0.18.2): the tray's ONE component — an equal-width
+ * (flex:1) glass capsule with the param's label, its bridge-APPLIED value
+ * in mono, and a 5px clay state dot when the param is manual (glyph +
+ * hairline, never color alone). The capsule has NO gestures of its own:
+ * the tap docks the precision bar, full stop. Widths never change on tap,
+ * on value, or on active state — the row is flex-equalized. An overridden
+ * param (EV under manual ISO+shutter) renders dimmed and explains itself
+ * on tap rather than pretending to adjust.
  */
 function ParamCapsule({
   label,
@@ -2776,7 +3015,7 @@ function ParamCapsule({
   valueText: string;
   manual?: boolean;
   overridden?: boolean;
-  /** Transient device feedback (AF running): the value turns clay. */
+  /** Transient device feedback (AF running) — the value turns clay. */
   busy?: boolean;
   open?: boolean;
   accessibilityLabel?: string;
@@ -2811,14 +3050,16 @@ function ParamCapsule({
 }
 
 const buildStyles = () => StyleSheet.create({
-  // A camera screen is black end-to-end; the paper-white theme background
-  // otherwise flashes between the preview and a session reconfigure.
+  // A camera screen is black end-to-end: the app's paper-white theme bg
+  // flashed between the preview and a session reconfigure (TestFlight 0.13.0
+  // "janky with a white screen" on mode switch).
   root: { flex: 1, backgroundColor: '#000' },
   scrimTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 170 },
   scrimBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 300 },
-  // One column stack for the seal pill and proof toggles, laid out by flexbox
-  // so the rows cannot overlap. Side gutters reserve the top-left lock and
-  // flash column, and the toggle row wraps inside them.
+  // ONE column stack for the seal pill + proof toggles (0.15.0 overlap
+  // fix): flexbox lays the rows out, so they can never land on each other
+  // the way the old top:0 / top:52 pair could. Side gutters reserve the
+  // top-left lock/flash column; the toggle row wraps inside them.
   hudStack: {
     position: 'absolute',
     top: 0,
@@ -2834,9 +3075,9 @@ const buildStyles = () => StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  // The hudpill, shared by every HUD element: translucent dark glass (BlurView
-  // intensity 8 at the call sites), a 1px hairline, borderRadius 999, a status
-  // dot and a 10.5/700 label.
+  // The mockup's hudpill, shared by every HUD element: translucent dark
+  // glass (BlurView intensity 8 at the call sites), a 1px hairline,
+  // borderRadius 999, a status dot and a 10.5/700 label.
   hudPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2851,11 +3092,11 @@ const buildStyles = () => StyleSheet.create({
   },
   hudPillText: { color: colors.onDark.text, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.4 },
   hudDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.onDark.faint },
-  // The two status-dot colors: sage (steady) and clay (busy).
+  // The palette's two status-dot colors: sage (steady) and clay (busy).
   hudDotGreen: { backgroundColor: HUD_SEAL_GREEN },
   hudDotBusy: { backgroundColor: HUD_IDENT_ON },
-  // Proof toggles, the same glass pill. On tints the hairline and label with
-  // the state color (inline at the call site); off is a hollow dot ring.
+  // Proof toggles: the same glass pill; ON tints the hairline/label with
+  // the state color (inline at the call site), OFF is a hollow dot ring.
   hudToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2891,7 +3132,7 @@ const buildStyles = () => StyleSheet.create({
     justifyContent: 'center',
   },
   sealPill: { marginTop: spacing.sm },
-  // The "Sealed" completion flash: the green-pill hairline tint.
+  // The "Sealed" completion flash: the mockup's green-pill hairline tint.
   sealPillFlash: { borderColor: 'rgba(52,199,89,0.35)' },
   sealPillFp: { color: colors.onDark.accent, fontFamily: type.mono, fontSize: fontSize.xs },
   recWrap: { position: 'absolute', top: 96, left: 0, right: 0, alignItems: 'center' },
@@ -2910,7 +3151,7 @@ const buildStyles = () => StyleSheet.create({
   recText: { color: colors.onDark.text, fontFamily: type.mono, fontSize: fontSize.sm },
   zoomWrap: { position: 'absolute', top: 140, left: 0, right: 0, alignItems: 'center' },
   controls: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: 34, alignItems: 'center' },
-  // Quiet hardware caption: gray, one line.
+  // Quiet hardware-honesty caption: gray, one line, never red.
   stereoCaption: {
     color: colors.onDark.faint,
     fontSize: fontSize.xs,
@@ -2922,12 +3163,13 @@ const buildStyles = () => StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    // No card background; the button floats on the bottom gradient scrim.
+    // No card background: the button floats on the bottom
+    // gradient scrim, like Apple's camera chrome.
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // The shutter: a large ink ring with a subtle inner disc and a visible gap
-  // between them.
+  // The mockup's shutter: a large ink ring with a subtle inner disc — a
+  // visible gap between ring and disc, never a heavy filled button.
   shutterOuter: {
     width: 74,
     height: 74,
@@ -2942,23 +3184,24 @@ const buildStyles = () => StyleSheet.create({
   shutterInnerVideo: { backgroundColor: colors.danger },
   shutterInnerRec: { width: 28, height: 28, borderRadius: 6 },
   proStrip: { alignSelf: 'stretch', marginBottom: spacing.md },
-  // Full-width wrapper for the tray and ribbon inside the centered `controls`
-  // column; without it the stretch below has nothing to stretch against.
+  // Full-width wrapper for the tray/ribbon inside the centered `controls`
+  // column — without it the stretch below has nothing to stretch against.
   trayWrap: { alignSelf: 'stretch' },
-  // The tray row: flex-equalized capsules, 6px gutters, screen padding both
-  // sides. No scroll and no wrap; every param the hardware reports fits at
-  // once at 393pt (6 capsules ≈ 55pt each, and the longest value text,
-  // '1/4000' at 11px mono ≈ 40px, fits).
+  // The tray row (0.18.2): flex-equalized capsules, 6px gutters, screen
+  // padding both sides. No scroll, no wrap — every param the hardware
+  // reports fits at once at 393pt (6 capsules ≈ 55pt each; the longest
+  // value text, '1/4000' at 11px mono ≈ 40px, fits with room).
   proTrayRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: spacing.md,
   },
-  // The capsule: dark glass (charcoal) over the viewfinder, a 1px hairline,
-  // radius 8, a 9px/800 label over an 11px mono value. Equal width via flex:1.
-  // Manual is marked by the clay dot, clay hairline and brighter value;
-  // overridden dims the whole capsule.
+  // The ONE capsule: dark glass (charcoal) over the viewfinder, a 1px
+  // hairline, radius 8, a 9px/800 label over an 11px mono value. Equal
+  // width via flex:1 — never a width change on tap, value, or state.
+  // MANUAL is told by the clay dot + clay hairline + brighter value
+  // (glyph, never color alone); OVERRIDDEN dims the whole capsule.
   paramCapsule: {
     flex: 1,
     minWidth: 0,
@@ -2969,8 +3212,8 @@ const buildStyles = () => StyleSheet.create({
     minHeight: 46,
     backgroundColor: 'rgba(13,13,15,0.55)',
     borderWidth: 1,
-    // The HUD's dark-glass hairline. colors.border is the light scheme's
-    // divider gray and glows white over the viewfinder.
+    // The HUD's dark-glass hairline — colors.border is the LIGHT scheme's
+    // divider gray and glowed white over the viewfinder (0.18.2 field).
     borderColor: 'rgba(232,232,236,0.14)',
     borderRadius: 8,
     paddingHorizontal: 4,
@@ -2981,8 +3224,8 @@ const buildStyles = () => StyleSheet.create({
   paramCapsuleOverridden: { opacity: 0.45 },
   paramLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   paramDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: HUD_IDENT_ON },
-  // onDark tokens always: the camera chrome is dark in both schemes, and a
-  // scheme color (textFaint) goes near-invisible on the glass in light mode.
+  // onDark tokens, always: the camera chrome is dark in BOTH schemes, so a
+  // scheme color (textFaint) went near-invisible on the glass in light mode.
   paramLabel: { color: colors.onDark.faint, fontSize: 9, fontWeight: '800', letterSpacing: 0.7 },
   paramValue: { color: colors.onDark.dim, fontSize: 11, fontWeight: '700', fontFamily: type.mono },
   paramValueManual: { color: colors.onDark.text },

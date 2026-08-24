@@ -6,24 +6,20 @@ import CoreMotion
  * AudioMotionLog — the audio recorder's IMU sink.
  * While a recording runs, gyro samples stream to a JSONL file in the
  * CaptureKit SensorLogger line format:
- *
- *   {"t":<bootSec>,"mach":<machTicks>,"kind":"gyro","x":..,"y":..,"z":..}
- *
+ * {"t":<bootSec>,"mach":<machTicks>,"kind":"gyro","x":..,"y":..,"z":..}
  * The first line is the anchor record binding the sensor clock to the
  * recording's wall-clock start, as in the CaptureKit session anchor:
- *   {"kind":"anchor","startedAtMs":..,"machAtAnchor":..,"bootSecAtAnchor":..}
- *
+ * {"kind":"anchor","startedAtMs":..,"machAtAnchor":..,"bootSecAtAnchor":..}
  * Gyro is requested at 100 Hz (gyroUpdateInterval = 0.01), the same target as
  * the video-side logger. CoreMotion delivery is best-effort, so the committed
  * poseTrace assertion derives its `hz` from the trace's own median Δt, not
  * from this target. Gyro only: the poseTrace commitment
  * (src/provenance/poseTrace.ts) reads gyro lines, and accel/baro/loc stay on
  * the CaptureKit-session sinks.
- *
  * Failure states (SensorLogger rule 4): a write failure marks the sink failed,
  * finish returns nil and the module reports sensorLogState "failed" without
  * blocking the recording. A failed sink appends one last best-effort line,
- *   {"kind":"sinkFailed","t":<bootSec>}
+ * {"kind":"sinkFailed","t":<bootSec>}
  * marking its own truncation point. With no gyro hardware no logger is created
  * and the module reports "unavailable".
  */

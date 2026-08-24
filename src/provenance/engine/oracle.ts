@@ -1,26 +1,30 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Differential oracle. Runs both engines over the same bytes, composes each
- * side's verdict through the policy layer, and diffs the composed verdict
- * plus the load-bearing facts. Divergences are whitelisted with a written
- * reason in tests/oracle-whitelist.json.
+ * WS3 differential oracle (SPEC §2.1 oracle.ts).
  *
- * Known divergence classes (Binding-Path §6):
- *  - UNSUPPORTED-for-merkle-aux: upstream fails (algorithm.unsupported or a
- *    hard error) where this engine declines to evaluate. Needs a whitelist
- *    entry.
- *  - A-1 binding guard: upstream fails closed with assertion.undeclared;
- *    policy maps both sides to SIGNATURE_INVALID + void-binding, so the
- *    composed verdicts agree while the raw postures differ.
+ * Runs BOTH engines over the same bytes, composes each side's verdict
+ * through the policy layer (the only verdict authority), and diffs the
+ * composed verdict plus the load-bearing facts. It never decides which side
+ * is right — it REPORTS. Divergences are investigated or whitelisted with a
+ * written reason (tests/oracle-whitelist.json); they are never silently
+ * absorbed.
+ *
+ * Known intentional divergence CLASSES (WS3-Binding-Path §6, SPEC §0):
+ *  - UNSUPPORTED-for-merkle-aux: upstream fails (algorithm.unsupported /
+ *    hard error) where we decline to evaluate. Whitelist entry required.
+ *  - A-1 binding guard: upstream fails closed with assertion.undeclared —
+ *    our policy maps BOTH to SIGNATURE_INVALID + void-binding, so the
+ *    composed verdicts agree even though the engines' raw postures differ.
  *  - Trust tiers: the hand-rolled engine has no C2PA trust-list concept
- *    (trustListHit always 'unknown'), upstream may report untrusted. Trust
- *    codes feed the tier ladder, not the verdict.
+ *    (trustListHit always 'unknown'); upstream may report untrusted against
+ *    its built-in list. Verdicts are unaffected — trust codes are inputs
+ *    to OUR tier ladder, never verdict failures.
  */
 
 import { readUpstreamAsset, type NormalizedEngineResult } from './upstreamEngine';
 import { readHandrolledPhotoAsset, readHandrolledVideoAsset } from './handrolledEngine';
 import { policyVerdict, type PolicyResult } from './policyLayer';
-import type { VerifyOptions } from '../../c2pa/verifyAsset';
+import type { VerifyOptions } from '../../../archive/handrolled-verifier/verifyAsset';
 
 export interface OracleDivergence {
   /** What differed: 'verdict' | 'manifestFound' | 'signatureFacts' | 'assetHashFacts' | 'unsupportedPosture'. */
@@ -41,9 +45,10 @@ function factsSummary(n: NormalizedEngineResult): string {
 }
 
 /**
- * Diff one asset's two engine outcomes: verdict, manifestFound, the
- * signature-side and asset-side facts, and the unsupported posture.
- * Exported so the suite can drive it with synthetic facts.
+ * Diff one asset's two engine outcomes — verdict, manifestFound, the
+ * signature-side and asset-side FACTS, and the unsupported posture.
+ * Exported so the suite can exercise the diff with synthetic facts (an
+ * assertion-check flip must surface even when composed verdicts agree).
  */
 export function diffOutcomes(
   hand: NormalizedEngineResult,
@@ -66,8 +71,10 @@ export function diffOutcomes(
       upstream: `${upNormalized.manifestFound} (${upNormalized.rawErrors.join('; ') || 'no errors'})`,
     });
   }
-  // Fact-level diffs, so a fact flip under an unchanged verdict still
-  // surfaces.
+  // Fact-level diffs (without them, a fact flip with an unchanged verdict
+  // would produce NO divergence anywhere): signature-side facts and
+  // asset-side facts each diff whenever the engines disagree, even when the
+  // composed verdicts happen to agree.
   const sigFacts = (n: NormalizedEngineResult) => `sig=${n.signatureValid} assertions=${n.claimAssertionsMatch}`;
   const assetFacts = (n: NormalizedEngineResult) => `asset=${n.assetHashMatches}/${n.assetHashFailure}`;
   if (sigFacts(hand) !== sigFacts(upNormalized)) {
@@ -84,8 +91,9 @@ export function diffOutcomes(
       upstream: assetFacts(upNormalized),
     });
   }
-  // Unsupported posture: one side declined a structure the other evaluated,
-  // recorded even when both land on the same verdict.
+  // UNSUPPORTED posture: one side declined a structure the other evaluated
+  // (or failed). Verdict-level diffs are caught above; this records the
+  // postural difference even when both sides land on the same verdict.
   if (hand.unsupported !== upNormalized.unsupported) {
     divergences.push({
       aspect: 'unsupportedPosture',

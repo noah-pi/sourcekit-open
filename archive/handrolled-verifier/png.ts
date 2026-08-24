@@ -1,13 +1,18 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * PNG container support for C2PA embedding. The manifest rides in a `caBX`
- * chunk immediately before IEND, with standard PNG framing:
+ * PNG container support for C2PA embedding.
+ *
+ * A C2PA manifest rides inside a PNG as a `caBX` chunk placed immediately
+ * before IEND. The chunk framing is the standard PNG one:
  *
  *   length(4 BE) | "caBX"(4) | <JUMBF store bytes> | CRC32(4)
  *
- * CRC32 (ISO 3309, reflected poly 0xEDB88320) covers type+data. The
- * c2pa.hash.data exclusion spans the whole chunk, framing included, so
- * removing it reconstructs the clean PNG exactly.
+ * where the CRC32 (ISO 3309, reflected polynomial 0xEDB88320 — the same CRC
+ * used by zlib/gzip and every PNG chunk) covers type+data, i.e. "caBX" plus
+ * the store bytes. The asset is hard-bound by a c2pa.hash.data byte-exclusion
+ * that spans the WHOLE caBX chunk (framing included), so removing it
+ * reconstructs the clean PNG exactly — the same exclusion semantics the JPEG
+ * path uses, which c2pa-rs validates.
  *
  * Pure module — no React Native dependencies.
  */

@@ -7,37 +7,33 @@ import CoreMotion
  * streams straight to a file for a whole delivery session; the camera instead
  * needs a window around an event (the shutter, the recording), so this logger
  * keeps a bounded in-memory ring and flushes a boot-time window on demand.
- *
- *   - Sampling: CMMotionManager accelerometer and gyroscope at the 100 Hz
- *     target (updateInterval 0.01), handlers on a serial OperationQueue.
- *     Delivery is best-effort; the file's own Δt sequence is the rate record
- *     and nothing is resampled or interpolated.
- *   - Buffer: a ring hard-capped at 12,000 samples (60 s at the
- *     100 Hz × 2-stream target, ~0.6 MB). Memory does not grow with session
- *     length, and stop() drops the contents.
- *   - File format: JSONL in the CaptureKit SensorLogger line format:
- *       {"t":<bootSec>,"mach":<machTicks>,"kind":"accel","x":..,"y":..,"z":..}
- *       {"t":<bootSec>,"mach":<machTicks>,"kind":"gyro","x":..,"y":..,"z":..}
- *     The first line anchors the sensor clock to the event's wall clock;
- *     machAtAnchor / bootSecAtAnchor are the event's instant on the sensor
- *     clock, so a reader can re-zero the window against either domain:
- *       {"kind":"anchor","startedAtMs":..,"machAtAnchor":..,"bootSecAtAnchor":..}
- *     The second line states the flush window, including tail truncation when
- *     a recording outlived the ring span:
- *       {"kind":"window","requestedStart":..,"requestedEnd":..,
- *        "actualStart":..,"actualEnd":..,"samples":N,"spanSec":60.0,
- *        "truncated":false}
- *
+ * Sampling: CMMotionManager accelerometer and gyroscope at the 100 Hz
+ * target (updateInterval 0.01), handlers on a serial OperationQueue.
+ * Delivery is best-effort; the file's own Δt sequence is the rate record
+ * and nothing is resampled or interpolated.
+ * Buffer: a ring hard-capped at 12,000 samples (60 s at the
+ * 100 Hz × 2-stream target, ~0.6 MB). Memory does not grow with session
+ * length, and stop drops the contents.
+ * File format: JSONL in the CaptureKit SensorLogger line format:
+ * {"t":<bootSec>,"mach":<machTicks>,"kind":"accel","x":..,"y":..,"z":..}
+ * {"t":<bootSec>,"mach":<machTicks>,"kind":"gyro","x":..,"y":..,"z":..}
+ * The first line anchors the sensor clock to the event's wall clock;
+ * machAtAnchor / bootSecAtAnchor are the event's instant on the sensor
+ * clock, so a reader can re-zero the window against either domain:
+ * {"kind":"anchor","startedAtMs":..,"machAtAnchor":..,"bootSecAtAnchor":..}
+ * The second line states the flush window, including tail truncation when
+ * a recording outlived the ring span:
+ * {"kind":"window","requestedStart":..,"requestedEnd":..,
+ * "actualStart":..,"actualEnd":..,"samples":N,"spanSec":60.0,
+ * "truncated":false}
  * Clocks: CMLogItem.timestamp is boot-relative seconds on the mach clock, the
  * same clock the camera frame PTS rides ("host seconds" in the
  * timestamps-*.json sink), so windows slice both domains with no conversion.
- *
  * Threading: samples append on the serial motionQueue; start/stop and window
  * slices run on the module's sessionQueue. The ring is NSLock-confined so the
  * two never race, and sliceWindow returns a value copy the caller owns. The
  * module drives the lifecycle from sessionQueue (start at configureSession,
  * stop at teardown or thermal).
- *
  * States (SensorLogger rule 4): no IMU means no logger and 'unavailable'; a
  * flush that finds zero samples writes no file and reports 'unavailable'; a
  * write failure throws and the module reports 'failed' plus sensorLogError.

@@ -16,6 +16,7 @@ fails if verification ever performs even one.
 | 6 | Esplora `GET block-height`, `GET block/<hash>/header` (mempool.space) | Verifying a file with a confirmed OTS anchor | Nothing. Receives an 80-byte block header | The receipt is shown as internally consistent, with the blockchain binding "unchecked" |
 | 7 | Esplora `GET /blocks/tip/hash` + `GET /block/<hash>/header` (beacon) | A jittered timer decoupled from shutter events, and app foreground — **never a per-capture fetch**, so an observer cannot correlate this traffic with captures. Endpoint pinnable in Settings | Nothing. Receives the tip block hash, height, and header | The beacon is simply absent from new records, and the record's `observedAt` staleness is disclosed |
 | 8 | Open-Meteo `GET archive-api.open-meteo.com/v1/archive` | **Tapping "Check the archive"** on the Weather card of a located capture, on the asset and Inspect screens — never on open, never part of sealing | **The sealed latitude and longitude, rounded to four decimals, and the capture date.** This is the only call that sends anything about where you were; every other row sends a digest or nothing | The card states "Network not available" rather than inventing a reading |
+| 9 | Organization credential `GET https://<domain>/.well-known/sourcekit-org.json` | **On demand only** — you type your organization's domain in Settings and tap to fetch. Never at launch, never at capture | Nothing about you or the capture. The request itself tells that server your IP and which organization you are asking about; the member entry for this device's key is found and verified locally, after the document arrives | The credential is not installed and Settings says the domain did not answer |
 
 Calls 3–7 are hash-or-nothing flows: digests out, receipts in. Custom TSA
 endpoints and custom OTS calendars are configurable in Settings (every
@@ -31,6 +32,11 @@ trust claim is swappable); the defaults are free, accountless public goods.
 > Nothing else on either screen resolves a coordinate. Place names are not
 > looked up — the platform geocoder would hand the coordinates to Apple — so
 > the sealed latitude and longitude are shown as sealed.
+>
+> **Row 9.** Row 8 is the only call that sends a location. Row 9 sends no
+> capture data at all, but a request is itself a disclosure: the organization's
+> server learns your address and that you are enrolling with them. It fires
+> only when you type a domain and ask for it.
 
 ## What there isn't
 

@@ -2,22 +2,23 @@
 /**
  * JPEG APP11 / JUMBF embedding, extraction, and stripping.
  *
- * Structure follows ISO/IEC 19566-5 (JUMBF in JPEG), the container family
- * C2PA uses, so the attestation rides inside the image file:
+ * Structure follows ISO/IEC 19566-5 (JUMBF in JPEG) — the same container
+ * family C2PA uses — so the attestation rides inside the image file itself
+ * and survives ordinary file copying, AirDrop, and messaging:
  *
  *   FF EB | length(2) | "JP" | box-instance(2) | packet-seq(4) | JUMBF
  *
- * A JUMBF too large for one segment splits across an ordered chain of packets
- * (same box-instance En, consecutive 1-based Z). The reader reassembles in Z
- * order; stripping removes the whole chain by group.
+ * A JUMBF too large for one segment splits across an ordered chain of
+ * packets (same box-instance En, consecutive 1-based Z) — the reader
+ * reassembles in Z order, and stripping removes the whole chain by group.
  *
  * JUMBF payload:
  *   jumb  { jumd(uuid, label "verify.attestation"), json(manifest UTF-8) }
  *
- * The signature covers the file without this segment, so stripping must
- * reproduce the signed bytes exactly.
+ * The signature covers the file WITHOUT this segment, so stripping our
+ * segment must always reproduce the exact signed bytes.
  *
- * Pure module, no React Native dependencies.
+ * Pure module — no React Native dependencies.
  */
 
 import { asciiToBytes, concatBytes } from '../../src/lib/bytes';
@@ -36,7 +37,7 @@ export const VERIFY_JUMD_UUID = asciiToBytes('verifyappattest!');
 const JUMD_LABEL = 'exhibit.attestation';
 
 const MAX_SEGMENT_PAYLOAD = 65533; // length field is 2 bytes, includes itself
-/** Per-segment JUMBF envelope: "JP"(2) + box-instance En(2) + packet-sequence Z(4). */
+/** "JP"(2) + box-instance En(2) + packet-sequence Z(4) — the per-segment JUMBF envelope. */
 const APP11_ENVELOPE_BYTES = 8;
 /** Box-instance id (En) for the legacy attestation box. */
 const VERIFY_EN = 0x0001;
@@ -151,9 +152,9 @@ function buildJumbf(manifest: Uint8Array): Uint8Array {
 
 /**
  * Builds the APP11 segment(s) for a manifest: one when it fits, an ordered
- * ISO 19566-5 packet chain when it does not. The JUMBF splits across
- * consecutive 1-based Z values sharing VERIFY_EN, the same way C2PA manifests
- * over 64KB ride JPEG. Returns the concatenated segments.
+ * ISO 19566-5 packet chain when it doesn't — the JUMBF is split across
+ * consecutive Z values (1-based) sharing VERIFY_EN, exactly how C2PA
+ * manifests >64KB ride JPEG. Returns the concatenated segments.
  */
 function buildApp11Segments(manifest: Uint8Array): Uint8Array {
   const jumbf = buildJumbf(manifest);
@@ -180,10 +181,12 @@ function buildApp11Segments(manifest: Uint8Array): Uint8Array {
 }
 
 /**
- * The box-instance ids (En) whose Z=1 packet opens a provenance JUMBF: the
- * legacy attestation box or a C2PA store. Continuation packets (Z>1) carry no
- * uuid, so a group is classified by its first packet and stripped as a whole;
- * a chain with no Z=1 packet is left in place.
+ * The box-instance ids (En) whose FIRST packet (Z=1) opens a provenance
+ * JUMBF — the legacy attestation box or a C2PA store. Multi-segment honesty:
+ * continuation packets (Z>1) carry no uuid, so per-segment uuid matching
+ * strands orphans; stripping works by GROUP, and a group is only as
+ * provenance-marked as its first packet. A continuation chain whose Z=1 is
+ * absent (crafted) is left alone — unknown bytes are not ours to delete.
  */
 function provenanceGroupEns(segments: Segment[]): Set<number> {
   const ens = new Set<number>();
@@ -216,14 +219,15 @@ export function stripManifest(jpeg: Uint8Array): Uint8Array {
 }
 
 /**
- * Removes metadata-bearing segments: EXIF/XMP (APP1), IPTC (APP13), and COM
- * comments. Compressed image data and non-identifying segments (JFIF APP0,
- * ICC APP2, Adobe APP14) stay byte-identical.
+ * Removes metadata-bearing segments — EXIF/XMP (APP1), IPTC (APP13), and COM
+ * comments — while leaving the compressed image data and non-identifying
+ * segments (JFIF APP0, ICC color profile APP2, Adobe APP14) byte-identical.
  *
- * Used by de-identification so a clean copy carries no device make/model,
- * EXIF timestamp, or IPTC byline. Pixels (SOS to EOI) are untouched; captures
- * shoot with processing on, so they are already upright and need no EXIF
- * orientation tag.
+ * Used by de-identification: a "clean" copy must not leak device make/model,
+ * EXIF timestamps, or IPTC bylines that the redacted telemetry has dropped.
+ * Lossless — the pixel data (SOS → EOI) is never touched. App captures shoot
+ * with processing on, so pixels are already upright and no EXIF orientation is
+ * needed to display them correctly.
  */
 export function stripMetadata(jpeg: Uint8Array): Uint8Array {
   if (!isJpeg(jpeg)) throw new Error('Not a JPEG file');
@@ -242,8 +246,8 @@ export function stripMetadata(jpeg: Uint8Array): Uint8Array {
 
 /**
  * Groups APP11 "JP" segments by box-instance id (En), each group ordered by
- * packet sequence (Z). Groups with a broken chain (duplicate Z or a gap) are
- * dropped rather than reassembled.
+ * packet sequence (Z). Returns null for a group whose packet chain is
+ * broken (duplicate Z, or a gap — reassembly would be a guess).
  */
 function jpGroups(segments: Segment[]): Map<number, Segment[]> {
   const groups = new Map<number, Segment[]>();
@@ -258,7 +262,7 @@ function jpGroups(segments: Segment[]): Map<number, Segment[]> {
   for (const [en, g] of groups) {
     g.sort((a, b) => (jpEnvelope(a.payload)?.z ?? 0) - (jpEnvelope(b.payload)?.z ?? 0));
     for (let i = 0; i < g.length; i++) {
-      if (jpEnvelope(g[i].payload)?.z !== i + 1) groups.delete(en); // broken chain
+      if (jpEnvelope(g[i].payload)?.z !== i + 1) groups.delete(en); // broken chain — unusable
     }
   }
   return groups;

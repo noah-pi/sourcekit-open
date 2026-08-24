@@ -11,45 +11,37 @@ import MachO // explicit import: _dyld_image_count/_dyld_get_image_name are not 
 
 /**
  * Secure Enclave signing identities.
- *
  * Two keys:
- *
- * 1. Standard key (tag ...signing-key). P-256, generated inside the Secure
- *    Enclave, non-extractable; the chip signs.
- *
- * 2. Biometric-bound key (tag ...signing-key-bio). Access control adds
- *    .biometryCurrentSet + .privateKeyUsage, so every sign requires Face
- *    ID/Touch ID and the key is invalidated when enrolled biometrics change.
- *    It is a separate identity because Apple does not permit biometric ACLs
- *    on App Attest keys.
- *
+ * 1. Standard key (tag...signing-key). P-256, generated inside the Secure
+ * Enclave, non-extractable; the chip signs.
+ * 2. Biometric-bound key (tag...signing-key-bio). Access control adds
+ * .biometryCurrentSet +.privateKeyUsage, so every sign requires Face
+ * ID/Touch ID and the key is invalidated when enrolled biometrics change.
+ * It is a separate identity because Apple does not permit biometric ACLs
+ * on App Attest keys.
  * Runtime-instrumentation hardening:
- *
  * a. Per-use biometric evaluation. sealBio evaluates Face ID once, signs the
- *    payloads it was given, and invalidates the LAContext before returning.
- *
+ * payloads it was given, and invalidates the LAContext before returning.
  * b. Native seal. seal/sealBio compute SHA-256 and the Enclave signature in
- *    one native call, so the payload is never hashed in JS.
- *
+ * one native call, so the payload is never hashed in JS.
  * c. Speed bumps. PT_DENY_ATTACH at module load, plus debugger and
- *    DYLD-injection artifact checks that gate signing. These raise the cost
- *    of commodity tooling (Frida, Cycript, SSL kill switches); they are not
- *    tamper-proofing. The gate covers active instrumentation only; jailbreak
- *    path indicators stay a signed self-report in src/lib/integrity.ts.
- *
+ * DYLD-injection artifact checks that gate signing. These raise the cost
+ * of commodity tooling (Frida, Cycript, SSL kill switches); they are not
+ * tamper-proofing. The gate covers active instrumentation only; jailbreak
+ * path indicators stay a signed self-report in src/lib/integrity.ts.
  * API surface (synchronous unless noted):
- *   isAvailable        -> Bool
- *   getPublicKey       -> String?  base64 65-byte X9.63 point
- *   generateKey        -> String
- *   sign(digest:)      -> String   DER signature base64
- *   deleteKey          -> Void
- *   getBioPublicKey    -> String?
- *   generateBioKey     -> String
- *   signBio(digest:)   -> String   signs behind Face ID/Touch ID
- *   deleteBioKey       -> Void
- *   seal(payload:)     -> String   SHA-256 + sign in one call, standard key
- *   sealBio(payloads:, reason:) -> [String]  one scan per call (async)
- *   deviceIntegrity    -> [String: Any]  active-instrumentation findings
+ * isAvailable -> Bool
+ * getPublicKey -> String? base64 65-byte X9.63 point
+ * generateKey -> String
+ * sign(digest:) -> String DER signature base64
+ * deleteKey -> Void
+ * getBioPublicKey -> String?
+ * generateBioKey -> String
+ * signBio(digest:) -> String signs behind Face ID/Touch ID
+ * deleteBioKey -> Void
+ * seal(payload:) -> String SHA-256 + sign in one call, standard key
+ * sealBio(payloads:, reason:) -> [String] one scan per call (async)
+ * deviceIntegrity -> [String: Any] active-instrumentation findings
  */
 public class SecureEnclaveModule: Module {
   private let keyTag = "com.verify.camera.signing-key"
@@ -184,12 +176,12 @@ public class SecureEnclaveModule: Module {
       }
     }
 
-    /**
-     * Evaluates Face ID or Touch ID once and vaults the context, so the
-     * c2pa-swift arm can sign the COSE claim without a second prompt. The
-     * hold is tag-scoped, expires on its own, and the caller releases it.
-     * Resolves true; rejects like sealBio on a failed or cancelled scan.
-     */
+ /**
+ * Evaluates Face ID or Touch ID once and vaults the context, so the
+ * c2pa-swift arm can sign the COSE claim without a second prompt. The
+ * hold is tag-scoped, expires on its own, and the caller releases it.
+ * Resolves true; rejects like sealBio on a failed or cancelled scan.
+ */
     AsyncFunction("sealBioHold") { (reason: String, promise: Promise) in
       do {
         try self.gateOnInstrumentation()

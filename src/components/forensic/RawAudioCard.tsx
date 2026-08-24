@@ -1,17 +1,22 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * RawAudioCard — the raw LPCM audio master (CAF) that rode with the capture.
- * Hidden for still photos. For video and audio exhibits it reads the sealed
- * path, parses the CAF, and shows:
+ * RawAudioCard — the raw LPCM audio master (CAF) that rode with the
+ * capture.
  *
- *   - a waveform from the PCM samples (≈200 peak bars),
- *   - duration in seconds (frames / sample rate, from the container),
- *   - SHA-256 of the PCM payload, recomputed on this device,
- *   - a "Power-grid anchor" row when the record carries ENF anchor fields,
- *     omitted when absent.
+ * Hidden entirely for still photos (the sink does not apply). For
+ * video/audio exhibits it reads the sealed path from the record, parses
+ * the CAF container itself, and shows:
  *
- * Absence renders as "Not recorded"; a read or parse failure is stated and
- * stays neutral.
+ *   - a waveform drawn from the actual PCM samples (≈200 rms bars),
+ *   - the duration in seconds (frames ÷ sample rate, from the container),
+ *   - the SHA-256 of the PCM payload — recomputed on this device, so a
+ *     reader can match it against any copy of the same master,
+ *   - a "Power-grid anchor" row when the record carries ENF anchor fields
+ *     (firstSampleWallClockUtcMs / sampleRate / sampleCount) — omitted
+ *     entirely when absent, never fabricated.
+ *
+ * "Not recorded" is the neutral absence state; a read/parse failure is
+ * stated plainly and stays neutral — absence and failure are not tamper.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -26,8 +31,8 @@ import { sha256Hex } from '../../lib/sign';
 import { ForensicCard, ForensicMono, NotRecorded } from './ForensicCard';
 import { toFileUri } from './grayMatch';
 
-/** ENF anchor fields, when the record carries them. The row is otherwise
- *  omitted. */
+/** ENF anchor fields, when the record carries them (added capture-side;
+ *  older records simply don't — the row is then omitted). */
 export interface EnfAnchor {
   firstSampleWallClockUtcMs: number;
   sampleRate: number;
@@ -42,8 +47,8 @@ interface CafPcm {
   bitsPerChannel: number;
   isFloat: boolean;
   bigEndian: boolean;
-  /** LPCM flag bit 2: signed integer. When absent, the CoreAudio convention
-   *  applies: 8-bit unsigned, everything wider signed. */
+  /** LPCM flag bit 2: signed integer. Absent on old CAFs — CoreAudio
+   *  convention then is 8-bit unsigned, everything wider signed. */
   isSigned: boolean;
   /** LPCM flag bit 4: valid bits high-aligned in a wider slot (only
    *  meaningful when the slot is wider than bitsPerChannel). */
@@ -55,16 +60,23 @@ interface CafPcm {
   /** The audio payload bytes (after the data chunk's edit count). */
   pcm: Uint8Array;
   frames: number;
- /** Anomalies the reader repaired or worked around, rendered in the meta
-   *  line. */
+  /** Stated anomalies the reader repaired or worked around (0.18.6) —
+   *  rendered in the meta line; never silent corrections. */
   notes?: string[];
+  /** 0.20.1: set when the description is stated-but-undecodable (no
+   *  plausible interpretation, no anchor). The fields may LOOK coherent —
+   *  the compacted-layout candidate is a legitimate read of the stated
+   *  bytes — so refusal must be explicit: the waveform and the WAV
+   *  converter check this flag and stand down (a drawn waveform has to be
+   *  real samples). */
+  incoherent?: boolean;
 }
 
 function readU32BE(b: Uint8Array, off: number): number {
   return ((b[off] << 24) | (b[off + 1] << 16) | (b[off + 2] << 8) | b[off + 3]) >>> 0;
 }
 
-/** The desc fields the reader needs, at one interpretation's offsets. */
+/** The desc fields the reader needs, at the offsets of one interpretation. */
 interface CafDescFields {
   formatFlags: number;
   bytesPerFrame: number;
@@ -72,10 +84,11 @@ interface CafDescFields {
   bitsPerChannel: number;
 }
 
-/** An interpretation is plausible only when every field lands inside the
- *  LPCM envelope. A misread offset picks up the next chunk's bytes as a
- *  channel or bit count, so implausible fields mean try another
- *  interpretation. */
+/** A desc interpretation is plausible only when every field lands in the
+ *  LPCM envelope — the 0.18.6 field master parsed as "16 ch ·
+ *  1718773093-bit" (the ASCII 'free' of the NEXT chunk), which no gate
+ *  here would have caught before. Garbage in now means "try another
+ *  interpretation", never "render nonsense confidently". */
 function plausibleDesc(d: CafDescFields, sampleRate: number): boolean {
   if (!(sampleRate > 0 && sampleRate <= 768000)) return false;
   if (!(d.channels >= 1 && d.channels <= 64)) return false;
@@ -89,17 +102,22 @@ function plausibleDesc(d: CafDescFields, sampleRate: number): boolean {
 }
 
 /**
- * Minimal CAF reader: 'caff' header, then typed chunks with 64-bit BE sizes.
- * The 'desc' AudioStreamBasicDescription is read under up to three
+ * Minimal CAF reader: 'caff' header, then typed chunks with 64-bit BE
+ * sizes. The 'desc' AudioStreamBasicDescription is read under up to three
  * interpretations, in trust order:
- *   1. standard 36-byte ASBD;
- *   2. compacted 32-byte description, where the mFramesPerPacket slot is
- *      absent and every later field sits 4 bytes early;
- *   3. anchor-derived, where the sealed capture log's frame count gives the
- *      stride (payload bytes / frames), used only on an incoherent desc.
- * With an ENF anchor present, the interpretation whose implied frame count
- * matches the anchor wins; a surviving mismatch is stated in the notes.
- * Returns null when nothing coherent emerges. Exported for the tests.
+ *   1. standard 36-byte ASBD (what every textbook CAF carries);
+ *   2. a compacted 32-byte description (the 0.18.6 field master: the
+ *      mFramesPerPacket slot is absent, so every field after it sits 4
+ *      bytes early — reading it as standard yields "16 ch · 'free'-bit"
+ *      nonsense and the frame count doubles, which is exactly what the
+ *      build-40/41 cards showed);
+ *   3. anchor-derived: the sealed capture log's frame count implies the
+ *      frame stride outright (payload bytes ÷ frames), used only when the
+ *      container's own description is incoherent — and stated as such.
+ * When the sealed ENF anchor rides along, the interpretation whose implied
+ * frame count MATCHES the anchor wins; a surviving mismatch is stated.
+ * Returns null only when nothing coherent emerges (the caller renders the
+ * neutral failure state). Exported for the logic tests.
  */
 export function parseCaf(
   bytes: Uint8Array,
@@ -119,7 +137,7 @@ export function parseCaf(
     const t3 = bytes[off + 3];
     const hi = readU32BE(bytes, off + 4);
     const lo = readU32BE(bytes, off + 8);
-    // Sizes beyond 4 GiB cannot be addressed in a Uint8Array.
+    // Sizes beyond 4 GiB cannot be addressed in a Uint8Array anyway.
     const size = hi === 0 && lo !== 0xffffffff ? lo : bytes.length - (off + 12);
     const body = off + 12;
     if (t0 === 0x64 && t1 === 0x65 && t2 === 0x73 && t3 === 0x63) {
@@ -154,16 +172,27 @@ export function parseCaf(
       },
     });
   }
-  if (descSize === 32 && descBody + 32 <= bytes.length) {
-    candidates.push({
-      source: 'compacted',
-      d: {
-        formatFlags,
-        bytesPerFrame: readU32BE(bytes, descBody + 20),
-        channels: readU32BE(bytes, descBody + 24),
-        bitsPerChannel: readU32BE(bytes, descBody + 28),
-      },
-    });
+  // 0.20.1 (field, 0.20.0 (53): the audio-mode hardware-format CAF rendered
+  // "32 ch · 'chan'-bit" — a compacted 32-byte description the parser never
+  // tried because the candidate was gated on the chunk's size field, and
+  // this writer's size field did not say 32): the compacted read is ALWAYS
+  // a candidate now; plausibility and the sealed anchor do the arbitrating,
+  // and the size field only orders the trust (a stated 32 puts the
+  // compacted layout first).
+  const compacted: { source: 'compacted'; d: CafDescFields } | null = descBody + 32 <= bytes.length
+    ? {
+        source: 'compacted',
+        d: {
+          formatFlags,
+          bytesPerFrame: readU32BE(bytes, descBody + 20),
+          channels: readU32BE(bytes, descBody + 24),
+          bitsPerChannel: readU32BE(bytes, descBody + 28),
+        },
+      }
+    : null;
+  if (compacted) {
+    if (descSize === 32) candidates.unshift(compacted);
+    else candidates.push(compacted);
   }
 
   const frameBytesOf = (d: CafDescFields): number =>
@@ -173,19 +202,39 @@ export function parseCaf(
     : null;
   const matchesAnchor = (d: CafDescFields): boolean =>
     anchorFrames !== null && frameBytesOf(d) > 0 && Math.floor(pcm.length / frameBytesOf(d)) === anchorFrames;
+  // The anchor-vouched relaxed pass (0.20.1): everything plausibleDesc
+  // checks EXCEPT the slot-width arithmetic. A sealed frame count that
+  // divides the payload exactly is stronger evidence than the slot rules —
+  // this is how a hardware-format CAF whose byte counts sit outside the
+  // textbook matrix still decodes, with the anchor doing the vouching.
+  const weaklyPlausibleDesc = (d: CafDescFields): boolean =>
+    sampleRate > 0 && sampleRate <= 768000 &&
+    d.channels >= 1 && d.channels <= 64 &&
+    d.bytesPerFrame > 0 && d.bytesPerFrame <= 4096 &&
+    [0, 8, 16, 20, 24, 32, 64].includes(d.bitsPerChannel);
 
   let chosen = candidates.find(c => plausibleDesc(c.d, sampleRate) && matchesAnchor(c.d))
+    ?? candidates.find(c => weaklyPlausibleDesc(c.d) && matchesAnchor(c.d))
     ?? candidates.find(c => plausibleDesc(c.d, sampleRate))
     ?? null;
+  const anchorVouched = chosen !== null
+    && !plausibleDesc(chosen.d, sampleRate)
+    && matchesAnchor(chosen.d);
 
   let desc: Omit<CafPcm, 'pcm' | 'frames'>;
   if (chosen) {
     if (chosen.source === 'compacted') {
-      notes.push("the container's description chunk is a non-standard 32 bytes; read as the compacted layout");
+      notes.push(descSize === 32
+        ? "the container's description chunk is a non-standard 32 bytes; read as the compacted layout"
+        : `the description chunk declares ${descSize} bytes, but only the compacted 32-byte layout reads coherently — the compacted read is used`);
+    }
+    if (anchorVouched) {
+      notes.push("the stated layout fails the strict layout arithmetic; the sealed capture log's frame count vouches for this read");
     }
     const d = chosen.d;
-    // mBitsPerChannel 0 means "use the slot width"; derive it from
-    // bytesPerFrame when that divides cleanly.
+    // 0.18.6: a CAF may leave mBitsPerChannel 0 ("use the slot width") —
+    // derive it from bytesPerFrame when that divides cleanly, so the
+    // decoder below keys off real numbers, never a zero.
     let bits = d.bitsPerChannel;
     if (bits === 0) {
       const perChannel = d.bytesPerFrame / d.channels;
@@ -203,9 +252,10 @@ export function parseCaf(
       bytesPerFrame: d.bytesPerFrame,
     };
   } else if (candidates.length > 0 && !anchorFrames) {
-    // No plausible interpretation and no anchor to arbitrate. Return the
-    // standard read with the incoherence noted, so the card can describe a
-    // layout it cannot decode; the decoders below still refuse it.
+    // No plausible interpretation and no anchor to arbitrate. Still return
+    // the standard read — with the incoherence STATED — so the card can
+    // describe the layout it cannot decode (the decoders below refuse it:
+    // a slot narrower than the sample is a null reader, never garbage).
     const d = candidates[0].d;
     notes.push("the container's description is incoherent; the layout is stated but cannot be decoded");
     desc = {
@@ -218,18 +268,44 @@ export function parseCaf(
       alignedHigh: (d.formatFlags & 16) !== 0,
       nonInterleaved: (d.formatFlags & 32) !== 0,
       bytesPerFrame: d.bytesPerFrame,
+      incoherent: true,
     };
   } else if (anchorFrames !== null && expected?.sampleRate) {
-    // Anchor-derived last resort: the sealed capture log commits the frame
-    // count and rate, so the stride follows arithmetically.
+    // Anchor-derived last resort: the container's description is
+    // incoherent, but the sealed capture log commits the frame count and
+    // rate — the stride is then arithmetic, not a guess.
     const frameBytes = pcm.length / anchorFrames;
     if (!Number.isInteger(frameBytes) || frameBytes < 1 || frameBytes > 8) return null;
     notes.push("the container's description is incoherent; the layout is derived from the sealed capture log");
+    // 0.22.0 (field finding: every waveform bar pinned full-height on a
+    // 20 s voice take): hardware-format CAF masters are FLOAT32, and this
+    // branch used to force a signed-integer read — float bytes reinterpreted
+    // as int32 are huge mid-band magnitudes, so every bar saturates under
+    // any normalizer. Arbitrate on the BYTES, stated: float wins only when
+    // the payload measures like float (≥99.9% of samples finite and within
+    // ±1.0) AND measures pathological as int32 (≥50% of samples ≥2^29 —
+    // quiet int32 fails the loudness test; loud int32 fails the float test,
+    // since 0x40000000 reads as 2.0 and 0x7FFFFFFF as NaN).
+    let isFloat = false;
+    if (frameBytes === 4) {
+      const probe = Math.min(4000, anchorFrames);
+      let floatOkCount = 0;
+      let intLoudCount = 0;
+      for (let i = 0; i < probe; i++) {
+        const f = view.getFloat32(i * 4, true);
+        if (Number.isFinite(f) && Math.abs(f) <= 1) floatOkCount++;
+        if (Math.abs(view.getInt32(i * 4, true)) >= 0x20000000) intLoudCount++;
+      }
+      if (floatOkCount / probe >= 0.999 && intLoudCount / probe >= 0.5) {
+        isFloat = true;
+        notes.push('the payload measures as 32-bit float (samples within ±1.0, implausible as integer); decoded float');
+      }
+    }
     desc = {
       sampleRate: expected.sampleRate,
       channels: 1,
       bitsPerChannel: frameBytes * 8,
-      isFloat: false,
+      isFloat,
       bigEndian: false,
       isSigned: frameBytes > 1,
       alignedHigh: false,
@@ -240,9 +316,11 @@ export function parseCaf(
     return null;
   }
 
-  // A repaired description's endian flag is suspect. Audio is low-pass, so
-  // the wrong byte order explodes sample-to-sample deltas: measure both ways
-  // and take the smoother, noting it. Standard descriptions are untouched.
+  // A repaired description's endian flag is suspect (the 0.18.6 master
+  // declared big-endian on a little-endian payload). Audio is low-pass:
+  // under the wrong byte order the sample-to-sample deltas explode. When
+  // the description needed repair, measure both ways and take the smoother
+  // — stated, never silent. Untouched for standard descriptions.
   if (notes.length > 0 && !desc.isFloat && desc.bitsPerChannel === 16 && desc.bytesPerFrame >= 2) {
     const probe = Math.min(4000, Math.floor(pcm.length / desc.bytesPerFrame));
     if (probe > 8) {
@@ -262,8 +340,8 @@ export function parseCaf(
   }
 
   if (desc.bytesPerFrame === 0 || desc.sampleRate <= 0) return null;
-  // Non-interleaved CAF stores channel blocks, so bytesPerFrame is
-  // per-channel and the frame count divides by channels as well.
+  // Non-interleaved CAF stores channel blocks: bytesPerFrame is per-channel,
+  // so the frame count divides by channels as well.
   const frameBytes = desc.nonInterleaved ? desc.bytesPerFrame * desc.channels : desc.bytesPerFrame;
   const frames = Math.floor(pcm.length / frameBytes);
   if (frames <= 0) return null;
@@ -274,32 +352,42 @@ export function parseCaf(
 }
 
 /**
- * The one LPCM sample reader, shared by the waveform and the WAV converter.
- * The container's own bytesPerFrame is the stride, and every LPCM encoding
- * decodes: int 8/16/24/32 (signed per flag, 8-bit unsigned by convention),
+ * 0.18.6 field fix (the "export WAV doesn't work" report): ONE universal
+ * LPCM sample reader, shared by the waveform and the WAV converter. The
+ * old code derived the frame stride from bitsPerChannel × channels and
+ * supported only four (float/depth) combos — the real AVAudioFile master
+ * landed outside that matrix and BOTH paths silently failed (dotted
+ * waveform, null WAV). Now the CONTAINER's own bytesPerFrame is the stride
+ * (the only layout truth a CAF carries), and every LPCM sample encoding
+ * decodes: int 8/16/24/32 (signed per flag, unsigned 8-bit by convention),
  * float32/64, both endians, interleaved or channel-blocked, packed or
- * high-aligned in a wider slot. Returns null when the container is
- * incoherent, e.g. a slot narrower than the sample or an unnamed depth.
+ * high-aligned in a wider slot. Returns null only when the container is
+ * incoherent (slot narrower than the sample, a depth we cannot name) —
+ * the caller then states the layout instead of a generic failure.
  * A read outside the payload yields NaN: the waveform skips it, the WAV
- * converter fails the export.
+ * converter treats it as a hard failure (a short file is a fact to state,
+ * not a sample to invent).
  */
 function makeSampleReader(caf: CafPcm): ((frame: number, ch: number) => number) | null {
+  // A stated-but-undecodable description yields no samples (0.20.1): the
+  // layout may look coherent, so refusal is explicit, not incidental.
+  if (caf.incoherent) return null;
   const { pcm, channels, bitsPerChannel, isFloat, bigEndian, isSigned, alignedHigh, nonInterleaved, bytesPerFrame, frames } = caf;
   const bytesPerSample = bitsPerChannel / 8;
   if (!Number.isInteger(bytesPerSample)) return null;
   if (isFloat ? (bytesPerSample !== 4 && bytesPerSample !== 8)
               : (bytesPerSample < 1 || bytesPerSample > 4)) return null;
-  // Slot: the byte width one channel occupies inside one frame.
+  // Slot = the byte width one channel occupies inside one frame.
   const slot = nonInterleaved ? bytesPerFrame : bytesPerFrame / channels;
   if (!Number.isInteger(slot) || slot < bytesPerSample) return null;
-  // Padding when the slot is wider than the sample. "high-aligned" and
-  // "big-endian" both name the numeric high end, which is opposite byte
-  // ends, so the sample sits at the slot's far byte end exactly when the two
-  // flags disagree. Packed slots pad 0 either way.
+  // Padding when the slot is wider than the sample: "high-aligned" and
+  // "big-endian" both name the NUMERIC high end, which is opposite byte
+  // ends — the sample sits at the slot's far byte end exactly when the
+  // two disagree (packed slots are the same width, so pad is 0 either way).
   const pad = alignedHigh !== bigEndian ? slot - bytesPerSample : 0;
   const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-  // CoreAudio's LPCM convention when the signed flag is absent: 8-bit
-  // unsigned, wider ints signed.
+  // CoreAudio's LPCM convention when the signed flag is absent: 8-bit is
+  // unsigned, wider ints are signed.
   const signed = isSigned || bytesPerSample > 1;
   const readInt24 = (off: number, le: boolean): number => {
     const b0 = pcm[off], b1 = pcm[off + 1], b2 = pcm[off + 2];
@@ -340,52 +428,62 @@ function makeSampleReader(caf: CafPcm): ((frame: number, ch: number) => number) 
   };
 }
 
-/** The container's own layout description, for the meta line and stated
- *  failures. Nothing inferred. */
+/** The master's own description of itself — for stated failures and the
+ *  meta line. Facts from the container, nothing inferred. */
 export function describeCafLayout(caf: CafPcm): string {
   const kind = caf.isFloat ? 'float' : caf.isSigned || caf.bitsPerChannel > 8 ? 'signed integer' : 'unsigned integer';
   return `${caf.sampleRate} Hz · ${caf.channels} ch · ${caf.bitsPerChannel}-bit ${kind} · ${caf.bigEndian ? 'big' : 'little'}-endian${caf.nonInterleaved ? ' · non-interleaved' : ''}`;
 }
 
-/** Per-bar peak amplitude (0..1) over channel 0 of the PCM. Null when the
- *  layout is incoherent, so the card states that instead of drawing a
- *  zero band. Exported for tests. */
+/** Per-bar RMS amplitude (0..1) over channel 0 of the PCM. Null when the
+ *  container's layout is incoherent — the card then says so instead of
+ *  drawing a dotted zero band (0.18.6). Exported for tests.
+ *  0.21.1 (field: an audio-mode take rendered "full band to band" next to
+ *  a video take's normal waveform): the bar was the PEAK of its
+ *  subsamples — one loud sample anywhere in the bucket pinned the bar, so
+ *  sustained speech drew as a solid strip. RMS (energy) carries the
+ *  take's actual dynamics; silence still reads as a hairline. */
 export function waveformBars(caf: CafPcm, bars: number): number[] | null {
   const read = makeSampleReader(caf);
   if (!read) return null;
   const { frames } = caf;
   const out = new Array<number>(bars).fill(0);
   const framesPerBar = Math.max(1, Math.floor(frames / bars));
-  // At most ~24 sample reads per bar, evenly spaced.
+  // Bound the work: at most ~24 sample reads per bar, evenly spaced.
   const readsPerBar = Math.max(1, Math.min(24, Math.floor(framesPerBar / 4)));
   const stride = Math.max(1, Math.floor(framesPerBar / readsPerBar));
   for (let bar = 0; bar < bars; bar++) {
     const start = bar * framesPerBar;
-    let peak = 0;
+    let sumSq = 0;
+    let n = 0;
     for (let r = 0; r < readsPerBar; r++) {
       const frame = start + r * stride;
       if (frame >= frames) break;
       const v = read(frame, 0);
       if (Number.isNaN(v)) continue;
-      const a = Math.abs(v);
-      if (a > peak) peak = a;
+      sumSq += v * v;
+      n++;
     }
-    out[bar] = Math.min(1, peak);
+    out[bar] = n > 0 ? Math.min(1, Math.sqrt(sumSq / n)) : 0;
   }
   return out;
 }
 
 /**
- * WAV (PCM16) wrapper for the parsed CAF master. All channels, interleaved
- * per the WAV contract; int payloads re-encoded little-endian, float
- * payloads scaled to int16. A format conversion only: the CAF and its hash
- * stay the sealed artifact.
+ * WAV (PCM16) wrapper for the parsed CAF master (0.18.5 post-field — the
+ * export Noah asked for). All channels, interleaved per the WAV contract.
+ * Int payloads are
+ * re-encoded little-endian; float payloads are scaled to int16. The export
+ * is a FORMAT conversion of the committed master — the CAF and its hash
+ * stay the sealed artifact; the WAV is for listening elsewhere, and the
+ * card says exactly that.
  */
 export function wavBytesFromCaf(caf: CafPcm): Uint8Array | null {
   const { channels, frames, sampleRate } = caf;
   if (frames <= 0 || channels <= 0) return null;
-  // An incoherent container or a short payload (NaN) fails the export, and
-  // the card states the layout.
+  // 0.18.6: the shared universal reader — every LPCM layout the container
+  // can honestly describe converts; an incoherent container or a short
+  // payload (NaN) fails the export, and the card states the layout.
   const read = makeSampleReader(caf);
   if (!read) return null;
   const out = new Int16Array(frames * channels);
@@ -427,7 +525,7 @@ type AudioState =
 
 export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
   kind: 'photo' | 'video' | 'audio';
-  /** Sealed three-state raw-PCM path (record.context.captureEvidence). */
+  /** The sealed three-state raw-PCM path (record.context.captureEvidence). */
   rawPcmPath: EvidencePath | undefined;
   /** ENF anchor fields when the record carries them; omitted row otherwise. */
   enfAnchor?: EnfAnchor | null;
@@ -446,7 +544,7 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
       try {
         const bytes = await readFileBytes(toFileUri(rawPcmPath as string));
         // The sealed ENF anchor arbitrates between container
-        // interpretations (see parseCaf).
+        // interpretations (0.18.6 — see parseCaf).
         const caf = parseCaf(bytes, enfAnchor
           ? { sampleRate: enfAnchor.sampleRate, sampleCount: enfAnchor.sampleCount }
           : undefined);
@@ -476,13 +574,16 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
     };
   }, [recorded, rawPcmPath, enfAnchor]);
 
-  // Exports the committed master as a PCM16 WAV through the OS share sheet.
-  // The CAF and its hash remain the sealed artifact.
+  // 0.18.5 post-field (Noah: "a way to export"): the committed master as a
+  // standard PCM16 WAV via the OS share sheet. The CAF + its hash stay the
+  // sealed artifact — the WAV is a format conversion for listening, and
+  // the button says so.
   const exportWav = async () => {
     if (audio.state !== 'done') return;
     setExportError(null);
     try {
-      // Every failure path below surfaces a line in exportError.
+      // 0.18.6 (field: "the export wav button doesn't do anything" — every
+      // failure was swallowed): each failure path surfaces a stated line.
       const available = await Sharing.isAvailableAsync();
       if (!available) {
         setExportError('Sharing is not available on this device.');
@@ -490,7 +591,8 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
       }
       const wav = wavBytesFromCaf(audio.caf);
       if (!wav) {
-        // Name the master's actual layout rather than a generic
+        // 0.18.6: self-describing — the master states its own layout, the
+        // reader states what it cannot do with it. No guessing, no generic
         // "unsupported".
         setExportError(`This master is ${describeCafLayout(audio.caf)} — a layout the WAV converter does not support.`);
         return;
@@ -503,13 +605,13 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
     }
   };
 
-  // The raw-audio sink does not apply to stills; the card hides entirely.
+  // The raw-audio sink does not apply to stills — the card hides entirely.
   if (kind === 'photo') return null;
 
   return (
     <ForensicCard
       title="Raw Audio"
-      sub="The uncompressed audio master sealed with this capture."
+      sub="The uncompressed audio sealed alongside this capture."
     >
       {rawPcmPath === null ? (
         <Text style={styles.line}>Enabled but failed at capture; the record commits the failure.</Text>
@@ -521,11 +623,14 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
         <Text style={styles.line}>{`Recorded at capture: ${audio.reason}.`}</Text>
       ) : (
         <View>
-          {/* Bars are peak-normalized to the take's loudest bar on a
-              perceptual √ scale, centered on the well's midline, with the
-              normalization noted in the caption. Silence reads as a
-              hairline. A layout the decoder cannot read is stated rather
-              than drawn as a zero band. */}
+          {/* 0.18.6 (field: "a black box of tiny data — not
+              interpretable"): peak-normalize the bars to the take's
+              loudest bar — stated in the caption, never silent — on the
+              perceptual √ scale, centered on the well's midline so the
+              amplitude reads symmetrically. Silence still reads as a
+              hairline; a quiet room no longer renders as 2 px nubs.
+              A layout the decoder cannot read is STATED (never a dotted
+              zero band — a drawn waveform must be real samples). */}
           {(() => {
             const bars = audio.bars;
             if (!bars) {
@@ -543,7 +648,7 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
             );
           })()}
           <Text style={styles.meta}>
-            {`Duration ${audio.durationSec.toFixed(2)} s · ${audio.sampleRate} Hz · ${audio.frames} frames · ${describeCafLayout(audio.caf)}${audio.bars ? ' · peak-normalized to the loudest bar, perceptual (√) scale' : ''}`}
+            {`Duration ${audio.durationSec.toFixed(2)} s · ${audio.sampleRate} Hz · ${audio.frames} frames · ${describeCafLayout(audio.caf)}${audio.bars ? ' · rms per bar, peak-normalized to the loudest bar, perceptual (√) scale' : ''}`}
           </Text>
           {audio.caf.notes?.map((n, i) => (
             <Text key={i} style={styles.meta}>{`Note: ${n}.`}</Text>
