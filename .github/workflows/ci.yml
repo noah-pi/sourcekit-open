@@ -102,6 +102,20 @@ jobs:
         with:
           node-version: 20
 
+      - name: Select the newest Xcode on the image
+        # The image's default Xcode ships an older Swift than some Expo pods
+        # declare in their Package.swift, and SPM resolution refuses to run a
+        # package whose tools version is newer than the toolchain. Picking the
+        # newest installed Xcode tracks the image without pinning a version
+        # that ages out. The listing is printed so a future failure names what
+        # the image actually had.
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+          swift --version
+
       - name: Install
         run: npm ci --legacy-peer-deps --no-audit --no-fund
 
