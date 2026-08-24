@@ -478,29 +478,19 @@ claim made here.
 - **LiDAR.** Pro iPhones ship a depth scanner and nothing uses it for provenance. A sealed depth
 map answers the flat-screen question directly rather than inferring it from disparity, and it
 works in the dark.
-- **Wi-Fi networks against a public location database.** The network the phone was joined to is
-  already sealed, and access point identifiers are broadly mapped by public wardriving projects.
-  A sealed network four thousand miles from the sealed coordinate is a contradiction in plain
-  sight. Today it is a lead a desk follows by hand.
 - **Authenticated satellite positioning.** Galileo began signing its navigation messages in 2025,
-  making a position something a receiver can check rather than merely believe. Phones do not
-  expose that to apps yet, and iOS hands over a finished coordinate with none of the raw material
-  behind it. Waiting on the platform, not on the idea.
+making a position something a receiver can check rather than merely believe. Phones do not
+expose it to apps yet.
 - **Optional face blurring that survives the signature.** A redaction committed at capture — the
 blur applied before signing, the original never written — would let someone publish a crowd
 without publishing the crowd's faces. The Guardian Project and WITNESS worked this out years ago
 in [ObscuraCam](https://guardianproject.info/apps/org.witness.sscphase1/), which finds faces
-automatically, lets you obscure them, and strips the metadata on the way out. The concept is
-theirs and it is the right one; what a signature adds is that the obscured version becomes the
-original rather than a copy of it. Their [ProofMode](https://proofmode.org) remains the option to
-reach for on iOS today — fully C2PA-compliant, in the field with the people who need it, and the
-project this one keeps learning from.
-- **Active challenge.** Every rephotography check here is passive: it reads what the camera happened to see. A flash fired in a pattern picked at the shutter inverts that. The falloff either matches the committed depth map or it does not; a screen has none. Short range, visible flicker, so it sits behind a toggle.
+automatically, lets you obscure them, and strips the metadata on the way out.
 - **More ways to catch rephotography.** Moiré from a display's pixel grid, the refresh beat of a
 panel against a rolling shutter, the polarization signature of an LCD.
 - **PRNU checks.** Every sensor leaves a fixed noise fingerprint. The useful signals are blunt
 ones: a frame carrying *two* fingerprints has been composited from two cameras, and a frame
-carrying *none* never came off a sensor at all. Neither needs a reference corpus to flag.
+carrying *none* never came off a sensor at all. 
 - **Soft binding, and formats that outlive the file.** The perceptual fingerprint is already
 committed. What is missing is somewhere to look it up.
 
