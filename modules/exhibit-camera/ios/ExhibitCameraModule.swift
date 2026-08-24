@@ -6105,10 +6105,11 @@ extension ExhibitCameraModule {
     }
   }
 
-  /// Removes the secondary input/output and rebuilds the synchronizer over
-  /// the primary output alone. The session keeps running single-cam;
-  /// subsequent captures report secondary as E_THERMAL errors (attempted
-  /// path, stated) — distinct from unsupported hardware.
+  /// Removes the secondary input and output and rebuilds the synchronizer
+  /// over the primary alone. The session keeps running single-cam, and
+  /// later captures report the secondary as a thermal failure — something
+  /// that was attempted and stopped, which is not the same as hardware that
+  /// never had it.
   private func detachSecondaryForThermal() {
     guard let session = session else { return }
     session.beginConfiguration()
@@ -6118,20 +6119,21 @@ extension ExhibitCameraModule {
     stereoDetachedForThermal = true
   }
 
-  /// Thermal gate for the IMU sink: serious/critical pressure parks the
-  /// logger — the same policy that halves pair cadence (serious) and
-  /// detaches stereo (critical) (spec §6).
+  /// Whether heat should park the motion log. The same policy that halves
+  /// the pair cadence and, further up, detaches stereo.
   private func sensorLogBlockedByThermal() -> Bool {
     let state = ProcessInfo.processInfo.thermalState
     return state == .serious || state == .critical
   }
 
-  /// IMU sink thermal park (0.15): stops the logger and marks the sink
-  /// thermal-stopped so captures report sensorLogState 'unavailable' — a
-  /// stated degradation, never a fabricated log. CoreMotion is independent
-  /// of the capture graph, so this is safe even mid-calibration one-shot.
-  /// Recovery mirrors the stereo detach: not silent — the logger restarts
-  /// only on the next configureSession, which re-reads the toggle.
+  /// Parks the motion log for heat: stops the logger and marks it stopped,
+  /// so captures report the log as unavailable rather than committing a
+  /// partial one. CoreMotion is independent of the capture graph, so this
+  /// is safe at any moment.
+  ///
+  /// Recovery works like the stereo detach: nothing restarts on its own.
+  /// The logger comes back at the next configureSession, which re-reads
+  /// the toggle.
   private func stopSensorLogForThermal() {
     guard let logger = sensorLogger else { return }
     logger.stop()
@@ -6139,13 +6141,13 @@ extension ExhibitCameraModule {
     sensorLogThermalStopped = true
   }
 
-  /// Stops the session entirely (screen blur / unmount). Safe to call with
-  /// nothing running. In-flight video is finalized first honestly: an
-  /// unfinished delivery file is worse than a stated rejection.
+  /// Stops the session entirely — a blurred screen, an unmount. Safe to
+  /// call with nothing running. A recording in flight is not torn out from
+  /// under: an unfinished delivery file is worse than a stated rejection.
   func stopSession(promise: Promise) {
-    // Guard the WHOLE recording state machine ( Drop 2): tearing down
-    // mid-seal orphaned the in-flight stop promise and leaked the writer —
-    // the old mode==.video check couldn't see a stop that was still sealing.
+    // Guard the whole recording state machine, not just whether frames are
+    // routing to the writer. Tearing down mid-seal orphans the stop already
+    // in flight and leaks its writer.
     switch videoState {
     case .recording:
       promise.reject(ExhibitCameraNamedException(
@@ -6167,12 +6169,12 @@ extension ExhibitCameraModule {
       return
     }
     rejectStart(ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Session stopped before the first frame"))
-    // teardownSession unbinds both preview layers synchronously on this
-    // queue before releasing the session — no separate hop here.
+    // teardownSession unbinds the preview layers synchronously on this
+    // queue before releasing the session, so there is no hop here.
     let stopError = teardownSession()
     if let stopError = stopError {
-      // The session is torn down either way; the rejection states that the
-      // stop itself threw.
+      // The session is torn down either way. The rejection says the stop
+      // itself threw.
       promise.reject(ExhibitCameraNamedException(
         ExhibitCameraErrorCode.platform,
         "Session stop raised an exception: \(stopError.localizedDescription)"
@@ -6182,18 +6184,20 @@ extension ExhibitCameraModule {
     promise.resolve(["stopped": true])
   }
 
-  /// full teardown plus IMMEDIATE tomb drain. Must be called ON
-  /// sessionQueue (OnDestroy guarantees this via the specific-key check).
-  /// Module death cannot strand a tombed session whose 5 s release closure
-  /// would early-return on `guard let self`: every layer is swept and every
-  /// tomb entry released here, on the queue the tomb contract requires.
+  /// Full teardown, plus draining every parked session immediately. Must
+  /// run on sessionQueue.
+  ///
+  /// The module dying must not strand a parked session whose release
+  /// closure would return early at its `guard let self`. Every layer is
+  /// swept and every entry dealt with here, on the queue the contract
+  /// requires.
   private func teardownAndDrainTombs() {
     _ = teardownSession()
-    // same contract as the tomb timer — sweep, drain the Fig
-    // queue, PROVE clean before releasing. Module death leaves no time
-    // for the retry ladder, so a still-dirty session goes straight to
-    // the process-lifetime graveyard (which outlives this module) rather
-    // than being released into a dealloc we cannot make safe.
+    // The same contract as the timer: sweep, drain Fig's queue, prove
+    // clean before releasing. There is no time here for retries, so a
+    // session that is still dirty goes straight to the graveyard — which
+    // outlives this module — rather than into a dealloc nobody can make
+    // safe.
     for entry in sessionTomb {
       detachRegisteredLayers(from: entry.session)
       drainFigDetachQueue(of: entry.session)
@@ -6204,14 +6208,13 @@ extension ExhibitCameraModule {
     sessionTomb.removeAll()
   }
 
-  /// Releases all session state. Idempotent; sessionQueue only. Returns the
-  /// error from an NSException-safe stopRunning ( Drop 2 — the
-  /// SIGABRT path): nil on a clean stop, so stopSession can reject
-  /// honestly instead of crashing the bridge. The error is also surfaced as
-  /// an onSessionError event (deduped) regardless of caller. Typed (any
-  /// Error)? to match the shim's imported return exactly — Swift imports
-  /// the ObjC nullable-NSError return as (any Error)? under the pinned
-  /// NS_SWIFT_NAME, and a mismatch here was EAS round-2's lone error.
+  /// Releases all session state. Idempotent, sessionQueue only.
+  ///
+  /// Returns the error from stopping, or nil on a clean stop, so
+  /// stopSession can reject rather than crash the bridge. The error is also
+  /// sent as an error event whatever the caller does.
+  ///
+  /// The return type matches the shim's imported signature exactly.
   @discardableResult
   private func teardownSession() -> (any Error)? {
     if let observer = runtimeErrorObserver {
@@ -6230,15 +6233,15 @@ extension ExhibitCameraModule {
       NotificationCenter.default.removeObserver(observer)
       interruptionEndedObserver = nil
     }
-    // the isActive timeline observers die with the session.
+    // The connection-activity observers die with the session.
     connectionActiveObservers.forEach { $0.invalidate() }
     connectionActiveObservers.removeAll()
     sessionStartWallClock = nil
     syncHandler.onCollection = nil
     audioHandler.onAudio = nil
     audioOutput?.setSampleBufferDelegate(nil, queue: nil)
-    // the multi-input secondary's direct delegate dies with the
-    // session, and the pinned UW frame returns to the pool.
+    // The secondary's direct delegate dies with the session, and the
+    // pinned ultra-wide frame goes back to the pool.
     secondaryDirectHandler.onFrame = nil
     secondaryDirectHandler.onDrop = nil
     secondaryVideoOutput?.setSampleBufferDelegate(nil, queue: nil)
@@ -6247,10 +6250,9 @@ extension ExhibitCameraModule {
     lastZoomLogSignature = nil
     let deadSession = session
     if let deadSession = deadSession { teardownPipConnection(in: deadSession) }
-    // NSException-safe, idempotent stop ( Drop 2): never twice in a
-    // row, never reentrant (sessionQueue is serial and this is the only
-    // teardown path), and a thrown ObjC exception comes back as an NSError
-    // instead of escaping to the bridge as SIGABRT.
+    // Stopping is idempotent and never reentrant: sessionQueue is serial
+    // and this is the only teardown path. A thrown Objective-C exception
+    // comes back as an error rather than escaping to the bridge.
     var stopError: (any Error)? = nil
     if let deadSession = deadSession {
       stopError = ExhibitSessionControl.safelyStop(deadSession)
@@ -6262,61 +6264,56 @@ extension ExhibitCameraModule {
       }
     }
     session = nil
-    // TEARDOWN CRASH FIX (the watchdog logs watchdog + /
-    //  SIGABRT, unbind BOTH preview layers HERE,
-    // synchronously, on sessionQueue, while `deadSession` still strongly
-    // holds the session — so no layer is attached when the last reference
-    // drops at the end of this function.
-    //   • The main.async hops left every layer attached until the
-    //     main queue drained; the layer (which RETAINS its session) could
-    //     then die with the session on a Fig workloop, where the session's
-    //     dealloc re-entered detachFromFigCaptureSession on its own sync
-    //     queue → assert/SIGABRT.
-    //   • The same hops put setSession: on MAIN, where it can synchronously
-    //     commit the capture graph (_commitConfiguration → _buildAndRunGraph
-    //     → AVRunLoopCondition wait) and block past the 8 s scene-update
-    //     watchdog while sessionQueue was mid-configuration → SIGKILL.
-    // AVCaptureVideoPreviewLayer serializes session attachment internally on
-    // its Fig sync queue, so the setter is safe from any OTHER queue; from
-    // sessionQueue it is trivially ordered against stopRunning above and
-    // against any begin/commit on this serial queue. After these two calls
-    // no layer retains the session, so its final release happens right here
-    // with nothing attached.
+    // Unbind every preview layer here, synchronously, on sessionQueue,
+    // while `deadSession` still strongly holds the session — so nothing is
+    // attached when the last reference drops at the end of this function.
+    //
+    // Two things go wrong if this hops to main instead. Every layer stays
+    // attached until the main queue drains, and a layer retains its
+    // session, so the two can die together on a Fig workloop, where the
+    // session's dealloc re-enters detachFromFigCaptureSession on Fig's own
+    // queue and aborts. And setting a layer's session from main can commit
+    // the capture graph synchronously and block past the scene-update
+    // watchdog while sessionQueue is mid-configuration, which gets the app
+    // killed.
+    //
+    // The setter is safe from any queue other than main — the layer
+    // serializes attachment internally — and from sessionQueue it is
+    // trivially ordered against the stop above and against any
+    // begin-and-commit on this serial queue.
     if let dead = deadSession {
-      // Module-held PiP ref first (survives a view swap); the view's own
-      // pipLayer is normally the same object — detach is idempotent.
+      // The module's own PiP reference first, since it survives a view
+      // swap. The view's layer is usually the same object, and detaching
+      // twice is harmless.
       pipLayer?.session = nil
       if let view = previewView {
         view.detachPipFromSession()
         view.bind(session: nil)
       }
-      // `previewView`/`pipLayer` are WEAK — a view that died or was
+      // `previewView` and `pipLayer` are weak, so a view that died or was
       // replaced before teardown is skipped by the two unbinds above while
-      // its layer may still point at `dead`
-      // Sweep the bind-time registry: every layer
-      // that ever bound is detached NOW, while deadSession strongly holds
-      // the session.
+      // its layer may still point at `dead`. Sweep the bind-time registry:
+      // every layer that ever bound is detached now, while `dead` still
+      // holds the session.
       detachRegisteredLayers(from: dead)
-      // tomb the dead session (see the property's note) — our
-      // last release happens on sessionQueue 5 s from now, never on a
-      // Fig workloop mid-interruption.
-      // the closure captures ONLY `tombId` (a value type) — never
-      // `dead`. The tomb array is the session's sole strong owner from
-      // here, so a dispatch-source handler dispose has nothing to release
-      // the
-      // closure's strong capture of `dead` was the exact release chain
-      // _dispatch_source_handler_dispose → _Block_release →
-      // _swift_release_dealloc → session dealloc → detach assert).
+      // Park the session — see sessionTomb. The last release happens on
+      // this queue five seconds from now, never on a Fig workloop in the
+      // middle of an interruption.
+      //
+      // The closure below captures only `tombId`, a value type, never
+      // `dead`. From here the tomb array is the session's sole strong
+      // owner, so nothing that disposes this closure can be the session's
+      // last release.
       let tombId = UUID()
       sessionTomb.append((id: tombId, session: dead, attempts: 0))
       sessionQueue.asyncAfter(deadline: .now() + 5.0) { [weak self] in
         guard let self = self else { return }
-        // A stale token (entry already drained by OnDestroy) is a no-op.
+        // A stale token — the entry was already drained — does nothing.
         guard let idx = self.sessionTomb.firstIndex(where: { $0.id == tombId }) else { return }
-        // sweep + Fig round-trip + PROVE clean before releasing;
-        // bounded retries, then the process-lifetime graveyard. The final
-        // release only ever happens after verification (see
-        // releaseTombIfClean) — never blindly on a timer.
+        // Sweep, round-trip through Fig, and prove clean before
+        // releasing; bounded retries, then the graveyard. The release
+        // happens only after that proof, never simply because a timer
+        // fired.
         self.releaseTombIfClean(at: idx)
       }
     }
@@ -6339,10 +6336,10 @@ extension ExhibitCameraModule {
     stallRecovering = false
     stallBounced = false
     stallEscalated = false
-    // pipWanted/pipLayer intentionally survive a rebuild: the RN altPreview
-    // prop handler only refires when the value CHANGES, so clearing them here
-    // left the inset permanently black after any session rebuild (bug).
-    // configureSession's ensurePipConnection reattaches to the same layer.
+    // pipWanted and pipLayer survive a rebuild on purpose. The altPreview
+    // prop handler only fires when the value changes, so clearing them here
+    // would leave the inset black for good after any rebuild.
+    // configureSession's ensurePipConnection re-attaches the same layer.
     pipConnection = nil
     droppedPairCount = 0
     droppedPrimaryCount = 0
@@ -6355,9 +6352,9 @@ extension ExhibitCameraModule {
     secondaryReseatDone = false
     stereoActive = false
     stereoDetachedForThermal = false
-    // Shutter-burst teardown: drop the ring + abandon any
-    // collection. A capture waiting on the burst settles via its own 10 s
-    // watchdog — the existing teardown-mid-capture discipline.
+    // Drop the ring and abandon any collection in progress. A capture
+    // waiting on the burst settles through its own watchdog, like every
+    // other teardown mid-capture.
     burstSinkWanted = false
     burstRing.removeAll()
     burstPostFrames.removeAll()
@@ -6369,9 +6366,8 @@ extension ExhibitCameraModule {
     audioBufferCount = 0
     pcmFirstSampleWallClockUtcMs = nil
     pcmAnchorSource = ""
-    // secondaryLensPreference intentionally survives a rebuild (the
-    // photoFlashPreference pattern): a stored preference applies at the
-    // next configureSession unless that call's opts override it.
+    // The secondary lens preference survives a rebuild on purpose: it
+    // applies at the next configureSession unless that call overrides it.
     sessionCalibration = [:]
     sessionCalibrationObjects = [:]
     calibrationCaptureInFlight = false
@@ -6395,9 +6391,9 @@ extension ExhibitCameraModule {
     deliveryURL = nil
     evidenceDirURL = nil
     videoStartDate = nil
-    // IMU sink teardown (0.15): stop delivery, drop the ring, nil the
-    // reference. Safe from sessionQueue (CoreMotion stop + lock-confined
-    // clear; handlers are [weak self]).
+    // Stop the motion log, drop its ring, release it. Safe from this
+    // queue: the stop and the clear both take their own locks, and the
+    // handlers hold the module weakly.
     sensorLogger?.stop()
     sensorLogger = nil
     sensorLogWanted = false
@@ -6414,9 +6410,9 @@ extension ExhibitCameraModule {
     startPromiseDone = false
     stopTimeout?.cancel()
     stopTimeout = nil
-    // A stop in flight (or joined to one) must never dangle across a
-    // teardown: reject every outstanding promise honestly — the seal's
-    // late finishWriting completion is identity-guarded and becomes a no-op.
+    // A stop in flight, or anything joined to one, must not dangle across
+    // a teardown: reject every outstanding promise. The seal's late
+    // completion checks writer identity and does nothing.
     if let pendingStop = stopPromise {
       pendingStop.reject(ExhibitCameraNamedException(
         ExhibitCameraErrorCode.noSession,
@@ -6431,8 +6427,7 @@ extension ExhibitCameraModule {
       ))
     }
     stopWaiters.removeAll()
-    // A queued start (E_BUSY race fix, Drop 2) must never dangle
-    // across a teardown: reject it honestly.
+    // A queued start must not dangle across a teardown either.
     if let pending = pendingStartVideo {
       pendingStartVideo = nil
       pending.promise.reject(ExhibitCameraNamedException(
@@ -6445,20 +6440,23 @@ extension ExhibitCameraModule {
   }
 }
 
-// MARK: - Pro controls (spec §14)
+// MARK: - Pro controls
 //
-// Every setter: sessionQueue-confined, capability-guarded, clamps applied
-// and REPORTED BACK, and a safe stated no-op (never a JS-visible throw)
-// when the hardware lacks the capability. The committed metadata reads the
-// device back at capture time — these setters are intent, the metadata
-// block is evidence.
+// Every setter here runs on sessionQueue, checks the capability first,
+// clamps its input and reports the clamped value back, and does nothing
+// while saying so when the hardware cannot do it. None of them throws into
+// JS.
+//
+// These setters are intent. The committed metadata reads the device back at
+// capture time, and that is the evidence.
 
 extension ExhibitCameraModule {
 
   /// { mode: 'auto'|'locked'|'custom', iso?, durationSeconds? }.
-  /// 'custom' requires both iso and durationSeconds; each is clamped to the
-  /// ACTIVE FORMAT's min/max (not the device's global range — formats
-  /// differ) and the clamped values are reported back as applied values.
+  ///
+  /// 'custom' needs both iso and durationSeconds. Each is clamped to the
+  /// active format's range, not the device's overall one — formats differ —
+  /// and the clamped values come back as what was applied.
   func setExposureMode(opts: [String: Any], promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -6494,7 +6492,7 @@ extension ExhibitCameraModule {
           return
         }
         let format = device.activeFormat
-        // Clamp to the active format's actual ranges (spec §14).
+        // Clamp to the active format's own ranges.
         let clampedISO = min(max(isoNumber.floatValue, format.minISO), format.maxISO)
         let requestedDuration = CMTime(seconds: durationNumber.doubleValue, preferredTimescale: 1_000_000_000)
         var clampedDuration = requestedDuration
@@ -6508,8 +6506,8 @@ extension ExhibitCameraModule {
         promise?.resolve([
           "applied": true,
           "exposureMode": "custom",
-          // The REQUESTED-clamped values; the device-settled values are
-          // committed in the metadata block at capture (device-reported).
+          // What was requested, clamped. What the device settled on is
+          // committed per capture, read back from the device.
           "iso": Double(clampedISO),
           "durationSeconds": CMTimeGetSeconds(clampedDuration),
           "isoClamped": clampedISO != isoNumber.floatValue,
@@ -6523,11 +6521,11 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "lock-failed: \(error.localizedDescription)"])
       return
     }
-    // mirror the applied exposure mode onto the secondary.
+    // Hand the applied mode to the secondary too.
     mirrorProControlsToSecondary()
   }
 
-  /// Exposure point-of-interest, independent of focus (spec §14).
+  /// The exposure point, independent of the focus point.
   func setExposurePoint(x: Double, y: Double, promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
@@ -6537,7 +6535,7 @@ extension ExhibitCameraModule {
       promise?.resolve(["applied": false, "reason": "exposure-point-unsupported"])
       return
     }
-    // Same view→device mapping as setFocusPoint (REVIEW-CHECK on device).
+    // Same axis swap as setFocusPoint.
     let devicePoint = CGPoint(x: CGFloat(y), y: CGFloat(1.0 - x))
     do {
       try device.lockForConfiguration()
@@ -6554,9 +6552,10 @@ extension ExhibitCameraModule {
   }
 
   /// { mode: 'auto'|'locked'|'manual', lensPosition? }.
-  /// 'manual' = focus locked at an explicit lensPosition (0–1, clamped).
-  /// iOS has no focus-distance API; lensPosition is the honest manual
-  /// control and it is committed per capture (spec §5).
+  ///
+  /// 'manual' locks focus at an explicit lens position, 0 to 1, clamped.
+  /// iOS exposes no focus distance, so lens position is the real manual
+  /// control, and it is committed with every capture.
   func setFocusMode(opts: [String: Any], promise: Promise?) {
     guard let device = primaryDevice else {
       promise?.resolve(["applied": false, "reason": "no-session"])
