@@ -39,8 +39,9 @@ function windWords(kmh: number): string {
   return 'strong wind';
 }
 
-/** Weather: the official archive reading for the sealed hour — fetched by
- *  default (a location is present), offline stated as "Network not available". */
+/** Weather: the official archive reading for the sealed hour.
+ *  The lookup sends the sealed coordinate and day to a third party, so it is
+ *  gated twice — the setting, and a tap. Nothing is fetched on mount. */
 function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
   lat: number;
   lon: number;
