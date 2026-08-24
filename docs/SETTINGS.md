@@ -98,9 +98,8 @@ always land.
 
 Not a setting. Photos and videos are signed by
 [c2pa-swift](https://github.com/contentauth/c2pa-swift); audio and PNG are
-signed by this app's own COSE/JUMBF builder. Verification always runs this
-app's own code, whichever path sealed the capture. Diagnostics names the path
-for each one.
+signed by this app's own COSE/JUMBF builder, which is also what verifies every
+file. Diagnostics names the path for each capture.
 
 ## Trust
 
