@@ -1468,8 +1468,7 @@ export default function AssetScreen() {
                   device-reported caveat once, not on every row. */}
               {ctx?.headingDeg != null || ctx?.declinationDeg != null || ctx?.pressureHPa != null || ctx?.altitudeM != null || ctx?.motion || ctx?.sensorTiming ? (
                 <View style={nl.drawerSection}>
-                  <Text style={nl.drawerHead}>Sensors</Text>
-                  <Text style={nl.detail}>Reported by the phone. Nothing here is verified.</Text>
+                  <Text style={nl.drawerHead}>Sensors (Device reported)</Text>
                   {ctx?.headingDeg != null ? <NlRow label="Heading" value={`${ctx.headingDeg}° (${compass8(ctx.headingDeg)})`} /> : null}
                   {declLine != null ? (
                     <NlRow
@@ -1498,8 +1497,7 @@ export default function AssetScreen() {
 
               {manifest?.exif && Object.keys(manifest.exif.data).filter((k) => k !== 'note').length > 0 ? (
                 <View style={nl.drawerSection}>
-                  <Text style={nl.drawerHead}>Camera settings</Text>
-                  <Text style={nl.detail}>Reported by the phone. Not covered by the seal.</Text>
+                  <Text style={nl.drawerHead}>Camera settings (Device reported)</Text>
                   {/* The sealed block's `note` key is provenance boilerplate
                       ("camera-pipeline-reported, signed as self-reported
                       metadata"), not a camera setting — never a row (0.18.1).
@@ -1526,7 +1524,7 @@ export default function AssetScreen() {
             <GroupCard
               icon="lock-closed-outline"
               title="Integrity"
-              peek="How fast it was signed, how the sensors behaved, and what was captured alongside."
+              peek="How fast it was signed and how the sensors behaved."
               open={groupOpen.integrity}
               onToggle={() => setGroupOpen((g) => ({ ...g, integrity: !g.integrity }))}
             >
@@ -1550,7 +1548,7 @@ export default function AssetScreen() {
                     detail={
                       report.c2pa?.appAttest.present
                         ? report.c2pa.appAttest.valid
-                          ? `Apple App Attest, ${report.c2pa.appAttest.attestationEnv ?? 'production'} authenticator. Checked on this device, offline.`
+                          ? `App Attest · ${report.c2pa.appAttest.attestationEnv ?? 'production'} · checked offline.`
                           : `${report.c2pa.appAttest.reason ?? 'The embedded assertion did not verify'}. A genuine attestation verifies offline.`
                         : undefined
                     }
