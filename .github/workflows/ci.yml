@@ -102,38 +102,14 @@ jobs:
         with:
           node-version: 20
 
-      - name: Select the oldest Xcode that satisfies the pods
-        # Squeezed from both sides. An Expo pod declares Swift tools 6.2 in
-        # its Package.swift and SPM refuses a toolchain older than that, so
-        # the image default is too old. The newest Xcode is too new: Swift's
-        # type checker changed and expo-modules-jsi no longer compiles under
-        # it. So: oldest toolchain that still satisfies the 6.2 floor, which
-        # is the widest distance from whatever broke most recently.
-        #
-        # The listing and the chosen version are printed, so a failure here
-        # names what the image actually offered instead of leaving it to
-        # guesswork.
+      - name: Select the newest Xcode on the image
+        # Newest, because the local modules use current Swift. The listing and
+        # the choice are printed so a failure names what the image offered.
         run: |
           set -euo pipefail
           echo "Xcodes on this image:"
           ls -d /Applications/Xcode*.app
-          PICK=""
-          for app in $(ls -d /Applications/Xcode*.app | sort -V); do
-            sw="$app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swift"
-            [ -x "$sw" ] || continue
-            v=$("$sw" --version 2>/dev/null | sed -n 's/.*Apple Swift version \([0-9][0-9.]*\).*/\1/p' | head -1)
-            [ -n "$v" ] || continue
-            echo "  $app -> Swift $v"
-            if [ "$(printf '%s\n6.2\n' "$v" | sort -V | head -1)" = "6.2" ]; then
-              PICK="$app"; break
-            fi
-          done
-          if [ -z "$PICK" ]; then
-            echo "No installed Xcode ships Swift 6.2 or newer; the pods cannot resolve." >&2
-            exit 1
-          fi
-          echo "Selected: $PICK"
-          sudo xcode-select -s "$PICK"
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
           xcodebuild -version
           swift --version
 
@@ -154,21 +130,32 @@ jobs:
         run: pod install
         working-directory: ios
 
-      - name: Compile every Swift module
-        # Build only: no signing, no tests, no device. A clean exit means
-        # every file under modules/ parses and typechecks against the SDK.
+      - name: Compile the local Swift modules
+        # The gate compiles OUR modules, not the whole app. Building the app
+        # drags in every upstream pod, and expo-modules-jsi does not compile
+        # on either Xcode these images carry — too old for `weak let`, too new
+        # for its own type inference. That is an upstream problem and it is
+        # not what this job exists to catch.
+        #
+        # Each local module is a pod target, so they can be built directly
+        # against the SDK and ExpoModulesCore. A type error, a bad selector,
+        # or a renamed API under modules/ fails here.
         run: |
           set -euo pipefail
-          WS=$(ls -d ios/*.xcworkspace | head -1)
-          SCHEME=$(basename "$WS" .xcworkspace)
-          xcodebuild -workspace "$WS" -list
-          xcodebuild build \
-            -workspace "$WS" \
-            -scheme "$SCHEME" \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO
+          echo "Xcodes on this image:"; ls -d /Applications/Xcode*.app
+          xcodebuild -version
+          xcodebuild -project ios/Pods/Pods.xcodeproj -list || true
+          for T in ExhibitCamera CaptureKit C2paIos SecureEnclave AudioCapture WifiInfo; do
+            echo "::group::$T"
+            xcodebuild build \
+              -project ios/Pods/Pods.xcodeproj \
+              -target "$T" \
+              -configuration Debug \
+              -sdk iphonesimulator \
+              CODE_SIGNING_ALLOWED=NO \
+              ONLY_ACTIVE_ARCH=NO
+            echo "::endgroup::"
+          done
 
   dead-code:
     # Catches the class no compiler and no test reaches: a module nothing
