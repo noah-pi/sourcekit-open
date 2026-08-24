@@ -156,7 +156,9 @@ try {
   if (Platform.OS === 'ios') {
     native = requireNativeModule<C2paIosNative>('C2paIos');
     try {
-      nativeCoreVersion = native.getVersion();
+      // requireNativeModule types as non-null in the app and nullable in the
+      // staged lab, where the module is absent. Optional either way.
+      nativeCoreVersion = native?.getVersion() ?? null;
     } catch {
       nativeCoreVersion = null; // version string is diagnostic only — never gates the engine
     }
