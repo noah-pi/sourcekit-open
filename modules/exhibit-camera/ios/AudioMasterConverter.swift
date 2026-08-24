@@ -5,7 +5,6 @@ import AVFoundation
 /**
  * AudioMasterConverter: native format to canonical PCM master, backing the
  * settings "raw audio master" toggle.
- *
  * `AVCaptureAudioDataOutput.audioSettings` is macOS-only, so on iOS the
  * audio data output always delivers the device's native format (typically
  * Float32 LPCM at 44.1/48 kHz, mono or stereo). The PCM master is specified
@@ -13,10 +12,8 @@ import AVFoundation
  * for the 120/180/240 Hz ENF harmonics), so each native buffer is converted
  * once with AVAudioConverter (sample-rate conversion, downmix, float to
  * int16) before the master writer sees it.
- *
  * The delivery AAC writer consumes the native buffers and is not coupled to
  * this converter; both derive from the same mic session.
- *
  * Thread confinement: session queue only (same as PcmMasterWriter).
  */
 final class AudioMasterConverter {
@@ -66,12 +63,12 @@ final class AudioMasterConverter {
       && a.isInterleaved == b.isInterleaved
   }
 
-  /**
-   * Convert one native CMSampleBuffer into the canonical master format.
-   * Returns nil for not-ready buffers and for zero-output conversions, where
-   * frames sit in the SRC delay line and emerge on a later call or at drain;
-   * callers skip nil. Throws only on real conversion failures.
-   */
+ /**
+ * Convert one native CMSampleBuffer into the canonical master format.
+ * Returns nil for not-ready buffers and for zero-output conversions, where
+ * frames sit in the SRC delay line and emerge on a later call or at drain;
+ * callers skip nil. Throws only on real conversion failures.
+ */
   func convert(_ sampleBuffer: CMSampleBuffer) throws -> AVAudioPCMBuffer? {
     guard CMSampleBufferDataIsReady(sampleBuffer) else { return nil }
     guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
@@ -153,13 +150,13 @@ final class AudioMasterConverter {
     }
   }
 
-  /**
-   * Flush the SRC delay line at session end: signalling .endOfStream makes
-   * the converter emit the tail frames convert(_:) left absorbed. Returns
-   * nil when nothing remains or no converter was built this session. The
-   * converter is torn down afterward, since one that has seen .endOfStream
-   * must not be reused without reset.
-   */
+ /**
+ * Flush the SRC delay line at session end: signalling.endOfStream makes
+ * the converter emit the tail frames convert(_:) left absorbed. Returns
+ * nil when nothing remains or no converter was built this session. The
+ * converter is torn down afterward, since one that has seen.endOfStream
+ * must not be reused without reset.
+ */
   func drain() throws -> AVAudioPCMBuffer? {
     guard let converter = converter else { return nil }
     defer {
@@ -167,7 +164,7 @@ final class AudioMasterConverter {
       self.inputFormat = nil
     }
     // SRC latency is a few dozen output frames, so 1024 is ample. One call
-    // suffices: with .endOfStream signalled the converter flushes whatever
+    // suffices: with.endOfStream signalled the converter flushes whatever
     // fits, and the residue always fits.
     guard let outBuf = AVAudioPCMBuffer(
       pcmFormat: outputFormat,

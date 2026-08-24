@@ -2,26 +2,33 @@
 /**
  * RFC 3161 trusted-timestamp client.
  *
- * A Time Stamp Authority countersigns the COSE signature (message imprint =
- * SHA-256 of the CBOR-encoded signature bytes, per the C2PA V1 timestamp
- * storage spec). The TimeStampToken is embedded in the COSE unprotected
- * header under "sigTst", bounding the signature's time independently of the
- * device clock.
+ * At signing time we ask a Time Stamp Authority to countersign the COSE
+ * signature (message imprint = SHA-256 of the CBOR-encoded signature bytes,
+ * per the C2PA V1 timestamp storage spec). The returned TimeStampToken is
+ * embedded in the COSE unprotected header under "sigTst", so third-party
+ * verifiers can prove the signature existed no later than the TSA's time —
+ * independent of the device clock, which is only a claim.
  *
- * If the TSA is unreachable the photo is signed without a timestamp and the
- * record says so (see telemetry).
+ * Offline capture still works: if the TSA is unreachable, the photo is
+ * signed without a timestamp and the record says so (see telemetry).
  */
 
 import { sha256 } from '@noble/hashes/sha256';
 import { concatBytes } from './bytes';
 
-/** Witness pool: independent TSAs asked to countersign every signature, so a
- * single TSA being down or distrusted still leaves the time bounded. Override
- * with setTsaUrls for organization-run authorities. */
+/** Witness pool: independent TSAs asked to countersign every signature.
+ * Trusted time then rests on a QUORUM of authorities, not one — if any single
+ * TSA is down, compromised, or distrusted, the others still bound the time.
+ * A production deployment should point this at TSAs the organization trusts
+ * (many run their own). */
 export const TSA_URLS = ['https://timestamp.digicert.com', 'https://freetsa.org/tsr'];
 const TIMEOUT_MS = 8000;
 
-/** TSA pool override. Settings injects it at load; TSA_URLS is the default. */
+/**
+ * Organizations can run or contract their own TSAs (0.9.1) — every trust
+ * claim must be swappable. Settings inject the override at load; the pool
+ * below is only the default witness set.
+ */
 let tsaUrlsOverride: string[] | null = null;
 export function setTsaUrls(urls: string[] | null): void {
   tsaUrlsOverride = urls && urls.length > 0 ? urls : null;
@@ -31,11 +38,26 @@ function activeTsaUrls(): string[] {
 }
 
 /**
- * The active witness pool in fallback order, for signers that try more than
- * one endpoint per capture. The hand-rolled path has always iterated it; the
- * SDK arm loops the same pool through its loopback relay, so one authority
- * being unreachable from a given network cannot cost the countersignature
- * while another answers.
+ * The single configured TSA endpoint for signers that take exactly one
+ * (c2pa-swift's Signer ta_url, 0.19.0 SDK path) — the first of the active
+ * witness pool, org override honored. Null only when the pool is empty.
+ */
+export function configuredTsaUrl(): string | null {
+  return activeTsaUrls()[0] ?? null;
+}
+
+/**
+ * 0.20.6: the FULL active witness pool, in fallback order — for signers
+ * that can try more than one endpoint per capture. The standard path has
+ * always iterated this pool (fetchTimestampTokensBounded); the SDK arm
+ * loops it through its loopback relay. Field run, 0.20.5 (59):
+ * timestamp.digicert.com was TLS-unreachable from the device network
+ * through BOTH stacks (reqwest first, then the relay's URLSession — "A
+ * TLS error caused the secure connection to fail") while the hand-rolled
+ * path countersigned via the pool fallback — a single-endpoint SDK arm
+ * sealed untimed where the standard path would not have. One witness's
+ * reachability must never cost the countersignature while another
+ * answers.
  */
 export function configuredTsaUrls(): string[] {
   return activeTsaUrls();
@@ -56,7 +78,7 @@ const seq = (...c: Uint8Array[]) => tlv(0x30, concatBytes(...c));
 const OID_SHA256 = new Uint8Array([0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01]);
 const NULL = new Uint8Array([0x05, 0x00]);
 
-/** TimeStampReq::= SEQUENCE { version 1, messageImprint, certReq TRUE }. */
+/** TimeStampReq ::= SEQUENCE { version 1, messageImprint, certReq TRUE }. */
 export function buildTimestampRequest(message: Uint8Array): Uint8Array {
   return seq(
     tlv(0x02, new Uint8Array([1])),
@@ -93,21 +115,23 @@ export async function fetchTimestampToken(message: Uint8Array): Promise<Uint8Arr
 }
 
 /**
- * Witness cosigning: asks every TSA in the pool concurrently and keeps every
- * token returned. All are embedded in the C2PA tstTokens array. Returns []
- * when fully offline.
+ * Witness cosigning: ask EVERY TSA in the pool concurrently and keep every
+ * token we get. All are embedded (C2PA tstTokens array); verifiers see how
+ * many independent authorities bound the time. Returns [] when fully offline.
  */
 export async function fetchTimestampTokens(message: Uint8Array): Promise<Uint8Array[]> {
   const results = await Promise.all(activeTsaUrls().map((u) => fetchFromTsa(message, u)));
   return results.filter((t): t is Uint8Array => t !== null && t.length > 0);
 }
 
-// --- Seal-latency machinery ---------------------------------------
+// --- Seal-latency machinery (0.18.0) ---------------------------------------
 //
-// Token size is TSA-fixed (same signer chain, same 32-byte imprint), so the
-// manifest builder sizes its layout from the last token length each TSA sent
-// instead of probing the network. The first-run estimate is generous so drift
-// runs downward into padding; upward drift would overflow after signing.
+// A token's size is TSA-fixed (same signer chain, same 32-byte imprint), so
+// the manifest builder's sizing probe no longer burns a network round: it
+// sizes the layout with the last token length each TSA actually sent. The
+// builder's slack + pad absorb any residual drift; a first-run estimate is
+// deliberately generous so drift is always DOWNWARD (padding), never upward
+// (which would be an unrecoverable post-signing overflow).
 const DEFAULT_TOKEN_ESTIMATE = 6144;
 const tokenSizes = new Map<string, number>();
 
@@ -117,11 +141,15 @@ export function estimatedTsaTokenSizes(): number[] {
 }
 
 /**
- * The seal path's fetcher: same witness pool as fetchTimestampTokens, bounded
- * by a deadline so a slow TSA cannot delay the shutter. The deadline caps the
- * wait, not the harvest: tokens arriving before it are kept. On a full miss
- * the seal ships without a TSA countersign; in-flight fetches finish, update
- * the size cache, and are discarded.
+ * The seal path's fetcher: same witness pool as fetchTimestampTokens but
+ * bounded by a deadline — the countersign is valuable, never worth a slow
+ * shutter. The deadline caps the WAIT, not the harvest: tokens that arrive
+ * before it are kept, so one slow or unreachable TSA can no longer starve
+ * the witnesses that did answer (0.18.0 raced the all-settled promise and
+ * discarded every token on a miss — a single down TSA meant NO countersign).
+ * On a full miss the seal ships unsigned-by-TSA exactly as an offline
+ * capture always has; fetches still in flight finish (updating the size
+ * cache) and are then discarded.
  */
 export async function fetchTimestampTokensBounded(
   message: Uint8Array,
@@ -169,6 +197,6 @@ async function fetchFromTsa(message: Uint8Array, tsaUrl: string): Promise<Uint8A
       clearTimeout(timer);
     }
   } catch {
-    return null; // offline, TSA down, or timeout; capture proceeds without it
+    return null; // offline, TSA down, timeout — capture must never fail for this
   }
 }

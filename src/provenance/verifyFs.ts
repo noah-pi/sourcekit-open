@@ -16,13 +16,14 @@ import {
   verifyWithSidecarBytes,
   type VerificationReport,
   type VerifyOptions,
-} from '../c2pa/verifyAsset';
+} from '../../archive/handrolled-verifier/verifyAsset';
 
 /**
- * UNREADABLE with the reason recorded. A throw here can be a missing file, a
- * corrupt asset, or an out-of-memory on a large video; the diagnostics log
- * gets the message and checksNotPerformed names the gap, so the report never
- * implies a check that did not run.
+ * 0.20.1 audit (Patch 5): a bare `catch` made an SDK throw, an OOM on a
+ * large video, a missing file, and a genuinely corrupt asset
+ * indistinguishable — exactly the signal a migration needs. UNREADABLE
+ * stays the verdict (right for the user), but the reason is logged and the
+ * report no longer claims checks that never ran.
  */
 function unreadable(kind: 'photo' | 'video' | 'audio', record: AttestationRecord | null, manifestFound: boolean, e: unknown): VerificationReport {
   const reason = e instanceof Error ? e.message : String(e);

@@ -1,23 +1,25 @@
 /**
- * Card grammar enforcement and the agreement matrix.
+ * Card grammar enforcement + the agreement matrix.
  *
- * makeCard is the only way a card enters the Reader, and it refuses two
- * shapes:
+ * makeCard is the ONLY way a card enters the Reader. It refuses, loudly, the
+ * two failure shapes the religion forbids:
  *
- *   1. a finding without its full clause: an 'agrees'/'diverges' card
+ *   1. a finding without its full clause — an 'agrees'/'diverges' card
  *      missing prediction, measurement, gap, or interpretation throws;
- *   2. a banned verdict word in finding position, scanned in titles and
- *      interpretations.
+ *   2. a banned verdict word in finding position — titles and
+ *      interpretations are scanned; the scan is a seatbelt, not a license
+ *      to write near the line.
  *
- * A check that could not run is a card with a stated reason. makeNotRun /
- * makeInsufficient / makeNotApplicable make that reason a required argument.
+ * A check that could not run is a card with a stated reason — never an
+ * absence. makeNotRun / makeInsufficient / makeNotApplicable exist so the
+ * reason is a required argument, not an afterthought.
  */
 
 import type { AgreementMatrix, CheckState, Claim, EvidenceCard } from '../types';
 
 /**
- * Verdict words banned from finding position. Matched lowercase on word
- * boundaries, so "unverified" and "mistrusted" trip it too.
+ * Verdict words banned from finding position. Lowercase match against
+ * word boundaries so "unverified" or "mistrusted" trip the same seatbelt.
  */
 const BANNED_FINDING_WORDS = [
   'verified', 'authentic', 'trusted', 'proven', 'real', 'secure', 'guaranteed',
@@ -57,13 +59,13 @@ export interface CardInput {
 
 /**
  * Builds one EvidenceCard, enforcing the grammar:
- *   - every card carries a stated gap and interpretation; for
- *     'insufficient'/'not-run'/'not-applicable' these carry the reason;
- *   - 'agrees'/'diverges' also require prediction and measurement;
- *   - no banned verdict word in title or interpretation;
- *   - a gauge, when present, sits on its stated band as a position, not a
- *     score; a position outside the band is a divergence the caller must
- *     already have stated in the gap.
+ *   - every card carries a stated gap and a stated interpretation (for
+ *     'insufficient'/'not-run'/'not-applicable' these carry the reason);
+ *   - 'agrees'/'diverges' additionally require prediction and measurement;
+ *   - no banned verdict word may appear in title or interpretation;
+ *   - a gauge, when present, must sit on its stated band (a position, never
+ *     a score — and a position outside the band is a divergence the caller
+ *     must have already stated in the gap).
  */
 export function makeCard(input: CardInput): EvidenceCard {
   assertNonEmpty('id', input.id, input.id ?? '(unnamed)');
@@ -122,7 +124,7 @@ export function makeCard(input: CardInput): EvidenceCard {
   return card;
 }
 
-/** A check that could not run; the reason is the card. */
+/** A check that could not run — the reason is the card. */
 export function makeNotRun(
   id: string,
   title: string,
@@ -154,7 +156,7 @@ export function makeInsufficient(
   });
 }
 
-/** A check structurally unavailable for this exhibit. */
+/** A check structurally unavailable for this exhibit — said out loud. */
 export function makeNotApplicable(
   id: string,
   title: string,
@@ -164,16 +166,16 @@ export function makeNotApplicable(
   return makeCard({
     id, title, state: 'not-applicable',
     gap: `not applicable: ${reason}`,
-    interpretation: `this exhibit structurally cannot carry this check (${reason}); the rung is absent, not failed`,
+    interpretation: `this exhibit structurally cannot carry this check (${reason}); the rung is absent`,
     ...extra,
   });
 }
 
 /**
  * Builds the agreement matrix: checks × claims. `claimsFor` names which
- * claims each card bears on, and a card's state is copied into each cell it
- * speaks to. A card with no claim mapping would render as an invisible
- * check, so it throws.
+ * claims each card bears on; a card's state is copied into each cell it
+ * speaks to. A card with NO claim mapping is a caller error (it would render
+ * as an invisible check — the one absence the Reader forbids), so it throws.
  */
 export function buildMatrix(
   cards: EvidenceCard[],

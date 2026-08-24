@@ -1,19 +1,25 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * ManifestReel — the full C2PA manifest as parsed: every claim, assertion,
- * telemetry block, edit action and ingredient, uncapped.
+ * ManifestReel — the FULL C2PA manifest, exactly as parsed from the file:
+ * every claim, assertion, telemetry block, edit action and ingredient,
+ * strings and arrays uncapped, no depth limit, no character budget
+ * (0.18.3, Noah: "it needs to be the FULL manifest").
  *
- * Two substitutions, both stated in the UI:
+ * Two honest accommodations, both visible in the UI:
  *
- *   1. Binary blobs over 64 bytes (thumbnails, depth maps, signatures) show
- *      as a labelled byte count; megabytes of base64 lay out as a blank box.
+ *   1. Large BINARY blobs (embedded thumbnails, depth maps, signatures)
+ *      are shown as a labelled byte count — megabytes of base64 lay out
+ *      as a blank box in a text view, which is less disclosure, not more.
  *      Byte strings ≤64 bytes (hashes) render as base64 in full.
  *
- *   2. The JSON is split into lines and rendered through a FlatList, since a
- *      single <Text> cannot lay out a video manifest's telemetry. Every line
- *      is in the list, and copy puts the unmodified text on the clipboard.
+ *   2. The reel is windowed: the JSON is split into lines and rendered
+ *      through a FlatList, because a single <Text> cannot lay out a
+ *      video manifest's telemetry (the 0.13.0 blank-box bug). Every line
+ *      is in the list — nothing is cut — and the copy button puts the
+ *      complete, unmodified text on the clipboard.
  *
- * Used by the exhibit details page and the Inspect screen (Advanced group).
+ * Used by the exhibit details page (Advanced group) and the Inspect
+ * screen (Advanced group) — one reel, one behaviour, both screens.
  */
 
 import React, { useMemo } from 'react';
@@ -24,9 +30,10 @@ import * as Haptics from 'expo-haptics';
 
 import { colors, spacing, fontSize, radii, type, useThemedStyles } from '../theme';
 import { bytesToBase64 } from '../lib/bytes';
-import type { C2paManifest } from '../c2pa/c2pa';
+import type { C2paManifest } from '../../archive/handrolled-verifier/c2pa';
 
-/** Display projection: the union of the fields both screens show. */
+/** The display projection: every field either screen's reel ever showed,
+ *  unioned — one shape, one behaviour. */
 function projectManifest(m: C2paManifest): Record<string, unknown> {
   return {
     manifestLabel: m.manifestLabel,
@@ -47,9 +54,10 @@ function projectManifest(m: C2paManifest): Record<string, unknown> {
   };
 }
 
-/** Full-fidelity JSON: no string, array, depth, or character caps. The one
- *  substitution is large binary blobs, replaced by a labelled byte count.
- *  Returns whether that fired so the view can say so. */
+/** Full-fidelity JSON: no string caps, no array caps, no depth limit, no
+ *  character budget. The ONLY substitution is large binary blobs → a
+ *  labelled byte count (they cannot render as text regardless). Returns
+ *  whether that substitution fired, so the view can say so. */
 function manifestToText(m: C2paManifest): { text: string; binaryCounted: boolean } {
   let binaryCounted = false;
   const walk = (v: unknown): unknown => {

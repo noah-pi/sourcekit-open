@@ -12,12 +12,13 @@
  *           └── c2pa.signature    (COSE_Sign1, ES256, x5chain = device cert)
  *
  * The hash.data assertion hard-binds the signature to the media bytes via a
- * byte-range exclusion, so any post-signing edit fails validation here and in
- * third-party verifiers (c2patool, verify.contentauthenticity.org).
+ * byte-range exclusion, so any post-signing edit fails validation — in this
+ * app and in any third-party C2PA verifier (c2patool, verify.contentauthenticity.org).
  *
- * Output is checked against c2pa-rs: clean files report only
- * `signingCredential.untrusted` (the device cert is self-signed and off the
- * C2PA trust list), tampered files report `assertion.dataHash.mismatch`.
+ * The builder output is validated in the lab against the official c2pa-rs
+ * implementation: clean files report only `signingCredential.untrusted`
+ * (expected — the device cert is self-signed and not on the C2PA trust list),
+ * tampered files report `assertion.dataHash.mismatch`.
  *
  * Pure module — no React Native dependencies.
  */
@@ -25,10 +26,10 @@
 import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
 import { Encoder, decode } from 'cbor-x';
-import { asciiToBytes, bytesToHex, concatBytes, utf8ToBytes, bytesToUtf8, hexToBytes, bytesToBase64, base64ToBytes } from '../lib/bytes';
-import { derToP1363LowS } from '../lib/der';
-import { PQ_ALG, PQ_CUSTODY, PQ_SIZES, pqFingerprint, pqPublicBlockFrom, pqVerify, type PqLayerCheck } from '../lib/pq';
-import { parseCertificate, publicKeyFromCert, verifyRsaPss } from '../lib/x509';
+import { asciiToBytes, bytesToHex, concatBytes, utf8ToBytes, bytesToUtf8, hexToBytes, bytesToBase64, base64ToBytes } from '../../src/lib/bytes';
+import { derToP1363LowS } from '../../src/lib/der';
+import { PQ_ALG, PQ_CUSTODY, PQ_SIZES, pqFingerprint, pqPublicBlockFrom, pqVerify, type PqLayerCheck } from '../../src/lib/pq';
+import { parseCertificate, publicKeyFromCert, verifyRsaPss } from '../../src/lib/x509';
 import { parseRootBoxes, type RootBox } from './bmff';
 
 // cbor-x must not wrap Uint8Array in CBOR tag 64 or JS Maps in tag 259.
@@ -54,20 +55,28 @@ function mapGet(m: unknown, key: unknown): unknown {
 }
 
 /**
- * Normalizes a claim's assertion reference URL to the bare label. Two forms
- * occur: shorthand `self#jumbf=c2pa.assertions/<label>` and store-qualified
- * `self#jumbf=/c2pa/<manifest>/c2pa.assertions/<label>` (c2pa-rs, Truepic).
- * Anything else is returned unchanged, so it matches no box and fails closed.
+ * Normalizes a claim's assertion reference URL to the bare assertion label.
+ * Two forms exist in the wild: the shorthand
+ * `self#jumbf=c2pa.assertions/<label>` (2022-era writers, and our own) and
+ * the store-qualified `self#jumbf=/c2pa/<manifest>/c2pa.assertions/<label>`
+ * (c2pa-rs, Truepic). Anything else is returned unchanged, so a malformed
+ * URL simply matches no box and the reference fails closed — never a
+ * silent pass.
  */
 function assertionRefLabel(url: string): string {
   const m = url.match(/^self#jumbf=(?:\/c2pa\/[^/]+\/)?c2pa\.assertions\/(.+)$/);
   return m ? m[1] : url;
 }
 
-// Assertion references from a claim of either generation. v1 puts them under
-// `assertions`; v2 splits them into `created_assertions` and
-// `gathered_assertions`. Reading only `assertions` leaves a v2 claim with no
-// referenced labels, which drops every binding to void-binding.
+/**
+ * The claim's assertion reference entries, whichever claim version wrote
+ * them: v1 claims (ours through 0.18.x) carry `assertions`; v2 claims
+ * (c2pa-rs ≥0.9 / the c2pa-swift SDK, 0.19.0 migration) split them into
+ * `created_assertions` + `gathered_assertions`. Both kinds bind identically
+ * (url + sha256 of the referenced box's jumb content — verified against
+ * ground-truth c2pa-rs 0.90.14 fixtures in tests/fixtures-sdk-layout/), so
+ * they are merged here in claim order, created first.
+ */
 function claimAssertionRefs(claim: unknown): { url?: string; hash?: Uint8Array }[] {
   const out: { url?: string; hash?: Uint8Array }[] = [];
   for (const key of ['created_assertions', 'gathered_assertions', 'assertions']) {
@@ -95,10 +104,11 @@ const UUID_JSON = c2paUuid('json');
 const UUID_JPEG = c2paUuid('jpeg');
 
 // ---------------------------------------------------------------------------
-// Standard assertion labels. Spellings come from the vendored C2PA SDK 2.3
-// StandardAssertionLabel enum (modules/c2pa-ios …/Manifest/
-// StandardAssertionLabel.swift). Emitted by verifyAssertionBoxes, parsed
-// back by parseOneManifest.
+// Standard assertion labels (0.16.0 data contract, C2–C5) — per the vendored
+// C2PA SDK 2.3 StandardAssertionLabel enum (modules/c2pa-ios …/
+// Manifest/StandardAssertionLabel.swift). Emitted through the first-class
+// allowlist in verifyAssertionBoxes; parsed back by parseOneManifest with
+// the same referenced-gating as actions/ingredients.
 // ---------------------------------------------------------------------------
 export const LABEL_ACTIONS_V2 = 'c2pa.actions.v2';
 export const LABEL_ASSET_TYPE_V2 = 'c2pa.asset-type.v2';
@@ -106,14 +116,23 @@ export const LABEL_METADATA = 'c2pa.metadata';
 export const LABEL_SOFT_BINDING = 'c2pa.soft-binding';
 export const LABEL_THUMBNAIL_CLAIM_JPEG = 'c2pa.thumbnail.claim.jpeg';
 export const LABEL_TRAINING_MINING = 'c2pa.training-mining';
-/** Signed stereo depth. C2PA 2.2 §18.21 Depthmap, §18.8 Collection Data Hash. */
+/**
+ * D1 (0.16.0): signed stereo depth. Label spellings are the vendored SDK
+ * 2.3 enum's (StandardAssertionLabel.depthmap / .collectionDataHash), which
+ * are also the spec's (C2PA 2.2 §18.21 Depthmap, §18.8 Collection Data
+ * Hash).
+ */
 export const LABEL_DEPTHMAP_GDEPTH = 'c2pa.depthmap.GDepth';
 export const LABEL_COLLECTION_HASH = 'c2pa.hash.collection.data';
 /**
- * Secondary viewpoint as a standard ingredient (C2PA 2.2 §18.11,
- * ingredient.v3) with relationship 'componentOf'. Its 512px thumbnail rides
- * as c2pa.thumbnail.ingredient.jpeg; the full-res bytes stay in the vault,
- * committed by the ingredient's data hash.
+ * 0.16.1: the secondary viewpoint baked into the manifest as a first-class
+ * standard ingredient (C2PA 2.2 §18.11, ingredient.v3 schema) with
+ * relationship 'componentOf' — the wide-angle frame is a COMPONENT of this
+ * exhibit, not a parent it was derived from. Its 512px thumbnail rides as
+ * c2pa.thumbnail.ingredient.jpeg (a LEAD, self-evidently not the measurement
+ * pixels); the full-res bytes stay in the vault, committed by the
+ * ingredient's data hash. A stranger holding ONLY the JPEG sees the second
+ * viewpoint in any C2PA reader.
  */
 export const LABEL_INGREDIENT_V3 = 'c2pa.ingredient.v3';
 export const LABEL_THUMBNAIL_INGREDIENT_JPEG = 'c2pa.thumbnail.ingredient.jpeg';
@@ -123,10 +142,11 @@ export const DIGITAL_SOURCE_TYPE_DIGITAL_CAPTURE =
   'http://cv.iptc.org/newscodes/digitalsourcetype/digitalCapture';
 
 /**
- * Soft-binding algorithm id for the capture pHash (src/lib/phash.ts): 32×32
- * ITU-R 601 luma → 32×32 DCT-II → 8×8 lowest-frequency magnitudes vs their
- * median → 64 bits. Recovery metadata after sidecar loss; the spec forbids
- * treating a soft binding as a hard one.
+ * Soft-binding algorithm identifier for the pHash the capture pipeline
+ * already computes (src/lib/phash.ts): 32×32 ITU-R 601 luma → 32×32 DCT-II →
+ * 8×8 lowest-frequency magnitudes vs their median → 64 bits. A LEAD for
+ * sidecar-loss recovery, never a hard binding — the spec forbids soft
+ * bindings as hard bindings, and nothing here treats it as one.
  */
 export const SOFT_BINDING_ALG_PHASH = 'com.verify.phash-dct64/1';
 
@@ -170,8 +190,8 @@ function cborText(s: string): Uint8Array {
 }
 
 /** tstContainer per C2PA spec (Example 2 CDDL): { tstTokens: [ { val }, ... ] }.
- *  Multiple entries are witness cosigning: independent TSAs countersign the
- *  same signature. */
+ *  Multiple entries = witness cosigning: independent TSAs countersign the same
+ *  signature, so trusted time doesn't hinge on any single authority. */
 function tstContainer(tokens: Uint8Array[]): Uint8Array {
   const arr = 0x80 | tokens.length; // up to 23 witnesses; we use 2–3
   return concatBytes(
@@ -181,11 +201,17 @@ function tstContainer(tokens: Uint8Array[]): Uint8Array {
 }
 
 /**
- * Exact pad length so the "pad" entry grows the unprotected header by exactly
- * `delta` bytes, or null when no exact pad exists. The CBOR bstr header steps
- * at payload 24 and 256, so entry size 4+h+padLen has two holes: delta 29 and
- * delta 262. Callers treat null as an off-target round and grow past the hole
- * rather than failing the seal.
+ * Exact pad length so the "pad" entry grows the unprotected header by
+ * exactly `delta` bytes — or NULL when no exact pad exists. The CBOR bstr
+ * header steps from 1 to 2 bytes at payload 24 and from 2 to 3 bytes at
+ * payload 256, so the entry size 4+h+padLen has exactly two holes: delta 29
+ * (padLen would be 24, which already needs the 2-byte header) and delta 262
+ * (padLen 255 → 3-byte header). 0.18.6 THREW here, and the throw escaped
+ * the convergence loops whole — the field's intermittent
+ * "seal-failed — C2PA segment did not converge" on first pass (retry
+ * succeeded because re-fetched TSA tokens shift the delta out of the hole).
+ * 0.18.7: null sentinel; every caller treats a hole as an off-target round
+ * and grows past it, so no delta can ever kill a seal.
  */
 export function padForDelta(delta: number): number | null {
   for (const h of [3, 2, 1]) {
@@ -197,10 +223,11 @@ export function padForDelta(delta: number): number | null {
 }
 
 /**
- * COSE unprotected-header entry for the PQ dual signature:
- * { alg: 'ML-DSA-65', fp: hex fingerprint, sig: 3309 bytes }, over the same
- * Sig_structure as the ES256 signature. The public key lives in the signed
- * record payload (telemetry.pqKey), not here, so stripping this is detectable.
+ * LEGACY (captures through 0.18.9): the COSE unprotected-header entry that
+ * carried the PQ dual signature — { alg: 'ML-DSA-65', fp: hex fingerprint,
+ * sig: 3309 bytes }, signed over the identical Sig_structure as the ES256
+ * signature. From 0.19.0 nothing is emitted here (record-only PQ by design);
+ * the type and the parse/verify path stay so those captures keep verifying.
  */
 export interface PqCoseEntry {
   alg: string;
@@ -210,8 +237,8 @@ export interface PqCoseEntry {
 
 function unprotectedHeader(timestampTokens: Uint8Array[], padLen: number, pq?: PqCoseEntry | null): Uint8Array {
   const entries: Uint8Array[] = [];
-  // V2 sigTst2 (CTT model): each token countersigns the COSE
-  // Countersign_structure over the signature, as c2pa-rs emits and validates.
+  // V2 sigTst2 (CTT model): each token countersigns the COSE Countersign_structure
+  // over the signature — what modern c2pa-rs emits and validates.
   if (timestampTokens.length > 0) entries.push(concatBytes(cborText('sigTst2'), tstContainer(timestampTokens)));
   if (pq) entries.push(concatBytes(cborText('verifyPq'), encode({ alg: pq.alg, fp: pq.fp, sig: pq.sig })));
   if (padLen > 0) entries.push(concatBytes(cborText('pad'), bstr(new Uint8Array(padLen))));
@@ -223,7 +250,7 @@ function unprotectedHeader(timestampTokens: Uint8Array[], padLen: number, pq?: P
 export interface TranscriptAssertion {
   text: string;
   segments: { start: number; duration: number; text: string }[];
-  /** Which engine produced the transcript. */
+  /** Honest provenance for the transcript itself. */
   engine: 'apple-speech-ondevice';
 }
 
@@ -272,8 +299,9 @@ export function timestampMessageForSignature(protectedBstr: Uint8Array, rawSigna
  * The message a V1 sigTst timestamp countersigns, per c2pa-rs
  * (sigtst.rs::validate_cose_tst_info — TimeStampStorage::V1_sigTst): the
  * RFC 9052 Sig_structure with context "CounterSignature" whose payload is
- * the claim bytes (what the COSE_Sign1 itself signed), not the signature.
- * Matches every sigTst-carrying file in the c2pa test corpus.
+ * the CLAIM bytes (what the COSE_Sign1 itself signed), not the signature.
+ * Verified against the c2pa test corpus: every sigTst-carrying file
+ * (adobe-20220124-*, truepic-20230212-*) matches this construction exactly.
  */
 export function timestampMessageForClaim(protectedBstr: Uint8Array, claimBytes: Uint8Array): Uint8Array {
   return concatBytes(
@@ -296,18 +324,20 @@ export interface C2paManifestParams {
   /** Signs a 32-byte digest with the device key (DER in, any backend). */
   signDigest: DigestSigner;
   /**
-   * Post-quantum dual signature. When present the COSE unprotected header
-   * carries a `verifyPq` entry: an ML-DSA-65 signature over the same
-   * Sig_structure the ES256 signature signs. Stripping it is detectable —
-   * the PQ public key sits in the signed record payload (telemetry.pqKey).
-   * Software key (src/lib/pq.ts).
+   * Post-quantum signature, RECORD layer: the ML-DSA-65 signature lives on the
+   * attestation record (signRecord), and from 0.19.0 ONLY there — the record
+   * declares pqScope: 'record'. (Through 0.18.9 this parameter additionally
+   * drove a `verifyPq` entry in the COSE unprotected header; that emission is
+   * retired.) Software key — hedges future P-256 cryptanalysis only
+   * (src/lib/pq.ts).
    */
   pq?: { publicKey: Uint8Array; fingerprint: string; sign: (message: Uint8Array) => Uint8Array } | null;
   /**
-   * Signs sha256(payload), digest and signature in one hop. With a Secure
-   * Enclave signer that is a single native call, so the payload is never
-   * hashed in JS. Takes precedence over signDigest. Payload is the COSE
-   * Sig_structure.
+   * Signs sha256(payload) — digest AND signature produced in
+   * one hop. When the signer is the Secure Enclave this is a single native
+   * call (payload never hashed in JS), narrowing the runtime-instrumentation
+   * hook surface. When present it takes precedence over signDigest for the
+   * claim signature. The payload is the COSE Sig_structure.
    */
   signPayload?: (payload: Uint8Array) => Promise<Uint8Array>;
   /** x5chain for the COSE protected header — [leaf] self-signed, or [leaf, org CA] with an org credential. */
@@ -318,9 +348,10 @@ export interface C2paManifestParams {
   /** Returns every witness token obtained (empty array when offline). */
   fetchTimestamp?: (message: Uint8Array) => Promise<Uint8Array[]>;
   /**
-   * Sizing-only probe token lengths. Token sizes are TSA-fixed, so the layout
-   * probe uses the last observed length per TSA instead of spending a network
-   * round. Falls back to fetchTimestamp when absent (lab seam).
+   * Sizing-only probe token lengths (0.18.0). Token sizes are TSA-fixed, so
+   * the layout probe uses the last observed length per TSA instead of a
+   * throwaway network fetch — that fetch used to cost a full TSA round per
+   * seal. When absent, the probe falls back to fetchTimestamp (lab seam).
    */
   probeTokenSizes?: () => number[];
   /** Optional App Attest binding assertion (JSON: Apple attestation object + challenge + bound signing-key fingerprint) — embedded as com.verify.app-attest. */
@@ -333,64 +364,77 @@ export interface C2paManifestParams {
    */
   exif?: Record<string, number | string> | null;
   /**
-   * Org identity assertion, emitted only when an org credential is active
-   * (x5chain length > 1). Modeled on the CAWG identity assertion data model
-   * but vendor-labeled `com.verify.identity` pending C2PA conformance
-   * testing. The binding proves which org credential produced the file, not
-   * that its contents are true.
+   * Org identity assertion — emitted ONLY when an org
+   * credential is active (x5chain length > 1). Modeled on the CAWG identity
+   * assertion data model (a named actor countersigning the claim) but
+   * vendor-labeled `com.verify.identity` until C2PA conformance testing:
+   * we do not claim `cawg.identity` conformance without it. The
+   * binding is mechanical — the org credential's key signed this claim and
+   * the same x5chain rides the COSE protected header — so it proves WHICH
+   * org credential produced the file, never that its contents are true.
    */
   identity?: { org: string; role: string } | null;
   /**
-   * Project-specific JSON assertions as JUMBF boxes in the standard assertion
-   * store, hashed into the claim like every other box. Used for
+   * Additional project-specific JSON assertions, embedded
+   * as proper JUMBF assertion boxes (`c2pa.assertion`-style labels
+   * `com.verify.*`) inside the standard assertion store, hashed into the
+   * claim via the same assertionHashes path as every other box. Used for
    * com.verify.streamedChunks / contextTree / poseTrace / captureIntegrity.
-   * Labels must start with 'com.verify.' and must not collide with built-ins.
+   * JSON content boxes per C2PA custom-assertion rules. Labels must start
+   * with 'com.verify.' and must not collide with the built-in boxes.
    */
   customAssertions?: { label: string; data: unknown }[] | null;
-  // ---- Standard assertions: each emitted only when its param is
-  // supplied. A missing input omits the assertion; it never fails the seal.
+  // ---- 0.16.0 data contract (C2–C5): standard assertions, each emitted
+  // only when its param is supplied; the caller omits (and logs) any
+  // assertion it cannot build honestly — never a capture/seal failure.
   /**
-   * Claim thumbnail — a small JPEG (≤512px) of the asset, embedded as
+   * C5: claim thumbnail — a small JPEG (≤512px) of the asset, embedded as
    * c2pa.thumbnail.claim.jpeg (JUMBF jpeg content box, like c2pa-rs).
    */
   thumbnailJpeg?: Uint8Array | null;
   /**
-   * Asset types for c2pa.asset-type.v2 (v2 JSON-array shape:
-   * [{type, version?}]). e.g. ['image'], ['video'], ['audio'].
+   * C5: asset types for c2pa.asset-type.v2 (SDK 2.3 enum label — the v2
+   * JSON-array shape: [{type, version?}]). e.g. ['image'], ['video'], ['audio'].
    */
   assetTypes?: string[] | null;
   /**
-   * Emit c2pa.training-mining with every standard entry
+   * C5: emit c2pa.training-mining with every standard entry
    * (c2pa.ai_training / c2pa.ai_generative_training / c2pa.data_mining /
-   * c2pa.ai_inference) set to `notAllowed`. Label is c2pa.training-mining,
-   * not cawg.training-mining, which the vendored enum does not carry.
+   * c2pa.ai_inference) set to the spec's `notAllowed` — declared as the app
+   * developer's stance on the captures IT seals, per the locked label
+   * decision (c2pa.training-mining, not cawg.training-mining: the vendored
+   * enum lacks the latter and our verifier must read back what we emit).
    */
   trainingMiningDenied?: boolean;
   /**
-   * Capture-time pHash (16 hex chars, src/lib/phash.ts), embedded as
-   * c2pa.soft-binding (CBOR) under SOFT_BINDING_ALG_PHASH. Recovery metadata,
-   * not a trust rung.
+   * C3: the capture-time pHash (16 hex chars, src/lib/phash.ts), embedded
+   * as c2pa.soft-binding (CBOR) under SOFT_BINDING_ALG_PHASH — durability
+   * against sidecar loss. Rendered downstream as recovery metadata, never
+   * as a rung.
    */
   phashHex?: string | null;
   /**
-   * With p.exif present, also emit the standard-supported fields as
-   * c2pa.metadata (JSON-LD, exif/tiff/exifEX namespaces) — signer-attributed.
-   * com.verify.exif keeps the full sanitized set.
+   * C4: when true AND p.exif is present, the standard-supported fields are
+   * ALSO emitted as c2pa.metadata (JSON-LD, exif/tiff/exifEX namespaces) —
+   * signer-attributed metadata, while com.verify.exif keeps the full
+   * sanitized set. "Present in the file" vs "asserted by the signer".
    */
   emitC2paMetadata?: boolean;
   /**
-   * Emit c2pa.actions.v2 declaring c2pa.created with
+   * C2 conformance: emit c2pa.actions.v2 declaring c2pa.created with
    * digitalSourceType digitalCapture (C2PA 2.1+ requires created/opened;
    * downstream tools check digitalSourceType first). `when` is the capture
    * time (ISO), optional.
    */
   createdDeclaration?: { when?: string | null } | null;
   /**
-   * Capture-side depth artifact as a GDepth depthmap (C2PA 2.2 §18.21,
-   * schema mirrors developers.google.com/depthmap-metadata/reference). Must
-   * be optically captured; the spec forbids ML-inferred single-image depth.
-   * `near`/`far` are required by the CDDL, so a caller lacking them passes
-   * no depthmap at all.
+   * D1 commit half: the capture-side depth artifact as a spec-conformant
+   * GDepth depthmap (C2PA 2.2 §18.21, schema mirrors
+   * developers.google.com/depthmap-metadata/reference). Optically captured
+   * (stereo) — the spec forbids ML-inferred single-image depth here.
+   * `near`/`far` are REQUIRED by the CDDL: they are properties of the map
+   * encoding only the capture side can know, so a caller without them
+   * passes no depthmap at all (absent, never fabricated).
    */
   depthmap?: {
     /** The depth image bytes (GDepth:Data, base64'd into the CBOR). */
@@ -411,18 +455,21 @@ export interface C2paManifestParams {
     imageHeight?: number | null;
   } | null;
   /**
-   * c2pa.hash.collection.data over the exhibit's artifact set (photo clean
-   * bytes + depth map): per-entry sha256 over all bytes of each member, so
-   * set membership is sealed. `uri` is the member name ('photo.jpg',
-   * 'depth.png' …) and may not contain '.'/'..' components (§15.12.5
-   * invalidURI); violating entries are dropped, and an empty set emits nothing.
+   * D1 commit half: the exhibit as a first-class multi-part C2PA object —
+   * c2pa.hash.collection.data (§18.8) over the artifact set the exhibit
+   * comprises (photo clean bytes + depth map). Set membership itself is
+   * sealed: per-entry sha256 over ALL bytes of each member (§15.12.5).
+   * `uri` is the member's name in the set ('photo.jpg', 'depth.png' …) —
+   * no '.'/'..' components (§15.12.5 invalidURI); entries violating that
+   * are dropped, and an empty set means no assertion at all.
    */
   collectionAssets?: { uri: string; bytes: Uint8Array; dcFormat?: string | null }[] | null;
   /**
-   * Secondary (wide) viewpoint as a componentOf ingredient. `thumbnailJpeg`
-   * is the embedded 512px lead; `fullResSha256` commits the full-res bytes
-   * held in the vault. The claim seals both, so they cannot diverge. Absent
-   * when the session captured no secondary frame.
+   * 0.16.1: the secondary (wide) viewpoint as a componentOf ingredient.
+   * `thumbnailJpeg` is the embedded 512px lead; `fullResSha256` commits the
+   * measurement-grade bytes that stay in the vault — the claim seals BOTH,
+   * so the vault copy and the in-file lead cannot silently diverge. Absent
+   * when the session captured no secondary frame (absent, never fabricated).
    */
   secondaryView?: {
     thumbnailJpeg: Uint8Array;
@@ -432,12 +479,17 @@ export interface C2paManifestParams {
     height?: number | null;
   } | null;
   /**
-   * Video: periodic synchronized-pair UW stills dumped during recording,
-   * each its own componentOf ingredient. The embedded `thumbnailJpeg` is the
-   * vaulted pair JPEG (≤640×480 capture-side cap) and `fullResSha256`
-   * commits those same bytes. Label uniqueness: the first still reuses the
-   * singular ingredient/thumbnail labels when secondaryView is absent, later
-   * stills suffix `.{pairIndex}`. Cadence is stated in context.stereo-video-*.
+   * 0.18.5 post-field (video): the periodic synchronized-pair UW stills
+   * dumped during recording, each as its own componentOf ingredient — a
+   * reviewer weighing a video sees the second camera's frames AT moments
+   * across the take, not a hash root alone. The embedded `thumbnailJpeg`
+   * IS the vaulted pair JPEG (≤640×480, capture-side byte cap) — lead and
+   * measurement coincide, and `fullResSha256` commits the same bytes.
+   * Labels stay unique within
+   * the claim: the first still reuses the singular ingredient/thumbnail
+   * labels when secondaryView is absent (video has none), later stills
+   * carry a `.{pairIndex}` suffix. Captured by the capture-side cadence
+   * claim (context.stereo-video-*); absent when no pairs were recorded.
    */
   videoStills?: {
     thumbnailJpeg: Uint8Array;
@@ -456,9 +508,9 @@ function isValidCollectionUri(uri: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Sanitized EXIF (com.verify.exif keys, src/lib/exif.ts) → standard
-// XMP/JSON-LD fields for c2pa.metadata. Closed mapping: anything unmapped
-// stays only in com.verify.exif.
+// C4: sanitized EXIF (com.verify.exif keys, src/lib/exif.ts) → standard
+// XMP/JSON-LD fields for c2pa.metadata. The mapping is CLOSED, like the
+// sanitizer's allowlist: anything unmapped stays only in com.verify.exif.
 // ---------------------------------------------------------------------------
 const EXIF_TO_METADATA: Record<string, string> = {
   Make: 'tiff:Make',
@@ -499,10 +551,11 @@ const C2PA_METADATA_CONTEXT = {
 };
 
 /**
- * Builds the c2pa.metadata JSON-LD body from the sanitized EXIF set, or null
- * when nothing maps (the assertion is then omitted). Later keys never
- * overwrite an already-mapped field: ISO before ISOSpeedRatings,
- * PixelXDimension before its ExifImageWidth aliases.
+ * Builds the c2pa.metadata JSON-LD body from the sanitized EXIF set, or
+ * null when nothing maps (assertion omitted — never an empty shell).
+ * Later keys do not overwrite an already-mapped field (ISO before
+ * ISOSpeedRatings, PixelXDimension before its ExifImageWidth aliases — the
+ * sanitizer's own aliases are excluded from the map for that reason).
  */
 function buildC2paMetadataJson(exif: Record<string, number | string>): Record<string, unknown> | null {
   const out: Record<string, unknown> = {};
@@ -514,7 +567,10 @@ function buildC2paMetadataJson(exif: Record<string, number | string>): Record<st
   return { '@context': C2PA_METADATA_CONTEXT, ...out };
 }
 
-/** Box-instance id (En) of the C2PA JUMBF store — the value c2pa-rs uses. */
+/**
+ * The box-instance id (En) of the C2PA JUMBF store — the value c2pa-rs
+ * uses, so third-party readers group our packets with theirs.
+ */
 const C2PA_APP11_EN = 0x0211;
 const APP11_ENVELOPE_BYTES = 8; // "JP"(2) + En(2) + Z(4)
 const MAX_APP11_PAYLOAD = 65533; // 2-byte length includes itself
@@ -583,16 +639,17 @@ function assembleStore(
 // ---------------------------------------------------------------------------
 // Two-phase claim signing
 //
-// Builders converge segment sizes against a dummy signature — the COSE slot
-// holds a fixed-width 64-byte P1363 signature, so a placeholder is exactly
-// the real size — then sign the final claim once. Signing per fixpoint round
-// would re-prompt Face ID on a biometric-bound key each round.
+// The builders below converge segment sizes with a DUMMY signature — the COSE
+// slot holds a fixed-width P1363 signature (64 bytes), so a placeholder has
+// exactly the real size — and sign the FINAL claim exactly once. Signing on
+// every fixpoint iteration would burn a real signature per round; with a
+// biometric-bound key each round would prompt Face ID again. One signature
+// per claim, period — which makes per-use biometric evaluation affordable.
 // ---------------------------------------------------------------------------
 
 /** Fixed 64-byte P1363 placeholder — the exact size of the real signature. */
 const DUMMY_RAW_SIG = new Uint8Array(64);
-/** Fixed 3309-byte ML-DSA-65 placeholder: sizes the PQ entry without signing. */
-const DUMMY_PQ_SIG = new Uint8Array(PQ_SIZES.signature);
+/** Fixed 3309-byte ML-DSA-65 placeholder — probe assemblies size the PQ entry exactly without signing. */
 
 interface ClaimPlan {
   claimBytes: Uint8Array;
@@ -600,9 +657,10 @@ interface ClaimPlan {
   /** The COSE Sig_structure; the key signs sha256 of exactly this. */
   sigPayload: Uint8Array;
   /**
-   * Tokens fetched over the dummy signature. Sizes are TSA-fixed (the imprint
-   * is always 32 bytes) so they size convergence exactly, but they bind the
-   * dummy signature and are never embedded; finalize re-fetches real ones.
+   * Tokens fetched over the DUMMY signature. Sizes are TSA-fixed (the imprint
+   * is always 32 bytes), so these size the convergence exactly — but they bind
+   * the dummy signature, so they are NEVER embedded; finalize re-fetches over
+   * the real one.
    */
   probeTokens: Uint8Array[];
 }
@@ -612,8 +670,9 @@ async function planClaim(claimBytes: Uint8Array, p: C2paManifestParams): Promise
   const sigPayload = sigStructure(protectedBstr, claimBytes);
   let probeTokens: Uint8Array[] = [];
   if (p.probeTokenSizes) {
-    // Sizing dummies: only length matters, and no network round is spent.
-    // Finalize re-fetches real tokens over the real signature.
+    // Sizing dummies — content is irrelevant (never embedded; the finalize
+    // step re-fetches real tokens over the real signature), length is all
+    // the fixpoint converges on. No network round here.
     probeTokens = p.probeTokenSizes().map((n) => new Uint8Array(Math.max(0, Math.floor(n))));
   } else if (p.fetchTimestamp) {
     probeTokens = (await p.fetchTimestamp(timestampMessageForSignature(protectedBstr, DUMMY_RAW_SIG))) ?? [];
@@ -621,14 +680,21 @@ async function planClaim(claimBytes: Uint8Array, p: C2paManifestParams): Promise
   return { claimBytes, protectedBstr, sigPayload, probeTokens };
 }
 
-/** Signs the planned claim once and fetches the witness tokens that bind it. */
+/** Signs the planned claim ONCE and fetches the witness tokens that bind it. */
 async function signPlannedClaim(
   plan: ClaimPlan,
   p: C2paManifestParams
 ): Promise<{ signed: { protectedBstr: Uint8Array; rawSignature: Uint8Array; pq?: PqCoseEntry | null }; timestampTokens: Uint8Array[] }> {
   const der = p.signPayload ? await p.signPayload(plan.sigPayload) : await p.signDigest(sha256(plan.sigPayload));
-  // The PQ layer signs the same Sig_structure. Software signing, once.
-  const pq = p.pq ? { alg: PQ_ALG, fp: p.pq.fingerprint, sig: p.pq.sign(plan.sigPayload) } : null;
+  // 0.19.0 — record-only PQ BY DESIGN (no installed base, so no legacy
+  // window to bridge): the claim-layer `verifyPq` entry is no longer
+  // emitted. The record's own ML-DSA-65 signature (signRecord, over the
+  // canonical record that commits asset.sha256) covers the media; a
+  // general-purpose C2PA writer has no place to park a second signature
+  // here, and the verifier understands the record's pqScope declaration.
+  // Parsing/verifying `verifyPq` STAYS (c2pa.ts:1992 region) — captures
+  // through 0.18.9 carry it and must keep verifying.
+  const pq = null;
   const signed = { protectedBstr: plan.protectedBstr, rawSignature: derToP1363LowS(der), pq };
   let timestampTokens: Uint8Array[] = [];
   if (p.fetchTimestamp) {
@@ -650,9 +716,9 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
         ...p.exif,
       }))))
     : null;
-  // The identity assertion references the telemetry box by the same hash
-  // basis the claim uses (hashJumbContent), so a verifier can cross-check it
-  // against the claim's own assertion list.
+  // The org identity assertion references the telemetry box by the
+  // SAME hash basis the claim uses (hashJumbContent), so a verifier can
+  // cross-check the reference against the claim's own assertion list.
   const identityBox = p.identity
     ? jumbBox(UUID_JSON, 'com.verify.identity', box('json', utf8ToBytes(JSON.stringify({
         format: 'com.verify.identity/1',
@@ -670,20 +736,22 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
           'Proves WHICH org credential produced this file — never that its contents are true.',
       }))))
     : null;
-  // ---- Standard assertions ----
+  // ---- 0.16.0 standard assertions (C2–C5), first-class allowlist ----
   // Order is fixed so the claim's assertion list is deterministic.
   const standardBoxes: Uint8Array[] = [];
   const standardLabels: string[] = [];
-  // Claim thumbnail (jpeg content box, like c2pa-rs thumbnails).
+  // C5: claim thumbnail (jpeg content box, like c2pa-rs thumbnails).
   if (p.thumbnailJpeg && p.thumbnailJpeg.length > 0) {
     standardBoxes.push(jumbBox(UUID_JPEG, LABEL_THUMBNAIL_CLAIM_JPEG, box('jpeg', p.thumbnailJpeg)));
     standardLabels.push(LABEL_THUMBNAIL_CLAIM_JPEG);
   }
-  // Secondary viewpoint as a componentOf ingredient: an embedded thumbnail
-  // plus a data hash of the full-res bytes in the vault. Both boxes enter the
-  // claim's assertion list, so the signature covers thumbnail and full-res
-  // commitment alike. Dimensions stay in the context claims — ingredient.v3
-  // has no width/height fields.
+  // 0.16.1: the secondary viewpoint as a componentOf ingredient — its own
+  // embedded thumbnail (a lead, self-evidently not the measurement pixels)
+  // plus a data hash of the full-res bytes in the vault (the measurement).
+  // Both boxes enter the claim's assertion list, so the signature covers the
+  // thumbnail bytes AND the full-res commitment: the two cannot silently
+  // diverge. Dimensions stay in the context claims — ingredient.v3 has no
+  // width/height fields and a standard assertion carries no non-standard keys.
   if (p.secondaryView && p.secondaryView.thumbnailJpeg.length > 0 && /^[0-9a-f]{64}$/i.test(p.secondaryView.fullResSha256)) {
     const secondary = p.secondaryView;
     const thumbnailBox = jumbBox(UUID_JPEG, LABEL_THUMBNAIL_INGREDIENT_JPEG, box('jpeg', secondary.thumbnailJpeg));
@@ -711,10 +779,11 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     }))));
     standardLabels.push(LABEL_INGREDIENT_V3);
   }
-  // Video: one componentOf ingredient per periodic pair still, same shape as
-  // secondaryView. The first still reuses the singular labels when no
-  // secondaryView preceded it; later stills suffix with the pair index so
-  // every claim label stays unique.
+  // 0.18.5 post-field (video): one componentOf ingredient per periodic
+  // pair still — the same lead+measurement discipline as secondaryView,
+  // repeated across the take. The first still reuses the singular labels
+  // when no secondaryView preceded it (video never carries one); later
+  // stills suffix with the pair index so every claim label stays unique.
   if (p.videoStills && p.videoStills.length > 0) {
     const singularFree = !p.secondaryView;
     p.videoStills.forEach((still, position) => {
@@ -749,13 +818,14 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
       standardLabels.push(ingredientLabel);
     });
   }
-  // Asset type(s), v2 JSON-array shape per the SDK 2.3 enum label.
+  // C5: asset type(s), v2 JSON-array shape per the SDK 2.3 enum label.
   if (p.assetTypes && p.assetTypes.length > 0) {
     standardBoxes.push(jumbBox(UUID_JSON, LABEL_ASSET_TYPE_V2, box('json', utf8ToBytes(JSON.stringify(p.assetTypes.map((type) => ({ type })))))));
     standardLabels.push(LABEL_ASSET_TYPE_V2);
   }
-  // Training/data-mining permissions, every standard entry notAllowed
-  // (CBOR map per the spec).
+  // C5: training/data-mining permissions — every standard entry
+  // notAllowed, the app developer's stance on its own captures (CBOR map
+  // per the spec; the vendored enum reads this label back).
   if (p.trainingMiningDenied) {
     standardBoxes.push(jumbBox(UUID_CBOR, LABEL_TRAINING_MINING, box('cbor', encode({
       entries: {
@@ -767,8 +837,8 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     }))));
     standardLabels.push(LABEL_TRAINING_MINING);
   }
-  // Soft binding from the capture-time pHash. Recovery metadata; the
-  // hash.data/bmff assertions are the only hard bindings.
+  // C3: soft binding from the capture-time pHash — recovery metadata, NOT
+  // a hard binding (the hash.data/bmff assertions remain the only ones).
   if (p.phashHex && /^[0-9a-f]{16}$/i.test(p.phashHex)) {
     standardBoxes.push(jumbBox(UUID_CBOR, LABEL_SOFT_BINDING, box('cbor', encode({
       alg: SOFT_BINDING_ALG_PHASH,
@@ -777,7 +847,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     }))));
     standardLabels.push(LABEL_SOFT_BINDING);
   }
-  // Standard-supported EXIF fields as signer-attributed c2pa.metadata
+  // C4: standard-supported EXIF fields as signer-attributed c2pa.metadata
   // (JSON-LD); the full sanitized set stays in com.verify.exif.
   if (p.emitC2paMetadata && p.exif) {
     const metadataJson = buildC2paMetadataJson(p.exif);
@@ -786,8 +856,8 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
       standardLabels.push(LABEL_METADATA);
     }
   }
-  // GDepth depthmap (CBOR per §18.21 depthmap-gdepth-map). 'GDepth:*' field
-  // names are mandated by the schema.
+  // D1: GDepth depthmap (CBOR per §18.21 depthmap-gdepth-map). Field names
+  // are the GDepth schema's own ('GDepth:*') — spec-mandated, not style.
   if (p.depthmap && p.depthmap.data.length > 0) {
     const d = p.depthmap;
     const gdepth: Record<string, unknown> = {
@@ -811,11 +881,11 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     standardBoxes.push(jumbBox(UUID_CBOR, LABEL_DEPTHMAP_GDEPTH, box('cbor', encode(gdepth))));
     standardLabels.push(LABEL_DEPTHMAP_GDEPTH);
   }
-  // Collection data hash (CBOR per §18.8 collection-data-hash-map): photo +
-  // depth map as one sealed set, sha256 over all bytes of each member. The
-  // photo member hashes the clean bytes, since hashing the signed file that
-  // holds this manifest would be circular; verifiers reconstruct clean bytes
-  // via the hash.data exclusion first.
+  // D1: collection data hash (CBOR per §18.8 collection-data-hash-map) —
+  // the photo + depth map as one sealed set. sha256 over ALL bytes of each
+  // member; the photo member hashes the CLEAN bytes (the signed file
+  // contains this very manifest — hashing it would be circular; verifiers
+  // reconstruct clean bytes via the hash.data exclusion before matching).
   if (p.collectionAssets && p.collectionAssets.length > 0) {
     const uris = p.collectionAssets
       .filter((a) => a.bytes.length > 0 && isValidCollectionUri(a.uri))
@@ -829,7 +899,7 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
       standardLabels.push(LABEL_COLLECTION_HASH);
     }
   }
-  // Actions.v2 declaring c2pa.created + digitalSourceType digitalCapture.
+  // C2: actions.v2 declaring c2pa.created + digitalSourceType digitalCapture.
   if (p.createdDeclaration) {
     const action: Record<string, unknown> = {
       action: 'c2pa.created',
@@ -840,8 +910,8 @@ function verifyAssertionBoxes(p: C2paManifestParams, telemetryJson: Uint8Array):
     standardLabels.push(LABEL_ACTIONS_V2);
   }
 
-  // Project-specific assertions as JUMBF boxes. The caller emits the same
-  // set for photo, video, and audio.
+  // Project-specific assertions as first-class JUMBF boxes
+  // (media parity — the caller emits the same set for photo, video, audio).
   const customBoxes: Uint8Array[] = [];
   const customLabels: string[] = [];
   const taken = new Set(['com.verify.telemetry', 'com.verify.app-attest', 'com.verify.identity', 'com.verify.transcript', 'com.verify.exif', ...standardLabels]);
@@ -872,18 +942,19 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
   const telemetryJson = utf8ToBytes(JSON.stringify(p.telemetry));
 
   let exclusionLength = 0;
-  // A TSA that alternates signing certs, or an OTS calendar whose response
-  // grows between probe and real fetch, can drift a token by more than 64
-  // bytes.
+  // 0.18.5: 64 → 256 bytes. A TSA that alternates signing certs (or an OTS
+  // calendar whose response grew between probe and real fetch) can drift a
+  // token by more than 64 bytes; the slack is reserved segment size, not
+  // per-capture overhead anyone sees.
   const SLACK = 256; // absorbs TSA token-size variance without a re-sign
 
-  // Per-round sizes, carried into the final throw so an unreachable fixpoint
-  // is diagnosable from the log alone.
+  // 0.18.7: per-round sizes, carried to the final throw — an unreachable
+  // fixpoint must be diagnosable from the field log alone.
   const rounds: string[] = [];
 
   for (let i = 0; i < 12; i++) {
-    // The exclusion reconstructs the clean file, so the hash is constant, but
-    // the exclusion length feeds the CBOR, which feeds the size.
+    // The exclusion reconstructs the clean file, so the hash is constant —
+    // but the exclusion length feeds the CBOR, which feeds the size.
     const hashDataCbor = encode({
       exclusions: [{ start: insertOffset, length: exclusionLength }],
       alg: 'sha256',
@@ -898,28 +969,29 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
     const labels = ['c2pa.hash.data', ...rest.labels];
     const claimBytes = buildClaimBytes(p, uuid, assertionBoxes, labels);
 
-    // Converge sizes with the dummy signature and, when a TSA is configured,
-    // probe tokens. No real signature is burned here.
+    // Phase 1: converge sizes with a fixed-size dummy signature and (if a
+    // TSA is configured) probe tokens — no real signature is burned.
     const plan = await planClaim(claimBytes, p);
-    const probeSigned = { protectedBstr: plan.protectedBstr, rawSignature: DUMMY_RAW_SIG, pq: p.pq ? { alg: PQ_ALG, fp: p.pq.fingerprint, sig: DUMMY_PQ_SIG } : null };
+    const probeSigned = { protectedBstr: plan.protectedBstr, rawSignature: DUMMY_RAW_SIG, pq: null } // 0.19.0: no claim-layer PQ entry to size for (record-only by design);
     const assembleProbe = (padLen: number): Uint8Array =>
       app11Segments(assembleStore(manifestLabel, claimBytes, assertionBoxes, probeSigned, plan.probeTokens, padLen));
 
-    // Converged means exact length, or once probe tokens reserve slack, a
-    // probe padded up to the exclusion length.
+    // Convergence rule: exact length, or — once probe
+    // tokens reserve slack — a probe PADDED to the exclusion length.
     const probeBare = assembleProbe(0);
     rounds.push(`round ${i}: target=${exclusionLength} probe=${probeBare.length}`);
     let converged = probeBare.length === exclusionLength;
     if (!converged && plan.probeTokens.length > 0 && probeBare.length < exclusionLength) {
       const delta = exclusionLength - probeBare.length;
-      // padForDelta null is an unrepresentable delta (29/262): stay
-      // unconverged and let the target grow past the hole below.
+      // padForDelta null = an unrepresentable delta (29/262) — this round
+      // stays unconverged and the target grows past the hole below.
       const pad = delta >= 6 ? padForDelta(delta) : null;
       if (pad !== null && assembleProbe(pad).length === exclusionLength) converged = true;
     }
     if (converged) {
-      // Sizes are final: sign once, fetch the real witness tokens, and
-      // re-pad from scratch, since real tokens can drift from the probes.
+      // Phase 2: sizes are final — sign the claim exactly once, fetch the
+      // real witness tokens, and re-pad from scratch (real tokens can drift
+      // a few bytes from the probes; the slack absorbs it).
       const { signed, timestampTokens } = await signPlannedClaim(plan, p);
       const assembleReal = (padLen: number): Uint8Array =>
         app11Segments(assembleStore(manifestLabel, claimBytes, assertionBoxes, signed, timestampTokens, padLen));
@@ -932,10 +1004,15 @@ export async function buildC2paSegment(p: C2paManifestParams, insertOffset: numb
         const segment = assembleReal(pad);
         if (segment.length === exclusionLength) return segment;
       }
-      // Real tokens can exceed their probes past the slack (TSA cert-chain
-      // or calendar-response variance between fetches). Grow the target past
-      // the signed assembly and iterate rather than fail; the next pass
-      // re-signs with the larger exclusion. Bounded by the 12-round loop.
+      // 0.18.5: token drift beyond the slack is no longer FATAL. The real
+      // witness tokens occasionally exceed their probes (TSA cert-chain or
+      // calendar-response variance between two fetches seconds apart) —
+      // the 2026-08-17 field logs showed this throw on the first pass of
+      // nearly every seal, with the queue's blind retry then succeeding.
+      // Re-converge instead: grow the target past the signed assembly and
+      // iterate — the next pass re-signs with the larger exclusion sealed
+      // inside the claim. Bounded by the 12-iteration loop; an unreached
+      // fixpoint still throws below.
       exclusionLength = Math.max(bare.length, exclusionLength) + SLACK;
       continue;
     }
@@ -959,10 +1036,10 @@ export async function buildC2paStorePng(p: C2paManifestParams, insertOffset: num
   const manifestLabel = 'verify:urn:uuid:' + uuid;
   const telemetryJson = utf8ToBytes(JSON.stringify(p.telemetry));
   const CHUNK_OVERHEAD = 12; // length(4) + "caBX"(4) + CRC32(4)
-  const SLACK = 256; // matches buildC2paSegment — see its note
+  const SLACK = 256; // 0.18.5: matches buildC2paSegment — see its note
 
   let exclusionLength = 0;
-  const rounds: string[] = []; // per-round sizes for the final throw
+  const rounds: string[] = []; // per-round sizes for the final throw (0.18.7)
 
   for (let i = 0; i < 12; i++) {
     const hashDataCbor = encode({
@@ -978,21 +1055,21 @@ export async function buildC2paStorePng(p: C2paManifestParams, insertOffset: num
     const labels = ['c2pa.hash.data', ...rest.labels];
     const claimBytes = buildClaimBytes(p, uuid, assertionBoxes, labels);
 
-    // Converge sizes with the dummy signature plus probe tokens; phase 2
-    // signs the final claim once (see buildC2paSegment).
+    // Phase 1: converge sizes with the fixed-size dummy signature + probe
+    // tokens; phase 2 signs the final claim exactly once (see buildC2paSegment).
     const plan = await planClaim(claimBytes, p);
-    const probeSigned = { protectedBstr: plan.protectedBstr, rawSignature: DUMMY_RAW_SIG, pq: p.pq ? { alg: PQ_ALG, fp: p.pq.fingerprint, sig: DUMMY_PQ_SIG } : null };
+    const probeSigned = { protectedBstr: plan.protectedBstr, rawSignature: DUMMY_RAW_SIG, pq: null } // 0.19.0: no claim-layer PQ entry to size for (record-only by design);
     const assembleProbe = (padLen: number): Uint8Array =>
       assembleStore(manifestLabel, claimBytes, assertionBoxes, probeSigned, plan.probeTokens, padLen);
 
-    // Converged means exact length, or once probe tokens reserve slack, a
-    // probe padded up to the exclusion length.
+    // Convergence rule: exact length, or — once probe
+    // tokens reserve slack — a probe PADDED to the exclusion length.
     const probeBare = assembleProbe(0);
     rounds.push(`round ${i}: target=${exclusionLength} probe=${probeBare.length + CHUNK_OVERHEAD}`);
     let converged = probeBare.length + CHUNK_OVERHEAD === exclusionLength;
     if (!converged && plan.probeTokens.length > 0 && probeBare.length + CHUNK_OVERHEAD < exclusionLength) {
       const delta = exclusionLength - (probeBare.length + CHUNK_OVERHEAD);
-      // padForDelta null is an unrepresentable delta (29/262): grow past it.
+      // padForDelta null = unrepresentable delta (29/262) — grow past the hole.
       const pad = delta >= 6 ? padForDelta(delta) : null;
       if (pad !== null && assembleProbe(pad).length + CHUNK_OVERHEAD === exclusionLength) converged = true;
     }
@@ -1009,8 +1086,8 @@ export async function buildC2paStorePng(p: C2paManifestParams, insertOffset: num
         const store = assembleReal(pad);
         if (store.length + CHUNK_OVERHEAD === exclusionLength) return store;
       }
-      // Same re-converge instead of throw as the JPEG path. Bounded by the
-      // 12-round loop.
+      // 0.18.5: same re-converge-instead-of-throw as the JPEG path — see
+      // buildC2paSegment's note. Bounded by the 12-iteration loop.
       exclusionLength = Math.max(bare.length + CHUNK_OVERHEAD, exclusionLength) + SLACK;
       continue;
     }
@@ -1068,15 +1145,47 @@ export function u64be(n: number): Uint8Array {
   return out;
 }
 
+/**
+ * 0.21.0 (field, 0.20.9: EVERY SDK-sealed video quarantined
+ * SIGNATURE_INVALID): c2pa-rs 0.85.2 writes absent optional exclusion
+ * fields as explicit CBOR nulls (length:null, data:null, subset:null …).
+ * Passed through raw, boxExcluded's `ex.length !== undefined` read null
+ * as a real constraint, no exclusion ever matched, the manifest's uuid
+ * box stayed "included", and the void-binding guard tripped on GENUINE
+ * credentials (lab: both field mp4s reproduce; the SDK's hash verifies
+ * byte-for-byte under the spec walk). Normalize at the parse boundary —
+ * keep only fields that are actually present. Returns null on a malformed
+ * entry (defective credentials → UNPROVEN, never a TypeError).
+ */
+export function normalizeBmffExclusions(decoded: unknown[]): BmffExclusion[] | null {
+  const exclusions: BmffExclusion[] = [];
+  for (const e of decoded) {
+    if (!e || typeof (e as { xpath?: unknown }).xpath !== 'string') return null;
+    const src = e as { xpath: string; length?: unknown; data?: unknown };
+    const clean: BmffExclusion = { xpath: src.xpath };
+    if (typeof src.length === 'number') clean.length = src.length;
+    if (Array.isArray(src.data)) {
+      const ds = (src.data as unknown[]).filter(
+        (d): d is { offset: number; value: Uint8Array } =>
+          !!d && typeof (d as { offset?: unknown }).offset === 'number' && (d as { value?: unknown }).value instanceof Uint8Array
+      );
+      if (ds.length !== (src.data as unknown[]).length) return null;
+      clean.data = ds;
+    }
+    exclusions.push(clean);
+  }
+  return exclusions;
+}
+
 export function boxExcluded(bytes: Uint8Array, box: RootBox, exclusions: BmffExclusion[]): boolean {
   for (const ex of exclusions) {
     // Root-level paths only; anything deeper is outside what we (and
     // c2pa-rs for monolithic files) ever write — left hashed, which fails
     // closed if a foreign manifest relied on it.
     if (ex.xpath !== '/' + box.type) continue;
-    // c2pa-rs writes an absent length as CBOR null, not by omitting the key,
-    // so `undefined` alone is not the whole absent case: treating null as a
-    // length constraint skips every exclusion a foreign manifest declares.
+    // 0.23.0 (auditor handoff): null-length guard here too, not only at
+    // the parse boundary — a caller that skipped normalizeBmffExclusions
+    // would otherwise read CBOR-null length as a real constraint again.
     if (ex.length != null && ex.length !== box.size) continue;
     let dataOk = true;
     for (const d of ex.data ?? []) {
@@ -1112,17 +1221,20 @@ export function hashBmffV2(bytes: Uint8Array, exclusions: BmffExclusion[]): Uint
 
 /**
  * Builds the raw JUMBF manifest store for BMFF embedding (no APP11 wrapper),
- * bound by a c2pa.hash.bmff.v2 assertion.
+ * with the asset bound by a c2pa.hash.bmff.v2 assertion.
  *
- * `hashAssertionCbor` must come from bmffHashAssertionCbor: its length never
- * depends on the hash value, so the store length is stable across the
- * caller's hash fixpoint. `fixedLength` pins the output size and padding
- * absorbs TSA token variance; a store that cannot be held to it is returned
- * as-is and the caller re-targets.
+ * `hashAssertionCbor` must be built with bmffHashAssertionCbor — its length
+ * never depends on the hash VALUE (a bstr of fixed size), so the store
+ * length is stable across the caller's hash fixpoint. `fixedLength` pins the
+ * output size (padding absorbs TSA token variance); when the store cannot
+ * be held to it, the oversized/undersized store is returned as-is and the
+ * caller re-targets.
  *
- * Sizing rounds assemble with a dummy signature and never reach a file; only
- * the round hitting the target length signs, so a biometric key prompts once
- * per video.
+ * Two-phase signing: sizing rounds assemble with a fixed-size
+ * DUMMY signature and are never part of a returned file (the caller's
+ * fixpoint rebuilds); the round that hits the target length signs the claim
+ * exactly once. A biometric-bound key therefore prompts once per video, not
+ * once per fixpoint round.
  */
 export async function buildC2paStoreBmff(
   p: C2paManifestParams,
@@ -1132,7 +1244,7 @@ export async function buildC2paStoreBmff(
   const uuid = p.instanceId.replace(/^xmp:iid:/i, '');
   const manifestLabel = 'verify:urn:uuid:' + uuid;
   const telemetryJson = utf8ToBytes(JSON.stringify(p.telemetry));
-  const SLACK = 256; // matches buildC2paSegment — see its note
+  const SLACK = 256; // 0.18.5: matches buildC2paSegment — see its note
 
   const hashBox = jumbBox(UUID_CBOR, 'c2pa.hash.bmff.v2', box('cbor', hashAssertionCbor));
   const rest = verifyAssertionBoxes(p, telemetryJson);
@@ -1141,54 +1253,60 @@ export async function buildC2paStoreBmff(
   const claimBytes = buildClaimBytes(p, uuid, assertionBoxes, labels);
 
   const plan = await planClaim(claimBytes, p);
-  const probeSigned = { protectedBstr: plan.protectedBstr, rawSignature: DUMMY_RAW_SIG, pq: p.pq ? { alg: PQ_ALG, fp: p.pq.fingerprint, sig: DUMMY_PQ_SIG } : null };
+  const probeSigned = { protectedBstr: plan.protectedBstr, rawSignature: DUMMY_RAW_SIG, pq: null } // 0.19.0: no claim-layer PQ entry to size for (record-only by design);
   const assembleProbe = (padLen: number): Uint8Array =>
     assembleStore(manifestLabel, claimBytes, assertionBoxes, probeSigned, plan.probeTokens, padLen);
 
   const probe = assembleProbe(0);
-  // The length this store must hit. A sizing round (fixedLength null) with
-  // tokens reserves slack so real tokens never outgrow it.
+  // The length this store is contracted to hit. A sizing round (fixedLength
+  // null) with tokens reserves slack so the real tokens never outgrow it.
   let target: number | null = fixedLength;
   if (target === null && plan.probeTokens.length > 0) target = probe.length + SLACK;
 
-  // Pad the probe to the target when possible. The pad entry carries a
-  // non-empty byte string, so the smallest pad is 6 bytes; deltas of 1–5 run
-  // unpadded and the signing round's overshoot guard below closes that gap.
+  // Pad the probe to the target when possible. (The pad entry carries a
+  // non-empty byte string, so the smallest real pad is 6 bytes; deltas of
+  // 1–5 stay unreachable here and the round simply runs unpadded — the
+  // signing round's overshoot guard below is what closes that gap.)
   let probeStore = probe;
   let onTarget = target !== null && probe.length <= target;
   if (onTarget && probe.length < target!) {
     const delta = target! - probe.length;
-    const pad = padForDelta(delta); // null at the holes (29, 262): off-target
+    const pad = padForDelta(delta); // null at the unrepresentable holes (29, 262) → treat as off-target
     onTarget = delta >= 6 && pad !== null;
     if (onTarget) probeStore = assembleProbe(pad!);
   }
 
   if (onTarget && target !== null && probeStore.length === target) {
-    // Converged: the only round that burns a real signature.
+    // Converged — the ONLY round that burns a real signature.
     const { signed, timestampTokens } = await signPlannedClaim(plan, p);
     const store = assembleStore(manifestLabel, claimBytes, assertionBoxes, signed, timestampTokens, 0);
     if (store.length === target) return store;
     let delta = target - store.length;
-    // A store 1–5 bytes under target cannot be re-padded (shortest encodable
-    // pad is 6 bytes) and the shortfall re-randomizes each signing round, so
-    // the caller's fixpoint could oscillate. Pad past the gap instead:
-    // delta+5 is always encodable and lands the store at exactly target+5,
-    // the caller re-pins to that length, and the next round pads exactly.
+    // 0.18.6 (field: 'C2PA BMFF embed did not converge'): a store 1–5 bytes
+    // UNDER target cannot be re-padded — the pad entry carries a non-empty
+    // byte string, so the shortest encodable pad is 6 bytes — and the real
+    // TSA tokens are re-fetched fresh every signing round, so the shortfall
+    // re-randomizes. The caller's fixpoint could oscillate inside that gap
+    // until the round budget ran out. Pad PAST the gap instead: delta+5 is
+    // always encodable and lands the store exactly target+5 (any d in the
+    // gap), the caller re-pins to that reachable length, and the next round
+    // pads exactly. Monotonic, bounded, and padding bytes are inert COSE
+    // header content.
     if (delta >= 1 && delta <= 5) delta += 5;
     if (delta >= 5) {
-      const pad = padForDelta(delta); // null: no pad covers this growth
+      const pad = padForDelta(delta); // null → no box sequence can cover this growth; stay off-target this round
       if (pad !== null) {
         const padded = assembleStore(manifestLabel, claimBytes, assertionBoxes, signed, timestampTokens, pad);
         if (padded.length === store.length + delta) return padded;
       }
     }
-    // Real tokens drifted beyond the slack: off target, and the caller's
+    // Real tokens drifted beyond the slack — off target; the caller's
     // fixpoint re-targets to store.length and rebuilds.
     return store;
   }
 
-  // Sizing round or off-target: dummy signature inside. The caller rebuilds
-  // until a round converges, and only that round signs.
+  // Sizing round or off-target: dummy signature inside (see the docstring —
+  // the caller rebuilds until a round converges; only that round signs).
   return probeStore;
 }
 
@@ -1206,12 +1324,22 @@ interface JumbNode {
 }
 
 function parseJumb(jumb: Uint8Array): JumbNode | null {
-  // Strict declared-length parsing. `jumb` spans from this box's start to the
-  // end of the enclosing buffer, but the box's own declared length governs:
-  // `full`/`body` are cut at the declared span and the child walk stops at
-  // the first malformed length instead of resyncing forward. Resyncing would
-  // make container-length bytes malleable, letting a flipped length be walked
-  // past silently.
+  // STRICT declared-length parsing. `jumb` spans from this box's start to
+  // the end of the enclosing buffer; the box's own DECLARED length governs
+  // everything: `full`/`body` are cut at the declared span, and the child
+  // walk stops at the first malformed length instead of resyncing forward.
+  //
+  // History: 0.18.6 briefly carried a physical-tail-tolerant walk with a
+  // resync scan, built for a "2022-era writers under-declare container
+  // lengths" theory. That theory was WRONG — the apparent under-declaration
+  // was the JPEG APP11 multi-segment envelope interleaved into the physical
+  // byte stream (ISO 19566-5; see extractC2paStore), not defective boxes.
+  // With proper de-segmentation the logical stream is exactly sized, the
+  // tolerant walk was dead code for every real file, and its resync made
+  // container-length bytes malleable (a flipped length was silently walked
+  // past — test-malleability caught it). Strict is smaller, faster to
+  // reason about, and closes that hole: the full 27-file c2pa-org
+  // public-testfiles sweep passes 28/28 under strict parsing.
   if (jumb.length < 8 || String.fromCharCode(jumb[4], jumb[5], jumb[6], jumb[7]) !== 'jumb') return null;
   const declaredLen = readU32(jumb, 0);
   if (declaredLen < 8) return null;
@@ -1223,13 +1351,13 @@ function parseJumb(jumb: Uint8Array): JumbNode | null {
   let q = 17; // uuid(16) + toggle(1)
   while (q < jumd.length && jumd[q] !== 0) q++;
   const label = bytesToUtf8(jumd.subarray(17, q));
-  const body = content.subarray(jumdLen); // declared content; hashing/COSE read this
+  const body = content.subarray(jumdLen); // declared content — hashing/COSE reads use THIS
   const node: JumbNode = { label, body, children: [], full: jumb.subarray(0, declaredEnd) };
   if (jumd[16] & 0x02) {
     let off = 0;
     while (off + 8 <= body.length) {
       const len = readU32(body, off);
-      if (len < 8 || off + len > body.length) break; // malformed length: stop, never resync
+      if (len < 8 || off + len > body.length) break; // malformed length — stop, never resync
       const child = parseJumb(body.subarray(off, off + len));
       if (child) node.children.push(child); // leaf boxes ('cbor'/'json'/…) return null — skipped by length
       off += len;
@@ -1243,18 +1371,49 @@ function readU32(b: Uint8Array, o: number): number {
 }
 
 /**
- * Decodes a JSON-family assertion payload. This writer emits JSON assertions
- * as 'json' content boxes; c2pa-rs serializes the same assertion data as
- * 'cbor' boxes. The content box type picks the decoder; any other type, or a
- * decode failure, reads as absence.
+ * Parses a JSON-family assertion payload (0.19.0 SDK-layout support). Our
+ * writer emits JSON assertions as 'json' content boxes; c2pa-rs / the
+ * c2pa-swift SDK serialize the same assertion DATA as 'cbor' content boxes
+ * (v2 manifests). Both decode to the same object — the content-box type
+ * byte picks the decoder. Malformed → null (absence, never a crash).
  */
+/**
+ * cbor-x decodes 8-byte-width CBOR ints as bigint; JSON-semantic assertions
+ * (telemetry, transcript, identity, app-attest — written as JSON by us,
+ * re-encoded as CBOR by c2pa-rs: 0.20.4's carrier lesson) carry only
+ * Number-safe values, so restore JSON semantics at the boundary. 0.21.0
+ * (field, 0.20.9 SDK-sealed videos): context.enfAnchor.firstSampleWallClockUtcMs
+ * came back as bigint, canonicalize() threw 'Unsupported value type',
+ * verifyRecordSignature caught it, and GENUINE records read as
+ * signature-invalid + fingerprint-mismatch + PQ-invalid — the second half
+ * of the SDK-video SIGNATURE_INVALID class (the first half was the
+ * exclusion nulls; both found on the same two field mp4s). Values beyond
+ * the safe range stay bigint (canonicalize then honestly fails closed).
+ */
+export function normalizeJsonBigints(value: unknown): unknown {
+  if (typeof value === 'bigint') {
+    return value <= BigInt(Number.MAX_SAFE_INTEGER) && value >= BigInt(-Number.MAX_SAFE_INTEGER)
+      ? Number(value)
+      : value;
+  }
+  if (Array.isArray(value)) return value.map(normalizeJsonBigints);
+  if (value && typeof value === 'object') {
+    if (value instanceof Uint8Array) return value;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = normalizeJsonBigints(v);
+    return out;
+  }
+  return value;
+}
+
 function parseJsonishAssertion(body: Uint8Array): unknown {
   if (body.length < 8) return null;
   const type = String.fromCharCode(body[4], body[5], body[6], body[7]);
   const content = body.subarray(8, readU32(body, 0));
   try {
     if (type === 'json') return JSON.parse(bytesToUtf8(content));
-    if (type === 'cbor') return decode(content);
+    // 0.21.0: cbor → bigint normalization (see normalizeJsonBigints).
+    if (type === 'cbor') return normalizeJsonBigints(decode(content));
   } catch {
     return null;
   }
@@ -1262,10 +1421,15 @@ function parseJsonishAssertion(body: Uint8Array): unknown {
 }
 
 /**
- * Extracts an embedded binary resource. c2pa-rs stores binary payloads
- * (thumbnails and other blobs) as a bfdb descriptor box (0x00, MIME string,
- * 0x00 — ISO 19566-5) followed by a bidb box holding the raw bytes. Anything
- * that is not exactly that shape reads as absence.
+ * Extracts an embedded binary resource (0.19.0 SDK-layout support). c2pa-rs
+ * and the c2pa-swift SDK store binary payloads (thumbnails and other blobs)
+ * as a superbox whose content is a bfdb box (binary descriptor: 0x00, MIME
+ * string, 0x00 — ISO 19566-5) followed by a bidb box (the raw bytes). Our
+ * own writer through 0.18.x never emits these — it uses single content
+ * boxes ('jpeg'/'cbor'/…) — so a bfdb/bidb pair here is unambiguous.
+ * Layout verified byte-for-byte against ground-truth c2pa-rs 0.90.14
+ * fixtures (tests/fixtures-sdk-layout/). Returns null for anything that
+ * isn't exactly this shape — malformed is absence, never a guess.
  */
 function extractEmbeddedData(body: Uint8Array): { mime: string; bytes: Uint8Array } | null {
   if (body.length < 16 || String.fromCharCode(body[4], body[5], body[6], body[7]) !== 'bfdb') return null;
@@ -1301,14 +1465,14 @@ export interface IngredientInfo {
   format?: string;
   relationship?: string;
   instanceId?: string;
-  /** The ingredient's declared data hash (hex), when present: the full-res
-      bytes the embedded thumbnail leads to. Parsed so a de-identify re-seal
-      can carry second-camera stills forward unchanged. */
+  /** The ingredient's declared data hash (hex), when present — the full-res
+      bytes the embedded thumbnail leads to (0.18.6: parsed so a de-identify
+      re-seal can carry second-camera stills forward unchanged). */
   dataHashHex?: string;
   /** The ingredient's declared thumbnail assertion identifier, when present. */
   thumbnailIdentifier?: string;
-  /** The assertion's own label (c2pa.ingredient, .v2, .v3). Multi-still video
-      manifests suffix it, e.g. c2pa.ingredient.v3.5. */
+  /** The assertion's own label (c2pa.ingredient, .v2, .v3 — multi-still
+      video manifests suffix: c2pa.ingredient.v3.5). */
   label: string;
 }
 
@@ -1329,104 +1493,128 @@ export interface C2paManifest {
   manifestLabel: string;
   /** Assertion label → sha256 of its jumb box content (as the claim references). */
   assertionHashes: Record<string, Uint8Array>;
-  /** Raw RFC 3161 TimeStampTokens (sigTst2/sigTst). Verified downstream;
-      presence alone proves nothing. */
+  /** Raw RFC 3161 TimeStampTokens (sigTst2/sigTst) — verified cryptographically downstream; presence alone means nothing. */
   timestampTokens: Uint8Array[];
   /**
-   * Which COSE header carried the tokens: v2 sigTst2 (CTT, token imprints the
-   * signature) or v1 sigTst (RFC 9052, token imprints the claim). The
-   * countersigned message differs, so verification must use the matching
-   * construction. Null when no tokens are present.
+   * Which COSE header carried the tokens: v2 sigTst2 (CTT — token imprints
+   * the signature) or v1 sigTst (RFC 9052 — token imprints the CLAIM). The
+   * countersigned message differs between the two; verification must use
+   * the matching construction or every genuine v1 token fails. Null when no
+   * tokens are present.
    */
   timestampVersion: 'v2-sigTst2' | 'v1-sigTst' | null;
   /**
    * PQ dual-signature entry from the COSE unprotected header (verifyPq), when
-   * present. Covers the same Sig_structure as the ES256 signature. The public
-   * key is not here; it is committed in the signed record payload
-   * (telemetry.pqKey), which also detects a strip.
+   * present. The signature covers the same Sig_structure as the
+   * ES256 signature; the public key is NOT here — it is committed inside the
+   * signed record payload (telemetry.pqKey), which doubles as strip detection.
    */
   pq: { alg: string; fingerprint: string; signature: Uint8Array } | null;
   /**
-   * Content of the com.verify.app-attest assertion, when present: the decoded
-   * object for a 'json' or 'cbor' content box, otherwise the raw bytes.
+   * The com.verify.app-attest assertion payload, when present. Decoded
+   * object for both carriers our readers accept (0.20.4: c2pa-rs / the
+   * c2pa-swift SDK serialize EVERY assertion — this one included — as a
+   * 'cbor' content box; our own writer emits 'json'). Content that fails
+   * BOTH decoders keeps flowing as raw bytes so present-but-undecodable
+   * still fails red on parse merit downstream, never silently absent.
    */
   appAttestAssertion: Record<string, unknown> | Uint8Array | null;
-  /** Which claim box parsed: 1 for 'c2pa.claim', 2 for 'c2pa.claim.v2'. */
+  /**
+   * Which claim box parsed: 1 = 'c2pa.claim' (our hand-rolled writer),
+   * 2 = 'c2pa.claim.v2' (c2pa-rs ≥0.9 / the c2pa-swift SDK path). Signed
+   * content — a reliable discriminator of which signing pipeline produced
+   * the manifest, for files whose generator is ours.
+   */
   claimVersion: 1 | 2;
   /** Signed on-device transcript (audio), when present. */
   transcript: TranscriptAssertion | null;
   /**
-   * Assertion labels the signed claim references (its `assertions` list, urls
-   * normalized to bare labels). A box in the store but absent here was
-   * attached after signing and carries no cryptographic weight, so every
-   * claim-bound report string must gate on membership in this list.
+   * Assertion labels the SIGNED CLAIM references (its `assertions` list, urls
+   * normalized to bare labels). A box present in the store but absent here
+   * was attached AFTER signing (box surgery) and carries NO cryptographic
+   * weight: every claim-bound report string must gate
+   * on membership in this list. Presence in the store is not endorsement.
    */
   referencedAssertionLabels: string[];
   /**
    * Sanitized camera EXIF (com.verify.exif), when present. `referenced` is
-   * true only when the signed claim references the box; an unreferenced box
-   * parses for display but binds to nothing.
+   * true ONLY when the signed claim references the box — an unreferenced box
+   * still parses (display is fine) but binds to nothing.
    */
   exif: { data: Record<string, unknown>; referenced: boolean } | null;
   /**
    * Org identity assertion (com.verify.identity), when present.
    * `referencedTelemetryHashHex` is the assertion's own claim about which
-   * telemetry hash it binds to; verifyManifest cross-checks it against the
-   * real assertion hash.
+   * telemetry hash it binds to — verifyManifest cross-checks it against the
+   * real assertion hash before any line calls it verified.
    */
   identity: { org: string; role: string; referencedTelemetryHashHex: string } | null;
   /**
    * Parsed JSON bodies of the project-specific custom assertions
    * (com.verify.streamedChunks / contextTree / poseTrace / captureIntegrity),
-   * keyed by label. Unknown or malformed bodies are absent; the claim's
-   * assertion-hash binding covers integrity either way. `referenced` is true
-   * only when the signed claim references the label.
+   * keyed by label. Unknown or malformed bodies are simply absent — the
+   * claim's assertion-hash binding (assertionHashes + claimAssertionsMatch)
+   * covers their integrity regardless of whether we understand the payload
+   * (UNSUPPORTED semantics for future fields). `referenced` is true ONLY
+   * when the signed claim references the label (referencedAssertionLabels);
+   * an unreferenced box was attached post-signing and proves nothing.
    */
   customAssertions: Record<string, { data: unknown; referenced: boolean }>;
   /**
-   * Standard C2PA actions assertion (edit history: c2pa.actions /
-   * c2pa.actions.v2) from the active manifest. Entries are declared by the
-   * sealing software, so they show what was declared, not what happened.
-   * `referenced` is true only when the signed claim references the box. Null
-   * when the manifest carries no actions box.
+   * Standard C2PA actions assertion (edit history — c2pa.actions /
+   * c2pa.actions.v2), parsed from the ACTIVE manifest. `referenced` is true
+   * ONLY when the signed claim references the box: these entries are
+   * DECLARED by the sealing software — they show what was declared and
+   * cannot prove nothing else happened. Absent entirely when the manifest
+   * carries no actions box (Source Kit's own manifests don't).
    */
   actions: { list: EditAction[]; referenced: boolean } | null;
   /**
-   * c2pa.metadata: signer-attributed standard metadata (JSON-LD). Declared by
-   * the sealing software like actions; claim-bound only when `referenced`.
+   * c2pa.metadata (0.16.0, C4) — signer-attributed standard metadata
+   * (JSON-LD). DECLARED by the sealing software like actions: parsed for
+   * display, claim-bound only when `referenced`.
    */
   c2paMetadata: { data: Record<string, unknown>; referenced: boolean } | null;
   /**
-   * c2pa.soft-binding: declared soft binding (alg id + first block value,
-   * hex). Recovery metadata; the spec forbids treating it as a hard binding,
-   * so no report string may present a match here as asset integrity.
+   * c2pa.soft-binding (0.16.0, C3) — the declared soft binding (alg id +
+   * first block value, hex). RECOVERY METADATA, never a hard binding: the
+   * spec forbids soft bindings as hard bindings, and no report string may
+   * present a match here as asset integrity.
    */
   softBinding: { alg: string; valueHex: string | null; referenced: boolean } | null;
   /**
-   * c2pa.training-mining: declared training/data-mining permissions,
-   * property → use (e.g. 'c2pa.ai_generative_training' → 'notAllowed'). A
-   * stated stance, not runtime enforcement.
+   * c2pa.training-mining (0.16.0, C5) — the declared training/data-mining
+   * permissions, property → use (e.g. 'c2pa.ai_generative_training' →
+   * 'notAllowed'). The signer/developer's stance, stated; not a runtime
+   * enforcement signal.
    */
   trainingMining: { entries: Record<string, string>; referenced: boolean } | null;
   /**
-   * c2pa.asset-type / c2pa.asset-type.v2: declared asset types (e.g.
-   * ['image']). v1 (CBOR map) and v2 (JSON array) both parse.
+   * c2pa.asset-type / c2pa.asset-type.v2 (0.16.0, C5) — declared asset
+   * types (e.g. ['image']). v1 (CBOR map) and v2 (JSON array) both parse.
    */
   assetType: { types: string[]; referenced: boolean } | null;
   /**
-   * Claim/ingredient thumbnails (c2pa.thumbnail.*.jpeg/.png): raw image bytes
-   * for display, each with its own `referenced` gate.
+   * Claim/ingredient thumbnails (c2pa.thumbnail.*.jpeg/.png) — raw image
+   * bytes for display, each with its own `referenced` gate; an
+   * unreferenced thumbnail is decoration attached post-signing.
    */
   thumbnails: { label: string; bytes: Uint8Array; referenced: boolean }[];
   /**
-   * Embedded binary resources (bfdb/bidb content boxes) keyed by assertion
-   * label, as c2pa-rs writes them. Claim and ingredient thumbnails also
-   * surface in `thumbnails`; each carries its own `referenced` gate.
+   * Embedded binary resources (0.19.0 SDK-layout support): c2pa-rs / the
+   * Swift SDK store binary payloads (thumbnails and other blobs) as JUMBF
+   * superboxes containing a bfdb (MIME descriptor) + bidb (raw bytes) pair,
+   * referenced from assertions/ingredients by hashed URI
+   * (self#jumbf=c2pa.assertions/<label>). Keyed by store label; the bytes
+   * are claim-bound by the same assertionHashes mechanism as any assertion
+   * box — `referenced` gates display weight exactly as for thumbnails.
    */
   resources: Record<string, { mime: string; bytes: Uint8Array; referenced: boolean }>;
   /**
-   * c2pa.depthmap.GDepth: declared depth map — GDepth envelope fields plus
-   * the decoded map image. Claim-bound only when `referenced`. The scene-match
+   * c2pa.depthmap.GDepth (0.16.0, D1; §18.21) — the declared depth map:
+   * GDepth envelope fields plus the decoded map image. Optically captured
+   * by the signer's claim; parsed for display/coherence, claim-bound only
+   * when `referenced`. Self-asserted like every assertion — a scene-match
    * check (spec's depthMap.sceneMismatch) is a desk analyzer's job.
    */
   depthmap: {
@@ -1443,9 +1631,10 @@ export interface C2paManifest {
     referenced: boolean;
   } | null;
   /**
-   * c2pa.hash.collection.data: declared multi-part set (photo + depth map),
-   * per-entry sha256 over all bytes of each member. A hard binding over set
-   * membership; validate with verifyCollectionHash against the artifacts.
+   * c2pa.hash.collection.data (0.16.0, D1; §18.8) — the declared
+   * multi-part set (photo + depth map), per-entry sha256 over ALL bytes of
+   * each member. A HARD BINDING over set membership: validate with
+   * verifyCollectionHash against the actual artifacts.
    */
   collectionHash: {
     alg: string;
@@ -1453,12 +1642,13 @@ export interface C2paManifest {
     referenced: boolean;
   } | null;
   /**
-   * Standard C2PA ingredient assertions (c2pa.ingredient[.vN]): the assets
-   * this file was made from, as declared by the sealing software. Declared,
-   * not proven, like actions; each carries its own `referenced` flag.
+   * Standard C2PA ingredient assertions (c2pa.ingredient[.vN]) — the assets
+   * this file was made from, as declared by the sealing software. Same
+   * declared-not-proven semantics as actions; each carries its own
+   * `referenced` flag.
    */
   ingredients: (IngredientInfo & { referenced: boolean })[];
-  /** claim_generator: the software that sealed this manifest. */
+  /** claim_generator — the software that sealed THIS manifest. */
   claimGenerator: string | null;
   /** Manifests in the store. >1 means an update chain; only the active one is verified. */
   manifestCount: number;
@@ -1483,11 +1673,12 @@ function isC2paStoreFirstPacket(payload: Uint8Array): boolean {
 
 /**
  * Locates the C2PA store inside a JPEG's APP11 segments and reassembles it.
- * A store larger than one segment rides an ISO 19566-5 packet chain (one En,
- * consecutive 1-based Z), concatenated in Z order. segmentStart/
- * segmentLength span the whole chain, which must be one contiguous run: the
- * hash.data exclusion is a single byte range. A broken chain (gap, duplicate
- * Z, interleaved packets) reads as no store at all.
+ * A store larger than one segment rides an ISO 19566-5 packet chain (one
+ * En, consecutive 1-based Z); the packets are concatenated in Z order.
+ * segmentStart/segmentLength span the WHOLE chain, which must be one
+ * contiguous run — the hash.data exclusion is a single byte range, and a
+ * fragmented chain would make that range a lie. A broken chain (gap,
+ * duplicate Z, interleaved packets) is absence, never a guess.
  */
 export function extractC2paStore(jpeg: Uint8Array): { payload: Uint8Array; segmentStart: number; segmentLength: number } | null {
   if (jpeg.length < 4 || jpeg[0] !== 0xff || jpeg[1] !== 0xd8) return null;
@@ -1522,16 +1713,19 @@ export function extractC2paStore(jpeg: Uint8Array): { payload: Uint8Array; segme
       if (g[i].z !== i + 1) { contiguous = false; break; }
       if (i > 0 && g[i].start !== g[i - 1].start + g[i - 1].length) { contiguous = false; break; }
     }
-    if (!contiguous) continue; // broken or fragmented chain: no store
-    // Continuation packets (Z>1) may repeat the store's LBox/TBox after the
-    // 8-byte CI/En/Z envelope (ISO 19566-5: "all fields except the XLBox
+    if (!contiguous) continue; // broken or fragmented chain — stated absence
+    // Continuation packets (Z>1) may REPEAT the store's LBox/TBox after the
+    // 8-byte CI/En/Z envelope — ISO 19566-5: "all fields except the XLBox
     // field … shall be present in all JPEG XT marker segment representing
-    // this box"). c2pa-rs and the 2022 Adobe writers duplicate them;
-    // app11Segments does not. Strip the duplicate only on a byte-compare
-    // against the first packet's store header, so both writer forms
-    // reassemble to the same logical store. Declared box lengths count the
-    // logical stream, so a stray duplicate mis-hashes every box straddling a
-    // segment boundary.
+    // this box". c2pa-rs and the 2022 Adobe writers duplicate them; our own
+    // writer (app11Segments) does not. Strip the duplicate only when it is
+    // literally there — a byte-compare against the first packet's store
+    // header — so both writer forms reassemble to the exact logical store.
+    // Without this, the 8 duplicated bytes land mid-stream and every box
+    // straddling a segment boundary hashes wrong (0.18.7: Adobe 2022
+    // ingredient thumbnails failed claim-assertion verification for exactly
+    // this reason — the foreign store's declared lengths count the LOGICAL
+    // stream, not the physical file bytes).
     const storeHeader = g[0].payload.subarray(APP11_ENVELOPE_BYTES, APP11_ENVELOPE_BYTES + 8);
     return {
       payload: concatBytes(...g.map((p, i) => {
@@ -1552,15 +1746,16 @@ export function extractC2paStore(jpeg: Uint8Array): { payload: Uint8Array; segme
 }
 
 /**
- * Parses the active manifest from a C2PA store payload. Per the spec the
- * active manifest is the last one in the store, since each update appends;
- * reading children[0] instead would disagree with reference validators on a
- * crafted multi-manifest file.
+ * Parses the active manifest from a C2PA store payload. Per the C2PA spec
+ * the active manifest is the LAST one in the store (each update appends);
+ * taking children[0] would let a crafted file show this verifier a benign
+ * first manifest while a reference validator reads a different active one —
+ * the "two verifiers, two verdicts" confusion attack.
  */
 export function parseManifest(storePayload: Uint8Array): C2paManifest | null {
-  // Hostile input must not throw: a manifest whose CBOR/JUMBF does not parse
-  // is invalid credentials (callers map null → SIGNATURE_INVALID). Pinned by
-  // the corpus's hostile-claim file.
+  // Hostile input must never throw here: a manifest whose CBOR/JUMBF does
+  // not parse is INVALID CREDENTIALS (callers map null → SIGNATURE_INVALID),
+  // not a verifier crash. The corpus's hostile-claim file pins this.
   try {
     return parseManifestInner(storePayload);
   } catch {
@@ -1569,7 +1764,9 @@ export function parseManifest(storePayload: Uint8Array): C2paManifest | null {
 }
 
 function parseManifestInner(storePayload: Uint8Array): C2paManifest | null {
-  // Full payload, not cut at the store box's declared length.
+  // Full payload, NOT cut at the store's declared length: 2022-era writers
+  // under-declare the store box too, and parseJumb's physical-tail tolerance
+  // needs those trailing bytes to recover the last child (0.18.7).
   const store = parseJumb(storePayload);
   const manifestCount = store?.children.length ?? 0;
   const manifest = store?.children[manifestCount - 1];
@@ -1578,10 +1775,10 @@ function parseManifestInner(storePayload: Uint8Array): C2paManifest | null {
 }
 
 /**
- * Parses every manifest in the store, in store order (last = active). A
- * manifest whose CBOR/JUMBF does not parse comes back null in place, so the
- * caller reports it as invalid credentials rather than skipping it. Hostile
- * input never throws.
+ * Parses EVERY manifest in the store, in store order (last = active).
+ * A manifest whose CBOR/JUMBF does not parse comes back null in place —
+ * the caller reports it as invalid credentials for that manifest, never
+ * silently skips it. Hostile input never throws.
  */
 export function parseManifestChain(storePayload: Uint8Array): { manifests: (C2paManifest | null)[] } | null {
   try {
@@ -1604,7 +1801,9 @@ export function parseManifestChain(storePayload: Uint8Array): { manifests: (C2pa
 
 function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManifest | null {
   const find = (label: string) => manifest.children.find((c) => c.label === label) ?? null;
-  // Claim box: 'c2pa.claim' (v1) or 'c2pa.claim.v2' (c2pa-rs).
+  // Claim box: 'c2pa.claim' (v1, ours) or 'c2pa.claim.v2' (c2pa-rs ≥0.9 /
+  // the c2pa-swift SDK — 0.19.0 SDK-layout support, ground-truth fixture
+  // tests/fixtures-sdk-layout/).
   const claimV1Node = find('c2pa.claim');
   const claimNode = claimV1Node ?? find('c2pa.claim.v2');
   const sigNode = find('c2pa.signature');
@@ -1624,33 +1823,44 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
   const decoded = decode(cose) as { tag?: number; value?: unknown[] };
   const arr = (decoded && Array.isArray(decoded.value) ? decoded.value : Array.isArray(decoded) ? decoded : null) as unknown[] | null;
   if (!arr || arr.length !== 4) return null;
-  // C2PA requires a detached payload: the payload slot must be CBOR null.
-  // Unchecked, that byte is malleable.
+  // C2PA requires a DETACHED payload: the payload slot must be CBOR null.
+  // Unchecked, that byte is malleable — an embedded payload is
+  // non-conformant; reject.
   if (arr[2] !== null && arr[2] !== undefined) return null;
   const protectedHeader = arr[0] as Uint8Array;
   const signature = arr[3] as Uint8Array;
 
-  // x5chain: C2PA 1.x carries it in the protected header (label 33);
-  // 2022-era drafts (Adobe beta, Truepic, Nikon) use the unprotected header
-  // under the string label 'x5chain'. Reading either is sound for signature
-  // verification — the chain only names the key, and a swapped chain fails
-  // the signature. Chain trust is a separate axis downstream (signerTrust).
+  // x5chain: C2PA 1.x carries it in the PROTECTED header (label 33).
+  // 2022-era drafts (Adobe beta, Truepic, Nikon) put it in the UNPROTECTED
+  // header under the STRING label 'x5chain'. Reading it from there is sound
+  // for signature verification — the signature itself proves possession of
+  // the leaf key; the chain merely NAMES which key, and a swapped chain
+  // fails the signature. Chain TRUST stays a separate axis downstream
+  // (signerTrust), so an unprotected chain cannot launder trust here.
   const headerMap = decode(protectedHeader);
-  // RFC 9360 serializes a single-certificate x5chain as a bare bstr rather
-  // than a one-element array, which is what c2pa-rs emits. Both encodings
-  // name the same chain, so a bare bstr is wrapped here.
+  // 0.20.3 (field, SDK self-check UNSUPPORTED on every c2pa-swift-signed
+  // capture): RFC 9360 serializes a ONE-CERTIFICATE x5chain as a bare bstr,
+  // not a one-element array — and c2pa-rs (via the coset crate) follows it.
+  // Our own signer always writes the array. Both encodings name the same
+  // chain; a bare bstr read as an array made chain[0] the first DER BYTE
+  // and key extraction threw → signatureValid null → "cannot verify".
   const rawChain = (mapGet(headerMap, 33) ?? mapGet(headerMap, 'x5chain') ??
     mapGet(arr[1], 33) ?? mapGet(arr[1], 'x5chain')) as Uint8Array[] | Uint8Array | undefined;
   const chain = rawChain instanceof Uint8Array ? [rawChain] : rawChain;
   if (!chain || chain.length === 0) return null;
   const certDer = chain[0];
 
-  // Labels the signed claim references — the only claim-bound boxes. Boxes
-  // in the store but not listed were attached after signing; they are parsed
-  // for display and carry no weight.
+  // The labels the SIGNED CLAIM references — the ONLY boxes claim-bound.
+  // Boxes in the store but not in this list were
+  // attached after signing: parsed for honest display, carrying no weight.
   const referencedAssertionLabels: string[] = [];
-  for (const r of claimAssertionRefs(claim)) {
-    if (typeof r?.url === 'string') referencedAssertionLabels.push(assertionRefLabel(r.url));
+  {
+    // v1 `assertions` and v2 `created_assertions`/`gathered_assertions`
+    // (c2pa-rs / SDK claims) merge here — see claimAssertionRefs.
+    for (const r of claimAssertionRefs(claim)) {
+      const url = (r as { url?: unknown } | null)?.url;
+      if (typeof url === 'string') referencedAssertionLabels.push(assertionRefLabel(url));
+    }
   }
   const claimReferences = (label: string): boolean => referencedAssertionLabels.includes(label);
 
@@ -1677,14 +1887,16 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
       assertionHashes[a.label] = sha256(a.full.subarray(8));
       const embedded = extractEmbeddedData(a.body);
       if (embedded) {
-        // Embedded binary resource (bfdb+bidb). Registered for hashed-URI
-        // consumers; claim and ingredient thumbnails also surface in
-        // `thumbnails` so both layouts render the same way.
+        // SDK-layout binary resource (bfdb+bidb). Registered for hashed-URI
+        // consumers; claim/ingredient thumbnails additionally surface in
+        // `thumbnails` so the SDK layout renders identically to ours.
         resources[a.label] = { mime: embedded.mime, bytes: embedded.bytes, referenced: claimReferences(a.label) };
         if (
-          // c2pa-rs keeps multi-instance labels unique with a double-underscore
-          // suffix ('c2pa.thumbnail.ingredient__1'); this writer suffixes with
-          // '.N'. Both parse.
+          // 0.20.4: c2pa-rs keeps multi-instance labels unique with a
+          // double-underscore suffix ('c2pa.thumbnail.ingredient__1' —
+          // reproduced byte-for-byte via c2pa-python 0.37.x / c2pa-rs
+          // 0.90.14, tests/fixtures-sdk-layout/c2pa-rs-0.90-video-stills.mp4);
+          // our own writer suffixes with '.N'. Both families parse.
           /^c2pa\.thumbnail\.(claim|ingredient)(\.\d+|__\d+)?$/.test(a.label) &&
           (embedded.mime === 'image/jpeg' || embedded.mime === 'image/png') &&
           embedded.bytes.length > 0
@@ -1693,9 +1905,10 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
         }
       } else if (a.label === 'c2pa.hash.data' && a.body.length >= 8) {
         const cborBytes = a.body.subarray(8, readU32(a.body, 0));
-        // Structural validation, not a blind cast: mutated CBOR can decode
-        // to a map missing exclusions/hash. Malformed leaves hashData null,
-        // so asset integrity reads as unproven rather than throwing.
+        // Structural validation, never a blind cast: mutated
+        // CBOR can decode to a map missing exclusions/hash — accepting it
+        // crashed verifyManifest on .length. Malformed → hashData stays
+        // null → asset integrity UNPROVEN and disclosed, never a TypeError.
         const decoded = decode(cborBytes) as { exclusions?: { start: number; length: number }[]; alg?: string; hash?: Uint8Array } | null;
         if (
           decoded &&
@@ -1707,22 +1920,33 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
           hashData = { exclusions: decoded.exclusions, alg: decoded.alg, hash: decoded.hash };
         }
       } else if ((a.label === 'c2pa.hash.bmff.v2' || a.label === 'c2pa.hash.bmff.v3') && a.body.length >= 8) {
-        // v3 (spec 2.2, c2pa-rs output) is structurally identical to v2 here:
-        // xpath exclusions, alg, and hash, over the same exclusion walk.
+        // v3 (c2pa-rs ≥0.9 / SDK output, spec 2.2) is structurally identical
+        // to v2 here — xpath exclusions + alg + hash — and the hash
+        // construction is the same exclusion-walk with BE64 offset markers
+        // (verified byte-for-byte against the ground-truth c2pa-rs 0.90.14
+        // MP4 fixture in tests/fixtures-sdk-layout/).
         const cborBytes = a.body.subarray(8, readU32(a.body, 0));
-        const decoded = decode(cborBytes) as { exclusions?: BmffExclusion[]; alg?: string; hash?: Uint8Array } | null;
+        const decoded = decode(cborBytes) as { exclusions?: { xpath?: unknown; length?: unknown; data?: unknown }[]; alg?: string; hash?: Uint8Array } | null;
         if (
           decoded &&
           Array.isArray(decoded.exclusions) &&
           typeof decoded.alg === 'string' &&
           decoded.hash instanceof Uint8Array
         ) {
-          hashBmff = { exclusions: decoded.exclusions, alg: decoded.alg, hash: decoded.hash };
+          // 0.21.0: normalize explicit CBOR nulls at the boundary (see
+          // normalizeBmffExclusions) — the 0.20.9 field failure class.
+          const exclusions = normalizeBmffExclusions(decoded.exclusions);
+          if (exclusions) hashBmff = { exclusions, alg: decoded.alg, hash: decoded.hash };
         }
       } else if (a.label === 'com.verify.app-attest' && a.body.length >= 8) {
-        // c2pa-rs writes this assertion as a 'cbor' content box; this writer
-        // uses 'json'. Content that decodes as neither flows on as raw bytes,
-        // so it still fails on parse merit downstream.
+        // 0.20.4 (field, every SDK-sealed photo red): c2pa-rs / the
+        // c2pa-swift SDK write EVERY assertion — this one included — as a
+        // 'cbor' content box (ground-truthed on the sdk-layout fixture:
+        // zero 'json' boxes). The old raw-slice path fed CBOR bytes to
+        // JSON.parse downstream, which threw → present+invalid → red.
+        // Decode through the shared JSON-or-CBOR carrier; content that
+        // fails both decoders keeps flowing as raw bytes so garbage still
+        // fails red on parse merit. Crypto checks downstream untouched.
         const parsed = parseJsonishAssertion(a.body);
         appAttestAssertion = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
           ? (parsed as Record<string, unknown>)
@@ -1742,7 +1966,7 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
               referencedTelemetryHashHex: ref.hash,
             };
           }
-        } catch { /* non-fatal: a malformed assertion is absence */ }
+        } catch { /* non-fatal — a malformed assertion is absence, not evidence */ }
       } else if (a.label === 'com.verify.exif' && a.body.length >= 8) {
         try {
           const parsed = parseJsonishAssertion(a.body);
@@ -1754,14 +1978,15 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
           }
         } catch { /* non-fatal */ }
       } else if (a.label === 'com.verify.telemetry' && a.body.length >= 8) {
+        // 'json' content box (our writer) or 'cbor' (SDK v2 manifests).
         const parsed = parseJsonishAssertion(a.body);
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           telemetry = parsed as Record<string, unknown>;
         }
       } else if ((a.label === 'c2pa.actions' || a.label === 'c2pa.actions.v2') && a.body.length >= 8) {
         // Standard C2PA edit history (CBOR): how a Canon→Photoshop file
-        // surfaces its edits. Structurally validated; malformed CBOR reads
-        // as absence.
+        // surfaces its edits here. Structural validation, never a blind
+        // cast — malformed CBOR decodes to absence, never a crash.
         try {
           const cborBytes = a.body.subarray(8, readU32(a.body, 0));
           const decoded = decode(cborBytes) as { actions?: unknown } | null;
@@ -1771,8 +1996,8 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
               if (!raw || typeof raw !== 'object') continue;
               const e = raw as Record<string, unknown>;
               if (typeof e.action !== 'string') continue;
-              // softwareAgent is a plain string in v1 and a map
-              // ({name, version}) in v2; take the name either way.
+              // softwareAgent is a plain string in v1; v2 allows a map
+              // ({name, version}) — take the name either way.
               const sa = e.softwareAgent;
               const softwareAgent =
                 typeof sa === 'string' ? sa
@@ -1790,22 +2015,27 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
             }
             actions = { list, referenced: claimReferences(a.label) };
           }
-        } catch { /* non-fatal: a malformed assertion is absence */ }
+        } catch { /* non-fatal — a malformed assertion is absence, not evidence */ }
       } else if (/^c2pa\.ingredient(\.v\d+)?(\.\d+|__\d+)?$/.test(a.label) && a.body.length >= 8) {
-        // Standard C2PA ingredient (CBOR): an asset this file was made from,
-        // as declared by the sealing software. The instance suffix is '.N'
-        // from this writer (multi-still video, where later pair ingredients
-        // are suffixed to keep claim labels unique) or '__N' from c2pa-rs.
+        // Standard C2PA ingredient (CBOR): an asset this file was made
+        // from, as declared by the sealing software. The instance suffix is
+        // '.N' from our writer (0.18.6 multi-still video) or '__N' from
+        // c2pa-rs / the c2pa-swift SDK (0.20.4, ground-truthed via
+        // c2pa-python 0.37.x / c2pa-rs 0.90.14 — 'c2pa.ingredient.v3__1');
+        // the dot-only anchored regex parsed only the first still's
+        // ingredient, so later SDK pair frames vanished from the report.
         try {
           const cborBytes = a.body.subarray(8, readU32(a.body, 0));
           const decoded = decode(cborBytes) as Record<string, unknown> | null;
           if (decoded && typeof decoded === 'object') {
-            // The data hash and thumbnail identifier let the de-identify
-            // re-seal carry second-camera stills forward unchanged.
+            // The data hash + thumbnail identifier let a re-seal (the
+            // de-identify path) carry the second-camera stills forward —
+            // lead bytes and the full-res commitment, unchanged.
             const data = decoded.data as { hash?: unknown } | undefined;
-            // This writer's v1-style ingredients name the thumbnail with
-            // {identifier}; c2pa-rs v3 ingredients use a hashed URI, whose key
-            // is 'url' in the spec ('uri' also accepted).
+            // Thumbnail reference: our writer (v1-style ingredient) uses
+            // {identifier}; c2pa-rs/SDK v3 ingredients use a hashed URI
+            // {url, hash} — the hashed-URI key is 'url' per the C2PA spec
+            // (ground-truth c2pa-rs 0.90.14 fixture), 'uri' tolerated.
             const thumb = decoded.thumbnail as { identifier?: unknown; url?: unknown; uri?: unknown } | undefined;
             const thumbRef = thumb?.url ?? thumb?.uri;
             const thumbId =
@@ -1813,7 +2043,7 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
               : typeof thumbRef === 'string' ? assertionRefLabel(thumbRef)
               : undefined;
             // v1 ingredients carry 'title'/'format'; c2pa-rs v3 ingredients
-            // carry 'dc:title'/'dc:format'.
+            // carry 'dc:title'/'dc:format' — both normalized here.
             const titleRaw = decoded.title ?? decoded['dc:title'];
             const formatRaw = decoded.format ?? decoded['dc:format'];
             ingredients.push({
@@ -1829,14 +2059,14 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
           }
         } catch { /* non-fatal */ }
       } else if (a.label === LABEL_METADATA && a.body.length >= 8) {
-        // c2pa.metadata (JSON-LD): declared metadata, gated on `referenced`
-        // like actions.
+        // c2pa.metadata (JSON-LD) — declared metadata, same epistemic
+        // weight as actions: display, gated on `referenced`.
         try {
           const j = JSON.parse(bytesToUtf8(a.body.subarray(8, readU32(a.body, 0))));
           if (j && typeof j === 'object' && !Array.isArray(j)) {
             c2paMetadata = { data: j as Record<string, unknown>, referenced: claimReferences(a.label) };
           }
-        } catch { /* non-fatal: a malformed assertion is absence */ }
+        } catch { /* non-fatal — a malformed assertion is absence, not evidence */ }
       } else if (a.label === LABEL_SOFT_BINDING && a.body.length >= 8) {
         // c2pa.soft-binding (CBOR): { alg, blocks: [{scope, value}], pad }.
         // Structural validation; value surfaced as hex for comparison.
@@ -1886,8 +2116,8 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
           if (types.length > 0) assetType = { types, referenced: claimReferences(a.label) };
         } catch { /* non-fatal */ }
       } else if (a.label === LABEL_DEPTHMAP_GDEPTH && a.body.length >= 8) {
-        // c2pa.depthmap.GDepth (CBOR; §18.21 depthmap-gdepth-map). The five
-        // required fields are validated; the map image is base64-decoded.
+        // c2pa.depthmap.GDepth (CBOR; §18.21 depthmap-gdepth-map). The
+        // required five are validated; the map image is base64-decoded.
         try {
           const cborBytes = a.body.subarray(8, readU32(a.body, 0));
           const decoded = decode(cborBytes) as Record<string, unknown> | null;
@@ -1916,11 +2146,11 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
               referenced: claimReferences(a.label),
             };
           }
-        } catch { /* non-fatal: a malformed assertion is absence */ }
+        } catch { /* non-fatal — malformed assertion is absence, not evidence */ }
       } else if (a.label === LABEL_COLLECTION_HASH && a.body.length >= 8) {
         // c2pa.hash.collection.data (CBOR; §18.8): { uris: [...], alg }.
         // URIs are validated per §15.12.5 (no '.'/'..' components) at parse
-        // time; a hostile set name is dropped.
+        // time — a hostile set name is dropped, never followed.
         try {
           const cborBytes = a.body.subarray(8, readU32(a.body, 0));
           const decoded = decode(cborBytes) as { uris?: unknown; alg?: unknown } | null;
@@ -1941,7 +2171,7 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
           }
         } catch { /* non-fatal */ }
       } else if (/^c2pa\.thumbnail\.(claim|ingredient)\.(jpeg|png)(\.\d+)?$/.test(a.label) && a.body.length >= 8) {
-        // Multi-still video manifests suffix later pair
+        // 0.18.6 field fix: multi-still video manifests suffix later pair
         // thumbnails (.1/.2/.3 — emission keeps claim labels unique); the
         // anchored regex dropped every still after the first, so exported
         // videos lost their second-camera frames on inspect.
@@ -1956,18 +2186,19 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
         // hash binds the raw box ONLY when the claim references the label —
         // an unreferenced box parses fine but proves nothing.
         try {
-          // 'json' content box (this writer) or 'cbor' (c2pa-rs).
+          // 'json' (our writer) or 'cbor' (SDK v2) content box.
           customAssertions[a.label] = {
             data: parseJsonishAssertion(a.body),
             referenced: claimReferences(a.label),
           };
-        } catch { /* non-fatal: a malformed body is absence */ }
+        } catch { /* non-fatal — malformed body is absence, never a crash */ }
       }
     }
   }
 
-  // RFC 3161 countersignatures (sigTst2/sigTst): raw tokens are collected
-  // here and verified downstream, once imprint, digest, and signature check.
+  // RFC 3161 countersignatures (sigTst2/sigTst): collect the raw tokens for
+  // real cryptographic verification downstream — a token's mere presence
+  // says nothing until its imprint, digest, and signature all check out.
   const timestampTokens: Uint8Array[] = [];
   let timestampVersion: C2paManifest['timestampVersion'] = null;
   try {
@@ -1983,7 +2214,7 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
   } catch { /* malformed countersignature container — treated as absent */ }
 
   // PQ dual signature (verifyPq): shape-checked here, verified
-  // cryptographically in verifyManifest.
+  // cryptographically in verifyManifest — presence alone means nothing.
   let pq: C2paManifest['pq'] = null;
   try {
     const unprotected = arr[1];
@@ -1996,10 +2227,15 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
     }
   } catch { /* malformed PQ entry — treated as absent */ }
 
-  // claim_generator: the software that sealed this manifest. Self-asserted,
-  // display only. v1 claims carry claim_generator (a string); v2 claims
-  // replace it with claim_generator_info, a map {name, version} or an array
-  // of them. Both normalize to "name/version".
+  // claim_generator: the software that sealed THIS manifest ("Adobe
+  // Photoshop 26.3", "ExhibitA/0.14.0"). Display only — self-asserted.
+  // v1 claims carry claim_generator (string); v2 claims (c2pa-rs / the
+  // c2pa-swift SDK — 0.20.4) replace it with claim_generator_info, a map
+  // {name, version, …} (spec 2.x tolerates an array of maps). Both
+  // normalize to "name/version" — an SDK-sealed file must not render as
+  // generator-less. NOTE: c2pa-rs 0.90 writes ITSELF here
+  // ('c2pa-rs/0.90.14'), dropping the manifest JSON's claim_generator —
+  // the honest surface is what the claim actually says.
   const claimGenerator = (() => {
     const g = claim['claim_generator'];
     if (typeof g === 'string') return g;
@@ -2014,9 +2250,11 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
     return null;
   })();
 
-  // The c2pa-rs path carries the capture-time pHash as com.verify.phash
-  // (JSON { alg, hex }) rather than a raw CBOR soft-binding block. Surface it
-  // through the same field: recovery metadata with the weight of
+  // 0.19.0 SDK-layout parity: the c2pa-swift path carries the capture-time
+  // pHash as com.verify.phash (JSON { alg, hex }) because c2pa-rs has no
+  // slot for raw CBOR soft-binding blocks in manifest JSON. Surface it
+  // through the same field so downstream consumers see one shape. Still
+  // recovery metadata, never a hard binding — the same weight as
   // c2pa.soft-binding, claim-bound only when referenced.
   if (!softBinding && customAssertions['com.verify.phash']) {
     const p = customAssertions['com.verify.phash'];
@@ -2031,9 +2269,11 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
 
 /**
  * SHA-256 of the file with byte ranges removed (c2pa.hash.data exclusion
- * semantics). Foreign signers (Leica, Adobe) emit several exclusions, so the
- * general case is N ranges: sort by start, hash the gaps. Zero-length ranges
- * are no-ops. Out-of-bounds or overlapping ranges fail closed (null).
+ * semantics). Foreign signers (Leica, Adobe) routinely emit several
+ * exclusions, so the general case is N ranges: sort by start, hash the gaps.
+ * Zero-length ranges are no-ops (a manifest whose only exclusion is empty
+ * hashes the whole file). Malformed ranges — out of bounds or overlapping —
+ * fail closed (null), never a guess.
  */
 export function sha256ExcludingRanges(bytes: Uint8Array, ranges: { start: number; length: number }[]): Uint8Array | null {
   const rs = ranges
@@ -2053,64 +2293,72 @@ export function sha256ExcludingRanges(bytes: Uint8Array, ranges: { start: number
 
 export interface C2paVerification {
   /** Tri-state: true = signature verifies over the claim bytes; false = it
-      does not (proven tamper); null = this build could not run the check
-      (unsupported COSE alg, unreadable key), reported as "not checked". */
+      does NOT (proven tamper of the signed content); null = this build could
+      not run the check (unsupported COSE alg, unreadable key) — absence of
+      proof in both directions, to be reported as "not checked", never red. */
   signatureValid: boolean | null;
   assetHashMatches: boolean;
   /**
-   * Why the asset hash failed. 'mismatch': the binding is well-formed and the
-   * bytes changed (proven tamper). 'void-binding': the binding proves nothing
-   * — the exclusions exempt the hash input itself, the exclusion set is
-   * malformed, the container cannot be walked, or the claim references no
-   * hard-binding assertion. A void binding must never surface as "content
-   * modified". Null when the hash matches.
+   * WHY the asset hash failed, when it did:
+   * 'mismatch' — the binding is well-formed and the bytes changed (proven
+   * tamper); 'void-binding' — the binding proves NOTHING: the declared
+   * exclusions exempt the hash input itself (cover the whole file, omit the
+   * manifest's own byte range, or exempt the media boxes), the exclusion set
+   * is malformed, the container can't be walked, or the signed claim
+   * references no hard-binding assertion at all. A void
+   * binding is absence of proof, NOT proven tamper — the report layer must
+   * never let it surface as "content modified"; null when the hash matches.
    */
   assetHashFailure: 'mismatch' | 'void-binding' | null;
   claimAssertionsMatch: boolean;
   /** COSE alg from the protected header ('ES256', 'PS256', …), or null if unreadable. */
   alg: string | null;
   /**
-   * PQ layer evaluation. Null when the manifest carries neither a verifyPq
-   * entry nor a committed telemetry pqKey. The public key comes from the
-   * committed record block, so keyCommitted=false with present=true means the
-   * entry binds to no committed key and proves nothing.
+   * PQ layer evaluation — null when the manifest carries neither a
+   * verifyPq entry nor a committed telemetry pqKey (legacy/foreign). The public
+   * key comes from the committed record block; the unprotected entry only
+   * carries fingerprint + signature, so keyCommitted=false with present=true
+   * means the PQ entry cannot be bound to any committed key — it proves nothing.
    */
   pq: PqLayerCheck | null;
   /**
-   * Org identity assertion evaluation. Null when the manifest carries no
-   * com.verify.identity assertion; absence is neutral. When present,
+   * Org identity assertion evaluation — null when the
+   * manifest carries no com.verify.identity assertion (personal captures,
+   * foreign manifests): absence is neutral, never a failure. When present,
    * telemetryHashMatches says the assertion's binding reference matches the
-   * claim's own telemetry assertion hash, and orgMatchesChainTop compares the
-   * named org against the x5chain's top certificate subject (org ?? CN), read
-   * from protected-header order since the chain is leaf-first. Chain validity
-   * is reported separately. orgMatchesChainTop is null when the top cert is
-   * unparseable, carries no org/CN, or the assertion names no org — the
-   * cross-check could not run.
+   * claim's own telemetry assertion hash, and orgMatchesChainTop compares
+   * the named org against the x5chain's TOP certificate subject (org ?? CN).
+   * The top is read straight from the protected-header order (x5chain is
+   * leaf-first by construction), so this check works even when full chain
+   * ordering/validity can't be established — chain validity remains a
+   * separate, independently reported question. orgMatchesChainTop is null
+   * when the top cert can't be parsed or carries no org/CN string (or the
+   * assertion names no org): the cross-check then could not run and must be
+   * reported as unproven, never silently skipped.
    */
   identity: {
     present: boolean;
     org: string | null;
     telemetryHashMatches: boolean;
     orgMatchesChainTop: boolean | null;
-    /** Subject (org ?? CN) of the x5chain's top cert, when parseable, so
-        reports can name what the org was compared against. */
+    /** Subject (org ?? CN) of the x5chain's top cert, when parseable — surfaced so reports can name what the org was compared against. */
     chainTopName: string | null;
   } | null;
 }
 
 /**
  * Verifies a parsed manifest against the media bytes it rides in (JPEG or
- * BMFF), in c2pa-rs order: COSE signature over the claim, assertion hashes,
- * then the hard-binding hash — hash.data exclusions for JPEG,
+ * BMFF). Mirrors what c2pa-rs does: COSE signature over the claim, assertion
+ * hashes, then the hard-binding hash — hash.data exclusions for JPEG,
  * c2pa.hash.bmff.v2 for MP4/MOV/M4A.
  */
 export function verifyManifest(
   fileBytes: Uint8Array,
   m: C2paManifest,
   /** The embedded manifest's own byte range in the file (JPEG APP11 segment /
-   * PNG caBX chunk / BMFF uuid box), when the caller located one. The
-   * asset-hash guards use it to confirm the declared exclusions exempt the
-   * credentials. Absent for detached/sidecar verification. */
+   * PNG caBX chunk / BMFF uuid box), when the caller located one. Used to
+   * prove the declared exclusions actually exempt the CREDENTIALS — see the
+   * asset-hash guards below. Absent for detached/sidecar verification. */
   manifestRange?: { start: number; length: number }
 ): C2paVerification {
   // 1. COSE signature over the claim bytes.
@@ -2121,10 +2369,12 @@ export function verifyManifest(
     new Uint8Array([0x40]),
     bstr(m.claimBytes)
   );
-  // Tri-state: true means the claim bytes are what the signer signed, false
-  // means they are not, null means this build cannot run the check
-  // (unsupported alg, unreadable key) and the verdict layer reports "not
-  // checked". Downstream distinguishes === false from === true.
+  // Tri-state: TRUE proves the claim bytes are exactly what the signer
+  // signed; FALSE proves they are not; NULL means this build cannot run the
+  // check at all (unsupported alg, unreadable key) — absence of proof in
+  // BOTH directions, which the verdict layer must surface as "not checked",
+  // never as tamper. Downstream (trustLadder/policyLayer/report) already
+  // distinguishes === false from === true; null is the honest middle.
   let signatureValid: boolean | null = null;
   let alg: string | null = null;
   try {
@@ -2132,23 +2382,26 @@ export function verifyManifest(
     const algId = mapGet(headerMap, 1);
     alg = COSE_ALG_NAMES[algId as number] ?? String(algId ?? 'unknown');
     if (algId === -7) {
-      // ES256: our own files, plus Leica/Truepic-era foreign files.
-      // The SAME positional SPKI walk that verifyAsset.ts derives
-      // signerFingerprint from. A byte scan for the curve OID would return
-      // whichever P-256 point appears first in the DER, which need not be the
-      // certificate's actual subject key — the signature would then be checked
-      // against one key while the identity reported another.
+      // ES256 — our own files, Leica/Truepic-era foreign files.
+      // The SAME positional SPKI walk that verifyAsset derives
+      // signerFingerprint from. A byte scan returns whichever P-256 point
+      // appears first in the DER, which need not be the certificate's
+      // subject key — the signature would then be checked against one key
+      // while the identity reported another (0.20.5 key-confusion patch).
       const certKey = publicKeyFromCert(m.certDer);
       const pub = certKey?.kind === 'ec' ? certKey.point : null;
       if (pub) {
-        // lowS: false — COSE has no low-S rule, and real signers ship high-S
-        // signatures (truepic-20230212-library.jpg in the c2pa-org
-        // public-testfiles). A high-S signature binds the same key to the
-        // same message, so rejecting it would false-red genuine media.
-        // Both ES256 byte forms are accepted: P1363 compact (this signer,
-        // Truepic-era files) and ASN.1 DER (the spec's ECDSA serialization,
-        // which c2pa-rs emits). Failing both is an invalid signature, not an
-        // unsupported one.
+        // lowS: false — COSE has no low-S rule (that is a Bitcoin-ism), and
+        // real signers ship high-S signatures (truepic-20230212-library.jpg
+        // in the c2pa-org public-testfiles does). A high-S malleation still
+        // binds the key to the IDENTICAL message, so tamper evidence is
+        // unaffected; rejecting it false-reds genuine media.
+        // 0.20.3: accept BOTH ES256 byte forms — P1363 compact (our signer,
+        // Truepic-era files) and ASN.1 DER (the C2PA spec's ECDSA
+        // serialization; what c2pa-rs emits). A signature failing BOTH
+        // forms is a genuine INVALID, not "unsupported" — coverage of the
+        // alg is now complete, so the honest null narrows to key-read
+        // failures only.
         const digest = sha256(sigStructure);
         let ok = false;
         try { ok = p256.verify(m.signature, digest, pub, { format: 'compact', lowS: false }); } catch { ok = false; }
@@ -2156,23 +2409,25 @@ export function verifyManifest(
         signatureValid = ok;
       }
     } else if (algId === -37 || algId === -38 || algId === -39) {
-      // PS256/PS384/PS512 (RSA-PSS): Adobe's 2022-era files. The key comes
-      // from the light SPKI extractor, not the strict chain parser, which
-      // refuses Adobe's RSASSA-PSS certs. Here the cert only names the key;
-      // the signature check proves possession.
+      // PS256/PS384/PS512 — RSA-PSS. Adobe's 2022-era files sign this way.
+      // The key comes from the light SPKI extractor, NOT the strict chain
+      // parser: Adobe signs its certs with RSASSA-PSS, which the strict
+      // parser refuses — but here the cert only NAMES the key, and the
+      // signature check itself proves possession.
       const key = publicKeyFromCert(m.certDer);
       if (key?.kind === 'rsa') {
         const hashName = algId === -37 ? 'sha256' : algId === -38 ? 'sha384' : 'sha512';
         signatureValid = verifyRsaPss(key, hashName, sigStructure, m.signature);
       }
     }
-    // Any other alg (ES384/ES512/EdDSA/…) leaves signatureValid null; the
-    // report names it in checksNotPerformed.
+    // Any other alg (ES384/ES512/EdDSA/…): signatureValid stays null —
+    // the report names the alg in checksNotPerformed instead of guessing.
   } catch { signatureValid = null; }
 
-  // 1b. PQ dual signature: ML-DSA-65 over the same Sig_structure. The key
-  // comes only from the committed record block (telemetry.pqKey), never the
-  // strippable unprotected header, and the entry's fingerprint must match it.
+  // 1b. PQ dual signature: ML-DSA-65 over the SAME Sig_structure.
+  // The key is taken ONLY from the committed record block (telemetry.pqKey) —
+  // never from the strippable unprotected header — and the entry's fingerprint
+  // must match it, so a swapped-in foreign PQ signature binds to nothing.
   let pq: PqLayerCheck | null = null;
   const block = m.telemetry ? pqPublicBlockFrom((m.telemetry as Record<string, unknown>).pqKey) : null;
   if (m.pq || block) {
@@ -2183,22 +2438,26 @@ export function verifyManifest(
   }
 
   // 2. Asset hash via the hard-binding assertion (hash.data for JPEG/PNG,
-  //    c2pa.hash.bmff.v2 for BMFF). The walk proves the hash matches some
-  //    input; two extra guards prove that input is the media. Without them a
-  //    manifest could exempt nearly the whole file and "match" any media.
-  //    Tripping a guard means a void binding, not proven tamper.
+  //    c2pa.hash.bmff.v2 for BMFF). Two guards beyond the walk:
+  //    the walk proves the hash matches SOME input; the guards prove
+  //    the input is the MEDIA. Without them a manifest can declare exclusions
+  //    that exempt (almost) the whole file — the hash then commits to a
+  //    constant or to nothing and "matches" any media. A file that trips a
+  //    guard is NOT proven-tampered: the binding is void, absence of proof.
   let assetHashMatches = false;
   let assetHashFailure: C2paVerification['assetHashFailure'] = null;
-  // A binding assertion binds media only when the signed claim references
-  // it; an unreferenced c2pa.hash.* box could have been attached after
-  // signing, self-consistent over arbitrary media. Unreferenced binding,
-  // malformed exclusion set, and no binding at all all yield void-binding.
+  // A binding assertion binds media ONLY when the SIGNED CLAIM references
+  // it. A c2pa.hash.* box the claim does not reference could have been
+  // attached AFTER signing — self-consistent over arbitrary media —
+  // lending that media a false INTACT. An unreferenced binding, a malformed
+  // exclusion set, and no binding at all are all the same honest outcome: the
+  // credentials commit to nothing → void-binding → UNPROVEN, never tamper.
   const bindingRefs = claimAssertionRefs(m.claim);
   const claimReferencesBinding = (label: string): boolean =>
     bindingRefs.some((r) => typeof r?.url === 'string' && assertionRefLabel(r.url) === label);
   if (m.hashData && m.hashData.alg === 'sha256' && m.hashData.exclusions.length > 0 && claimReferencesBinding('c2pa.hash.data')) {
-    // All exclusions are honored; foreign manifests (Leica, Adobe) use
-    // several, and verifying only the first would false-red genuine media.
+    // All exclusions are honored — foreign manifests (Leica, Adobe) use
+    // several; verifying only the first would false-red genuine media.
     const recomputed = sha256ExcludingRanges(fileBytes, m.hashData.exclusions);
     const walkMatches =
       recomputed !== null &&
@@ -2217,8 +2476,8 @@ export function verifyManifest(
           (r) => r.start <= manifestRange.start && r.start + r.length >= manifestRange.start + manifestRange.length
         );
     if (recomputed === null || !remainderNonEmpty || !coversManifest) {
-      // recomputed null means the exclusion set is malformed (overlapping or
-      // out of bounds): defective credentials, not proven tamper.
+      // recomputed null = the exclusion set itself is malformed (overlapping /
+      // out of bounds) — defective credentials, NOT proven tamper.
       assetHashFailure = 'void-binding';
     } else {
       assetHashMatches = walkMatches;
@@ -2228,8 +2487,9 @@ export function verifyManifest(
     try {
       const recomputed = hashBmffV2(fileBytes, m.hashBmff.exclusions);
       const walkMatches = recomputed.length === m.hashBmff.hash.length && recomputed.every((v, i) => v === m.hashBmff!.hash[i]);
-      // BMFF guards: at least one root box must contribute to the hash, no
-      // mdat box may be excluded, and a known manifest uuid box must be.
+      // Guards (BMFF shapes of the same attack): at least one root box must
+      // contribute to the hash; no mdat (media) box may be excluded; and when
+      // the manifest's uuid box is known, it must itself be excluded.
       const rootBoxes = parseRootBoxes(fileBytes);
       const hashedBoxes = rootBoxes.filter((b) => !boxExcluded(fileBytes, b, m.hashBmff!.exclusions));
       const anyHashed = hashedBoxes.length > 0;
@@ -2243,36 +2503,47 @@ export function verifyManifest(
         if (!walkMatches) assetHashFailure = 'mismatch';
       }
     } catch {
-      // Malformed container: it could not be walked, so tamper is unproven.
+      // Malformed container — we could not walk it, so we cannot say the bytes
+      // changed. UNPROVEN, not proven tamper.
       assetHashMatches = false;
       assetHashFailure = 'void-binding';
     }
   } else {
-    // No signed hard binding: the claim references no usable c2pa.hash.*
-    // assertion, so the signature is genuine but commits to no media bytes.
+    // No signed hard binding at all: the claim references
+    // no usable c2pa.hash.* assertion — the signature is genuine but commits
+    // to NO media bytes. Integrity UNPROVEN; without this guard an attached,
+    // self-consistent binding box could lend arbitrary media a false INTACT.
     assetHashFailure = 'void-binding';
   }
 
   // 3. Claim assertion hashes bind the signed claim to the assertion boxes.
-  //    Unreferenced boxes are not a failure here: legitimate third-party
+  //    Boxes in the store that the claim does NOT reference are deliberately
+  //    NOT a failure here: legitimate third-party
   //    assets carry them, so they are disclosed as unreferenced (see
-  //    referencedAssertionLabels) rather than failing closed.
+  //    referencedAssertionLabels) instead of failing closed — a false red
+  //    on genuine media is the worse outcome.
   let claimAssertionsMatch = true;
-  for (const ref of claimAssertionRefs(m.claim)) {
-    if (!ref?.url || !ref.hash) { claimAssertionsMatch = false; continue; }
-    const label = assertionRefLabel(ref.url);
-    const actual = m.assertionHashes[label];
-    if (!actual || actual.length !== ref.hash.length || !actual.every((v, i) => v === ref.hash![i])) {
-      claimAssertionsMatch = false;
+  const refs = claimAssertionRefs(m.claim);
+  if (refs.length > 0) {
+    for (const ref of refs) {
+      if (!ref?.url || !ref.hash) { claimAssertionsMatch = false; continue; }
+      const label = assertionRefLabel(ref.url);
+      const actual = m.assertionHashes[label];
+      if (!actual || actual.length !== ref.hash.length || !actual.every((v, i) => v === ref.hash![i])) {
+        claimAssertionsMatch = false;
+      }
     }
   }
 
-  // 4. Org identity assertion: its referenced telemetry hash must equal the
-  //    claim's own telemetry assertion hash, or the binding points at
-  //    nothing. The named org is cross-checked against the x5chain's top
-  //    certificate subject, read from protected-header order (leaf-first).
-  //    Unparseable top cert, absent org/CN, or an org-less assertion leaves
-  //    orgMatchesChainTop null, meaning the check could not run.
+  // 4. Org identity assertion: the assertion's referenced telemetry
+  //    hash must equal the claim's own telemetry assertion hash — otherwise
+  //    the binding points at nothing. The named org is cross-checked against
+  //    the x5chain's TOP certificate subject, read directly from the
+  //    protected-header order (leaf-first by construction) — independent of
+  //    whether full chain verification can order or validate the certs,
+  //    which is reported separately. Unparseable top cert, absent org/CN, or
+  //    an org-less assertion → orgMatchesChainTop null = "could not check",
+  //    never a silent pass.
   let identity: C2paVerification['identity'] = null;
   if (m.identity) {
     const actual = m.assertionHashes['com.verify.telemetry'];
@@ -2284,7 +2555,7 @@ export function verifyManifest(
         const top = parseCertificate(topDer);
         chainTopName = top.subjectOrg ?? top.subjectCN;
       } catch {
-        chainTopName = null; // top cert unparseable: cross-check cannot run
+        chainTopName = null; // top cert unparseable — cross-check could not run
       }
     }
     orgMatchesChainTop =
@@ -2302,24 +2573,24 @@ export function verifyManifest(
 }
 
 // ---------------------------------------------------------------------------
-// c2pa.hash.collection.data validation
+// c2pa.hash.collection.data validation (0.16.0, D1; spec §15.12.5)
 // ---------------------------------------------------------------------------
 
 export interface CollectionHashEntryResult {
   uri: string;
-  /** 'match' | 'mismatch' | 'missing', per §15.12.5 failure semantics. */
+  /** 'match' | 'mismatch' | 'missing' — per §15.12.5 failure semantics. */
   status: 'match' | 'mismatch' | 'missing';
 }
 
 export interface CollectionHashCheck {
-  /** True only when every declared member is present and matches and the
-      presented set is exactly the declared set (§15.12.5's
+  /** True only when every declared member is present and matches, and the
+      presented set is EXACTLY the declared set (§15.12.5's
       assertion.collectionHash.incorrectFileCount otherwise). */
   ok: boolean;
   entries: CollectionHashEntryResult[];
-  /** Presented members the declaration does not know: set drift. */
+  /** Presented members the declaration doesn't know — set drift, stated. */
   undeclared: string[];
-  /** Only sha256 is emitted; any other alg is reported as unsupported. */
+  /** Only sha256 is emitted today; anything else is stated, not guessed. */
   algSupported: boolean;
 }
 
@@ -2327,8 +2598,9 @@ export interface CollectionHashCheck {
  * Validates a parsed c2pa.hash.collection.data assertion against the
  * actual artifact set: sha256 over ALL bytes of each member, by name.
  * `assets` maps the member URI ('photo.jpg', 'depth.png' …) to its exact
- * bytes. For the photo member the caller presents the clean bytes (signed
- * file minus the manifest exclusion), since the builder hashes clean bytes.
+ * bytes. For the photo member the caller presents the CLEAN bytes (the
+ * signed file minus the manifest exclusion) — the builder hashes clean
+ * bytes because hashing the signed file would be circular.
  */
 export function verifyCollectionHash(
   ch: NonNullable<C2paManifest['collectionHash']>,
@@ -2339,7 +2611,7 @@ export function verifyCollectionHash(
   const entries: CollectionHashEntryResult[] = ch.uris.map((u) => {
     const bytes = byUri.get(u.uri);
     if (!bytes) return { uri: u.uri, status: 'missing' as const };
-    if (!algSupported) return { uri: u.uri, status: 'mismatch' as const }; // unsupported alg cannot confirm
+    if (!algSupported) return { uri: u.uri, status: 'mismatch' as const }; // can't confirm — stated as not-matching
     return { uri: u.uri, status: bytesToHex(sha256(bytes)) === u.hashHex ? ('match' as const) : ('mismatch' as const) };
   });
   const declared = new Set(ch.uris.map((u) => u.uri));

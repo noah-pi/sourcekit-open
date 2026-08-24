@@ -8,25 +8,26 @@
  *           recompute c2pa.hash.bmff.v2 binding → verdict
  *   legacy: sidecar JSON + media file → re-hash → compare → verify → verdict
  *
- * Each failure mode maps to a distinct verdict; uncertainty stays uncertain.
+ * Every failure mode is a distinct, plainly-worded verdict. Nothing here
+ * ever "upgrades" uncertainty into confidence.
  */
 
 import { extractManifest, stripManifest, isJpeg } from './jpegApp11';
-import { recordFromManifestBytes } from '../provenance/manifest';
+import { recordFromManifestBytes } from '../../src/provenance/manifest';
 import { extractC2paStore, parseManifest, parseManifestChain, verifyManifest, timestampMessageForSignature, timestampMessageForClaim, bstr } from './c2pa';
 import { extractC2paStoreBmff, stripC2paFromBmff, isBmff, BmffUnsupported } from './bmff';
 import { isPng, extractCaBx, stripCaBx } from './png';
-import { verifyRecordSignature } from '../lib/sign';
-import type { PqLayerCheck } from '../lib/pq';
-import { isValidTip } from '../lib/beacon';
-import { sha256Hex } from '../lib/sign';
-import { isAttestationRecord, type AttestationRecord } from '../provenance/manifest';
-import type { SignerTrust } from '../lib/trustProvider';
+import { verifyRecordSignature } from '../../src/lib/sign';
+import type { PqLayerCheck } from '../../src/lib/pq';
+import { isValidTip } from '../../src/lib/beacon';
+import { sha256Hex } from '../../src/lib/sign';
+import { isAttestationRecord, type AttestationRecord } from '../../src/provenance/manifest';
+import type { SignerTrust } from '../../src/lib/trustProvider';
 import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex } from '../lib/bytes';
-import { parseCertificate, verifyChain } from '../lib/x509';
-import { verifyTimestampToken } from '../lib/rfc3161';
-import { pinnedTsaFor } from '../lib/tsaTrustList';
+import { bytesToHex } from '../../src/lib/bytes';
+import { parseCertificate, verifyChain } from '../../src/lib/x509';
+import { verifyTimestampToken } from '../../src/lib/rfc3161';
+import { pinnedTsaFor } from '../../src/lib/tsaTrustList';
 import { verifyAppAttestAssertion, type AppAttestVerification } from './verifyAppAttest';
 
 export type VerdictCode =
@@ -45,21 +46,28 @@ export interface VerificationReport {
   /** Present when a C2PA manifest was found and checked. */
   c2pa?: {
     generator: string | null;
+    /**
+     * Which claim box parsed: 1 = 'c2pa.claim' (our hand-rolled signer),
+     * 2 = 'c2pa.claim.v2' (c2pa-rs / the c2pa-swift SDK path). Signed
+     * content — for files whose generator is ours, the reliable
+     * discriminator of which signing pipeline produced the manifest.
+     */
+    claimVersion: 1 | 2;
     alg: string | null;
     claimAssertionsMatch: boolean;
     /** True when the embedded telemetry is a Source Kit record from this ecosystem. */
     hasVerifyTelemetry: boolean;
-    /** Why the asset hash failed, when it did. 'void-binding' means the
+    /** Why the asset hash failed, when it did — 'void-binding' means the
         declared exclusions exempt the hash input (integrity UNPROVEN, not
         proven tamper). Surfaced so verdict surfaces can say it precisely. */
     assetHashFailure: 'mismatch' | 'void-binding' | null;
-    /** SHA-256 of the signing key, hex; the signer's public identity. */
+    /** SHA-256 of the signing key, hex — the signer's public identity. */
     signerFingerprint: string | null;
     /**
      * Mechanical verification of the COSE x5chain (signatures, name chaining,
-     * CA flags, validity at verified signing time). The chain top is
-     * self-asserted, so a valid chain proves structure, not that the named org
-     * vouches for this key.
+     * CA flags, validity at verified signing time). The top of the chain is
+     * always self-asserted here — a valid chain proves structure, not that
+     * the named org actually vouches for this key.
      */
     certChain: {
       length: number;
@@ -67,19 +75,19 @@ export interface VerificationReport {
       reason: string | null;
       topSubject: string | null;
       /**
-       * False when the chain could not be evaluated at all (a parse or
-       * coverage gap in this verifier), which is neutral rather than a
-       * failure. True or absent means a cryptographic verdict was reached.
+       * False when the chain could not be evaluated at all (parse/coverage
+       * gap in this verifier) — neutral, never red. True (or absent in
+       * older reports) means a real cryptographic verdict.
        */
       checked?: boolean;
     } | null;
-    /** Offline App Attest verification, not a presence check. */
+    /** Real, offline App Attest verification — never a presence check. */
     appAttest: AppAttestVerification;
     /**
-     * PQ dual-signature layer: claim-level and record-level checks, each null
-     * when the capture carries no PQ layer. Software-key custody, hedging a
-     * future P-256 break; label it as such wherever it is displayed, since it
-     * is not a second hardware anchor.
+     * PQ dual-signature layer — claim-level and record-level
+     * checks, each null when the capture carries no PQ layer. Software-key
+     * custody: this layer hedges a future P-256 break; it is never a second
+     * hardware anchor and must be labeled as such wherever it is displayed.
      */
     pq: { claim: PqLayerCheck | null; record: PqLayerCheck | null };
     timestamps: {
@@ -89,29 +97,29 @@ export interface VerificationReport {
       valid: number;
       /**
        * Valid tokens whose authority is on the pinned TSA trust list
-       * (src/lib/tsaTrustList.ts). Only these anchor verified time for
-       * roster-membership and certificate-validity evaluation; an unpinned
-       * TSA's genTime is self-asserted by an unvetted operator.
+       * (src/lib/tsaTrustList.ts). ONLY these anchor verified time for
+       * roster-membership and certificate-validity evaluation — an
+       * unpinned TSA's genTime is self-asserted by an unvetted operator.
        */
       trusted: number;
       /**
-       * Tokens this verifier could not evaluate (unparseable or unsupported
-       * structure/algorithm). Disclosed, not counted as failures: a parser gap
-       * is not tamper evidence.
+       * Tokens this verifier could not evaluate at all (unparseable or
+       * unsupported structure/algorithm). Disclosed, NEVER counted as
+       * failures — a parser gap is not tamper evidence.
        */
       unchecked: number;
       /** Display names of the pinned authorities that countersigned. */
       trustedNames: string[];
-      /** Earliest genTime among valid tokens, pinned authority or not. */
+      /** Earliest genTime among VALID tokens (any authority, pinned or not). */
       earliestValidUtc: string | null;
-      /** Earliest genTime among trusted tokens; null when no pinned TSA countersigned. */
+      /** Earliest genTime among TRUSTED tokens — null when no pinned TSA countersigned. */
       earliestTrustedUtc: string | null;
       tsaNames: string[];
       /** Why each invalid token failed. */
       failures: string[];
     };
   };
-  /** Present when a record was found; details for the UI. */
+  /** Present when a record was found — details for the UI. */
   checks: {
     manifestFound: boolean;
     signatureValid: boolean | null;
@@ -119,24 +127,25 @@ export interface VerificationReport {
     assetHashMatches: boolean | null;
     recomputedSha256: string | null;
   };
-  /** Every check performed; the verbose panel shows both lists. */
+  /** Every check actually performed — the verbose panel shows both lists. */
   checksPerformed: string[];
-  /** Every check not performed, with the reason. */
+  /** Every check NOT performed, with the reason — absence of a check is itself disclosed. */
   checksNotPerformed: string[];
   /**
-   * Trust axis: who vouches for the signing key, resolved through anchors
-   * outside the file. It lives in the data model, so a desk scripting against
-   * verifyPhotoBytes sees the same tier the UI renders. Null or undefined
-   * means unresolved (no resolver supplied) and is disclosed in
-   * checksNotPerformed.
+   * Trust axis: WHO vouches for the signing key,
+   * resolved through anchors OUTSIDE the file — part of the DATA MODEL,
+   * not a switch statement in a React component. A desk scripting against
+   * verifyPhotoBytes sees the same 'unknown' the UI renders amber.
+   * null/undefined = NOT RESOLVED (no resolver supplied) — disclosed in
+   * checksNotPerformed, never silently green.
    */
   signerTrust?: SignerTrust | null;
 }
 
 /**
- * Optional anchors for the trust axis. The resolver is injected because anchor
- * storage differs by host (app keychain, desk localStorage, a script's own
- * files) and the verifier imports none of them.
+ * Optional anchors for the trust axis. The resolver is injected because
+ * anchor storage differs by host (app keychain, desk localStorage, a
+ * script's own files) — the verifier must not import any of them.
  */
 export interface VerifyOptions {
   trustResolver?: (input: {
@@ -154,11 +163,11 @@ const noChecks = {
   recomputedSha256: null,
 };
 
-/** Every report carries both lists, including a bare one. */
+/** Every report carries both lists — even a bare one. */
 const NO_EXTRAS = { checksPerformed: [] as string[], checksNotPerformed: [] as string[] };
 
 export async function verifyPhotoBytes(bytes: Uint8Array, opts?: VerifyOptions): Promise<VerificationReport> {
-  // PNG path: the manifest rides in a caBX chunk before IEND, hard-bound by
+  // PNG path — the manifest rides in a caBX chunk before IEND, hard-bound by
   // the same c2pa.hash.data byte-exclusion the JPEG path uses.
   if (isPng(bytes)) {
     const caBx = extractCaBx(bytes);
@@ -176,8 +185,8 @@ export async function verifyPhotoBytes(bytes: Uint8Array, opts?: VerifyOptions):
     return { verdict: 'NOT_JPEG', record: null, checks: { ...noChecks }, ...NO_EXTRAS };
   }
 
-  // 1. C2PA path: what this camera embeds, and what any third-party C2PA
-  //    signer produces.
+  // 1. Genuine C2PA path — what our camera embeds now, and what any
+  //    third-party C2PA signer produces.
   const c2paStore = extractC2paStore(bytes);
   if (c2paStore) {
     const manifest = parseManifest(c2paStore.payload);
@@ -214,8 +223,8 @@ export async function verifyPhotoBytes(bytes: Uint8Array, opts?: VerifyOptions):
   else if (!assetHashMatches) verdict = 'CONTENT_MODIFIED';
   else verdict = 'INTACT';
 
-  // Trust axis on the legacy path too: legacy records carry a signer
-  // fingerprint, so a supplied resolver is consulted.
+  // Trust axis on the legacy path too — legacy records
+  // carry a signer fingerprint; a supplied resolver gets its say.
   let legacyTrust: SignerTrust | null = null;
   const legacyNotPerformed = [
     'signer identity — legacy manifests carry no chain to evaluate; the signing key is self-asserted',
@@ -253,7 +262,7 @@ export async function verifyPhotoBytes(bytes: Uint8Array, opts?: VerifyOptions):
   };
 }
 
-/** One line for a record-level PQ layer, in any path that has one. */
+/** One honest line for a record-level PQ layer, in any path that has one. */
 function pqPerformedLines(pq: PqLayerCheck | null): string[] {
   if (!pq) return [];
   if (pq.present && pq.signatureValid) {
@@ -266,10 +275,10 @@ function pqPerformedLines(pq: PqLayerCheck | null): string[] {
 }
 
 /**
- * Video path: the same C2PA verification over MP4/MOV containers, where the
- * manifest lives in a uuid box and the hard binding is c2pa.hash.bmff.v2.
- * Videos with no embedded manifest report NO_ATTESTATION so the caller can
- * offer the sidecar flow.
+ * Video path — the same genuine C2PA verification over MP4/MOV containers:
+ * the manifest lives in a uuid box, the hard binding is c2pa.hash.bmff.v2.
+ * Videos without an embedded manifest report NO_ATTESTATION so the caller
+ * can offer the sidecar flow.
  */
 export async function verifyVideoBytes(bytes: Uint8Array, opts?: VerifyOptions): Promise<VerificationReport> {
   if (!isBmff(bytes)) {
@@ -280,8 +289,10 @@ export async function verifyVideoBytes(bytes: Uint8Array, opts?: VerifyOptions):
   try {
     store = extractC2paStoreBmff(bytes);
   } catch (e) {
-    // A manifest is present but uses structures this build cannot check (e.g.
-    // merkle aux boxes), so the verdict is unsupported rather than invalid.
+    // A manifest is present but uses structures this build cannot check
+    // (e.g. merkle aux boxes). "Unsupported" is the true statement —
+    // "signature invalid" would condemn credentials we never evaluated.
+    // The file is not condemned; it is unchecked here.
     if (e instanceof BmffUnsupported) {
       return {
         verdict: 'UNSUPPORTED', record: null,
@@ -348,22 +359,35 @@ async function c2paReport(
   if (inner) performed.push('inner Source Kit record signature verified (defense in depth)');
 
   // --- Post-quantum dual signature. ---
-  // Two layers, two custodies, both labeled. A PQ failure does not flip the
-  // verdict on its own — that would make the layer a downgrade-attack vector —
-  // but it is reported, and a stripped layer is detectable because the
-  // committed key cannot leave the signed payload.
+  // Two layers, two custodies — always labeled. A PQ FAILURE never flips the
+  // verdict by itself (the classical layer is load-bearing today, and letting
+  // PQ tampering flip INTACT to red would make the layer a downgrade attack
+  // vector) — but tampering is reported loudly, and a stripped layer is
+  // detectable because the committed key cannot leave the signed payload.
   const claimPq = result.pq;
   const recordPq = inner?.pq ?? null;
+  // Where the ML-DSA signature is SUPPOSED to live, read from inside the
+  // signed payload. Absent means 'claim+record' — every capture through
+  // 0.18.9. From 0.19.0 the design is record-only: a general-purpose C2PA
+  // writer has nowhere to park a claim entry, so the record carries the PQ
+  // signature alone and its absence from the COSE header is by design, not
+  // evidence of stripping. The declaration cannot be forged to silence the
+  // warning: it is covered by the record signature. (Declared BEFORE first
+  // use — a TDZ crash shipped in the first draft of this change.)
+  const pqScope = telemetryRecord?.pqScope ?? 'claim+record';
+  const claimShouldCarryPq = pqScope === 'claim+record';
   if (!claimPq && !recordPq) {
     notPerformed.push(
       'post-quantum layer — none carried (capture predates 0.10.0, or a de-identified copy: deID omits the PQ layer, since the device\'s long-lived PQ key would re-link an anonymised copy)',
     );
   } else {
-    // The PQ signature rides on the record and signs the record's canonical
-    // JSON, which carries asset.sha256, so the media is covered. A claim entry
-    // is read and reported when present; its absence is not flagged.
     const pqWhere = (claim: PqLayerCheck | null, record: PqLayerCheck | null): string =>
       [claim?.signatureValid ? 'COSE claim' : null, record?.signatureValid ? 'record' : null].filter(Boolean).join(' + ');
+    if (!claimShouldCarryPq && recordPq?.signatureValid) {
+      notPerformed.push(
+        'post-quantum layer on the COSE claim — not carried by design (this manifest declares pqScope: record). The media is still covered: the record signature is post-quantum and the record commits the media digest',
+      );
+    }
     if (claimPq?.signatureValid || recordPq?.signatureValid) {
       performed.push(
         `post-quantum layer verified on the ${pqWhere(claimPq, recordPq)} (ML-DSA-65, SOFTWARE key — hedges a future P-256 break; NOT a second hardware anchor; key committed inside the signed payload)`,
@@ -379,17 +403,16 @@ async function c2paReport(
         'post-quantum layer on the inner record FAILED (signature invalid or key fingerprint mismatch) — the classical layer still stands; the PQ layer proves nothing here',
       );
     }
-    // Strip detection lives on the record, where the signature is. The key is
-    // committed inside the signed payload, so a committed key with no
-    // signature beside it means the layer was removed after signing.
-    if (recordPq && !recordPq.present && recordPq.keyCommitted) {
+    const strippedClaim = claimShouldCarryPq && claimPq && !claimPq.present && claimPq.keyCommitted;
+    const strippedRecord = recordPq && !recordPq.present && recordPq.keyCommitted;
+    if (strippedClaim || strippedRecord) {
       performed.push(
-        'post-quantum layer STRIPPED (record): a PQ key is committed inside the signed payload but the PQ signature is missing — the commitment cannot be removed without breaking the classical signature, so this file was altered after signing',
+        `post-quantum layer STRIPPED (${[strippedClaim ? 'COSE claim' : null, strippedRecord ? 'record' : null].filter(Boolean).join(' + ')}): a PQ key is committed inside the signed payload but the PQ signature is missing — the commitment cannot be removed without breaking the classical signature, so this file was altered after signing`,
       );
     }
   }
-  // The pose trace is signed data, not a check; its integrity rides the record
-  // signature above.
+  // The pose trace is signed DATA, not a check: its integrity rides the
+  // record signature above. What it shows is for the desk to weigh.
   const poseTrace = telemetryRecord?.context?.poseTrace;
   if (poseTrace) {
     performed.push(
@@ -403,17 +426,19 @@ async function c2paReport(
         `camera EXIF assertion present (${fields} fields: exposure/optics, camera-reported) — signed as self-reported metadata, hash cross-checked against the claim`,
       );
     } else {
-      // A com.verify.exif box attached after signing still parses, but the
-      // signed claim does not reference it, so its bytes bind to nothing.
+      // Box surgery: a com.verify.exif box attached
+      // AFTER signing still parses, but the signed claim never references it
+      // — its bytes bind to nothing. Never the claim-bound string.
       notPerformed.push(
         `camera EXIF assertion box present (${fields} fields) but NOT referenced by the signed claim — carrying no cryptographic weight (attachable after signing; its contents bind to nothing)`,
       );
     }
   }
-  // Bitcoin beacon: a signed time lower bound. The embedded block hash could
-  // not be known before that block was mined, so the signature cannot predate
-  // it; the signer's `observedAt` is its own clock. Shape-checked and
-  // disclosed.
+  // Bitcoin beacon: a signed TIME LOWER BOUND. The embedded
+  // block hash could not have been known before that block was mined, so the
+  // signature cannot predate it. The block hash is the objective part; the
+  // signer's `observedAt` is its own clock. Never a verdict — shape-checked
+  // and disclosed, exactly like the other self-reported signals.
   const beacon = telemetryRecord?.beacon;
   if (beacon) {
     if (isValidTip(beacon.blockHash, beacon.blockHeight)) {
@@ -427,15 +452,17 @@ async function c2paReport(
     }
   }
 
-  // --- Trusted time: every RFC 3161 token is verified. ---
-  // The countersigned message covers the bstr-wrapped protected header as it
-  // sat in the COSE_Sign1 (c2pa-rs sigtst.rs::cose_countersign_data);
-  // parseManifest returns it unwrapped (cbor-x strips the bstr tag), and
-  // passing it raw shifts the message three bytes so every genuine token fails
-  // messageImprint. Which message applies depends on the COSE header that
-  // carried the tokens: v2 sigTst2 imprints the signature (CTT), v1 sigTst
-  // imprints the claim (RFC 9052 Sig_structure, payload = claim bytes;
-  // c2pa-rs sigtst.rs::validate_cose_tst_info).
+  // --- Trusted time: verify every RFC 3161 token for real. ---
+  // The countersigned message covers the bstr-WRAPPED protected header, exactly
+  // as it sat in the COSE_Sign1 (c2pa-rs sigtst.rs::cose_countersign_data).
+  // parseManifest hands us the UNWRAPPED header (cbor-x strips the bstr tag) —
+  // passing it raw shifts the message three bytes and every genuine token fails
+  // messageImprint.
+  // The countersigned message depends on which COSE header carried the
+  // tokens: v2 sigTst2 imprints the signature (CTT), v1 sigTst imprints the
+  // CLAIM (RFC 9052 Sig_structure, payload = claim bytes — c2pa-rs
+  // sigtst.rs::validate_cose_tst_info). Using the wrong one fails every
+  // genuine token of the other version; the corpus proved both shapes.
   const expectedMessage = manifest.timestampVersion === 'v1-sigTst'
     ? timestampMessageForClaim(bstr(manifest.protectedHeader), manifest.claimBytes)
     : timestampMessageForSignature(bstr(manifest.protectedHeader), manifest.signature);
@@ -443,16 +470,18 @@ async function c2paReport(
   const validTokens = tokenResults.filter((r) => r.tokenValid);
   const earliestValidUtc = validTokens.map((r) => r.genTimeUtc!).sort()[0] ?? null;
   const tsaNames = [...new Set(validTokens.map((r) => r.tsaName).filter((n): n is string => !!n))];
-  // Only tokens fully parsed and cryptographically failed count as tamper
-  // evidence; one this verifier could not evaluate (checked === false) is a
-  // verifier limitation and must not turn a rung red. verifyTimestampToken
-  // distinguishes the two.
+  // Only tokens we fully parsed and cryptographically FAILED count as tamper
+  // evidence. A token this verifier could not parse or evaluate (checked ===
+  // false — e.g. a TimeStampResp wrapper we unwrap, or an algorithm we do not
+  // implement) is a limitation of this verifier: it must never turn a rung
+  // red. verifyTimestampToken distinguishes the two so we don't have to.
   const failures = tokenResults.filter((r) => !r.tokenValid && r.checked).map((r) => r.reason ?? 'invalid');
   const uncheckedTokens = tokenResults.filter((r) => !r.tokenValid && !r.checked);
-  // Trust pinning: a valid token only proves some authority countersigned, and
-  // anyone can run a TSA and mint any genTime. Only authorities on the pinned
-  // TSA trust list anchor verified time below (roster membership, certificate
-  // validity).
+  // Trust pinning: a VALID token still only proves SOME authority countersigned
+  // — anyone can run a TSA and mint any genTime. Only tokens from authorities
+  // on the pinned TSA trust list anchor verified time below (roster membership,
+  // certificate validity); a backdated capture around a revocation would need a
+  // self-run TSA, and an unpinned token can no longer pull that off silently.
   const validWithPins = validTokens.map((r) => ({ result: r, pin: pinnedTsaFor(r.tsaFingerprints) }));
   const trustedTokens = validWithPins.filter((d) => d.pin !== null);
   const trustedNames = [...new Set(trustedTokens.map((d) => d.pin!.name))];
@@ -470,7 +499,7 @@ async function c2paReport(
   }
   if (uncheckedTokens.length > 0) {
     notPerformed.push(
-      `${uncheckedTokens.length} attached timestamp token(s) could not be evaluated by this verifier (${uncheckedTokens[0].reason ?? 'unsupported structure'}) — disclosed; not counted as failures`,
+      `${uncheckedTokens.length} attached timestamp token(s) could not be evaluated by this verifier (${uncheckedTokens[0].reason ?? 'unsupported structure'}) — disclosed, never counted as failures`,
     );
   }
 
@@ -485,17 +514,18 @@ async function c2paReport(
       signerFingerprint = bytesToHex(sha256(signerPub));
     }
   } catch { /* unparseable leaf — chain verdict below fails closed */ }
-  // Verified signing time comes from pinned authorities only. An unpinned
-  // TSA's genTime is shown for context but anchors nothing: not chain
-  // validity, App Attest validity, or roster membership.
+  // "Verified signing time" = pinned-authority time only. An unpinned TSA's
+  // genTime is displayed for context but never anchors chain validity,
+  // App Attest validity, or roster membership.
   const atMs = earliestTrustedUtc ? Date.parse(earliestTrustedUtc) : null;
   {
     const chain = verifyChain(manifest.certChain, [], atMs);
     certChain = { length: manifest.certChain.length, linksValid: chain.linksValid, reason: chain.reason, topSubject: chain.topSubject, checked: chain.checked };
   }
-  // --- Trust axis: who vouches for this key, in the data model. The UI reads
-  // report.signerTrust, as does any scripting caller. With no resolver the
-  // result is disclosed as unresolved.
+  // --- Trust axis: who vouches for this key lives
+  // in the data model. The UI consumes report.signerTrust; a desk scripting
+  // against verifyPhotoBytes gets the same amber. No resolver → disclosed
+  // as unresolved, never silently green.
   let signerTrust: SignerTrust | null = null;
   if (signerFingerprint && opts?.trustResolver) {
     try {
@@ -508,7 +538,7 @@ async function c2paReport(
       });
       performed.push(`signer trust resolved through outside anchors: ${signerTrust.tier}${signerTrust.tier === 'unknown' ? ' (nothing outside the file vouches for this key — the amber is in the data, not just the UI)' : ''}`);
     } catch {
-      notPerformed.push('signer trust resolution FAILED (resolver threw); treat the signer as unresolved');
+      notPerformed.push('signer trust resolution FAILED (resolver threw) — stated, not hidden; treat the signer as unresolved');
     }
   } else if (signerFingerprint && !opts?.trustResolver) {
     notPerformed.push('signer trust — no resolver supplied by the caller; who vouches for this key is UNRESOLVED (the app supplies one; scripting callers should too)');
@@ -519,17 +549,18 @@ async function c2paReport(
       notPerformed.push('the top of the chain is self-asserted — a valid chain proves structure, not that the named organization vouches for this key; confirm the CA out of band');
     } else if (!certChain.checked) {
       notPerformed.push(
-        `certificate chain could not be evaluated by this verifier (${certChain.reason ?? 'unsupported structure'}) — disclosed; not counted as a failure`,
+        `certificate chain could not be evaluated by this verifier (${certChain.reason ?? 'unsupported structure'}) — disclosed, never counted as a failure`,
       );
     } else {
       performed.push('certificate chain verification FAILED — see warning');
     }
   }
-  // --- Org identity assertion: the binding-to-claim and org-to-x5chain-top
-  // cross-checks both run inside verifyManifest, reading the chain top from
-  // the protected-header order so the check survives chains full verification
-  // cannot order. A cross-check that could not run is reported as unproven.
-  // Identity vouches for key custody, not for truth.
+  // --- Org identity assertion: binding ↔ claim and org ↔
+  // x5chain-top cross-checks both run inside verifyManifest (the chain top is
+  // read from the protected-header order, so the check survives chains that
+  // full verification can't order). Four honest outcomes — a cross-check
+  // that could not run is reported as unproven, never silently skipped.
+  // Identity vouches for key custody, NEVER for truth.
   if (result.identity?.present) {
     const id = result.identity;
     if (!id.telemetryHashMatches) {
@@ -548,17 +579,24 @@ async function c2paReport(
     notPerformed.push('certificate validity windows not checked (no pinned-authority timestamp to check them against)');
   }
 
-  // --- App Attest: offline verification, not a presence check. ---
+  // --- App Attest: real offline verification, never a presence check. ---
   const appAttest = verifyAppAttestAssertion(manifest.appAttestAssertion, signerPub);
   performed.push(...appAttest.checksPerformed);
 
-  // An update chain carries several manifests. The asset-hash verdict rests on
-  // the active (last) one per the C2PA rule, and every earlier manifest is
-  // still evaluated and reported. An earlier manifest whose asset hash no
-  // longer matches is normal; one whose claim-referenced assertion hashes no
-  // longer match the store is not, and bars INTACT — c2pa-rs flags the store
-  // invalid on that condition for any manifest in the chain. C2PA redaction
-  // removes boxes legitimately and would report as such an inconsistency.
+  // An update chain carries several manifests. The asset-hash VERDICT rests
+  // on the active (last) one per the C2PA rule, but every earlier manifest is
+  // evaluated and reported — never silently skipped. An earlier manifest
+  // whose asset hash no longer matches is normal (update chains exist to
+  // record edits); one whose claim-referenced assertion hashes no longer
+  // match the store is NOT: the credentials as presented are internally
+  // inconsistent (a post-signing box edit, or a defective update that rewrote
+  // an assertion without updating the earlier claim's reference — the
+  // c2pa-org E-uri defect family). c2pa-rs flags the store invalid on
+  // exactly this condition for any manifest in the chain; matching that, it
+  // bars INTACT here. (Caveat: a store using C2PA redaction removes boxes by
+  // design; no public-testfile uses redaction — if a redacted store ever
+  // surfaces, its earlier manifest reports the inconsistency and the
+  // disclosure text states the facts, which stays honest.)
   let chainDefect: string | null = null;
   if (manifest.manifestCount > 1) {
     performed.push(`store contains ${manifest.manifestCount} manifests — the asset verdict rests on the active (most recent) one per the C2PA update-chain rule; every manifest's signature and assertion binding is still checked`);
@@ -584,19 +622,22 @@ async function c2paReport(
             ? 'asset binding is VOID — integrity unproven for this manifest (defective credentials, not proven tamper)'
             : 'asset hash does not match — the media was edited after this manifest (expected in an update chain)';
         const assertions = r.claimAssertionsMatch ? '' : ', ASSERTION HASHES MISMATCH';
-        // Reference semantics (c2pa-rs, checked against the c2pa-org
-        // public-testfiles): an update chain validates the COSE signature of
-        // the active manifest only, since the active claim re-binds the chain,
-        // but validates claim-referenced assertion hashes for every manifest.
-        // An old signature failure is reported in the line above and does not
-        // bar INTACT; an old assertion-hash mismatch does.
+        // Reference semantics (c2pa-rs, confirmed against the oracle on the
+        // c2pa-org public-testfiles): an update chain validates the COSE
+        // signature of the ACTIVE manifest only — the active claim re-binds
+        // the chain — but validates claim-referenced assertion hashes for
+        // EVERY manifest (E-uri-CIE-sig-CA is flagged on the old manifest;
+        // CIE-sig-CA, whose old claim was altered, is not flagged on the old
+        // signature). An old signature failure is still reported verbatim in
+        // the line above; it does not bar INTACT. An old assertion-hash
+        // mismatch does.
         if (!r.claimAssertionsMatch) chainDefect = `manifest ${i + 1} ("${m.manifestLabel}") claim-referenced assertion hashes no longer match the store`;
         performed.push(`update chain: manifest ${i + 1}/${chain.manifests.length} ("${m.manifestLabel}") — ${sig}, ${asset}${assertions}`);
       });
     }
   }
 
-  // Revocation is not checked anywhere: verification is offline.
+  // Revocation is deliberately not performed anywhere (offline verification).
   notPerformed.push('revocation (OCSP/CRL) — verification is fully offline; ask the issuing org about a cert\'s current status');
 
   let recomputed: string | null = null;
@@ -607,18 +648,20 @@ async function c2paReport(
   let verdict: VerdictCode;
   if (result.signatureValid === false || !result.claimAssertionsMatch) verdict = 'SIGNATURE_INVALID';
   else if (inner && !inner.signatureValid) verdict = 'SIGNATURE_INVALID';
-  // An earlier manifest whose signature or assertion binding no longer holds
-  // means the store is internally inconsistent: defective credentials, so
-  // SIGNATURE_INVALID rather than CONTENT_MODIFIED.
+  // An earlier manifest in the update chain whose signature or assertion
+  // binding no longer holds: the store as presented is internally
+  // inconsistent. Defective-or-tampered credentials → SIGNATURE_INVALID,
+  // never CONTENT_MODIFIED (the media bytes are not what failed).
   else if (chainDefect !== null) verdict = 'SIGNATURE_INVALID';
-  // A void binding is not proven tamper: the manifest's own exclusion
-  // declaration exempts the hash input, so the credentials prove nothing about
-  // the media. Defective credentials, so SIGNATURE_INVALID.
+  // A void binding is NOT proven tamper — the manifest's own exclusion
+  // declaration exempts the hash input, so the credentials prove nothing
+  // about the media. It lands as SIGNATURE_INVALID (defective credentials),
+  // never CONTENT_MODIFIED.
   else if (!result.assetHashMatches && result.assetHashFailure === 'void-binding') verdict = 'SIGNATURE_INVALID';
   else if (!result.assetHashMatches) verdict = 'CONTENT_MODIFIED';
-  // The signature could not be checked (a COSE alg this build does not
-  // verify). Nothing proved tamper, but INTACT requires a verified signature,
-  // so UNSUPPORTED, with the alg named in checksNotPerformed.
+  // The signature could not be CHECKED (COSE alg this build doesn't verify):
+  // nothing above proved tamper, but INTACT requires a verified signature —
+  // UNSUPPORTED is the honest middle, with the alg named in checksNotPerformed.
   else if (result.signatureValid === null) verdict = 'UNSUPPORTED';
   else verdict = 'INTACT';
 
@@ -626,7 +669,11 @@ async function c2paReport(
     verdict,
     record: telemetryRecord,
     c2pa: {
-      generator: typeof manifest.claim['claim_generator'] === 'string' ? (manifest.claim['claim_generator'] as string) : null,
+      // Normalized at parse time (v1 claim_generator string; v2
+      // claim_generator_info map/array → "name/version") — an SDK-sealed
+      // file must not render as generator-less.
+      generator: manifest.claimGenerator,
+      claimVersion: manifest.claimVersion,
       alg: result.alg,
       claimAssertionsMatch: result.claimAssertionsMatch,
       assetHashFailure: result.assetHashFailure,
@@ -651,7 +698,7 @@ async function c2paReport(
       manifestFound: true,
       signatureValid: result.signatureValid,
       fingerprintMatches: inner ? inner.fingerprintMatches : null,
-      // void-binding → null (integrity unproven), not false (proven tamper)
+      // void-binding → null (integrity UNPROVEN), never false (proven tamper)
       assetHashMatches: result.assetHashFailure === 'void-binding' ? null : result.assetHashMatches,
       recomputedSha256: recomputed,
     },
@@ -681,8 +728,8 @@ export async function verifyWithSidecarBytes(
   else if (!assetHashMatches) verdict = 'CONTENT_MODIFIED';
   else verdict = 'INTACT';
 
-  // Trust axis on the legacy path too: legacy records carry a signer
-  // fingerprint, so a supplied resolver is consulted.
+  // Trust axis on the legacy path too — legacy records
+  // carry a signer fingerprint; a supplied resolver gets its say.
   let legacyTrust: SignerTrust | null = null;
   const legacyNotPerformed = [
     'signer identity — legacy manifests carry no chain to evaluate; the signing key is self-asserted',

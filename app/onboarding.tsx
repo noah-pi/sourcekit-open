@@ -1,12 +1,18 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Onboarding: a wordmark opening page, then three panels — the problem,
- * what the camera does (with the self-playing seal-break demo), and the
- * limit.
+ * Onboarding: a wordmark opening page, then three panels, said plainly.
  *
- * Swipe paging with back and skip on every screen; first-launch gating via
- * the store, and replays from the camera HUD get an X-out instead. The beta
- * line on panel 3 is protected copy: keep it verbatim.
+ * The arc is the honesty rules in miniature: (1) the problem — fakes are
+ * free and perfect now, and eyes can't settle it; (2) what this camera
+ * does — seals each shot at the shutter, taught by the self-playing
+ * seal-break demo; (3) the limit — the camera commits, it never
+ * concludes. Every claim here is literally true: we say the seal covers
+ * the bytes, never that it proves a scene was real.
+ *
+ * The mechanics that worked are unchanged: real swipe paging, back, skip
+ * on every screen, and first-launch gating via the store (replays from
+ * the camera HUD get an X-out instead). The beta line on panel 3 is
+ * protected copy — keep it verbatim.
  */
 
 import React, { useRef, useState } from 'react';
@@ -60,10 +66,12 @@ const SLIDES: Slide[] = [
 ];
 
 /**
- * The footer's primary action. Local rather than the shared ui.tsx Button,
- * whose hard-coded near-black label goes black-on-black in light mode: this
- * one fills with colors.text and labels in colors.bg, so it stays legible
- * in both schemes and re-themes on a scheme flip.
+ * The footer's primary action. The shared ui.tsx primary Button pairs its
+ * ink fill with a hard-coded near-black label — black-on-black in light
+ * mode (the 0.18.0 illegibility report). This one is theme-aware by
+ * construction: ink fill (colors.text) with the scheme's canvas color
+ * (colors.bg) as the label — legible in BOTH light and dark. The styles
+ * come from the screen's useThemedStyles, so a scheme flip re-themes it.
  */
 function PrimaryButton({ label, onPress, icon, styles }: {
   label: string;
@@ -86,12 +94,12 @@ export default function Onboarding() {
   const [page, setPage] = useState(0);
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
-  // Replay from the camera HUD lock badge gets an X-out; first run has none,
-  // since the tour gates entry to the app.
+  // Replayed from the camera HUD lock badge after first run: offer an X-out
+  // (first run has none — the tour is the gate into the app).
   const replaying = onboarded;
 
-  // One count keeps the dots, the swipe, and the final button in agreement.
-  // The +1 is the wordmark opening page.
+  // One count so the dots, the swipe, and the final button always agree
+  // with how many pages actually exist (+1: the wordmark opening page).
   const TOTAL_PAGES = SLIDES.length + 1;
   const LAST_PAGE = TOTAL_PAGES - 1;
 
@@ -106,7 +114,7 @@ export default function Onboarding() {
     scrollRef.current?.scrollTo({ x: i * width, animated: true });
   };
 
-  // Swiping is real paging; this keeps the dots on the current page.
+  // Swiping is real paging: keep the dots honest about where the user is.
   const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setPage(Math.round(e.nativeEvent.contentOffset.x / width));
   };
@@ -133,8 +141,9 @@ export default function Onboarding() {
         onMomentumScrollEnd={onScrollEnd}
         style={{ flex: 1 }}
       >
-        {/* Page 0: the wordmark. The aperture mark takes the iOS icon
-            treatment, large and centered. The subhead is protected copy. */}
+        {/* Page 0 — the wordmark. The aperture mark gets the iOS icon
+            treatment (rounded-continuous corners, hairline), large and
+            centered; the subhead is verbatim owner copy — ship as-is. */}
         <View key="intro" style={[styles.slide, { width }]}>
           <Panel active={page === 0} style={styles.introPanel}>
             <Image
@@ -250,8 +259,8 @@ const buildStyles = () => StyleSheet.create({
   introIcon: {
     width: 120,
     height: 120,
-    // iOS icon treatment: continuous-corner squircle (~22.5% radius) with a
-    // hairline, so the asset reads as the app icon rather than a picture.
+    // The iOS icon treatment: continuous-corner squircle (~22.5% radius)
+    // with a hairline, so the asset reads as the app icon, not a picture.
     borderRadius: 27,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,

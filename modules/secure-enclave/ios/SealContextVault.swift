@@ -3,28 +3,34 @@ import Foundation
 import LocalAuthentication
 
 /**
- * One Face ID evaluation, two signatures.
+ * SealContextVault (biometric-via-SDK) — ONE Face ID evaluation,
+ * TWO signatures.
  *
- * A biometric-bound capture signs twice: the telemetry record, and on the
- * c2pa-swift arm the COSE claim. A `.biometryCurrentSet` key prompts per
- * signing operation, so the SDK arm would raise a second prompt outside the
- * one-prompt seal flow. An evaluated LAContext is iOS's answer: a key ref
- * fetched with `kSecUseAuthenticationContext` signs under that context's
- * already-evaluated biometry without prompting again.
+ * The problem: a biometric-bound capture signs TWICE — the telemetry record
+ * (sealBio) and, on the c2pa-swift arm, the COSE claim (the vendored
+ * SecureEnclaveSigner's own SecKeyCreateSignature). A.biometryCurrentSet
+ * key prompts per signing operation, so the SDK arm would raise a SECOND
+ * Face ID prompt outside the one-prompt seal flow (the audit's
+ * reason for gating the SDK arm off for bio keys). iOS's own answer is the
+ * evaluated LAContext: a key ref fetched with kSecUseAuthenticationContext
+ * signs under that context's just-evaluated biometry without re-prompting.
  *
- * This vault holds that context between the two signatures. It is public
- * because the C2paIos pod consumes it on the SDK arm — two pod targets, one
- * process.
+ * This vault holds that freshly evaluated context between the two
+ * signatures. It is PUBLIC because the C2paIos pod (which depends on this
+ * pod) consumes the context on the SDK arm — two pod targets, one process.
  *
- * The discipline that keeps it equivalent to the per-use promise:
- *  - A TTL, enforced on read and by a guarded timer, whichever lands first.
- *  - The timer captures its hold's token and invalidates only that hold, so
- *    a stale timer can never kill a newer one.
- *  - Explicit release on every SDK-arm exit, which invalidates the context
- *    so no later sign can ride it.
- *  - `current(keyTag:)` is non-consuming but tag-scoped: only the key the
- *    hold was evaluated for can use it. Past the TTL or a release a caller
- *    gets nil, and the SDK arm throws rather than raising a second prompt.
+ * Discipline (matches the per-use sealBio promise):
+ *  - 30 s TTL. The record sign, the TSA relay hop, and the SDK sign all
+ *    fit in seconds; a leaked hold dies on its own. Expiry is enforced on
+ *    READ (expiresAt) and by a guarded timer, whichever lands first.
+ *  - Identity-guarded timer: the async-after captures the hold's token and
+ *    only invalidates THAT hold — a stale timer can never kill a newer one.
+ *  - Explicit release on every SDK-arm exit (attest.ts finally), which
+ *    invalidates the context so no later sign can ride it.
+ *  - current(keyTag:) is NON-consuming but tag-scoped: only the bio key the
+ *    hold was evaluated for can use it. After the TTL or a release, a
+ *    caller asking for the context gets nil — and the SDK arm THROWS rather
+ *    than silently raising a second prompt (C2paIosModule).
  */
 public final class SealContextVault {
   public static let shared = SealContextVault()
@@ -38,19 +44,13 @@ public final class SealContextVault {
 
   private let lock = NSLock()
   private var hold: Hold?
-
-  /// Long enough to cover the record signature, every TSA witness attempt
-  /// and the SDK signature — a witness pool that outlives the hold would
-  /// leave the later attempts signing against nothing. Short enough that the
-  /// window in which one scan authorizes a signature stays small: the relay
-  /// caps each witness at 15s, so a pool of two finishes well inside this.
-  private let ttlSeconds: TimeInterval = 60
+  private let ttlSeconds: TimeInterval = 30
 
   private init() {}
 
   /// Stores a freshly evaluated context for `keyTag`, replacing any prior
-  /// hold. Only callable after a successful evaluatePolicy — the vault never
-  /// evaluates biometry itself.
+  /// hold (invalidated immediately). Only callable after a successful
+  /// evaluatePolicy — the vault never evaluates biometry itself.
   public func place(context: LAContext, keyTag: String) {
     lock.lock()
     let previous = hold
@@ -68,20 +68,14 @@ public final class SealContextVault {
     }
   }
 
-  /// The held context when one exists for this keyTag and is unexpired, nil
-  /// otherwise. An expired hold is evicted and invalidated here rather than
-  /// left alive until the timer fires.
+  /// The held context when one exists for this keyTag and is unexpired;
+  /// nil otherwise (expired holds are evicted here too — exactness, not
+  /// timer latency).
   public func current(keyTag: String) -> LAContext? {
     lock.lock()
-    guard let h = hold else { lock.unlock(); return nil }
-    if h.expiresAt <= Date() {
-      hold = nil
-      lock.unlock()
-      h.context.invalidate()
-      return nil
-    }
-    lock.unlock()
-    return h.keyTag == keyTag ? h.context : nil
+    defer { lock.unlock() }
+    guard let h = hold, h.keyTag == keyTag, h.expiresAt > Date() else { return nil }
+    return h.context
   }
 
   /// Explicit release — invalidates the context so nothing can ride it

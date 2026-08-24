@@ -1,9 +1,10 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Exhibits: encrypted library of every exhibit this device has sealed.
+ * Exhibits — encrypted library of every exhibit this device has sealed.
  * Thumbnails are decrypted on demand into an ephemeral cache (wiped on lock).
- * Each cell carries at most two badges, bottom-left: a lock, and a pin when
- * location or wifi data is embedded.
+ * Each cell carries at most two quiet badges (0.17.0 mockup language): the
+ * lock — sealed is the default state — and a pin when location OR wifi
+ * data is embedded. Small glyphs on translucent dark discs, bottom-left.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -33,7 +34,8 @@ import * as Sharing from 'expo-sharing';
 import { subscribeSeals, subscribeSealJobs, retrySealJob, discardSealJob, cancelSealJob, resumeSealQueue, type SealJobSnapshot } from '../../src/provenance/sealQueue';
 import { ScreenTitle, EmptyState, Chip, Button, Mono } from '../../src/components/ui';
 
-// Grid geometry: 3 columns, 9px gutters, 16px page padding, square tiles.
+// Grid geometry per the 0.17.0 mockup: 3 columns, 9px gutters, 16px page
+// padding, square tiles (.grid{gap:9px;padding:4px 16px 0}).
 const COLS = 3;
 const GAP = 9;
 const PAD = 16;
@@ -46,10 +48,16 @@ const JOB_ICON: Record<SealJobSnapshot['kind'], keyof typeof Ionicons.glyphMap> 
 };
 
 /**
- * Seal-failure card. Vault insertion is the last step of sealing, so a failed
- * job has no grid cell of its own; this row shows its kind, capture time, and
- * verbatim error (in the Full details drawer), plus Retry and Remove. Remove
- * discards the queued draft.
+ * Seal-failure visibility (0.15.1): vault insertion is the LAST step of
+ * sealing, so a failed seal used to leave no trace here at all. This row
+ * states the failed job plainly — what kind, when it was captured, the
+ * verbatim error — and offers a retry (the queue's own failure logic is
+ * unchanged; a retry that still fails is marked failed again).
+ */
+/**
+ * Seal-failure card (0.17.0 copy v5): the state, stated plainly — what
+ * happened, that the capture is safe, two actions, and the verbatim error
+ * one drawer down in Full details. Remove discards the queued draft.
  */
 function FailedSealRow({ job }: { job: SealJobSnapshot }) {
   const styles = useThemedStyles(buildStyles);
@@ -109,8 +117,11 @@ function FailedSealRow({ job }: { job: SealJobSnapshot }) {
 }
 
 /**
- * Queued and in-flight seals render in the grid as loading squares. Both
- * 'pending' and 'sealing' jobs are selectable so Select mode can cancel them.
+ * A queued or in-flight seal renders IN THE GRID as a loading square —
+ * the capture already has a place here; it just isn't sealed yet.
+ * 0.18.3 (Noah): a QUEUED job is selectable like any sealed cell — Select
+ * mode can cancel it. An in-flight ('sealing') job is not: the pump has
+ * claimed it and a seal in progress never loses work to a stray tap.
  */
 function PendingSealTile({ job, selecting, selected, onToggle }: {
   job: SealJobSnapshot;
@@ -119,8 +130,11 @@ function PendingSealTile({ job, selecting, selected, onToggle }: {
   onToggle: () => void;
 }) {
   const styles = useThemedStyles(buildStyles);
-  // A mid-seal cancel is honored at the pump's pre-write checkpoints
-  // (sealQueue.cancelSealJob), never mid-write.
+  // 0.18.4 (Noah: "allow you to also remove/cancel queued/sealing ones"):
+  // sealing tiles are selectable too — a mid-seal cancel is honored at the
+  // pump's pre-write checkpoints (sealQueue.cancelSealJob), never mid-write.
+  // The selection dot was also missing here entirely; it now matches the
+  // sealed cells exactly.
   const selectable = job.state === 'pending' || job.state === 'sealing';
   const inner = (
     <>
@@ -167,28 +181,29 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
   const scheme = useEffectiveScheme();
   const [uri, setUri] = useState<string | null>(null);
   const [snippet, setSnippet] = useState<string | null>(null);
-  // Badge flags come from the index; entries without them are backfilled
-  // once from the record, never from media.
+  // Badge flags: sealed entries carry them in the index;
+  // legacy entries are backfilled once from the record — never from media.
   const [flags, setFlags] = useState<VaultFlags | null>(item.flags ?? null);
-  // Second pin trigger: wifi embedded. The index folds wifi into
-  // `identifying`, so the wifi claim is read from the sealed record, and only
-  // when location alone does not already justify the pin.
+  // Pin badge fact #2 (0.17.0): wifi embedded. The index flags bundle wifi
+  // into `identifying`, so the wifi claim itself is read from the sealed
+  // record — but only when location alone doesn't already justify the pin.
   const [wifi, setWifi] = useState(false);
   const hasLocation = item.hasLocation || flags?.location === true;
 
   useEffect(() => {
-    // Photos and videos carry vault-sealed thumbnails. A video without one
-    // gets a lazy backfill: one frame grabbed from the decrypted media,
-    // sealed beside it, then shown. The full-item fallback is photo-only; a
-    // video decrypts to an unrenderable .mp4.
+    // Photos AND videos carry vault-sealed thumbnails (0.14.0 — videos were
+    // bare icons before). Legacy videos without one get a lazy backfill: one
+    // frame grabbed from the decrypted media, sealed beside it, then shown.
+    // The full-item fallback is photo-only (a video decrypts to an
+    // unrenderable .mp4 — 200 MB for a broken image).
     if (item.kind === 'photo' || item.kind === 'video') {
       let mounted = true;
       decryptThumbToCache(item.id, { fallbackToFull: item.kind === 'photo' })
         .then((u) => mounted && setUri(u))
         .catch(() => {
           if (item.kind !== 'video') return;
-          // No sealed thumbnail: backfill once; a failure leaves the
-          // placeholder icon.
+          // No sealed thumbnail — a pre-thumbnail legacy video. Backfill
+          // once; a failure leaves the honest placeholder icon.
           void ensureVideoThumb(item.id).then((u) => u && mounted && setUri(u));
         });
       return () => {
@@ -218,11 +233,11 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
   }, [item.id, item.flags]);
 
   useEffect(() => {
-    if (hasLocation) return; // pin already justified, skip the read
+    if (hasLocation) return; // the pin is already justified — skip the read
     let mounted = true;
     getRecord(item.id)
       .then((rec) => {
-        // Only an object claim counts; 'redacted', 'unavailable', and null are absent.
+        // An object claim only — 'redacted' / 'unavailable' / null mean absent.
         const w = rec?.context?.wifi;
         if (mounted) setWifi(!!w && typeof w === 'object');
       })
@@ -237,8 +252,8 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
       {(item.kind === 'photo' || item.kind === 'video') && uri ? (
         <Image source={{ uri }} style={styles.thumb} contentFit="cover" transition={0} cachePolicy="memory-disk" />
       ) : item.kind === 'audio' && snippet ? (
-        // Audio thumbnail: the exhibit's first words, sealed beside the media
-        // and decrypted on demand like any thumbnail.
+        // The audio thumbnail is the exhibit's own first words — sealed
+        // beside the media, decrypted on demand like any thumbnail.
         <View style={[styles.thumb, styles.thumbSnippet]}>
           <Ionicons name="mic" size={13} color={colors.textDim} />
           <Text style={styles.thumbSnippetText} numberOfLines={4}>
@@ -246,8 +261,8 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
           </Text>
         </View>
       ) : (
-        // No thumbnail: 135deg gradient placeholder with a centered
-        // media-type glyph.
+        // No thumbnail: the mockup's quiet placeholder — a 135deg gradient
+        // with a centered media-type glyph, nothing louder.
         <LinearGradient
           colors={scheme === 'dark' ? ['#1F1F25', '#17171B'] : ['#EEEEF2', '#E3E3EA']}
           start={{ x: 0, y: 0 }}
@@ -266,8 +281,10 @@ const VaultCell = React.memo(function VaultCell({ item, onPress, selecting, sele
           {selected ? <Ionicons name="checkmark" size={12} color="#fff" /> : null}
         </View>
       ) : (
-        // Badge row: at most two discs, bottom-left. The lock is always
-        // shown; the pin only when location or wifi data is embedded.
+        // Badge row (0.17.0): at most two quiet discs, bottom-left. The lock
+        // is always there — sealed is the default state. The pin appears
+        // only when location OR wifi data is actually embedded. No identity
+        // badge, no bright colors: small dim glyphs on translucent discs.
         <View style={styles.badgeRow}>
           <View style={styles.badge} accessible accessibilityLabel="Sealed">
             <Ionicons name="lock-closed" size={13} color="#FFFFFF" />
@@ -314,7 +331,8 @@ export default function VaultScreen() {
   };
 
   // The selection mixes sealed exhibits (bare ids) and queued captures
-  // ('job:<id>' keys); Remove routes each kind to its own discard path.
+  // ('job:<id>' keys, 0.18.3) — one Select mode, one Remove action; each
+  // kind goes through its own discard path.
   const splitSelection = () => {
     const itemIds: string[] = [];
     const jobIds: string[] = [];
@@ -331,7 +349,8 @@ export default function VaultScreen() {
     const m = jobIds.length;
     if ((n === 0 && m === 0) || deleting) return;
     const sealedCopy = 'These are the only sealed copies. The collection is encrypted on this device and its key never leaves the OS keychain, so no readable copy exists anywhere else. Deleted exhibits cannot be recovered or re-created. Shared/exported copies elsewhere are unaffected.';
-    // Sealing jobs are cancellable; a seal past its final step is not.
+    // 0.18.4: sealing jobs are cancellable too — the copy states the one
+    // case a discard can't intercept (a seal already past its final step).
     const queuedCopy = 'Queued or sealing captures are discarded unsealed — their encrypted drafts are deleted. A seal already past its final step completes and lands as a sealed exhibit. This cannot be undone.';
     Alert.alert(
       n > 0
@@ -362,8 +381,9 @@ export default function VaultScreen() {
   };
 
   /**
-   * Desk handoff: exports the metadata index of the selected items as CSV,
-   * GeoJSON, or KML. Media stays in the vault; proofs match by hash.
+   * Desk handoff: export the metadata index of the selected items —
+   * CSV for the spreadsheet, GeoJSON/KML for the map. Media stays in the
+   * vault; this is the desk's intake list, matched to proofs by hash.
    */
   const doExport = async (format: 'csv' | 'geojson' | 'kml') => {
     setExporting(true);
@@ -387,6 +407,7 @@ export default function VaultScreen() {
           locationState: typeof loc === 'object' ? 'present' : loc === 'redacted' ? 'redacted' : 'unavailable',
           otsState: !rec?.ots ? 'none' : confirmed.length > 0 ? 'confirmed' : 'pending',
           otsBlockHeight: confirmed[0]?.blockHeight ?? null,
+          assignment: rec?.assignment?.label ?? null,
         });
       }
       const body =
@@ -403,8 +424,8 @@ export default function VaultScreen() {
   };
 
   const exportSelected = () => {
-    // Queued captures have no sealed record yet, so only sealed exhibits
-    // count toward the export.
+    // Queued captures have no sealed record yet — nothing to export; only
+    // real exhibits count toward the metadata export (0.18.3).
     const n = items.filter((i) => selected.has(i.id)).length;
     if (n === 0 || exporting) return;
     Alert.alert(
@@ -423,8 +444,8 @@ export default function VaultScreen() {
     setItems(await listItems());
   }, []);
 
-  // Export applies to sealed exhibits only; a selection of queued captures
-  // alone leaves the button disabled.
+  // Export only applies to sealed exhibits — a selection of nothing but
+  // queued captures disables it honestly.
   const selectedHasItems = items.some((i) => selected.has(i.id));
 
   useEffect(() => {
@@ -456,15 +477,18 @@ export default function VaultScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        {/* Beta tag: the ScreenTitle `tag` prop, the same one the Settings
-            header uses. */}
+        {/* BETA tag: the same ScreenTitle tag prop the Settings header uses
+            for "in beta" — same tokens, same styling (0.18.2, Noah: the word
+            belongs on the screen header, not the tab-bar label). */}
         <ScreenTitle title="Exhibits" tag="in beta" subtitle="Manage media. Stored locally." />
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           {items.length > 0 ? (
             <Chip label={`${items.length} exhibit${items.length === 1 ? '' : 's'}`} tone="neutral" icon="albums-outline" />
           ) : null}
-          {/* Select mode covers sealed exhibits, queued captures, and
-              sealing jobs, so any active job keeps the toggle reachable. */}
+          {/* Select mode covers sealed exhibits AND queued captures (0.18.3,
+              Noah) — so it must be reachable when the grid holds only
+              queued work. 0.18.4: sealing jobs are selectable too, so any
+              active job keeps the toggle reachable. */}
           {items.length > 0 || activeJobs.length > 0 ? (
             <TouchableOpacity onPress={selecting ? exitSelect : () => setSelecting(true)}>
               <Text style={styles.selectToggle}>{selecting ? 'Cancel' : 'Select'}</Text>
@@ -485,8 +509,8 @@ export default function VaultScreen() {
         removeClippedSubviews
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.textDim} />}
         ListHeaderComponent={
-          // Needs attention: collapsed header line with the count; tap opens
-          // the failure cards. Hidden when there are no failed jobs.
+          // Needs attention: collapsed by default — one quiet header line
+          // with the count; tap opens the failure cards. No jobs, no chrome.
           failedJobs.length === 0 ? undefined : (
             <View style={styles.attentionSection}>
               <Pressable style={styles.attentionToggle} onPress={() => setAttentionOpen((o) => !o)} hitSlop={8}>
@@ -524,8 +548,9 @@ export default function VaultScreen() {
       />
 
       {selecting ? (
-        // The pill tab bar is absolutely positioned over this screen, so the
-        // select bar clears it: inset + 64px pill + 10, the layout convention.
+        // 0.18.4 (Noah: the bar overlapped the tab bar): the pill tab bar
+        // is absolutely positioned OVER this screen — the select bar must
+        // clear it (the layout's own convention: inset + 64px pill + 10).
         <View style={[styles.selectBar, { marginBottom: Math.max(insets.bottom, 12) + 64 + 10 }]}>
           <Text style={styles.selectCount}>
             {selected.size === 0 ? 'Tap items to select' : `${selected.size} selected`}
@@ -560,7 +585,7 @@ const buildStyles = () => StyleSheet.create({
   // Each cell carries GAP/2 margin on every side, so the content container
   // insets by the remainder to land the outer edge exactly at PAD.
   gridContent: { paddingHorizontal: PAD - GAP / 2, paddingTop: 4 },
-  // Tile: square, 11px radius, 1px hairline border.
+  // Tile per the 0.17.0 mockup: square, 11px radius, 1px hairline border.
   tile: {
     width: CELL,
     aspectRatio: 1,
@@ -619,8 +644,8 @@ const buildStyles = () => StyleSheet.create({
     paddingVertical: 8,
   },
   deleteButtonText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
-  // Needs-attention section: amber failure rows with the verbatim error
-  // (wrapped, selectable) and muted queued/sealing rows.
+  // Needs-attention section: amber-toned failure rows (the error is the
+  // point — verbatim, wrapped, selectable) and muted queued/sealing rows.
   attentionSection: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: spacing.sm },
   attentionToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs },
   attentionToggleText: { color: colors.textDim, fontSize: fontSize.sm, fontWeight: '600' },
@@ -641,7 +666,7 @@ const buildStyles = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Tile caption: bottom-left, 8.5px, muted.
+  // Tile caption per the mockup (.tile .cap): bottom-left, 8.5px, muted.
   tileCap: {
     position: 'absolute',
     left: 8,
@@ -653,7 +678,9 @@ const buildStyles = () => StyleSheet.create({
   thumbPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   thumbSnippet: { padding: spacing.sm, justifyContent: 'flex-start', gap: 5 },
   thumbSnippetText: { color: colors.textDim, fontSize: 10, lineHeight: 13, fontStyle: 'italic' },
-  // Badge row: bottom-left, 4px apart.
+  // Badge row (0.17.0 mockup language): small translucent dark discs with a
+  // hairline light border, dim glyphs, bottom-left, 4px apart. Quiet by
+  // design — the lock is the default state, not an alarm.
   badgeRow: {
     position: 'absolute',
     bottom: 6,
@@ -662,7 +689,10 @@ const buildStyles = () => StyleSheet.create({
     gap: 4,
   },
   badge: {
-    // Solid black disc, white glyph, light ring: legible over any photo.
+    // 0.18.5 contrast pass (Noah: "even less visible than before — we need
+    // contrast"): a SOLID black disc with a pure-white glyph and a strong
+    // light ring — legible against any photo, bright or busy. Translucency
+    // was the failure mode; gone.
     width: 24,
     height: 24,
     borderRadius: 12,
@@ -672,8 +702,10 @@ const buildStyles = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Kind caption for non-photo tiles: solid chip with white text, anchored
-  // bottom-right so it clears the badge row.
+  // Kind caption for non-photo tiles — same cap language as the mockup,
+  // anchored bottom-right so it never collides with the badge row.
+  // 0.18.5 contrast pass: solid chip, white text (was dim text directly on
+  // the thumbnail — unreadable on busy frames).
   kindCap: {
     position: 'absolute',
     right: 8,

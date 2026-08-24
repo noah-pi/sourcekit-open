@@ -1,21 +1,24 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * EnvironmentCard: sun/shadow, horizon, and weather for the sealed time and
- * place, in the Inspect screen's juxtaposition style.
+ * EnvironmentCard — sun/shadow, horizon, and weather for the sealed time
+ * and place, in the same juxtaposition style as the Inspect screen.
  *
- * Horizon and shadow reuse the Inspect components (HorizonCard / ShadowCard
- * in src/components/Juxtapose.tsx) so the two screens stay in step. Weather
- * fetches on mount here when a location is present; Inspect puts that fetch
- * behind a tap. Each module shows the sealed claim next to the reference
- * value without drawing a conclusion.
+ * The horizon and shadow modules REUSE the Inspect screen's components
+ * (src/components/Juxtapose.tsx — HorizonCard / ShadowCard) so the two
+ * screens can never drift apart; weather renders in the same card language
+ * but fetches BY DEFAULT when a location is present (Inspect puts the fetch
+ * behind a tap). Offline the weather module says "Network not available",
+ * neutral. Every module juxtaposes the sealed claim with what should be
+ * true and never concludes.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Linking, ActivityIndicator } from 'react-native';
 
 import { colors, spacing, fontSize, useThemedStyles } from '../../theme';
 import { HorizonCard, ShadowCard } from '../Juxtapose';
 import { ForensicCard, NotRecorded } from './ForensicCard';
+import { useStore } from '../../store/useStore';
 
 // Open-Meteo archive weather-code words (same table the Inspect screen uses).
 const WEATHER_WORDS: Record<number, string> = {
@@ -36,8 +39,8 @@ function windWords(kmh: number): string {
   return 'strong wind';
 }
 
-/** Weather: archive reading for the sealed hour. Fetches on mount; offline it
- *  shows a retry line. */
+/** Weather: the official archive reading for the sealed hour — fetched by
+ *  default (a location is present), offline stated as "Network not available". */
 function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
   lat: number;
   lon: number;
@@ -45,7 +48,8 @@ function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
   sealedWhenWhere: string;
 }) {
   const styles = useThemedStyles(buildStyles);
-  const [state, setState] = useState<'loading' | 'done' | 'offline'>('loading');
+  const weatherLookupEnabled = useStore((st) => st.settings.weatherLookupEnabled);
+  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'offline'>('idle');
   const [reading, setReading] = useState<string | null>(null);
 
   const check = async () => {
@@ -69,16 +73,20 @@ function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
     }
   };
 
-  useEffect(() => {
-    void check();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one fetch per sealed (lat, lon, at)
-  }, [lat, lon, at]);
 
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Weather</Text>
       <Text style={styles.cardSub}>Official weather for the sealed time and location.</Text>
-      {state === 'loading' ? (
+      {!weatherLookupEnabled ? (
+        <Text style={styles.weatherBtnText}>
+          Weather archive lookup is off. Turn it on in Settings to check the archive — the lookup sends the sealed coordinate and day over the network.
+        </Text>
+      ) : state === 'idle' ? (
+        <Pressable style={styles.weatherBtn} onPress={() => void check()} hitSlop={6}>
+          <Text style={styles.weatherBtnText}>Check the archive · sends the sealed coordinates</Text>
+        </Pressable>
+      ) : state === 'loading' ? (
         <View style={styles.weatherBtn}>
           <ActivityIndicator color={colors.accent} size="small" />
         </View>
@@ -98,14 +106,16 @@ function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
           </View>
         </View>
       )}
-      <Pressable onPress={() => void Linking.openURL('https://open-meteo.com/')} hitSlop={6}>
-        <Text style={styles.sourceLink}>Source: Open-Meteo archive ↗</Text>
-      </Pressable>
+      {weatherLookupEnabled ? (
+        <Pressable onPress={() => void Linking.openURL('https://open-meteo.com/')} hitSlop={6}>
+          <Text style={styles.sourceLink}>Source: Open-Meteo archive ↗</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
-export function EnvironmentCard({ lat, lon, atIso, rollDeg, pitchDeg, sealedWhenWhere }: {
+export function EnvironmentCard({ lat, lon, atIso, rollDeg, pitchDeg, facing, hfovDeg, sealedWhenWhere }: {
   /** Sealed location claim (device-reported), when present. */
   lat: number | null;
   lon: number | null;
@@ -114,6 +124,10 @@ export function EnvironmentCard({ lat, lon, atIso, rollDeg, pitchDeg, sealedWhen
   /** Sealed pose-trace attitude at the shutter, degrees, when present. */
   rollDeg: number | null;
   pitchDeg: number | null;
+  /** 0.20.5: sealed camera facing / horizontal FOV — the horizon card's
+   *  projection inputs (absent on older records → nominal fallbacks). */
+  facing?: 'front' | 'back' | null;
+  hfovDeg?: number | null;
   /** "Aug 12 · 2:41 PM · Austin" — the sealed time/place line, caller-formatted. */
   sealedWhenWhere: string;
 }) {
@@ -126,7 +140,7 @@ export function EnvironmentCard({ lat, lon, atIso, rollDeg, pitchDeg, sealedWhen
     return (
       <ForensicCard
         title="Environment"
-        sub="The sealed time, place, and tilt next to the sun, the horizon, and the archived weather."
+        sub="What the sun, the horizon, and the weather record say about the sealed time and place."
       >
         <NotRecorded reason="no location or pose trace sealed with this capture" />
       </ForensicCard>
@@ -136,7 +150,7 @@ export function EnvironmentCard({ lat, lon, atIso, rollDeg, pitchDeg, sealedWhen
   // The modules render as sibling cards in the Inspect screen's own style.
   return (
     <View>
-      {hasHorizon ? <HorizonCard rollDeg={rollDeg} pitchDeg={pitchDeg} /> : null}
+      {hasHorizon ? <HorizonCard rollDeg={rollDeg} pitchDeg={pitchDeg} facing={facing} hfovDeg={hfovDeg} /> : null}
       {hasPlace ? (
         <ShadowCard lat={lat} lon={lon} at={atValid} sealedWhenWhere={sealedWhenWhere} />
       ) : null}

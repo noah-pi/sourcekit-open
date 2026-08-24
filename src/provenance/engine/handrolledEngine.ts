@@ -1,10 +1,16 @@
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Adapter exposing the hand-rolled verifier in src/c2pa/ through the same
- * normalized shape as the upstream engine. It emits no verdicts: the report
- * is flattened into facts, and policyLayer recomposes the verdict from them
- * and asserts parity with the hand-rolled verdict, so drift cannot pass
- * silently.
+ * WS3 hand-rolled engine — a thin ADAPTER exposing the archived verifier
+ * (archive/handrolled-verifier/, moved not deleted) through the same
+ * normalized shape as the upstream engine. Refactor only: the archived code
+ * is called as-is, with zero behavior change; every existing suite keeps
+ * exercising it directly.
+ *
+ * No verdicts are emitted here either. The archived verifier's rich report
+ * (which DOES contain our canonical verdict) is flattened into normalized
+ * FACTS; policyLayer re-composes the verdict from those facts and asserts
+ * parity with the archived verdict — so a drift between the archive and the
+ * policy layer cannot pass silently.
  */
 
 import {
@@ -12,7 +18,7 @@ import {
   verifyVideoBytes,
   type VerificationReport,
   type VerifyOptions,
-} from '../../c2pa/verifyAsset';
+} from '../../../archive/handrolled-verifier/verifyAsset';
 import {
   baseResultLike,
   type NormalizedEngineResult,
@@ -46,14 +52,18 @@ function normalizeReport(report: VerificationReport): NormalizedEngineResult {
   r.signatureValid = report.checks.signatureValid;
   r.claimAssertionsMatch = report.c2pa ? report.c2pa.claimAssertionsMatch : null;
   r.assetHashFailure = report.c2pa?.assetHashFailure ?? null;
-  // void-binding reports assetHashMatches=null; normalize it to false so the
-  // policy layer composes SIGNATURE_INVALID from the pair.
+  // void-binding → UNPROVEN (null in the report) is normalized to
+  // assetHashMatches=false + assetHashFailure='void-binding' — the policy
+  // layer composes SIGNATURE_INVALID from the pair, exactly like the archive.
   r.assetHashMatches =
     r.assetHashFailure === 'void-binding' ? false : report.checks.assetHashMatches;
 
-  // A broken inner Source Kit record signature also yields SIGNATURE_INVALID,
-  // and the report exposes no bit for it. When no other fact explains the
-  // verdict, that is the cause; surface it as a signature-layer fact.
+  // The archive also fails SIGNATURE_INVALID when the INNER Source Kit record's
+  // signature is broken (defense in depth) with the claim layer intact. The
+  // report doesn't expose that bit directly; when the verdict says
+  // SIGNATURE_INVALID and no other fact explains it, that is the cause —
+  // surface it as a signature-layer fact so the policy layer composes the
+  // same verdict (parity, never drift).
   if (v === 'SIGNATURE_INVALID' && r.signatureValid !== false
       && r.claimAssertionsMatch !== false && r.assetHashFailure !== 'void-binding') {
     r.signatureValid = false;
@@ -82,8 +92,8 @@ function normalizeReport(report: VerificationReport): NormalizedEngineResult {
     }
   }
 
-  // Status lines in the `exhibit.` namespace, kept distinct from upstream
-  // spec codes so oracle diffs cannot confuse the two.
+  // Status lines in OUR namespace — the archived engine's vocabulary, kept
+  // distinct from upstream spec codes so oracle diffs never confuse the two.
   const statuses: NormalizedEngineResult['validationStatus'] = [];
   if (r.signatureValid === false) {
     statuses.push({ code: 'exhibit.signatureInvalid', severity: 'failure', explanation: 'hand-rolled pipeline: COSE/record signature failed' });
@@ -97,14 +107,15 @@ function normalizeReport(report: VerificationReport): NormalizedEngineResult {
     statuses.push({ code: 'exhibit.assetHashMismatch', severity: 'failure', explanation: 'hand-rolled pipeline: media bytes differ from the signed hash' });
   }
   if (v === 'SIGNATURE_INVALID' && statuses.length === 0) {
-    // SIGNATURE_INVALID with no claim-layer fact means the inner Source Kit
-    // record signature failed while the claim layer stayed intact.
+    // Verdict SIGNATURE_INVALID with no claim-layer fact → the INNER Source Kit
+    // record's signature failed (defense in depth, claim layer intact).
     statuses.push({ code: 'exhibit.innerRecordSignatureInvalid', severity: 'failure', explanation: 'hand-rolled pipeline: inner Source Kit record signature failed (claim layer intact)' });
   }
   r.validationStatus = statuses;
 
-  // No C2PA trust-list concept here; the trust axis is the roster resolver,
-  // so this is always 'unknown'.
+  // The hand-rolled verifier has NO C2PA trust-list concept (its trust axis
+  // is the roster resolver — policy-layer input, untouched). It can never
+  // claim official/interim: always 'unknown'.
   r.trustListHit = 'unknown';
   return r;
 }

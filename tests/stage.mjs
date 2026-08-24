@@ -27,11 +27,11 @@ fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
 const STAGE = [
-  // Hand-rolled verification core, staged from src/c2pa/ under flat
-  // basenames, so the suites import './verifyAsset.mts' etc.
-  'src/c2pa/verifyAsset.ts', 'src/c2pa/verifyAppAttest.ts',
-  'src/c2pa/c2pa.ts', 'src/c2pa/bmff.ts',
-  'src/c2pa/jpegApp11.ts', 'src/c2pa/png.ts',
+  // Hand-rolled verification core, staged from archive/handrolled-verifier/
+  // under flat basenames, so the suites import './verifyAsset.mts' etc.
+  'archive/handrolled-verifier/verifyAsset.ts', 'archive/handrolled-verifier/verifyAppAttest.ts',
+  'archive/handrolled-verifier/c2pa.ts', 'archive/handrolled-verifier/bmff.ts',
+  'archive/handrolled-verifier/jpegApp11.ts', 'archive/handrolled-verifier/png.ts',
   'src/provenance/attest.ts', 'src/provenance/manifest.ts',
   'src/provenance/detached.ts',
   // Stereo-capture artifact ingestion (Spec-Camera-Module-0.13): three-state
@@ -82,8 +82,8 @@ function rewrite(src, fname) {
     // Longest prefixes first: engine/ modules sit one level deeper than
     // provenance/ modules, and some modules reach back into src/. Everything
     // flattens to './x.mts'.
-    .replace(/from '\.\.\/\.\.\/c2pa\/(\w+)'/g, "from './$1.mts'")
-    .replace(/from '\.\.\/c2pa\/(\w+)'/g, "from './$1.mts'")
+    .replace(/from '(?:\.\.\/)+archive\/handrolled-verifier\/(\w+)'/g, "from './$1.mts'")
+    .replace(/from '\.\.\/\.\.\/src\/lib\/(\w+)'/g, "from './$1.mts'")
     // engine/ modules reach src/lib as '../../lib/x' (policyLayer to trustProvider).
     .replace(/from '\.\.\/\.\.\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/\.\.\/src\/lib\/(\w+)'/g, "from './$1.mts'")
@@ -96,6 +96,7 @@ function rewrite(src, fname) {
     // The reader's card model sits at src/reader/types.ts; '../types' from
     // reader/verify/ would otherwise flatten onto a generic types.mts.
     .replace(/from '\.\.\/types'/g, "from './reader-types.mts'")
+    .replace(/from '(?:\.\.\/)+src\/reader\/verify\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '@exhibit\/lib\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '@exhibit\/provenance\/(\w+)'/g, "from './$1.mts'")
     .replace(/from '\.\.\/stereo\/(\w+)'/g, "from './$1.mts'")
@@ -142,6 +143,9 @@ for (const rel of STAGE) {
 for (const [name, rel] of [
   ['reader-types', 'src/reader/types.ts'],
   ['reader-ladder', 'src/reader/verify/ladder.ts'],
+  // The WMM evaluator and its generated table, for the declination gate.
+  ['geomag', 'src/reader/verify/geomag.ts'],
+  ['wmmCoefficients', 'src/reader/verify/wmmCoefficients.ts'],
 ]) {
   const src = fs.readFileSync(path.join(root, rel), 'utf8');
   fs.writeFileSync(path.join(out, `${name}.mts`), rewrite(src, name));
@@ -166,12 +170,18 @@ for (const f of fs.readdirSync(path.join(here, 'shims'))) {
 // imports, './exhibitCamera.mts'. Type-only; see the shim's header.
 fs.copyFileSync(path.join(out, 'exhibitCamera-types-shim.mts'), path.join(out, 'exhibitCamera.mts'));
 
+// NOAA's published WMM test vectors, read by test-geomag at run time.
+fs.copyFileSync(path.join(here, 'WMM_TEST_VALUES.txt'), path.join(out, 'WMM_TEST_VALUES.txt'));
+
 // test suites — media paths point at the staged dir; c2patool from env/PATH
 const stagedAbs = out.endsWith('/') ? out : out + '/';
 for (const f of fs.readdirSync(here).filter((f) => (f.startsWith('test-') || f.startsWith('build-') || f.startsWith('tool-')) && f.endsWith('.mts'))) {
   let s = fs.readFileSync(path.join(here, f), 'utf8');
   s = s.replaceAll('/tmp/lab/', stagedAbs);
   s = s.replaceAll("'/tmp/bin/c2patool'", `process.env.C2PATOOL ?? 'c2patool'`);
+  // Suites that import app modules by their repo path resolve to the flat
+  // staged copies, same rule the modules themselves are rewritten under.
+  s = s.replace(/from '(?:\.\.\/)+src\/reader\/verify\/(\w+)'/g, "from './$1.mts'");
   fs.writeFileSync(path.join(out, f), s);
 }
 

@@ -222,8 +222,13 @@ console.log('— record-carried PQ layer —');
     (r.checksPerformed ?? []).some((x) => x.includes('post-quantum layer verified on the record')));
 }
 
-// ---------- forgery: foreign PQ signature binds to nothing ----------
-console.log('— forgery resistance —');
+// ---------- the claim-layer entry is retired at the builder ----------
+// 0.19.0 made the PQ layer record-only: the builder no longer emits a
+// `verifyPq` entry in the COSE unprotected header, though the verifier still
+// parses and checks one so pre-0.19.0 and foreign files keep verifying.
+// A forged-entry file can therefore no longer be produced by this builder;
+// covering that path again needs a stored hostile fixture, not generated input.
+console.log('— claim-layer emission retired —');
 {
   const forger = generatePqKeyPair();
   const insertOffset = 2;
@@ -245,12 +250,12 @@ console.log('— forgery resistance —');
   );
   const forgedMedia = concatBytes(clean.subarray(0, insertOffset), segment, clean.subarray(insertOffset));
   const r = await verifyPhotoBytes(forgedMedia);
-  check('forged PQ entry: signature check FAILS (fingerprint bound to committed key)',
-    r.c2pa?.pq?.claim?.present === true && r.c2pa?.pq?.claim?.signatureValid === false);
-  check('a failed PQ layer never flips the verdict (additive assurance, not a downgrade vector)',
+  check('a claim-layer pq signer is accepted by the builder and emits no entry',
+    r.c2pa?.pq?.claim?.present !== true, String(r.c2pa?.pq?.claim?.present));
+  check('the retirement never flips the verdict (the record layer carries the assurance)',
     r.verdict === 'INTACT', r.verdict);
-  check('the FAILED line is loud and keeps the classical layer standing',
-    (r.checksPerformed ?? []).some((s) => s.includes('post-quantum layer') && s.includes('FAILED') && s.includes('classical layer still stands')));
+  check('an absent claim entry is not reported as stripping',
+    !(r.checksPerformed ?? []).some((s) => s.includes('post-quantum layer') && s.includes('STRIPPED')));
 }
 
 // ---------- APP11 budget ----------

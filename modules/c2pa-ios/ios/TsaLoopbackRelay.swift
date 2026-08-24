@@ -3,53 +3,50 @@ import Foundation
 import Network
 
 /**
- * One-shot loopback relay for the RFC 3161 timestamp round-trip.
+ * TsaLoopbackRelay (b2) — the RFC 3161 timestamp round-trip the
+ * vendored c2pa-swift stack cannot complete on its own from an app process.
  *
- * The vendored c2pa-swift stack attempts the sigTst fetch itself, but drives
- * it through a fresh Context whose default blocking resolver does not
- * complete from an app process, and the builder path exposes no resolver
- * seam. So the SDK is pointed at a listener on 127.0.0.1 (OS-assigned port,
- * alive for a single sign call). The relay accepts the core's one POST,
- * forwards it to the configured authority over URLSession, and on an
- * upstream 200 sets the `application/timestamp-reply` content type the core
- * requires — `time_stamp_request_http` demands status 200 and that exact
- * type. Any other outcome is answered with an honest status and recorded in
- * `lastError`, which the module appends to the thrown error.
+ * Why this exists (triple-checked 2026-08-24, see Vendor/C2PA/VENDORED.md):
+ *  - Our FFI entry `c2pa_builder_sign` DOES attempt the sigTst fetch
+ *    (c2pa-rs #2143), but it drives it through a FRESH `Context` (upstream
+ *    TODO) whose default reqwest blocking resolver fails from this process
+ *    — the–error "an error occurred from the underlying
+ *    http resolver". There is NO public resolver seam on the builder path
+ *    (c2pa-swift #109; releases through c2pa-c-ffi v0.90.15 carry no fix).
+ *  - The standard RFC 3161 transport is a plain HTTP POST of
+ *    `application/timestamp-query` answered `application/timestamp-reply`,
+ *    and `time_stamp_request_http` requires status == 200 AND that exact
+ *    response content-type.
  *
- * Limits: HTTP/1.1 with an explicit Content-Length only, which is what the
- * core's client always sends. Exactly one request is served, then the
- * listener stops itself. Nothing terminates TLS here, and nothing leaves the
- * loopback interface except the single forward hop.
+ * So: the SDK is pointed at a ONE-SHOT loopback listener (.1,
+ * OS-assigned port, alive for a single sign call). The relay accepts the
+ * core's one POST, forwards it to the configured TSA over URLSession
+ * (30 s cap, task cancelled on timeout), and on an upstream 200 forces the
+ * Content-Type the core requires. Anything else — listener failure, forward
+ * failure, upstream non-200 — is answered with an honest status and recorded
+ * in `lastError`, which the module appends to the thrown error so the TS
+ * diagnostic (and its 'TSA relay' classifier needle) sees the real reason.
+ *
+ * Deliberate limits: HTTP/1.1 with an explicit Content-Length only (the
+ * core's reqwest client always sends one); exactly one request is served,
+ * then the listener stops itself. Nothing here terminates TLS and nothing
+ * leaves the loopback interface except the single forward hop to the
+ * configured authority.
  */
 final class TsaLoopbackRelay {
-  /// Upper bound on a relayed timestamp query. RFC 3161 requests are a few
-  /// hundred bytes; this only has to be larger than any honest one.
-  private static let maxBodyBytes = 1 << 20
-
-  /// Per-witness cap on the forward hop.
-  private static let upstreamTimeout: TimeInterval = 15
-
   private let upstream: URL
   private let queue = DispatchQueue(label: "com.verify.camera.tsa-relay", qos: .userInitiated)
-  private let listenerLock = NSLock()
-  private var listenerStorage: NWListener?
+  private var listener: NWListener?
   private var served = false
 
   private let errorLock = NSLock()
   private var lastErrorStorage: String?
   /// The relay-side failure, verbatim, or nil when the forward succeeded.
-  /// Written before the error response is sent, read by the module after the
-  /// core throws — the lock makes that cross-queue handoff safe.
+  /// Written before the error response is sent, read by the module after
+  /// the core throws — the lock makes that cross-queue handoff safe.
   private(set) var lastError: String? {
     get { errorLock.lock(); defer { errorLock.unlock() }; return lastErrorStorage }
     set { errorLock.lock(); lastErrorStorage = newValue; errorLock.unlock() }
-  }
-
-  /// `stop()` runs both from the module's defer and from the response
-  /// completion on `queue`, so the listener reference is lock-guarded too.
-  private var listener: NWListener? {
-    get { listenerLock.lock(); defer { listenerLock.unlock() }; return listenerStorage }
-    set { listenerLock.lock(); listenerStorage = newValue; listenerLock.unlock() }
   }
 
   init(upstream: URL) {
@@ -60,7 +57,7 @@ final class TsaLoopbackRelay {
   /// Throws (recording lastError) when the listener cannot come up.
   func start() throws -> URL {
     let params = NWParameters.tcp
-    // Loopback only — the relay must never be reachable off-device.
+    // Loopback ONLY — the relay must never be reachable off-device.
     params.requiredInterfaceType = .loopback
     let newListener: NWListener
     do {
@@ -104,14 +101,11 @@ final class TsaLoopbackRelay {
     return URL(string: "http://127.0.0.1:\(port.rawValue)/")!
   }
 
-  /// Stops the listener. Idempotent; the module calls it in a defer so no
-  /// relay survives its sign call.
+  /// Stops the listener (idempotent). The module calls this in a defer so
+  /// no relay survives its sign call.
   func stop() {
-    listenerLock.lock()
-    let current = listenerStorage
-    listenerStorage = nil
-    listenerLock.unlock()
-    current?.cancel()
+    listener?.cancel()
+    listener = nil
   }
 
   // MARK: - one-shot request handling (all on `queue`)
@@ -124,7 +118,7 @@ final class TsaLoopbackRelay {
   }
 
   private func readHeaders(connection: NWConnection, accumulating: Data) {
-    connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+    connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, error in
       guard let self = self else { return }
       var buffer = accumulating
       if let data = data { buffer.append(data) }
@@ -137,11 +131,6 @@ final class TsaLoopbackRelay {
         if buffer.count > 65536 {
           self.lastError = "TSA relay: request headers exceeded 64 KB without terminating"
           self.respond(connection: connection, status: 400, contentType: "text/plain", body: Data())
-        } else if isComplete {
-          // The peer closed mid-header. Without this the receive returns
-          // nil data and nil error forever and the recursion never ends.
-          self.lastError = "TSA relay: the connection closed before the request headers finished"
-          connection.cancel()
         } else {
           self.readHeaders(connection: connection, accumulating: buffer)
         }
@@ -160,14 +149,6 @@ final class TsaLoopbackRelay {
         self.respond(connection: connection, status: 400, contentType: "text/plain", body: Data())
         return
       }
-      // Bound the declared length before it reaches prefix(_:), which traps
-      // on a negative argument, or readBody, which would otherwise wait for
-      // bytes that never arrive.
-      guard length >= 0, length <= Self.maxBodyBytes else {
-        self.lastError = "TSA relay: Content-Length \(length) is outside the accepted range (0…\(Self.maxBodyBytes))"
-        self.respond(connection: connection, status: 400, contentType: "text/plain", body: Data())
-        return
-      }
       let body = Data(buffer[headerEnd.upperBound...])
       if body.count >= length {
         self.forward(connection: connection, body: Data(body.prefix(length)))
@@ -178,7 +159,7 @@ final class TsaLoopbackRelay {
   }
 
   private func readBody(connection: NWConnection, body: Data, needed: Int) {
-    connection.receive(minimumIncompleteLength: 1, maximumLength: max(1, needed - body.count)) { [weak self] data, _, isComplete, error in
+    connection.receive(minimumIncompleteLength: 1, maximumLength: max(1, needed - body.count)) { [weak self] data, _, _, error in
       guard let self = self else { return }
       var buffer = body
       if let data = data { buffer.append(data) }
@@ -189,27 +170,19 @@ final class TsaLoopbackRelay {
       }
       if buffer.count >= needed {
         self.forward(connection: connection, body: Data(buffer.prefix(needed)))
-      } else if isComplete {
-        // Same closed-early case as the header read.
-        self.lastError = "TSA relay: the connection closed after \(buffer.count) of \(needed) body bytes"
-        connection.cancel()
       } else {
         self.readBody(connection: connection, body: buffer, needed: needed)
       }
     }
   }
 
-  /// The one network hop: RFC 3161 query → configured authority.
+  /// The one network hop: RFC 3161 query → configured authority, 30 s cap.
   private func forward(connection: NWConnection, body: Data) {
     var request = URLRequest(url: upstream)
     request.httpMethod = "POST"
     request.setValue("application/timestamp-query", forHTTPHeaderField: "Content-Type")
     request.httpBody = body
-    // An authority that has not answered in this long is not going to. The
-    // cap matters beyond patience: on a biometric capture the whole witness
-    // pool has to finish inside the held-context TTL, and a 30s stall on the
-    // first witness would spend it.
-    request.timeoutInterval = Self.upstreamTimeout
+    request.timeoutInterval = 30
     let done = DispatchSemaphore(value: 0)
     var responseData: Data?
     var httpResponse: HTTPURLResponse?
@@ -221,9 +194,9 @@ final class TsaLoopbackRelay {
       done.signal()
     }
     task.resume()
-    if done.wait(timeout: .now() + Self.upstreamTimeout) == .timedOut {
+    if done.wait(timeout: .now() + 30) == .timedOut {
       task.cancel()
-      lastError = "TSA relay: upstream \(upstream.absoluteString) did not answer within \(Int(Self.upstreamTimeout))s"
+      lastError = "TSA relay: upstream \(upstream.absoluteString) did not answer within 30s"
       respond(connection: connection, status: 504, contentType: "text/plain", body: Data())
       return
     }
@@ -238,8 +211,8 @@ final class TsaLoopbackRelay {
       return
     }
     if http.statusCode == 200, let data = responseData {
-      // The content type the core requires, set only on a real upstream 200.
-      // A non-200 upstream is relayed with its true status.
+      // The content-type the core requires — forced ONLY on a real upstream
+      // 200; a non-200 upstream is relayed with its true status.
       respond(connection: connection, status: 200, contentType: "application/timestamp-reply", body: data)
     } else {
       lastError = "TSA relay: upstream \(upstream.absoluteString) responded HTTP \(http.statusCode)"
