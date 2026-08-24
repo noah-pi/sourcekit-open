@@ -11,17 +11,18 @@
  *                  on a perspective-tilted ground plane with its shadow in the
  *                  sun-opposite direction at the computed length ratio, in the
  *                  object's own heights and labeled NSEW.
- *   Weather      — the official archive reading for the sealed time and
- *                  place, fetched on tap over the network.
  *   Motion       — the sealed gyro trace around the shutter, drawn as-is.
  *
- * Horizon and motion need only the pose trace; shadows and weather also need
- * the committed location. Cards whose inputs are absent do not render, and the
- * caller does that check.
+ * Weather lives in src/components/forensic/EnvironmentCard.tsx, because it is
+ * the one card that reaches the network and it stays behind a tap there.
+ *
+ * Horizon and motion need only the pose trace; shadows also need the committed
+ * location. Cards whose inputs are absent do not render, and the caller does
+ * that check.
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { colors, spacing, radii, fontSize, type, useThemedStyles } from '../theme';
@@ -465,76 +466,6 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
 }
 
 // ---------------------------------------------------------------------------
-// Weather — the official archive for the sealed time and place, on tap
-// ---------------------------------------------------------------------------
-
-const WEATHER_WORDS: Record<number, string> = {
-  0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Overcast',
-  45: 'Fog', 48: 'Fog',
-  51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle',
-  61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
-  66: 'Freezing rain', 67: 'Freezing rain',
-  71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains',
-  80: 'Light showers', 81: 'Showers', 82: 'Heavy showers',
-  85: 'Snow showers', 86: 'Snow showers',
-  95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with hail',
-};
-
-function windWords(kmh: number): string {
-  if (kmh < 12) return 'light wind';
-  if (kmh < 30) return 'breezy';
-  return 'strong wind';
-}
-
-export function WeatherCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon: number; at: Date; sealedWhenWhere: string }) {
-  const styles = useThemedStyles(buildStyles);
-  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'failed'>('idle');
-  const [reading, setReading] = useState<string | null>(null);
-
-  const check = async () => {
-    setState('loading');
-    try {
-      const day = at.toISOString().slice(0, 10);
-      const url =
-        `https://archive-api.open-meteo.com/v1/archive?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
-        `&start_date=${day}&end_date=${day}&hourly=temperature_2m,weather_code,wind_speed_10m&timezone=UTC`;
-      const res = await fetch(url);
-      const json = await res.json();
-      const hour = at.getUTCHours();
-      const code = json?.hourly?.weather_code?.[hour];
-      const temp = json?.hourly?.temperature_2m?.[hour];
-      const wind = json?.hourly?.wind_speed_10m?.[hour];
-      if (code === undefined || temp === undefined) throw new Error('no reading');
-      setReading(`${WEATHER_WORDS[code] ?? 'Unknown'} · ${Math.round(temp)}°C · ${windWords(wind ?? 0)}`);
-      setState('done');
-    } catch {
-      setState('failed');
-    }
-  };
-
-  return (
-    <Card title="Weather" sub="Official weather for the sealed time and location.">
-      {state === 'idle' ? (
-        <Pressable style={styles.weatherBtn} onPress={() => void check()} hitSlop={6}>
-          <Text style={styles.weatherBtnText}>Check the archive · needs network</Text>
-        </Pressable>
-      ) : state === 'loading' ? (
-        <View style={styles.weatherBtn}><ActivityIndicator color={colors.accent} size="small" /></View>
-      ) : state === 'failed' ? (
-        <Pressable style={styles.weatherBtn} onPress={() => void check()} hitSlop={6}>
-          <Text style={styles.weatherBtnText}>Couldn't reach the archive. Tap to retry</Text>
-        </Pressable>
-      ) : (
-        <Pair sealed={sealedWhenWhere} shouldLabel="Should have been" shouldBe={reading ?? ''} />
-      )}
-      <Pressable onPress={() => void Linking.openURL('https://open-meteo.com/')} hitSlop={6}>
-        <Text style={styles.sourceLink}>Source: Open-Meteo archive ↗</Text>
-      </Pressable>
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Motion at the shutter — the sealed trace, drawn as-is
 // ---------------------------------------------------------------------------
 
@@ -573,40 +504,10 @@ export function MotionCard({ trace }: { trace: PoseTrace }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// The section — renders only the cards whose sealed inputs exist
-// ---------------------------------------------------------------------------
-
-export function WhatShouldBeTrue({ inputs }: { inputs: JuxtaInputs }) {
-  const styles = useThemedStyles(buildStyles);
-  const cards: React.ReactNode[] = [];
-  if (inputs.rollDeg !== null && inputs.pitchDeg !== null) {
-    cards.push(<HorizonCard key="h" rollDeg={inputs.rollDeg} pitchDeg={inputs.pitchDeg} />);
-  }
-  if (inputs.lat !== null && inputs.lon !== null && inputs.at) {
-    cards.push(<ShadowCard key="s" lat={inputs.lat} lon={inputs.lon} at={inputs.at} sealedWhenWhere={inputs.sealedWhenWhere} />);
-    cards.push(<WeatherCard key="w" lat={inputs.lat} lon={inputs.lon} at={inputs.at} sealedWhenWhere={inputs.sealedWhenWhere} />);
-  }
-  if (inputs.trace) {
-    cards.push(<MotionCard key="m" trace={inputs.trace} />);
-  }
-  if (cards.length === 0) return null;
-  return (
-    <View>
-      <Text style={styles.secTitle}>What should be true</Text>
-      {cards}
-    </View>
-  );
-}
 
 // ---------------------------------------------------------------------------
 
 const buildStyles = () => StyleSheet.create({
-  secTitle: {
-    color: colors.textFaint, fontSize: fontSize.xs, fontWeight: '800',
-    letterSpacing: 1.8, textTransform: 'uppercase',
-    marginTop: spacing.lg, marginBottom: spacing.sm,
-  },
   card: {
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
     borderRadius: radii.md, padding: spacing.sm + 4, marginBottom: spacing.sm,

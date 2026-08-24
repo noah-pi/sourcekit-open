@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as Location from 'expo-location';
 import { Image } from 'expo-image';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -883,10 +882,6 @@ export default function InspectScreen() {
   // Camera settings (com.verify.exif) from the active manifest: the
   // "Camera Settings (Device-reported)" claims block.
   const [manifestExif, setManifestExif] = useState<{ referenced: boolean; data: Record<string, unknown> } | null>(null);
-  // Reverse-geocoded place name for the sealed coordinates. Runs only while a
-  // result with a location is on screen; any failure falls back to the bare
-  // coordinates. Same resolver the exhibit page uses.
-  const [placeName, setPlaceName] = useState<string | null>(null);
   // Local signer history: prior exhibits in this device's collection by the
   // same fingerprint. Computed for every tier so the sealing ladder's rung 2
   // can state it for this-device signers. Local evidence only; never vouches.
@@ -1022,33 +1017,17 @@ export default function InspectScreen() {
 
   const record = report?.record ?? null;
 
-  // Place name for the sealed coordinates via the platform reverse geocoder
-  // (CLGeocoder), as the exhibit page resolves it. Runs only while a result
-  // with a location is on screen; any failure falls back to the coordinates.
-  useEffect(() => {
-    let cancelled = false;
-    const l = record?.context?.location;
-    if (!l || typeof l !== 'object') { setPlaceName(null); return; }
-    Location.reverseGeocodeAsync({ latitude: l.lat, longitude: l.lon })
-      .then((r) => {
-        if (cancelled) return;
-        const p = r?.[0];
-        setPlaceName(p?.city ?? p?.region ?? null);
-      })
-      .catch(() => { if (!cancelled) setPlaceName(null); });
-    return () => { cancelled = true; };
-  }, [record]);
-
-  // The sealed when/where as one line for the juxtaposition cards: the
-  // reverse-geocoded place name when it resolved, the coordinates otherwise.
+  // The sealed when/where as one line for the juxtaposition cards. The
+  // coordinates stand as they were sealed: resolving them to a place name
+  // would hand them to a geocoding service, which this screen does not do.
   const sealedWhenWhere = useMemo(() => {
     if (!record) return '';
     const loc = record.context?.location;
     const where = loc && typeof loc === 'object'
-      ? placeName ?? `${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`
+      ? `${loc.lat.toFixed(4)}, ${loc.lon.toFixed(4)}`
       : null;
     return [fmtWhen(record.capturedAt), where].filter(Boolean).join(' · ');
-  }, [record, placeName]);
+  }, [record]);
   const juxta = useMemo<JuxtaInputs | null>(
     () => (record ? juxtaInputs(record, sealedWhenWhere) : null),
     [record, sealedWhenWhere],
@@ -1520,10 +1499,6 @@ export default function InspectScreen() {
                         if (loc && typeof loc === 'object') {
                           return (
                             <>
-                              {/* The reverse-geocoded place is Inspect-only
-                                  context from the same sealed coordinates; the
-                                  claim itself is the Location row below. */}
-                              {placeName ? <LabelRow label="Place" value={placeName} detail="Reverse-geocoded from the sealed coordinates." /> : null}
                               <LabelRow
                                 label="Location"
                                 value={`${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)}`}

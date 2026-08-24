@@ -5,12 +5,13 @@
  *
  * Horizon and shadow reuse the Inspect components (HorizonCard / ShadowCard
  * in src/components/Juxtapose.tsx) so the two screens stay in step. Weather
- * fetches on mount here when a location is present; Inspect puts that fetch
- * behind a tap. Each module shows the sealed claim next to the reference
- * value without drawing a conclusion.
+ * sits behind a tap: it is the one call in the app that sends the sealed
+ * coordinates anywhere, so it does not fire until a reader asks for it. Each
+ * module shows the sealed claim next to the reference value without drawing a
+ * conclusion.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Linking, ActivityIndicator } from 'react-native';
 
 import { colors, spacing, fontSize, useThemedStyles } from '../../theme';
@@ -36,8 +37,9 @@ function windWords(kmh: number): string {
   return 'strong wind';
 }
 
-/** Weather: archive reading for the sealed hour. Fetches on mount; offline it
- *  shows a retry line. */
+/** Weather: archive reading for the sealed hour. The fetch sends the sealed
+ *  latitude, longitude and date to Open-Meteo, so it runs only on a tap.
+ *  Offline it shows a retry line. */
 function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
   lat: number;
   lon: number;
@@ -45,7 +47,7 @@ function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
   sealedWhenWhere: string;
 }) {
   const styles = useThemedStyles(buildStyles);
-  const [state, setState] = useState<'loading' | 'done' | 'offline'>('loading');
+  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'offline'>('idle');
   const [reading, setReading] = useState<string | null>(null);
 
   const check = async () => {
@@ -69,16 +71,15 @@ function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
     }
   };
 
-  useEffect(() => {
-    void check();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one fetch per sealed (lat, lon, at)
-  }, [lat, lon, at]);
-
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Weather</Text>
       <Text style={styles.cardSub}>Official weather for the sealed time and location.</Text>
-      {state === 'loading' ? (
+      {state === 'idle' ? (
+        <Pressable style={styles.weatherBtn} onPress={() => void check()} hitSlop={6}>
+          <Text style={styles.weatherBtnText}>Check the archive · sends the sealed coordinates</Text>
+        </Pressable>
+      ) : state === 'loading' ? (
         <View style={styles.weatherBtn}>
           <ActivityIndicator color={colors.accent} size="small" />
         </View>

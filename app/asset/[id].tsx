@@ -25,7 +25,6 @@ import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { useEvent } from 'expo';
 import * as Sharing from 'expo-sharing';
-import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Ionicons } from '@expo/vector-icons';
@@ -352,11 +351,10 @@ function GroupCard({ icon, title, peek, open, onToggle, children }: {
  * anchor, with the device-reported caveat on the location clause. Proven
  * tamper turns it red; absence of proof stays neutral gray.
  */
-function SummaryLine({ record, report, signerTrust, placeName }: {
+function SummaryLine({ record, report, signerTrust }: {
   record: AttestationRecord;
   report: VerificationReport | null;
   signerTrust: SignerTrust;
-  placeName: string | null;
 }) {
   const sumStyles = useThemedStyles(buildSumStyles);
   const identity = record.identity;
@@ -389,7 +387,7 @@ function SummaryLine({ record, report, signerTrust, placeName }: {
         <Text style={sumStyles.strong}>{signer}</Text>
         {when ? <Text> on <Text style={sumStyles.strong}>{when}</Text></Text> : null}
         {loc && typeof loc === 'object' ? (
-          <Text>, {placeName ? 'near ' : 'at the coordinates below'}{placeName ? <Text style={sumStyles.strong}>{placeName}</Text> : null}</Text>
+          <Text>, at the coordinates below</Text>
         ) : null}
         <Text>. </Text>
         {bytesFailed ? (
@@ -715,10 +713,6 @@ export default function AssetScreen() {
   // Three collapsible groups: Capture open by default, Integrity and Advanced
   // collapsed behind a one-line peek each.
   const [groupOpen, setGroupOpen] = useState({ capture: true, integrity: false, advanced: false });
-  // Reverse-geocoded place for the one-line summary: the platform geocoder on
-  // the owner's own coordinates, only while this screen is open. On failure
-  // the summary falls back to "at the coordinates below".
-  const [placeName, setPlaceName] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptAssertion | null>(null);
   // The parsed C2PA manifest: drives the transcript, the Camera Settings
   // rows, and the raw manifest shown open at the bottom of Advanced.
@@ -907,23 +901,6 @@ export default function AssetScreen() {
         queueDelayMs: delay,
       });
     })();
-    return () => { cancelled = true; };
-  }, [record]);
-
-  // One-line summary place name: reverse-geocode the owner's own coordinates
-  // (CLGeocoder), only while this screen is open. Any failure falls back to
-  // "at the coordinates below" rather than guessing.
-  useEffect(() => {
-    let cancelled = false;
-    const l = record?.context?.location;
-    if (!l || typeof l !== 'object') { setPlaceName(null); return; }
-    Location.reverseGeocodeAsync({ latitude: l.lat, longitude: l.lon })
-      .then((r) => {
-        if (cancelled) return;
-        const p = r?.[0];
-        setPlaceName(p?.city ?? p?.region ?? null);
-      })
-      .catch(() => { if (!cancelled) setPlaceName(null); });
     return () => { cancelled = true; };
   }, [record]);
 
@@ -1202,15 +1179,15 @@ export default function AssetScreen() {
     [record],
   );
   const enfAnchor = useMemo(() => (record ? readEnfAnchor(record) : null), [record]);
-  // The sealed when/where as one line for the environment modules: the
-  // reverse-geocoded place name when it resolved, the coordinates otherwise.
+  // The sealed when/where as one line for the environment modules. The
+  // coordinates stand as they were sealed: resolving them to a place name
+  // would hand them to a geocoding service, which this screen does not do.
   const sealedWhenWhere = useMemo(() => {
     if (!record) return '';
     const l = record.context?.location;
-    const where =
-      l && typeof l === 'object' ? placeName ?? `${l.lat.toFixed(4)}, ${l.lon.toFixed(4)}` : null;
+    const where = l && typeof l === 'object' ? `${l.lat.toFixed(4)}, ${l.lon.toFixed(4)}` : null;
     return [fmtWhen(record.capturedAt), where].filter(Boolean).join(' · ');
-  }, [record, placeName]);
+  }, [record]);
   const juxta = useMemo(
     () => (record ? juxtaInputs(record, sealedWhenWhere) : null),
     [record, sealedWhenWhere],
@@ -1276,7 +1253,7 @@ export default function AssetScreen() {
             time anchor. */}
         {record ? (
           <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.md }}>
-            <SummaryLine record={record} report={report} signerTrust={signerTrust} placeName={placeName} />
+            <SummaryLine record={record} report={report} signerTrust={signerTrust} />
           </View>
         ) : null}
 
