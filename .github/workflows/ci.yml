@@ -105,14 +105,28 @@ jobs:
         with:
           node-version: 20
 
-      - name: Select the newest Xcode on the image
-        # Newest, because the local modules use current Swift. The listing and
-        # the choice are printed so a failure names what the image offered.
+      - name: Select the Xcode that EAS builds with
+        # Pinned to the toolchain the shipping build uses, so this gate and the
+        # real build cannot drift. Not "newest": Swift's type checker changed
+        # between 26.0.1, 26.3, and 26.6, and each version breaks a different
+        # part of the Expo pod chain. Matching EAS is the only version known to
+        # compile the whole tree.
+        #
+        # If the image stops carrying it, this fails loudly rather than
+        # silently building with something else. Update both sides together.
+        env:
+          EAS_XCODE: '26.6'
         run: |
           set -euo pipefail
           echo "Xcodes on this image:"
           ls -d /Applications/Xcode*.app
-          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          APP="/Applications/Xcode_${EAS_XCODE}.app"
+          if [ ! -d "$APP" ]; then
+            echo "Xcode ${EAS_XCODE} is not on this image. EAS builds with it, so" >&2
+            echo "building with anything else would not prove what ships." >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$APP"
           xcodebuild -version
           swift --version
 

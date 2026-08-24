@@ -998,8 +998,8 @@ public class ExhibitCameraModule: Module {
     sessionQueue.async {
       preview.session = nil
       pip?.session = nil
-      self.boundSessionMap.remove(preview)
-      if let pip = pip { self.boundSessionMap.remove(pip) }
+      self.boundSessionMap.removeObject(forKey: preview)
+      if let pip = pip { self.boundSessionMap.removeObject(forKey: pip) }
     }
   }
 
@@ -1020,7 +1020,7 @@ public class ExhibitCameraModule: Module {
     for layer in boundPreviewLayers.allObjects {
       if boundSessionMap.object(forKey: layer) === dead {
         layer.session = nil
-        boundSessionMap.remove(layer)
+        boundSessionMap.removeObject(forKey: layer)
       }
     }
   }
@@ -1168,7 +1168,7 @@ extension ExhibitCameraModule {
       // the discarded inset layer can never carry the session into a
       // workloop dealloc (the SIGABRT class).
       oldLayer?.session = nil
-      if let oldLayer = oldLayer { boundSessionMap.remove(oldLayer) }
+      if let oldLayer = oldLayer { boundSessionMap.removeObject(forKey: oldLayer) }
     }
   }
 
