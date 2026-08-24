@@ -12,6 +12,8 @@ export interface DeviceSigner {
   fingerprint: string;
   privateKeyHex: string | null;
   biometricBound?: boolean;
+  /** Keychain tag of the Enclave key; absent for software signers. */
+  enclaveKeyTag?: string;
   signDigest(digest: Uint8Array): Promise<Uint8Array>;
   /** Signs sha256(payload) in one hop — mirrors deviceKey.ts. */
   signPayload(payload: Uint8Array): Promise<Uint8Array>;

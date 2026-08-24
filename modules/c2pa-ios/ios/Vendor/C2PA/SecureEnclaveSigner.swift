@@ -13,6 +13,7 @@
 
 @_implementationOnly import C2PAC
 import Foundation
+import LocalAuthentication  // VENDOR EDIT 4 (LAContext) — see VENDORED.md
 import Security
 
 /// Configuration for Secure Enclave-based signing.
@@ -26,17 +27,27 @@ public struct SecureEnclaveSignerConfig {
     /// Access control flags determining when and how the key can be used.
     public let accessControl: SecAccessControlCreateFlags
 
+    /// VENDOR EDIT 4 (see VENDORED.md): an already-evaluated LAContext from
+    /// the app's SealContextVault. When present the keychain query carries it
+    /// via kSecUseAuthenticationContext, so a .biometryCurrentSet key signs
+    /// under that one evaluation instead of raising a second Face ID prompt.
+    /// Nil keeps upstream behavior exactly.
+    public let context: LAContext?
+
     /// Creates a new Secure Enclave signer configuration.
     ///
     /// - Parameters:
     ///   - keyTag: A unique identifier for the key in the keychain.
     ///   - accessControl: Security flags controlling key usage. Defaults to `.privateKeyUsage`.
+    ///   - context: Optional pre-evaluated LAContext (vendor edit 4).
     public init(
         keyTag: String,
-        accessControl: SecAccessControlCreateFlags = [.privateKeyUsage]
+        accessControl: SecAccessControlCreateFlags = [.privateKeyUsage],
+        context: LAContext? = nil
     ) {
         self.keyTag = keyTag
         self.accessControl = accessControl
+        self.context = context
     }
 }
 
@@ -97,7 +108,7 @@ extension Signer {
             certificateChainPEM: certificateChainPEM,
             tsa: tsa
         ) { data in
-            let query: [String: Any] = [
+            var query: [String: Any] = [
                 kSecClass as String: kSecClassKey,
                 // kSecAttrApplicationTag is a CFData attribute. A String tag
                 // never matches a key stored with a Data tag, and the
@@ -107,6 +118,12 @@ extension Signer {
                 kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
                 kSecReturnRef as String: true
             ]
+            // VENDOR EDIT 4: a key ref retrieved with the caller's evaluated
+            // context signs under that context's biometry, so one scan covers
+            // both the record signature and this COSE signature.
+            if let context = secureEnclaveConfig.context {
+                query[kSecUseAuthenticationContext as String] = context
+            }
 
             var item: CFTypeRef?
             let status = SecItemCopyMatching(query as CFDictionary, &item)

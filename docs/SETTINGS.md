@@ -94,6 +94,22 @@ always land.
   are fetched on a jittered schedule, never when you shoot. Leave blank for the
   public defaults; pin your own Esplora server here.
 
+## Which code seals a capture
+
+- **Seal with the C2PA SDK** — signs photos and videos with
+  [c2pa-swift](https://github.com/contentauth/c2pa-swift), the official library
+  over the C2PA Rust core, instead of this app's own COSE/JUMBF builder. The
+  signed bytes are read back through the same verifier a recipient runs, and
+  anything that does not come back intact is discarded and sealed the original
+  way instead. Diagnostics names the path that sealed each capture, so the
+  comparison never has to be guessed at.
+
+  Audio always uses this app's builder — there is no c2pa-swift path for the
+  m4a container — and so does PNG. Both paths emit the same assertion labels,
+  so a file is the same shape to a verifier either way.
+
+  Off by default.
+
 ## Trust
 
 ### Newsroom rosters

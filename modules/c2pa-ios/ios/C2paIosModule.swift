@@ -4,7 +4,9 @@ import ExpoModulesCore
 // into this pod target and its types are same-module here. See
 // Vendor/C2PA/VENDORED.md "Module-name note".
 import Foundation
+import LocalAuthentication  // LAContext, for the vaulted biometric hold
 import Security  // SecAccessControlCreateFlags (same explicit import as upstream's SecureEnclaveSigner.swift)
+import SecureEnclave  // SealContextVault — cross-pod; C2paIos.podspec depends on it
 
 /**
  * C2paIos — upstream C2PA engine binding,
@@ -131,19 +133,69 @@ public class C2paIosModule: Module {
      */
     AsyncFunction("signFileSecureEnclave") { (sourcePath: String, destPath: String, format: String,
                                               manifestJSON: String, certificateChainPEM: String,
-                                              keyTag: String, requireBiometric: Bool) throws -> String in
+                                              keyTag: String, requireBiometric: Bool,
+                                              tsaUrl: String?, resourcesJson: String?,
+                                              useHeldBioContext: Bool) throws -> String in
+      var relay: TsaLoopbackRelay?
+      var heldContext: LAContext?
       do {
+        // The caller ran sealBioHold, so one Face ID evaluation is vaulted
+        // and this signature rides it through the vendored signer's keychain
+        // query. An empty vault throws rather than letting the signer raise
+        // its own prompt: the caller's fallback logs and seals hand-rolled.
+        // The hold's lifetime belongs to the vault and the caller's finally.
+        if useHeldBioContext {
+          guard let ctx = SealContextVault.shared.current(keyTag: keyTag) else {
+            throw NamedException("C2PA_SIGN", "useHeldBioContext was set but no held biometric context exists for '\(keyTag)' (vault empty or expired) — refusing to raise a second Face ID prompt silently")
+          }
+          heldContext = ctx
+        }
         let accessControl: SecAccessControlCreateFlags = requireBiometric
           ? [.privateKeyUsage, .biometryCurrentSet]
           : [.privateKeyUsage]
-        let config = SecureEnclaveSignerConfig(keyTag: keyTag, accessControl: accessControl)
+        let config = SecureEnclaveSignerConfig(keyTag: keyTag, accessControl: accessControl, context: heldContext)
+        // The caller's configured RFC 3161 authority, or nil for the offline
+        // invariant — an untimed capture is disclosed downstream, never
+        // dressed up. A malformed configured URL throws rather than degrading
+        // to nil, which would present a configuration failure as an offline
+        // capture. With an authority set, the SDK is pointed at a one-shot
+        // loopback relay: the core's own resolver does not complete the
+        // round-trip from an app process. See TsaLoopbackRelay.swift.
+        let tsaURL: URL?
+        if let tsaUrl = tsaUrl {
+          guard let parsed = URL(string: tsaUrl) else {
+            throw C2PAError.api("malformed TSA URL: \(tsaUrl)")
+          }
+          let tsr = TsaLoopbackRelay(upstream: parsed)
+          relay = tsr
+          tsaURL = try tsr.start()
+        } else {
+          tsaURL = nil
+        }
+        defer { relay?.stop() }
         let signer = try Signer(
           algorithm: .es256,
           certificateChainPEM: certificateChainPEM,
-          tsa: nil,  // offline invariant
+          tsa: tsaURL,
           secureEnclaveConfig: config
         )
         let builder = try Builder(manifestJSON: manifestJSON)
+        // Binary payloads (thumbnails) as embedded resources — the bfdb/bidb
+        // layout, referenced from the manifest by thumbnail identifier. Only
+        // identifiers the manifest references are passed; unreferenced
+        // resources are dropped by the core.
+        if let resourcesJson = resourcesJson,
+           let raw = resourcesJson.data(using: .utf8),
+           let list = try JSONSerialization.jsonObject(with: raw) as? [[String: String]] {
+          for entry in list {
+            guard let identifier = entry["identifier"],
+                  let dataBase64 = entry["dataBase64"],
+                  let data = Data(base64Encoded: dataBase64) else {
+              throw C2PAError.api("malformed resource entry")
+            }
+            try builder.addResource(uri: identifier, stream: try Stream(data: data))
+          }
+        }
         let source = try Stream(readFrom: self.fileURL(sourcePath))
         let dest = try Stream(writeTo: self.fileURL(destPath))
         let manifestBytes = try builder.sign(
@@ -154,7 +206,13 @@ public class C2paIosModule: Module {
         )
         return manifestBytes.base64EncodedString()
       } catch {
-        throw self.mapError(error, code: "C2PA_SIGN")
+        // The relay names why a timestamp fetch failed — listener, forward
+        // hop, or upstream status. Append it so the diagnostic carries the
+        // real reason and the caller's 'TSA relay' classifier matches.
+        let base = self.mapError(error, code: "C2PA_SIGN")
+        guard let relayNote = relay?.lastError else { throw base }
+        let baseText = (base as? NamedException)?.reason ?? error.localizedDescription
+        throw NamedException("C2PA_SIGN", "\(baseText) — \(relayNote)")
       }
     }
   }

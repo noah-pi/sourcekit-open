@@ -45,8 +45,8 @@ over the vendored tree → no matches.
 
 ## Source edits
 
-Three. Two are confined to imports and access levels; the third is a one-word
-type change in a keychain query.
+Four. Two are confined to imports and access levels; the third is a one-word
+type change in a keychain query; the fourth adds one optional field.
 
 1. **`import C2PAC` → `@_implementationOnly import C2PAC`** in the 11 files
    that import the clang module (Builder, C2PA, C2PASettings, Helpers,
@@ -85,6 +85,15 @@ A DocC "SeeAlso" symbol link to an excluded type remains in a doc comment
    branch minted a second enclave key whose public key does not match the
    supplied certificate chain, so a signature made with it could not verify
    against its own x5chain.
+
+4. **An optional `LAContext` on `SecureEnclaveSignerConfig`**, threaded into
+   the key-lookup query as `kSecUseAuthenticationContext`. A
+   `.biometryCurrentSet` key prompts per signing operation, so a biometric
+   capture would raise a second Face ID prompt for the COSE signature after
+   the one the record signature already cost. A key ref retrieved with an
+   already-evaluated context signs under that evaluation. The field defaults
+   to nil, which is upstream behavior unchanged; the app supplies a context
+   only for the duration of one seal, from `SealContextVault`.
 
 ## Module-name note (why `import C2PA` was removed from C2paIosModule.swift)
 

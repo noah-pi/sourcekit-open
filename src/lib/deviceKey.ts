@@ -66,7 +66,18 @@ export interface DeviceSigner {
    * plain Enclave key, so its attestation does not cover the bio key.
    */
   biometricBound?: boolean;
+  /**
+   * Keychain tag of the Enclave key this signer uses. The c2pa-swift arm needs
+   * it explicitly: without it that path falls back to the default tag and a
+   * biometric capture would sign with the non-bio key against the bio
+   * certificate. Absent for software signers, which have no keychain key.
+   */
+  enclaveKeyTag?: string;
 }
+
+/** The tags SecureEnclaveModule.swift stores the two Enclave keys under. */
+export const ENCLAVE_KEY_TAG = 'com.verify.camera.signing-key';
+export const ENCLAVE_BIO_KEY_TAG = 'com.verify.camera.signing-key-bio';
 
 let cached: DeviceSigner | null = null;
 let cachedForBio = false;
@@ -94,6 +105,7 @@ function bioEnclaveSigner(publicKey: Uint8Array): DeviceSigner {
       return derNormalizeLowS(sealed[0]);
     },
     biometricBound: true,
+    enclaveKeyTag: ENCLAVE_BIO_KEY_TAG,
   };
 }
 
@@ -133,6 +145,7 @@ function enclaveSigner(publicKey: Uint8Array): DeviceSigner {
       if (!sealed) return derNormalizeLowS(enclaveSignDigest(sha256(payload))); // no native seal
       return derNormalizeLowS(sealed);
     },
+    enclaveKeyTag: ENCLAVE_KEY_TAG,
   };
 }
 

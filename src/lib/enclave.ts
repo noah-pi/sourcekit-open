@@ -33,6 +33,11 @@ interface SecureEnclaveNative {
    * the call; the context is invalidated before it returns.
    */
   sealBio(payloadsBase64: string[], reason: string): Promise<string[]>;
+  /** One evaluation, vaulted, so the SDK arm's COSE signature rides the
+   *  same scan as the record signature. */
+  sealBioHold(reason: string): Promise<boolean>;
+  /** Releases and invalidates the held context. Safe when empty. */
+  sealBioRelease(): void;
   /** Active runtime-instrumentation findings. */
   deviceIntegrity(): { debuggerAttached: boolean; injectedLibraries: string[] };
 }
@@ -110,13 +115,40 @@ export function enclaveSeal(payload: Uint8Array): Uint8Array | null {
 /**
  * Biometric native seal: one Face ID/Touch ID evaluation covers exactly the
  * payloads in this call, and the authenticated context is invalidated
- * natively before it returns, so no primed window survives for another
- * process to sign in. Null when the native module lacks `sealBio`.
+ * natively before it returns, so no primed window survives.
+ *
+ * The exception is a live hold (enclaveSealBioHold): this call then signs
+ * under that hold's evaluation instead of prompting, which is the whole
+ * point of the one-prompt ceremony. The hold owns the window in that case.
+ *
+ * Null when the native module lacks `sealBio`.
  */
 export async function enclaveSealBio(payloads: Uint8Array[], reason: string): Promise<Uint8Array[] | null> {
   if (!native || typeof native.sealBio !== 'function') return null;
   const sigs = await native.sealBio(payloads.map(bytesToBase64), reason);
   return sigs.map(base64ToBytes);
+}
+
+/**
+ * Biometric hold: evaluates Face ID or Touch ID once and vaults the context
+ * natively, tag-scoped to the bio key and expiring on its own. While it is
+ * held, both enclaveSealBio and the c2pa-swift arm sign without prompting
+ * again, so a biometric capture costs one scan rather than two.
+ *
+ * Returns false when the native module predates the ceremony; callers then
+ * skip the SDK arm and let the hand-rolled path prompt as before. Rejects,
+ * like sealBio, when the scan itself fails or is cancelled.
+ */
+export async function enclaveSealBioHold(reason: string): Promise<boolean> {
+  if (!native || typeof native.sealBioHold !== 'function') return false;
+  await native.sealBioHold(reason);
+  return true;
+}
+
+/** Releases the held context, invalidating it natively. Safe when empty. */
+export function enclaveSealBioRelease(): void {
+  if (!native || typeof native.sealBioRelease !== 'function') return;
+  native.sealBioRelease();
 }
 
 /** Active runtime-instrumentation findings; null when the module is absent/old. */

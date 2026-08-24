@@ -35,9 +35,21 @@ and says so.
 
 ## Which C2PA code this actually runs
 
-Signing is my own COSE/JUMBF builder, and so is verification in the app. The c2pa-swift binding
-is written for both — sign and verify, including Secure Enclave signing — and is not wired into
-any screen ([`upstreamEngineIos.ts`](src/provenance/engine/upstreamEngineIos.ts)).
+Verification in the app is always my own code. Signing has two paths.
+
+With **Seal with the C2PA SDK** on (Settings ▸ Proof), photos and videos are signed by
+[c2pa-swift](https://github.com/contentauth/c2pa-swift) — the official library over the C2PA Rust
+core — using the Secure Enclave key. The signed bytes are then read back through the same
+verifier a recipient runs, and anything that does not come back INTACT with an intact hard
+binding is discarded and sealed the original way instead. Diagnostics names which path sealed
+each capture.
+
+With it off, and for **audio and PNG in either case**, my own COSE/JUMBF builder signs. There is
+no c2pa-swift path for audio; the m4a container goes through the hand-rolled BMFF embed.
+
+Both paths emit the same assertion labels, so a file is the same shape to a verifier either way.
+The wiring is in [`upstreamEngineIos.ts`](src/provenance/engine/upstreamEngineIos.ts) and
+[`attest.ts`](src/provenance/attest.ts); the switch defaults to off.
 
 What checks that code is a differential oracle in CI: every corpus asset runs through my verifier
 and the official c2pa-rs, and the build fails on any disagreement that isn't whitelisted with a

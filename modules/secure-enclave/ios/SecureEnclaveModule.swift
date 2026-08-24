@@ -148,6 +148,21 @@ public class SecureEnclaveModule: Module {
         }
         payloads.append(d)
       }
+      // A live SDK-arm hold already covers this call — signing under it
+      // rather than prompting again is the point of the ceremony.
+      if let held = SealContextVault.shared.current(keyTag: self.bioKeyTag) {
+        do {
+          var signatures: [String] = []
+          for payload in payloads {
+            let digest = SHA256.hash(data: payload)
+            signatures.append(try self.sign(digestBase64: Data(digest).base64EncodedString(), tag: self.bioKeyTag, context: held))
+          }
+          promise.resolve(signatures)
+        } catch {
+          promise.reject(error)
+        }
+        return
+      }
       // Fresh context, one scan, invalidated in defer.
       let context = LAContext()
       context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { ok, error in
@@ -167,6 +182,35 @@ public class SecureEnclaveModule: Module {
           promise.reject(error)
         }
       }
+    }
+
+    /**
+     * Evaluates Face ID or Touch ID once and vaults the context, so the
+     * c2pa-swift arm can sign the COSE claim without a second prompt. The
+     * hold is tag-scoped, expires on its own, and the caller releases it.
+     * Resolves true; rejects like sealBio on a failed or cancelled scan.
+     */
+    AsyncFunction("sealBioHold") { (reason: String, promise: Promise) in
+      do {
+        try self.gateOnInstrumentation()
+      } catch {
+        promise.reject(error)
+        return
+      }
+      let context = LAContext()
+      context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { ok, error in
+        guard ok else {
+          promise.reject(NamedException("BIO_AUTH", error?.localizedDescription ?? "Biometric authentication failed"))
+          return
+        }
+        SealContextVault.shared.place(context: context, keyTag: self.bioKeyTag)
+        promise.resolve(true)
+      }
+    }
+
+    /// Releases and invalidates any held context. Safe to call when empty.
+    Function("sealBioRelease") { () -> Void in
+      SealContextVault.shared.release()
     }
 
     Function("deviceIntegrity") { () -> [String: Any] in
@@ -222,10 +266,14 @@ public class SecureEnclaveModule: Module {
   }
 
   private func sign(digestBase64: String, tag: String, context: LAContext? = nil) throws -> String {
+    // With no explicit context, consult the vault so every sign made while a
+    // hold is live is covered by that hold's single evaluation. Nil when no
+    // hold exists, which is the unchanged per-use path.
+    let effectiveContext = context ?? SealContextVault.shared.current(keyTag: tag)
     guard let digest = Data(base64Encoded: digestBase64), digest.count == 32 else {
       throw EnclaveError.badDigest
     }
-    guard let key = self.loadKey(tag: tag, context: context) else {
+    guard let key = self.loadKey(tag: tag, context: effectiveContext) else {
       throw EnclaveError.noKey
     }
     var error: Unmanaged<CFError>?

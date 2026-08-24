@@ -30,6 +30,17 @@ function activeTsaUrls(): string[] {
   return tsaUrlsOverride ?? TSA_URLS;
 }
 
+/**
+ * The active witness pool in fallback order, for signers that try more than
+ * one endpoint per capture. The hand-rolled path has always iterated it; the
+ * SDK arm loops the same pool through its loopback relay, so one authority
+ * being unreachable from a given network cannot cost the countersignature
+ * while another answers.
+ */
+export function configuredTsaUrls(): string[] {
+  return activeTsaUrls();
+}
+
 function derLen(n: number): Uint8Array {
   if (n < 128) return new Uint8Array([n]);
   const bytes: number[] = [];

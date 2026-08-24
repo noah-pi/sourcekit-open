@@ -45,7 +45,15 @@ import { stripManifest, stripMetadata } from '../c2pa/jpegApp11';
 import { buildC2paSegment, buildC2paStoreBmff, buildC2paStorePng, bmffHashAssertionCbor, bmffMandatoryExclusions, hashBmffV2, extractC2paStore, parseManifest, type C2paManifestParams, type TranscriptAssertion } from '../c2pa/c2pa';
 import { C2PA_UUID_BYTES, embedUuidStore, stripC2paFromBmff, extractC2paStoreBmff } from '../c2pa/bmff';
 import { embedCaBx, iendOffset, stripCaBx } from '../c2pa/png';
-import { signRecord, sha256Hex } from '../lib/sign';
+import { signRecord, sha256Hex, payloadBytes } from '../lib/sign';
+import { enclaveSealBioHold, enclaveSealBioRelease } from '../lib/enclave';
+import { sdkSigningExperimentActive } from '../lib/sdkSigningGate';
+import { configuredTsaUrls } from '../lib/timestamp';
+import {
+  UPSTREAM_SIGNING_EXPERIMENT,
+  signSourceKitAssetSecureEnclave,
+} from './engine/upstreamEngineIos';
+import { verifyPhotoBytes, verifyVideoBytes, type VerificationReport } from '../c2pa/verifyAsset';
 import { pqPublicBlock, type PqCaptureKey } from '../lib/pq';
 import { getDeviceCertChain, type DeviceSigner } from '../lib/deviceKey';
 import { buildSelfSignedCert } from '../lib/cert';
@@ -53,7 +61,7 @@ import type { DeviceIntegritySignals } from '../lib/integrity';
 import { fetchTimestampTokensBounded, estimatedTsaTokenSizes } from '../lib/timestamp';
 import type { BeaconCommitment } from '../lib/beacon';
 import { getAttestationAssertion } from '../lib/appAttest';
-import { bytesToBase64, bytesToHex, base64ToBytes, concatBytes, utf8ToBytes } from '../lib/bytes';
+import { bytesToBase64, bytesToHex, base64ToBytes, concatBytes, utf8ToBytes, equalBytes} from '../lib/bytes';
 import { readFileBytes } from '../lib/fileHash';
 import { pHashFromGray32 } from '../lib/phash';
 import { logDiagnostic } from '../lib/diagnosticsLog';
@@ -403,6 +411,126 @@ async function videoThumbnailJpeg(videoUri: string): Promise<Uint8Array | null> 
   }
 }
 
+/**
+ * GDepth envelope fields for the c2pa.depthmap.GDepth assertion. The SDK path
+ * emits the same standard label the hand-rolled builder does, with the map
+ * image base64 inside the payload, so no separate resource is needed.
+ */
+function gdepthSpecFromDepthmap(d: NonNullable<StandardAssertions['depthmap']>): Record<string, unknown> {
+  const g: Record<string, unknown> = {
+    'GDepth:Format': d.format,
+    'GDepth:Near': d.near,
+    'GDepth:Far': d.far,
+    'GDepth:Mime': d.mime,
+    'GDepth:Data': bytesToBase64(d.data),
+  };
+  if (d.units) g['GDepth:Units'] = d.units;
+  if (d.measureType) g['GDepth:MeasureType'] = d.measureType;
+  if (d.confidence && d.confidence.data.length > 0) {
+    g['GDepth:ConfidenceMime'] = d.confidence.mime;
+    g['GDepth:Confidence'] = bytesToBase64(d.confidence.data);
+  }
+  if (d.manufacturer) g['GDepth:Manufacturer'] = d.manufacturer;
+  if (d.model) g['GDepth:Model'] = d.model;
+  if (d.software) g['GDepth:Software'] = d.software;
+  if (typeof d.imageWidth === 'number') g['GDepth:ImageWidth'] = d.imageWidth;
+  if (typeof d.imageHeight === 'number') g['GDepth:ImageHeight'] = d.imageHeight;
+  return g;
+}
+
+/**
+ * Keeps the bytes an SDK self-check rejected, for forensics only: never sealed
+ * as a capture, never listed in Exhibits, never uploaded. A verdict alone does
+ * not say which axis failed, and the rejected bytes are otherwise discarded by
+ * the fallback. A write failure here must not delay the hand-rolled path.
+ */
+async function quarantineSdkOutput(bytes: Uint8Array, ext: 'jpg' | 'png' | 'mp4'): Promise<string | null> {
+  try {
+    const dir = `${FileSystem.documentDirectory ?? ''}sdk-quarantine/`;
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
+    const name = `sdk-rejected-${Date.now()}.${ext}`;
+    await FileSystem.writeAsStringAsync(dir + name, bytesToBase64(bytes));
+    return `sdk-quarantine/${name}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Names the answering witness, or why the seal ended up untimed. */
+function sdkTimeNote(sdk: { untimedTsaRetry: boolean; tsaError: string | null; tsaWitness: string | null }): string {
+  if (sdk.untimedTsaRetry) {
+    return `; every witness failed (${sdk.tsaError ?? 'reason not surfaced'}) — sealed untimed, no RFC 3161 countersignature on this claim`;
+  }
+  return sdk.tsaWitness ? `; countersigned by ${sdk.tsaWitness}` : '';
+}
+
+/**
+ * Names the axis that failed. A bare verdict never says whether the COSE
+ * signature, the assertion binding or the media hash was the problem, and the
+ * quarantined bytes are not always reachable afterwards.
+ */
+function sdkSelfCheckNote(
+  r: VerificationReport,
+  media: string,
+  quarantined: string | null,
+): string {
+  const binding = r.c2pa ? (r.c2pa.claimAssertionsMatch ? 'matches' : 'MISMATCH') : 'n/a';
+  const unchecked = r.checksNotPerformed.length > 0 ? `; first unchecked: ${r.checksNotPerformed[0]}` : '';
+  const kept = quarantined ? `; rejected bytes kept at ${quarantined} (forensics only, never sealed)` : '';
+  return `c2pa-swift self-check failed (verdict ${r.verdict}; assertion binding ${binding}; asset hash ${r.c2pa?.assetHashFailure ?? 'intact'}${unchecked}, ${media}) — hand-rolled path used${kept}`;
+}
+
+/**
+ * The SDK arm's biometric prelude, shared by the photo, PNG and video paths.
+ *
+ * A biometric capture signs twice — the record here, and the COSE claim on the
+ * c2pa-swift arm. One vaulted Face ID evaluation covers both, so the hold is
+ * taken before the record signature and released on every arm exit. When the
+ * native build predates the ceremony the arm stays off for biometric keys and
+ * the hand-rolled path prompts as it always did, which the log states.
+ *
+ * While a hold is live the record's payload is pinned: the enclave must sign
+ * exactly the bytes this record canonicalizes to, so nothing can swap a
+ * payload between the scan and the signature and mint one the scan never
+ * covered.
+ */
+async function openSdkArm(
+  key: DeviceSigner,
+  record: AttestationRecord,
+  kind: 'photo' | 'video',
+  note = '',
+): Promise<{ wanted: boolean; holdActive: boolean; signPayload: DeviceSigner['signPayload'] }> {
+  const wanted = UPSTREAM_SIGNING_EXPERIMENT && Platform.OS === 'ios' && sdkSigningExperimentActive();
+  let holdActive = false;
+  if (wanted && key.biometricBound) {
+    holdActive = await enclaveSealBioHold('Authorize signing this capture');
+    if (!holdActive) {
+      logDiagnostic({
+        t: Date.now(), kind, outcome: 'info',
+        message: `SDK signing skipped — biometric key, but the held-context ceremony is unavailable on this native build; hand-rolled path used (its own prompt)${note}`,
+      });
+    }
+  }
+  if (!holdActive) return { wanted, holdActive, signPayload: key.signPayload };
+  const expected = payloadBytes(record);
+  const inner = key.signPayload;
+  return {
+    wanted,
+    holdActive,
+    signPayload: async (payload: Uint8Array) => {
+      if (!equalBytes(payload, expected)) {
+        throw new Error('held-bio payload mismatch — refusing to sign a payload the scan did not cover');
+      }
+      return inner(payload);
+    },
+  };
+}
+
+/** True when the arm should run: not biometric, or biometric with a live hold. */
+function sdkArmRuns(arm: { wanted: boolean; holdActive: boolean }, key: DeviceSigner): boolean {
+  return arm.wanted && (!key.biometricBound || arm.holdActive);
+}
+
 export async function attestPhoto(params: {
   photoUri: string;
   context: SensorContext;
@@ -593,7 +721,16 @@ export async function attestPhoto(params: {
       secondaryStd = null;
     }
   }
-  const signedRecord = await signRecord(record, params.key.signDigest, params.key.signPayload, params.pq);
+  const arm = await openSdkArm(params.key, record, 'photo');
+  let signedRecord: AttestationRecord;
+  try {
+    signedRecord = await signRecord(record, params.key.signDigest, arm.signPayload, params.pq);
+  } catch (e) {
+    // The payload guard refused, or the enclave threw. Release the vaulted
+    // scan rather than leaving it to expire.
+    if (arm.holdActive) enclaveSealBioRelease();
+    throw e;
+  }
   // PHash and claim thumbnail, computed pre-signing so both land under
   // the COSE claim signature. Each fails closed on its own.
   const standard: StandardAssertions = {
@@ -602,6 +739,52 @@ export async function attestPhoto(params: {
     ...depthStd,
     secondaryView: secondaryStd,
   };
+  // c2pa-swift signs, then self-verifies through the same verifier a recipient
+  // runs. Any failure falls back to the hand-rolled builder with a diagnostic;
+  // this arm never returns bytes it could not read back.
+  if (sdkArmRuns(arm, params.key)) {
+    try {
+      const sdkChain = params.certChainOverride ?? (await getDeviceCertChain()).chain;
+      const aaBytes = params.key.backend === 'secure-enclave-attested' ? await getAttestationAssertion() : null;
+      const sdk = await signSourceKitAssetSecureEnclave(stripped, 'image/jpeg', {
+        appName: `Source Kit/${appVersion()} (com.verify.camera)`,
+        title: `verify-${signedRecord.capturedAt.replace(/[:.]/g, '-')}.jpg`,
+        telemetry: signedRecord as unknown as Record<string, unknown>,
+        appAttest: aaBytes ? (JSON.parse(new TextDecoder().decode(aaBytes)) as Record<string, unknown>) : null,
+        exif: params.exif ?? null,
+        // No org identity here: the standard writer wraps identity in an
+        // envelope whose referenced_assertions hash commits the telemetry box
+        // as emitted, and the core emits those boxes internally, so this arm
+        // cannot compute the binding before signing.
+        customAssertions: phase2.customAssertions,
+        thumbnailJpeg: standard.thumbnailJpeg ?? null,
+        phashHex: standard.phashHex ?? null,
+        depthGdepth: standard.depthmap ? gdepthSpecFromDepthmap(standard.depthmap) : null,
+        secondaryView: standard.secondaryView
+          ? {
+              thumbnailJpeg: standard.secondaryView.thumbnailJpeg,
+              fullResSha256: standard.secondaryView.fullResSha256,
+              title: `verify-secondary-${signedRecord.capturedAt.replace(/[:.]/g, '-')}.jpg`,
+            }
+          : null,
+        certChainDer: sdkChain,
+        enclaveKeyTag: params.key.enclaveKeyTag ?? null,
+        tsaUrls: configuredTsaUrls(),
+        heldBioContext: params.key.biometricBound,
+      });
+      const selfCheck = await verifyPhotoBytes(sdk.signedBytes);
+      if (selfCheck.verdict === 'INTACT' && selfCheck.c2pa?.assetHashFailure === null) {
+        logDiagnostic({ t: Date.now(), kind: 'photo', outcome: 'info', message: `sealed by the c2pa-swift path, self-verified INTACT${sdkTimeNote(sdk)}` });
+        return { signedPhotoBytes: sdk.signedBytes, record: signedRecord, disclosure: phase2.disclosure, chunkMaps: null };
+      }
+      const quarantined = await quarantineSdkOutput(sdk.signedBytes, 'jpg');
+      logDiagnostic({ t: Date.now(), kind: 'photo', outcome: 'failed', message: sdkSelfCheckNote(selfCheck, 'jpeg', quarantined) });
+    } catch (e) {
+      logDiagnostic({ t: Date.now(), kind: 'photo', outcome: 'failed', message: `c2pa-swift signing threw (${e instanceof Error ? e.message : String(e)}) — hand-rolled path used` });
+    } finally {
+      if (arm.holdActive) enclaveSealBioRelease();
+    }
+  }
   const signedPhotoBytes = await embedC2paInJpeg(stripped, signedRecord, params.key, params.certChainOverride, params.exif, params.pq, phase2.customAssertions, standard);
   return { signedPhotoBytes, record: signedRecord, disclosure: phase2.disclosure, chunkMaps: null };
 }
@@ -1152,8 +1335,6 @@ export async function attestVideo(params: {
     evidenceEnabled: params.evidenceEnabled ?? null,
     stereoClaims: params.stereoClaims ?? null,
   });
-  const signedRecord = await signRecord(record, params.key.signDigest, params.key.signPayload, params.pq);
-
   // The periodic pair frames as componentOf ingredients. The embedded bytes
   // are the vaulted pair JPEG (≤640×480, capture-side byte cap), so the data
   // hash commits the same bytes. Fail-closed per still.
@@ -1175,11 +1356,57 @@ export async function attestVideo(params: {
     }
     videoStillsStd = stills.length > 0 ? stills : null;
   }
+  // Prep before the hold, not after. Hashing every pair frame and extracting a
+  // thumbnail can run into tens of seconds on a long 4K capture, and a hold
+  // taken first would expire inside it — the SDK arm would then throw and the
+  // hand-rolled fallback would raise a second Face ID prompt, which is exactly
+  // what the ceremony exists to avoid.
+  const videoThumb = await videoThumbnailJpeg(params.videoUri);
+
+  const arm = await openSdkArm(params.key, record, 'video', ' (video)');
+  let signedRecord: AttestationRecord;
+  try {
+    signedRecord = await signRecord(record, params.key.signDigest, arm.signPayload, params.pq);
+  } catch (e) {
+    if (arm.holdActive) enclaveSealBioRelease();
+    throw e;
+  }
+
+  if (sdkArmRuns(arm, params.key) && mime === 'video/mp4') {
+    try {
+      const sdkChain = params.certChainOverride ?? (await getDeviceCertChain()).chain;
+      const aaBytes = params.key.backend === 'secure-enclave-attested' ? await getAttestationAssertion() : null;
+      const sdk = await signSourceKitAssetSecureEnclave(stripped, 'video/mp4', {
+        appName: `Source Kit/${appVersion()} (com.verify.camera)`,
+        title: `verify-${signedRecord.capturedAt.replace(/[:.]/g, '-')}.mp4`,
+        telemetry: signedRecord as unknown as Record<string, unknown>,
+        appAttest: aaBytes ? (JSON.parse(new TextDecoder().decode(aaBytes)) as Record<string, unknown>) : null,
+        customAssertions: phase2.customAssertions,
+        thumbnailJpeg: videoThumb,
+        videoStills: videoStillsStd,
+        certChainDer: sdkChain,
+        enclaveKeyTag: params.key.enclaveKeyTag ?? null,
+        tsaUrls: configuredTsaUrls(),
+        heldBioContext: params.key.biometricBound,
+      });
+      const selfCheck = await verifyVideoBytes(sdk.signedBytes);
+      if (selfCheck.verdict === 'INTACT' && selfCheck.c2pa?.assetHashFailure === null) {
+        logDiagnostic({ t: Date.now(), kind: 'video', outcome: 'info', message: `sealed by the c2pa-swift path, self-verified INTACT (video)${sdkTimeNote(sdk)}` });
+        return { signedVideoBytes: sdk.signedBytes, record: signedRecord, disclosure: phase2.disclosure, chunkMaps: phase2.chunkMaps };
+      }
+      const quarantined = await quarantineSdkOutput(sdk.signedBytes, 'mp4');
+      logDiagnostic({ t: Date.now(), kind: 'video', outcome: 'failed', message: sdkSelfCheckNote(selfCheck, 'video', quarantined) });
+    } catch (e) {
+      logDiagnostic({ t: Date.now(), kind: 'video', outcome: 'failed', message: `c2pa-swift signing threw (${e instanceof Error ? e.message : String(e)}, video) — hand-rolled path used` });
+    } finally {
+      if (arm.holdActive) enclaveSealBioRelease();
+    }
+  }
 
   // C2PA embed; out-of-scope containers fall back to the sidecar.
   let signedVideoBytes: Uint8Array | undefined;
   try {
-    signedVideoBytes = await embedC2paInBmff(stripped, signedRecord, params.key, mime, null, params.certChainOverride, params.pq, params.fetchTimestamp ?? fetchTimestampTokensBounded, phase2.customAssertions, { thumbnailJpeg: await videoThumbnailJpeg(params.videoUri), videoStills: videoStillsStd });
+    signedVideoBytes = await embedC2paInBmff(stripped, signedRecord, params.key, mime, null, params.certChainOverride, params.pq, params.fetchTimestamp ?? fetchTimestampTokensBounded, phase2.customAssertions, { thumbnailJpeg: videoThumb, videoStills: videoStillsStd });
   } catch (e) {
     console.warn('C2PA video embed skipped (sidecar attestation still signed):', e instanceof Error ? e.message : e);
   }
