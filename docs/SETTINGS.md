@@ -100,8 +100,8 @@ always land.
   [c2pa-swift](https://github.com/contentauth/c2pa-swift) instead of this app's
   own builder, then reads the result back through the verifier a recipient
   runs; anything that fails is sealed the original way instead. Audio and PNG
-  always use this app's builder — neither has an SDK path. Diagnostics names
-  which path sealed each capture. Off by default.
+  always use this app's builder. Diagnostics names which path sealed each
+  capture. Off by default.
 
 ## Trust
 

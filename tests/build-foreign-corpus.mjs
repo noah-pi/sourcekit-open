@@ -61,6 +61,21 @@ const frame = (ext) => {
   return p;
 };
 
+/** BMFF sources: the container the app's own video and audio captures use. */
+const clip = () => {
+  const p = path.join(work, 'src.mp4');
+  execFileSync('ffmpeg', ['-y', '-f', 'lavfi', '-i',
+    'testsrc=duration=1:size=320x240:rate=10', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', p],
+    { stdio: 'ignore' });
+  return p;
+};
+const tone = () => {
+  const p = path.join(work, 'src.m4a');
+  execFileSync('ffmpeg', ['-y', '-f', 'lavfi', '-i',
+    'sine=frequency=440:duration=2', '-c:a', 'aac', p], { stdio: 'ignore' });
+  return p;
+};
+
 const sign = (src, claimVersion, dest) => {
   const mPath = path.join(work, `m${claimVersion}.json`);
   fs.writeFileSync(mPath, manifest(claimVersion));
@@ -73,6 +88,8 @@ const jpg = frame('jpg'), png = frame('png');
 sign(jpg, 1, 'c2patool-v1.jpg');
 sign(jpg, 2, 'c2patool-v2.jpg');
 sign(png, 2, 'c2patool-v2.png');
+sign(clip(), 1, 'c2patool-v1.mp4');
+sign(tone(), 1, 'c2patool-v1.m4a');
 
 // One byte flipped deep in the compressed scan, well past any manifest
 // segment: the claim is untouched, so the signature still verifies and only

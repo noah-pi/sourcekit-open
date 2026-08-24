@@ -40,7 +40,8 @@ Verification is always my own code.
 Signing has two paths. With **Seal with the C2PA SDK** on (Settings ▸ Proof, off by default),
 [c2pa-swift](https://github.com/contentauth/c2pa-swift) signs photos and videos; the bytes are
 read back through my verifier and anything that fails is sealed the original way instead. With it
-off — and always for audio and PNG, which have no SDK path — my own COSE/JUMBF builder signs.
+off — and always for audio and PNG, which this app does not route through it — my own COSE/JUMBF
+builder signs.
 Both emit the same assertion labels.
 
 What checks that code is a differential oracle in CI: every corpus asset runs through my verifier
