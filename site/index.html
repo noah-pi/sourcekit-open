@@ -882,15 +882,15 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 <!-- ===================== YET TO BUILD ===================== -->
 <section class="block" id="next"><div class="wrap">
   <h2>Things I have not built yet</h2>
-  
+  <!-- Hand-maintained by Noah. Keep in step with the README section of the
+       same name; do not regenerate from the closed tree. -->
   <div class="col">
     <ul class="todo">
       <li><b>Android.</b> StrongBox gets closer to the sensor than the Secure Enclave allows, and the platform exposes sensors iOS keeps to itself: raw barometric pressure, per-frame camera timestamps, a real multi-camera API. Anything committed there would be stronger than the same claim made here.</li>
       <li><b>LiDAR.</b> Pro iPhones ship a depth scanner and nothing uses it for provenance. A sealed depth map answers the flat-screen question directly rather than inferring it from disparity, and it works in the dark.</li>
-      <li><b>Authenticated satellite positioning.</b> Galileo began signing its navigation messages in 2025, which for the first time makes a position something a receiver can check rather than merely believe. Phones do not expose that to apps yet, and iOS hands over a finished coordinate with none of the raw material behind it. This one is waiting on the platform, not on the idea.</li>
-      <li><b>Optional face blurring that survives the signature.</b> A redaction committed at capture — the blur applied before signing, the original never written — would let someone publish a crowd without publishing the crowd's faces. The Guardian Project and WITNESS worked this out years ago in <a href="https://guardianproject.info/apps/org.witness.sscphase1/">ObscuraCam</a>, which finds faces automatically, lets you obscure them, and strips the metadata on the way out. The concept is theirs and it is the right one; what a signature adds is that the obscured version becomes the original rather than a copy of it. Their <a href="https://proofmode.org">ProofMode</a> remains the option to reach for on iOS today — fully C2PA-compliant, in the field with the people who need it, and the project this one keeps learning from.</li>
-      <li><b>More ways to catch rephotography.</b> Moiré from a display's pixel grid, the refresh beat of a panel against a rolling shutter, the polarization signature of an LCD.</li>
-      <li><b>PRNU checks.</b> Every sensor leaves a fixed noise fingerprint. The useful signals are blunt ones: a frame carrying <i>two</i> fingerprints has been composited from two cameras, and a frame carrying <i>none</i> never came off a sensor at all. Neither needs a reference corpus to flag.</li>
+      <li><b>Authenticated satellite positioning.</b> Galileo began signing its navigation messages in 2025, which for the first time uses an encryption that evades traditional (but not all) spoofing. However phones do not yet expose it to apps.</li>
+      <li><b>Optional face blurring that survives the signature.</b> A redaction committed at capture — the blur applied before signing, the original never written — would let someone publish a crowd without publishing the crowd's faces. The Guardian Project and WITNESS worked this out years ago in <a href="https://guardianproject.info/apps/org.witness.sscphase1/">ObscuraCam</a>, which finds faces automatically, lets you obscure them, and strips the metadata on the way out.</li>
+      <li><b>More ways to catch rephotography.</b> Moiré from a display's pixel grid, the refresh beat of a panel against a rolling shutter, the polarization signature of an LCD, multiple or missing PRNU fingerprints, AV desynchronization — none a slam dunk.</li>
       <li><b>Soft binding, and formats that outlive the file.</b> The perceptual fingerprint is already committed. What is missing is somewhere to look it up.</li>
     </ul>
   </div>
