@@ -51,7 +51,9 @@
     "src/provenance/trackChunks.ts",
     "src/reader/types.ts",
     "src/reader/verify/geomag.ts",
+    "src/reader/verify/horizon.ts",
     "src/reader/verify/ladder.ts",
+    "src/reader/verify/timeClaims.ts",
     "src/sensors/motion.ts",
     "src/vault/passcode.ts",
     "archive/handrolled-verifier/*.ts"
