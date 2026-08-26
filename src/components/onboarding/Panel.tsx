@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — one onboarding block's entrance
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Panel — one onboarding block's entrance. A fade-and-rise (250ms, native
