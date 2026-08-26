@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — pluggable trust anchors for verification
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * TrustProvider — pluggable trust anchors for verification. Anchors live
