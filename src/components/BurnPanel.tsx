@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — BurnPanel: the selective-disclosure lock surface
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * BurnPanel: the selective-disclosure lock surface. User-facing language is
