@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — multi-cam lifecycle, on demand, on a device
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Session soak — the multi-cam lifecycle, on demand, on a device.
