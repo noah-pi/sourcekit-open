@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — what the seal does and does not prove -->
 # Capture integrity — what each signal bounds, and what it misses
 
 Every signal on this page is self-reported by the capturing device and signed
