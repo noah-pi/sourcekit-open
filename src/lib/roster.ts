@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Signed newsroom roster: staff signing-key fingerprints with names
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Signed newsroom roster: staff signing-key fingerprints with names, roles,
