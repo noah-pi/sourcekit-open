@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — four rungs, always visible
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Trust ladder card — the four rungs, always visible.
