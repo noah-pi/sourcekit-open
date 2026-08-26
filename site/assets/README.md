@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — where the screenshots come -->
 # site/assets
 
 Images used by the deep-dive page.
