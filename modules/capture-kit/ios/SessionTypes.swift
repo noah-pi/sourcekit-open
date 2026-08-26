@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Shared value types for the CaptureKit module
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import Foundation
 import AVFoundation
