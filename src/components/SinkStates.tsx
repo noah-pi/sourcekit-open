@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — renders the capture-evidence sinks
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * SinkStates — renders the capture-evidence sinks. Each sink is in one of
