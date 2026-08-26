@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Shamir secret sharing over GF
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Shamir secret sharing over GF(256). Splits the newsroom desk X25519 private
