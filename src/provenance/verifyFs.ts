@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — filesystem wrappers around the pure byte verifiers
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Filesystem wrappers around the pure byte verifiers (app-side only).
