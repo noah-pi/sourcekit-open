@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Root layout: bootstrap, gating, and the lock lifecycle
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Root layout: bootstrap, gating, and the lock lifecycle.
