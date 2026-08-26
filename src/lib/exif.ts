@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — EXIF sanitization for the signed com.verify.exif assertion
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * EXIF sanitization for the signed com.verify.exif assertion.
