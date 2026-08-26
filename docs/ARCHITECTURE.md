@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — how the app is put together -->
 # Architecture — Source Kit provenance core
 
 One page from capture to verification.
