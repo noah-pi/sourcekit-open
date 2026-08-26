@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Set / change passcode: enter 6 digits →
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Set / change passcode: enter 6 digits → confirm → saved.
