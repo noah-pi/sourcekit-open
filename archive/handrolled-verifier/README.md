@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — what this verifier is and why it stays -->
 # archive/handrolled-verifier — the hand-rolled C2PA verifier
 
 **Moved, not deleted, not disconnected.** This is the verification pipeline
