@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — composes the verdict from both engines
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS3 policy layer — THE verdict authority (SPEC §0.2, §2.1).
