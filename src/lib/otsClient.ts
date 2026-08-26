@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — openTimestamps network client
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * OpenTimestamps network client. Accountless; the only thing that leaves the
