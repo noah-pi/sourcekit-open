@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Genuine C2PA support, implemented from the spec with
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Genuine C2PA ("Content Credentials") support, implemented from the spec
