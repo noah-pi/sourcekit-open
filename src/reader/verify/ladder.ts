@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — custody ladder — five rungs, each a projection
 /**
  * The custody ladder (M0) — five rungs, each a projection of checks
  * verify-core ALREADY performs. Nothing here computes new cryptography and
