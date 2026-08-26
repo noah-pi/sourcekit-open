@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — what Source Kit is and how it works -->
 <p align="center">
   <img src=".github/banner.svg" alt="Source Kit — an open cryptographic camera" width="100%">
 </p>
