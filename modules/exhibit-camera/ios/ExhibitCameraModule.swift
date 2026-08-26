@@ -233,70 +233,37 @@ public class ExhibitCameraModule: Module {
   /// it. OnDestroy needs this: dispatching sync onto the queue you are
   /// already on deadlocks. Set once in OnCreate, before anything can fire.
   private let sessionQueueSpecificKey = DispatchSpecificKey<UInt8>()
+  /// The one capture session, for the life of the process.
+  ///
+  /// AVFoundation aborts when a session deallocates while a preview layer
+  /// is still attached to it: dealloc reaches detachFromFigCaptureSession,
+  /// which barrier-syncs to Fig's own queue and asserts on the
+  /// inconsistent state. Everything that used to guard that moment — a
+  /// bind-time layer registry, a parking area, a Fig round-trip, a proof
+  /// that nothing was attached, bounded retries, a graveyard for the
+  /// sessions that could not be proven clean — existed to make one
+  /// dealloc survivable.
+  ///
+  /// A session that never deallocates does not need any of it. This one is
+  /// created once and never released, so the abort has no precondition
+  /// left to satisfy. Preview layers may keep their reference across a
+  /// blur, a view's death, anything: the referent outlives them all.
+  ///
+  /// What replaces teardown is rewiring. configureSession strips the
+  /// current graph with unwireGraph and builds the new one inside the same
+  /// begin-and-commit, and resetCaptureState clears the per-graph state
+  /// that a fresh session used to clear by existing.
+  private static let processSession = AVCaptureMultiCamSession()
 
-  /// Dead sessions, parked here for five seconds and released on
-  /// sessionQueue.
-  ///
-  /// A session that deallocates while anything is still attached to it
-  /// aborts the process: AVCaptureSession.dealloc reaches
-  /// detachFromFigCaptureSession, which barrier-syncs to Fig's own queue
-  /// and asserts. Teardown unbinds everything, but a retain can outlive
-  /// that — Fig holds one during an interruption, a preview layer can be
-  /// mid-rebind — and then the last release lands wherever that retain was
-  /// dropped, on a queue nobody here owns.
-  ///
-  /// Parking the session guarantees the last release happens here instead:
-  /// on our queue, seconds after teardown has settled, with every layer
-  /// long since unbound.
-  ///
-  /// The UUID tag is what makes that true. The release closure captures
-  /// only the tag, a value type, which leaves this array as the session's
-  /// sole strong owner. A closure that captured the session could become
-  /// its last reference and release it from the timer's own teardown; a
-  /// closure that cannot hold it cannot. The final release is the array
-  /// removal, ordered after the sweep, on this queue.
-  private var sessionTomb: [(id: UUID, session: AVCaptureMultiCamSession, attempts: Int)] = []
-  /// Every preview layer ever bound to a session. Weakly held, confined to
-  /// sessionQueue.
-  ///
-  /// Reaching layers through `previewView` and `pipLayer` is not enough to
-  /// unbind them: both are weak, so a view that died or was replaced before
-  /// teardown is skipped, and its layer stays attached to a session already
-  /// on its way out.
-  ///
-  /// Layers register here at bind time, when the view is provably alive.
-  /// Teardown and the tomb both sweep this registry, so no layer can still
-  /// be attached when a session is released, whatever order the views
-  /// happened to die in. Entries are weak: a layer that is truly gone
-  /// removes itself.
-  private let boundPreviewLayers = NSHashTable<AVCaptureVideoPreviewLayer>.weakObjects()
-  /// Which session each registered layer was bound to, recorded here at
-  /// bind time.
-  ///
-  /// The sweep decides from this map and never asks `layer.session`. That
-  /// getter can read nil or stale while Fig still considers the layer
-  /// attached, and a sweep that trusts it leaves behind exactly the
-  /// attachment the abort catches.
-  ///
-  /// Weak keys and weak values: a dead layer removes itself, and the map
-  /// never keeps a session alive — the tomb owns it during the sweep.
-  private let boundSessionMap = NSMapTable<AVCaptureVideoPreviewLayer, AVCaptureMultiCamSession>(
-    keyOptions: .weakMemory, valueOptions: .weakMemory)
-  /// process-GLOBAL last resort. A session whose attachments we
-  /// cannot PROVE are gone after the sweep + Fig round-trip + bounded
-  /// retries is retained for the lifetime of the process instead of being
-  /// released: a session that never deallocs can never hit the dealloc-
-  /// time detach assert. Static so it outlives this module instance
-  /// (OnDestroy drains into it while the module is dying). Worst case is a
-  /// bounded, logged leak of a stopped session — never a SIGABRT. All
-  /// appends happen on sessionQueue (single module instance by design).
-  private static var sessionGraveyard: [AVCaptureMultiCamSession] = []
-  /// Serial queue for evidence-sink I/O (JPEG encodes + file writes). Kept
-  /// OFF sessionQueue: a >33 ms encode on the frame queue drops synchronized
-  /// pairs and was a stall source. RetainedPair holds ARC-retained
-  /// sample buffers, so the hop is memory-safe.
+  /// Serial queue for evidence-sink work — JPEG encodes and file writes.
+  /// Kept off sessionQueue: an encode longer than a frame interval on the
+  /// frame queue drops synchronized pairs. RetainedPair holds its sample
+  /// buffers under ARC, so the hop is safe.
   private let sinkIOQueue = DispatchQueue(label: "com.exhibit.camera.sinkio")
 
+  /// The process session, from the first configureSession on. nil means
+  /// only that nothing has configured yet — it is never nil'd again and
+  /// never replaced. A graph change rewires it in place.
   private var session: AVCaptureMultiCamSession?
   private var sessionId: String = ""
   private var facing: ExhibitFacing = .back
@@ -362,7 +329,7 @@ public class ExhibitCameraModule: Module {
   // record the whole timeline instead — initial state and every transition,
   // timestamped against sessionStartWallClock. Never active means the graph
   // rejected the connection; active and then inactive means it was evicted
-  // after start. Invalidated in teardownSession.
+  // after start. Invalidated in resetCaptureState.
   private var connectionActiveObservers: [NSKeyValueObservation] = []
   private var sessionStartWallClock: Date? = nil
   private var secondaryDroppedCount = 0
@@ -597,9 +564,9 @@ public class ExhibitCameraModule: Module {
     // destruction itself originates on sessionQueue.
     OnDestroy {
       if DispatchQueue.getSpecific(key: self.sessionQueueSpecificKey) != nil {
-        self.teardownAndDrainTombs()
+        self.stopForModuleDestroy()
       } else {
-        self.sessionQueue.sync { self.teardownAndDrainTombs() }
+        self.sessionQueue.sync { self.stopForModuleDestroy() }
       }
     }
 
@@ -890,8 +857,14 @@ public class ExhibitCameraModule: Module {
       // owns the connection to the secondary input's video port.
       Prop("altPreview") { (view: ExhibitCameraPreviewView, value: Bool) in
         view.attach(module: self)
+        // Read the inset layer BEFORE disabling it. The disable path nils
+        // the view's layer on this thread, so reading afterward hands
+        // sessionQueue a nil and leaves the module's weak reference to die
+        // still attached. Enabling reads after, because the call is what
+        // creates the layer; disabling reads before.
+        let layerBefore = view.currentPipLayer()
         view.setAltPreviewEnabled(value)
-        let layer = view.currentPipLayer()
+        let layer = value ? view.currentPipLayer() : layerBefore
         self.sessionQueue.async {
           self.previewView = view
           self.setPipWanted(value, layer: layer)
@@ -900,153 +873,40 @@ public class ExhibitCameraModule: Module {
     }
   }
 
-  /// Binds the view's layer to the running session, from a prop handler on
-  /// main onto sessionQueue.
+  /// Binds the view's layer to the session, from a prop handler on main
+  /// onto sessionQueue.
   ///
   /// Every preview-layer bind and unbind runs on sessionQueue, which puts
-  /// them in order with configure, start, and stop by construction. Two
-  /// things they must not do: run on main, where setSession: can commit the
-  /// capture graph synchronously and stall into the scene-update watchdog;
-  /// or run as a fire-and-forget hop, which lets a bound layer outlive the
-  /// session it points at.
+  /// them in order with configure, start, and stop by construction. What
+  /// they must not do is run on main, where setSession: can commit the
+  /// capture graph synchronously and stall into the scene-update watchdog.
   func attachViewOnSessionQueue(_ view: ExhibitCameraPreviewView) {
     sessionQueue.async { [weak self, weak view] in
       guard let self = self, let view = view else { return }
       self.previewView = view
       if let session = self.session {
         view.bind(session: session)
-        self.boundPreviewLayers.add(view.currentPreviewLayer())
-        self.boundSessionMap.setObject(session, forKey: view.currentPreviewLayer())
-        if let pip = view.currentPipLayer() {
-          self.boundPreviewLayers.add(pip)
-          self.boundSessionMap.setObject(session, forKey: pip)
-        }
       }
     }
   }
 
-  /// A dying view's unbind, hopped onto sessionQueue. The queue is serial,
-  /// so this lands ahead of any release already scheduled for the session
-  /// the layer points at.
+  /// A dying view's unbind, hopped onto sessionQueue. Tidiness rather than
+  /// safety now: a layer that outlives its view holding a reference to the
+  /// session harms nothing, because the session is never released.
   func enqueueLayerUnbind(preview: AVCaptureVideoPreviewLayer, pip: AVCaptureVideoPreviewLayer?) {
     sessionQueue.async {
+      // When the dying view's inset layer is the one the tracked live
+      // connection feeds, remove that connection first, so the next bind
+      // builds a fresh inset instead of finding a stale one and showing
+      // black.
+      if let pip = pip, let session = self.session, self.pipConnection?.videoPreviewLayer === pip {
+        session.beginConfiguration()
+        self.teardownPipConnection(in: session)
+        session.commitConfiguration()
+      }
       preview.session = nil
       pip?.session = nil
-      self.boundSessionMap.removeObject(forKey: preview)
-      if let pip = pip { self.boundSessionMap.removeObject(forKey: pip) }
     }
-  }
-
-  /// Detaches every layer this module's own bookkeeping says was bound to
-  /// `dead`, without consulting `layer.session`.
-  ///
-  /// That getter can read nil while Fig still considers the layer attached,
-  /// so filtering on it leaves behind exactly the attachment that aborts
-  /// the process. Setting `.session = nil` on an already-detached layer
-  /// does nothing, so sweeping from bookkeeping costs nothing and misses
-  /// nothing this module knows about.
-  ///
-  /// Runs on sessionQueue, at teardown and again before every release
-  /// attempt.
-  private func detachRegisteredLayers(from dead: AVCaptureMultiCamSession) {
-    // The registry is sessionQueue-confined. A caller on another queue races
-    // the sweep against a bind and can leave a layer attached — the exact
-    // precondition AVFoundation asserts on. Debug builds say so here first.
-    dispatchPrecondition(condition: .onQueue(sessionQueue))
-    for layer in boundPreviewLayers.allObjects {
-      if boundSessionMap.object(forKey: layer) === dead {
-        layer.session = nil
-        boundSessionMap.removeObject(forKey: layer)
-      }
-    }
-  }
-
-  /// Checks whether anything still points at `dead`, after the sweep and a
-  /// round trip through Fig.
-  ///
-  /// `layer.session` is unreliable as a filter because it can read nil too
-  /// early, but a non-nil read is real evidence of a real attachment. So it
-  /// is used here only to prove the session is dirty, never to prove it is
-  /// clean. The bookkeeping map is checked as well, in case a bind
-  /// re-registered a layer mid-teardown.
-  private func layersStillAttached(to dead: AVCaptureMultiCamSession) -> Bool {
-    dispatchPrecondition(condition: .onQueue(sessionQueue))
-    for layer in boundPreviewLayers.allObjects {
-      if layer.session === dead { return true }
-      if boundSessionMap.object(forKey: layer) === dead { return true }
-    }
-    return false
-  }
-
-  /// Forces Fig to drain any detach work it has parked.
-  ///
-  /// Work posted to Fig's own queue can sit there for as long as the app is
-  /// backgrounded — hours. An empty begin-and-commit pair makes the session
-  /// drain that queue now, on our queue, before anything judges whether it
-  /// is clean. Both calls are synchronous and legal on a stopped session.
-  private func drainFigDetachQueue(of session: AVCaptureMultiCamSession) {
-    session.beginConfiguration()
-    session.commitConfiguration()
-  }
-
-  /// The only place a parked session is released. Sweep, round-trip
-  /// through Fig, prove clean, then release.
-  ///
-  /// The point is to remove the abort's precondition rather than to race
-  /// it. A layer pointing at nothing cannot be detached during dealloc, and
-  /// a session that cannot be proven clean never reaches dealloc at all.
-  ///
-  /// If something still provably points at the session, this retries after
-  /// 10, 20, and 40 seconds. The retries are bounded so a permanently stuck
-  /// session cannot loop forever; after the last one it goes to the
-  /// graveyard instead.
-  private func releaseTombIfClean(at idx: Int) {
-    dispatchPrecondition(condition: .onQueue(sessionQueue))
-    let entry = sessionTomb[idx]
-    detachRegisteredLayers(from: entry.session)
-    drainFigDetachQueue(of: entry.session)
-    guard layersStillAttached(to: entry.session) else {
-      // Proven clean. The array removal below is the final release: on
-      // sessionQueue, with nothing attached, so the detach that runs during
-      // dealloc finds no layer and cannot abort.
-      //
-      // The rule, stated where it is relied on: no preview layer may
-      // reference a session that is about to deallocate. Debug builds trap
-      // here if the proof above is ever weakened. Release builds fall
-      // through to the retry and graveyard path.
-      assert(!layersStillAttached(to: entry.session),
-             "tomb released a session with a preview layer still bound")
-      sessionTomb.remove(at: idx)
-      return
-    }
-    let attempt = entry.attempts + 1
-    let retryDelays: [Double] = [10.0, 20.0, 40.0]
-    if attempt <= retryDelays.count {
-      sessionTomb[idx] = (id: entry.id, session: entry.session, attempts: attempt)
-      let delay = retryDelays[attempt - 1]
-      let tombId = entry.id
-      logDiagnosticEvent("Preview layer still attached to tombed session after sweep (attempt \(attempt)); retrying release in \(Int(delay)) s")
-      sessionQueue.asyncAfter(deadline: .now() + delay) { [weak self] in
-        guard let self = self else { return }
-        guard let i = self.sessionTomb.firstIndex(where: { $0.id == tombId }) else { return }
-        self.releaseTombIfClean(at: i)
-      }
-    } else {
-      graveyardSession(entry.session, reason: "still attached after \(entry.attempts) release retries")
-      sessionTomb.remove(at: idx)
-    }
-  }
-
-  /// Holds a session that cannot be proven clean for the rest of the
-  /// process.
-  ///
-  /// A session that never deallocates can never abort during dealloc. This
-  /// trades a crash for a bounded, logged leak of one stopped session. The
-  /// graveyard is static, so it keeps holding even if this module instance
-  /// is destroyed.
-  private func graveyardSession(_ session: AVCaptureMultiCamSession, reason: String) {
-    ExhibitCameraModule.sessionGraveyard.append(session)
-    logDiagnosticEvent("Tombed capture session retained for process lifetime (\(reason)); it will never deallocate, by design")
   }
 
   /// Pushes the running session to the preview view, and reports
@@ -1057,12 +917,6 @@ public class ExhibitCameraModule: Module {
     sessionQueue.async { [weak self] in
       guard let self = self, let session = self.session, let view = self.previewView else { return }
       view.bind(session: session)
-      self.boundPreviewLayers.add(view.currentPreviewLayer())
-      self.boundSessionMap.setObject(session, forKey: view.currentPreviewLayer())
-      if let pip = view.currentPipLayer() {
-        self.boundPreviewLayers.add(pip)
-        self.boundSessionMap.setObject(session, forKey: pip)
-      }
       if let signal = readySignal {
         view.reportReady(session: session, signal: signal)
       }
@@ -1111,7 +965,6 @@ extension ExhibitCameraModule {
       // inset layer can never carry the session off to deallocate
       // somewhere else.
       oldLayer?.session = nil
-      if let oldLayer = oldLayer { boundSessionMap.removeObject(forKey: oldLayer) }
     }
   }
 
@@ -1120,6 +973,10 @@ extension ExhibitCameraModule {
   /// empty frame rather than showing something that is not the second
   /// camera.
   func ensurePipConnection(in session: AVCaptureMultiCamSession) {
+    // A connection missing from this session's own list is stale — left
+    // behind when an in-place rewire stripped the graph. Clearing it lets
+    // the inset rebuild instead of staying black behind the guard below.
+    if let stale = pipConnection, !session.connections.contains(stale) { pipConnection = nil }
     guard pipWanted, pipConnection == nil, let layer = pipLayer else { return }
     // On the virtual graph there is no secondary input: the secondary port
     // is a constituent of the single virtual input, requested by name.
@@ -1138,8 +995,6 @@ extension ExhibitCameraModule {
     }
     guard let port = pipPort else { return }
     layer.setSessionWithNoConnection(session)
-    boundPreviewLayers.add(layer)
-    boundSessionMap.setObject(session, forKey: layer)
     // The initializer cannot fail on iOS; canAddConnection below is the
     // real gate.
     let connection = AVCaptureConnection(inputPort: port, videoPreviewLayer: layer)
@@ -1701,7 +1556,7 @@ extension ExhibitCameraModule {
   /// another reservation.
   ///
   /// isActive is documented as observable. The observer is invalidated in
-  /// teardownSession, and the log call is fire-and-forget, so it is safe
+  /// resetCaptureState, and the log call is fire-and-forget, so it is safe
   /// from whichever thread delivers the change.
   private func observeConnectionActivity(_ connection: AVCaptureConnection?, label: String) {
     guard let connection = connection else { return }
@@ -1722,9 +1577,28 @@ extension ExhibitCameraModule {
   /// rather than a quiet downgrade. sensorLog, off by default, arms the
   /// motion log for the whole session.
   func configureSession(opts: [String: Any], promise: Promise) {
-    guard session == nil else {
-      promise.reject(ExhibitCameraNamedException(ExhibitCameraErrorCode.busy, "The camera session is already running"))
+    // There is no "already running" rejection: there is exactly one session
+    // for the life of the process, and a configure that finds it wired
+    // rewires the graph in place below.
+    //
+    // What still rejects is a configure landing mid-recording. Rewiring the
+    // graph underneath a sealing writer orphans the stop already in flight,
+    // which is what the recording state machine exists to prevent.
+    switch videoState {
+    case .recording:
+      promise.reject(ExhibitCameraNamedException(
+        ExhibitCameraErrorCode.busy,
+        "Video is recording; call stopVideo first — an unfinished delivery file is worse than a stated rejection"
+      ))
       return
+    case .stopping:
+      promise.reject(ExhibitCameraNamedException(
+        ExhibitCameraErrorCode.busy,
+        "Video is finishing its previous clip; wait for stopVideo to settle — an unfinished delivery file is worse than a stated rejection"
+      ))
+      return
+    case .idle:
+      break
     }
     guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
       promise.reject(ExhibitCameraNamedException(ExhibitCameraErrorCode.permission, "Camera permission is required"))
@@ -1807,8 +1681,16 @@ extension ExhibitCameraModule {
       secondary = AVCaptureDevice.default(partnerDeviceType(for: primary.deviceType), for: .video, position: .back)
     }
 
-    let session = AVCaptureMultiCamSession()
+    // The one session, created once and held for the life of the process.
+    // Every configure first strips whatever graph a previous configure —
+    // or one that failed mid-build — left behind, atomically with the new
+    // wiring inside this single begin-and-commit, and resets the per-graph
+    // state. That is the clean slate a fresh session used to provide. On
+    // the first run the strip is a no-op.
+    let session = Self.processSession
     session.beginConfiguration()
+    unwireGraph(session)
+    resetCaptureState()
 
     // Primary input.
     do {
@@ -2183,7 +2065,7 @@ extension ExhibitCameraModule {
       self?.handleSynchronizedCollection(collection)
     }
     // the multi-input secondary's direct delegate closures (nil'd
-    // in teardownSession alongside syncHandler.onCollection).
+    // in resetCaptureState alongside syncHandler.onCollection).
     secondaryDirectHandler.onFrame = { [weak self] buffer in
       self?.handleDirectSecondaryFrame(buffer)
     }
@@ -2191,47 +2073,53 @@ extension ExhibitCameraModule {
       self?.handleDirectSecondaryDrop()
     }
 
-    runtimeErrorObserver = NotificationCenter.default.addObserver(
-      forName: .AVCaptureSessionRuntimeError,
-      object: session,
-      queue: nil
-    ) { [weak self] note in
-      let err = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
-      let description = err.map { "\($0.domain) \($0.code): \($0.localizedDescription)" } ?? "unknown"
-      self?.logDiagnosticEvent("session runtime error: \(description)")
-      self?.sendError(ExhibitCameraErrorCode.platform, "Capture session runtime error: \(err?.localizedDescription ?? "unknown")")
-    }
+    // Session-lifetime observers attach once. The session object is
+    // process-lifetime, so these live as long as it does; removing and
+    // re-attaching them on every rewire would double-fire every handler.
+    // [weak self] keeps a dead module out of the closures.
+    if runtimeErrorObserver == nil {
+      runtimeErrorObserver = NotificationCenter.default.addObserver(
+        forName: .AVCaptureSessionRuntimeError,
+        object: session,
+        queue: nil
+      ) { [weak self] note in
+        let err = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+        let description = err.map { "\($0.domain) \($0.code): \($0.localizedDescription)" } ?? "unknown"
+        self?.logDiagnosticEvent("session runtime error: \(description)")
+        self?.sendError(ExhibitCameraErrorCode.platform, "Capture session runtime error: \(err?.localizedDescription ?? "unknown")")
+      }
 
-    // Interruption boundaries. When the OS interrupts the graph, or
-    // resumes it incompletely, the secondary stream can park while the
-    // previews go on showing their last buffers. Without these two lines
-    // that looks like nothing happened.
-    interruptionObserver = NotificationCenter.default.addObserver(
-      forName: .AVCaptureSessionWasInterrupted,
-      object: session,
-      queue: nil
-    ) { [weak self] note in
-      let reason = (note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? NSNumber)?.intValue ?? -1
-      guard let self = self else { return }
-      self.logDiagnosticEvent("session INTERRUPTED: reason=\(reason) census=\(self.connectionCensus())")
-    }
-    interruptionEndedObserver = NotificationCenter.default.addObserver(
-      forName: .AVCaptureSessionInterruptionEnded,
-      object: session,
-      queue: nil
-    ) { [weak self] _ in
-      guard let self = self else { return }
-      self.logDiagnosticEvent("session interruption ended: census=\(self.connectionCensus())")
-    }
+      // Interruption boundaries. When the OS interrupts the graph, or
+      // resumes it incompletely, the secondary stream can park while the
+      // previews go on showing their last buffers. Without these two lines
+      // that looks like nothing happened.
+      interruptionObserver = NotificationCenter.default.addObserver(
+        forName: .AVCaptureSessionWasInterrupted,
+        object: session,
+        queue: nil
+      ) { [weak self] note in
+        let reason = (note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? NSNumber)?.intValue ?? -1
+        guard let self = self else { return }
+        self.logDiagnosticEvent("session INTERRUPTED: reason=\(reason) census=\(self.connectionCensus())")
+      }
+      interruptionEndedObserver = NotificationCenter.default.addObserver(
+        forName: .AVCaptureSessionInterruptionEnded,
+        object: session,
+        queue: nil
+      ) { [weak self] _ in
+        guard let self = self else { return }
+        self.logDiagnosticEvent("session interruption ended: census=\(self.connectionCensus())")
+      }
 
-    // Thermal policy.
-    thermalObserver = NotificationCenter.default.addObserver(
-      forName: ProcessInfo.thermalStateDidChangeNotification,
-      object: nil,
-      queue: nil
-    ) { [weak self] _ in
-      self?.sessionQueue.async {
-        self?.handleThermalState(ProcessInfo.processInfo.thermalState)
+      // Thermal policy.
+      thermalObserver = NotificationCenter.default.addObserver(
+        forName: ProcessInfo.thermalStateDidChangeNotification,
+        object: nil,
+        queue: nil
+      ) { [weak self] _ in
+        self?.sessionQueue.async {
+          self?.handleThermalState(ProcessInfo.processInfo.thermalState)
+        }
       }
     }
 
@@ -2253,7 +2141,10 @@ extension ExhibitCameraModule {
         ExhibitCameraErrorCode.platform,
         "Session start failed: \(startError.localizedDescription)"
       ))
-      teardownSession()
+      // No teardown: the graph stays wired on the permanent session. Stop
+      // the hardware and state the failure; the next configure rewires in
+      // place.
+      _ = ExhibitSessionControl.safelyStop(session)
       return
     }
 
@@ -2271,6 +2162,12 @@ extension ExhibitCameraModule {
       sensorLogger = logger
     }
 
+    // The session never changes identity now, so the view's per-session
+    // stale-frame shield would never re-arm across an in-place rewire — a
+    // facing flip would paint the last rear frame over the live front
+    // camera. Re-arm it explicitly: unbind to black, and let the first
+    // frame of the new graph lift the shield.
+    previewView?.bind(session: nil)
     pushSessionToPreview()
     ensurePipConnection(in: session)
     scheduleStallWatchdog()
@@ -2289,7 +2186,9 @@ extension ExhibitCameraModule {
     let timeout = DispatchWorkItem { [weak self] in
       guard let self = self, !self.startPromiseDone else { return }
       self.rejectStart(ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "No video frames arrived within 10s of start"))
-      self.teardownSession()
+      // Stop, do not tear down — the graph stays wired and the next
+      // configure rewires it in place.
+      if let session = self.session { _ = ExhibitSessionControl.safelyStop(session) }
     }
     self.startTimeout = timeout
     sessionQueue.asyncAfter(deadline: .now() + 10.0, execute: timeout)
@@ -2692,7 +2591,9 @@ extension ExhibitCameraModule {
   /// artifact can degrade, and each one reports recorded, failed, or
   /// never-recorded with a reason.
   func capture(opts: [String: Any], promise: Promise) {
-    guard session != nil else {
+    // The session object now outlives stopSession, so the honest gate is
+    // "not running" rather than "nil".
+    guard session?.isRunning == true else {
       promise.reject(ExhibitCameraNamedException(ExhibitCameraErrorCode.noSession, "No camera session is running"))
       return
     }
@@ -3246,7 +3147,7 @@ extension ExhibitCameraModule {
   /// target count arrives, otherwise at the timeout — always on
   /// sessionQueue.
   ///
-  /// A session rebuild clears the continuation in teardownSession, and the
+  /// A session rebuild clears the continuation in resetCaptureState, and the
   /// capture in flight then settles through its own watchdog, which is how
   /// every teardown-mid-capture is handled.
   private func finishBurstCollection() {
@@ -4632,7 +4533,9 @@ extension ExhibitCameraModule {
   /// is the one that records. Arms the writer and resolves once it is
   /// accepting frames.
   func startVideo(opts: [String: Any], promise: Promise) {
-    guard session != nil else {
+    // Running, not merely configured: a stopped session would arm a writer
+    // that never sees a frame.
+    guard session?.isRunning == true else {
       promise.reject(ExhibitCameraNamedException(ExhibitCameraErrorCode.noSession, "configureSession must run before startVideo"))
       return
     }
@@ -6139,9 +6042,15 @@ extension ExhibitCameraModule {
     sensorLogThermalStopped = true
   }
 
-  /// Stops the session entirely — a blurred screen, an unmount. Safe to
-  /// call with nothing running. A recording in flight is not torn out from
-  /// under: an unfinished delivery file is worse than a stated rejection.
+  /// Stops the camera hardware — a blurred screen, an unmount — and resets
+  /// the per-graph state. Safe to call with nothing running. A recording in
+  /// flight is not torn out from under: an unfinished delivery file is
+  /// worse than a stated rejection.
+  ///
+  /// The session object itself is not torn down. It is process-lifetime,
+  /// the graph stays wired, and the next configureSession rewires it in
+  /// place. A stopped session holds no camera, no microphone, and no
+  /// recording indicator.
   func stopSession(promise: Promise) {
     // Guard the whole recording state machine, not just whether frames are
     // routing to the writer. Tearing down mid-seal orphans the stop already
@@ -6162,16 +6071,20 @@ extension ExhibitCameraModule {
     case .idle:
       break
     }
-    guard session != nil else {
+    guard let session = session else {
       promise.resolve(["stopped": false, "reason": "no-session"])
       return
     }
     rejectStart(ExhibitCameraNamedException(ExhibitCameraErrorCode.platform, "Session stopped before the first frame"))
-    // teardownSession unbinds the preview layers synchronously on this
-    // queue before releasing the session, so there is no hop here.
-    let stopError = teardownSession()
+    // Stop through the exception shim. The graph, the preview layers'
+    // session references, and the inset connection all stay wired: none of
+    // them can hurt anything now that the session is never released. Blur
+    // stops it; coming back rewires and starts it again.
+    let stopError = ExhibitSessionControl.safelyStop(session)
+    burstSinkWanted = false
+    resetCaptureState()
     if let stopError = stopError {
-      // The session is torn down either way. The rejection says the stop
+      // The hardware is stopped either way. The rejection says the stop
       // itself threw.
       promise.reject(ExhibitCameraNamedException(
         ExhibitCameraErrorCode.platform,
@@ -6182,139 +6095,68 @@ extension ExhibitCameraModule {
     promise.resolve(["stopped": true])
   }
 
-  /// Full teardown, plus draining every parked session immediately. Must
-  /// run on sessionQueue.
+  /// What OnDestroy does: stop the hardware, and nothing else.
   ///
-  /// The module dying must not strand a parked session whose release
-  /// closure would return early at its `guard let self`. Every layer is
-  /// swept and every entry dealt with here, on the queue the contract
-  /// requires.
-  private func teardownAndDrainTombs() {
-    _ = teardownSession()
-    // The same contract as the timer: sweep, drain Fig's queue, prove
-    // clean before releasing. There is no time here for retries, so a
-    // session that is still dirty goes straight to the graveyard — which
-    // outlives this module — rather than into a dealloc nobody can make
-    // safe.
-    for entry in sessionTomb {
-      detachRegisteredLayers(from: entry.session)
-      drainFigDetachQueue(of: entry.session)
-      if layersStillAttached(to: entry.session) {
-        graveyardSession(entry.session, reason: "still attached at module destroy")
-      }
+  /// There is nothing to drain and nothing to release, so the module dying
+  /// is the boring case. Must run on sessionQueue, which OnDestroy
+  /// guarantees through the specific-key check.
+  private func stopForModuleDestroy() {
+    guard let session = session else { return }
+    if let stopError = ExhibitSessionControl.safelyStop(session) {
+      logDiagnosticEvent("OnDestroy session stop raised: \(stopError.localizedDescription)")
     }
-    sessionTomb.removeAll()
+  }
+  /// Strips the current graph off the permanent session so a configure can
+  /// rebuild it in place.
+  ///
+  /// Called inside configureSession's begin-and-commit, so the strip and
+  /// the new wiring apply atomically. It enumerates the session's own
+  /// inputs and outputs — ground truth — so it also cleans up whatever a
+  /// configure that failed mid-build left behind.
+  ///
+  /// The session object is never released. What dies here are the
+  /// per-graph delegates, which is exactly the hygiene teardown used to do
+  /// before releasing.
+  private func unwireGraph(_ session: AVCaptureMultiCamSession) {
+    // The inset's connection references a port on an input about to be
+    // removed, so tear it down first. That call is exception-safe,
+    // idempotent, and clears the property itself.
+    teardownPipConnection(in: session)
+    for output in session.outputs {
+      if let video = output as? AVCaptureVideoDataOutput {
+        video.setSampleBufferDelegate(nil, queue: nil)
+      } else if let audio = output as? AVCaptureAudioDataOutput {
+        audio.setSampleBufferDelegate(nil, queue: nil)
+      }
+      session.removeOutput(output)
+    }
+    for input in session.inputs { session.removeInput(input) }
+    synchronizer = nil
   }
 
-  /// Releases all session state. Idempotent, sessionQueue only.
+  /// Clears the per-graph and per-capture state — everything a fresh
+  /// session used to clear by simply not existing yet.
   ///
-  /// Returns the error from stopping, or nil on a clean stop, so
-  /// stopSession can reject rather than crash the bridge. The error is also
-  /// sent as an error event whatever the caller does.
-  ///
-  /// The return type matches the shim's imported signature exactly.
-  @discardableResult
-  private func teardownSession() -> (any Error)? {
-    if let observer = runtimeErrorObserver {
-      NotificationCenter.default.removeObserver(observer)
-      runtimeErrorObserver = nil
-    }
-    if let observer = thermalObserver {
-      NotificationCenter.default.removeObserver(observer)
-      thermalObserver = nil
-    }
-    if let observer = interruptionObserver {
-      NotificationCenter.default.removeObserver(observer)
-      interruptionObserver = nil
-    }
-    if let observer = interruptionEndedObserver {
-      NotificationCenter.default.removeObserver(observer)
-      interruptionEndedObserver = nil
-    }
-    // The connection-activity observers die with the session.
+  /// Called by stopSession on a blur, and by configureSession as it
+  /// rewires. It resets everything the old teardown reset except four
+  /// things: the session object, which is process-lifetime; the inset
+  /// connection, owned by unwireGraph and ensurePipConnection;
+  /// burstSinkWanted, owned by stopSession and configureSession's options;
+  /// and the session-lifetime observers, which are attached once and live
+  /// as long as the session. sessionQueue only.
+  private func resetCaptureState() {
     connectionActiveObservers.forEach { $0.invalidate() }
     connectionActiveObservers.removeAll()
     sessionStartWallClock = nil
     syncHandler.onCollection = nil
     audioHandler.onAudio = nil
     audioOutput?.setSampleBufferDelegate(nil, queue: nil)
-    // The secondary's direct delegate dies with the session, and the
-    // pinned ultra-wide frame goes back to the pool.
     secondaryDirectHandler.onFrame = nil
     secondaryDirectHandler.onDrop = nil
     secondaryVideoOutput?.setSampleBufferDelegate(nil, queue: nil)
     latestDirectSecondary = nil
     directSecondaryFrameCount = 0
     lastZoomLogSignature = nil
-    let deadSession = session
-    if let deadSession = deadSession { teardownPipConnection(in: deadSession) }
-    // Stopping is idempotent and never reentrant: sessionQueue is serial
-    // and this is the only teardown path. A thrown Objective-C exception
-    // comes back as an error rather than escaping to the bridge.
-    var stopError: (any Error)? = nil
-    if let deadSession = deadSession {
-      stopError = ExhibitSessionControl.safelyStop(deadSession)
-      if let stopError = stopError {
-        sendError(
-          ExhibitCameraErrorCode.platform,
-          "Session stop raised an exception: \(stopError.localizedDescription)"
-        )
-      }
-    }
-    session = nil
-    // Unbind every preview layer here, synchronously, on sessionQueue,
-    // while `deadSession` still strongly holds the session — so nothing is
-    // attached when the last reference drops at the end of this function.
-    //
-    // Two things go wrong if this hops to main instead. Every layer stays
-    // attached until the main queue drains, and a layer retains its
-    // session, so the two can die together on a Fig workloop, where the
-    // session's dealloc re-enters detachFromFigCaptureSession on Fig's own
-    // queue and aborts. And setting a layer's session from main can commit
-    // the capture graph synchronously and block past the scene-update
-    // watchdog while sessionQueue is mid-configuration, which gets the app
-    // killed.
-    //
-    // The setter is safe from any queue other than main — the layer
-    // serializes attachment internally — and from sessionQueue it is
-    // trivially ordered against the stop above and against any
-    // begin-and-commit on this serial queue.
-    if let dead = deadSession {
-      // The module's own PiP reference first, since it survives a view
-      // swap. The view's layer is usually the same object, and detaching
-      // twice is harmless.
-      pipLayer?.session = nil
-      if let view = previewView {
-        view.detachPipFromSession()
-        view.bind(session: nil)
-      }
-      // `previewView` and `pipLayer` are weak, so a view that died or was
-      // replaced before teardown is skipped by the two unbinds above while
-      // its layer may still point at `dead`. Sweep the bind-time registry:
-      // every layer that ever bound is detached now, while `dead` still
-      // holds the session.
-      detachRegisteredLayers(from: dead)
-      // Park the session — see sessionTomb. The last release happens on
-      // this queue five seconds from now, never on a Fig workloop in the
-      // middle of an interruption.
-      //
-      // The closure below captures only `tombId`, a value type, never
-      // `dead`. From here the tomb array is the session's sole strong
-      // owner, so nothing that disposes this closure can be the session's
-      // last release.
-      let tombId = UUID()
-      sessionTomb.append((id: tombId, session: dead, attempts: 0))
-      sessionQueue.asyncAfter(deadline: .now() + 5.0) { [weak self] in
-        guard let self = self else { return }
-        // A stale token — the entry was already drained — does nothing.
-        guard let idx = self.sessionTomb.firstIndex(where: { $0.id == tombId }) else { return }
-        // Sweep, round-trip through Fig, and prove clean before
-        // releasing; bounded retries, then the graveyard. The release
-        // happens only after that proof, never simply because a timer
-        // fired.
-        self.releaseTombIfClean(at: idx)
-      }
-    }
     sessionId = ""
     primaryDevice = nil
     secondaryDevice = nil
@@ -6338,7 +6180,7 @@ extension ExhibitCameraModule {
     // prop handler only fires when the value changes, so clearing them here
     // would leave the inset black for good after any rebuild.
     // configureSession's ensurePipConnection re-attaches the same layer.
-    pipConnection = nil
+    // pipConnection itself is owned by unwireGraph.
     droppedPairCount = 0
     droppedPrimaryCount = 0
     droppedSecondaryHalfCount = 0
@@ -6353,10 +6195,12 @@ extension ExhibitCameraModule {
     // Drop the ring and abandon any collection in progress. A capture
     // waiting on the burst settles through its own watchdog, like every
     // other teardown mid-capture.
-    burstSinkWanted = false
+    // burstSinkWanted is not touched here: a blur abandons the ring
+    // through stopSession, and a configure re-arms it from its options.
     burstRing.removeAll()
     burstPostFrames.removeAll()
     burstPostTarget = 0
+    lastBurstPTS = nil
     lastBurstRetainedAt = nil
     burstContinuation = nil
     burstTimeout?.cancel()
@@ -6434,7 +6278,6 @@ extension ExhibitCameraModule {
       ))
     }
     videoState = .idle
-    return stopError
   }
 }
 

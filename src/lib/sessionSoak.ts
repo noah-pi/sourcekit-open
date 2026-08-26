@@ -3,18 +3,23 @@
  * Session soak — the multi-cam lifecycle, on demand, on a device.
  *
  * The camera's failure mode is not a wrong value; it is an ordering bug
- * between queues nobody here owns. AVFoundation aborts when a session
- * deallocates while a preview layer still points at it, and that is
- * invisible to a typechecker, invisible to the 30 suites (the shims replace
- * every native import), and invisible to the compile gate. It only appears
- * when a session is really built and really torn down, on real hardware,
- * enough times.
+ * between queues nobody here owns, and it is invisible to a typechecker,
+ * invisible to the suites (the shims replace every native import), and
+ * invisible to the compile gate. It only appears when a session is really
+ * configured and really stopped, on real hardware, enough times.
  *
- * So: build and tear down the session in a loop, alternating cameras,
- * because switching is what the field reports were doing. In a debug build
- * the native assertions trap the moment the invariant breaks, which is the
- * point — the run either finishes or it stops on the exact cycle that broke
- * it, with the state on screen.
+ * The session itself is never deallocated — see the native module — so what
+ * this loop exercises is the rewire: strip the graph, build a new one in
+ * place, start, stop. Alternating cameras is what makes it worth running,
+ * because a facing flip is a full teardown and rebuild of every input,
+ * output, and connection on a live session.
+ *
+ * Watch for three things this run can catch and nothing else can. A stop
+ * that creeps longer each cycle means outputs are accumulating rather than
+ * being stripped. An error event that fires twice for one fault means a
+ * session-lifetime observer was attached more than once. And a first frame
+ * showing the previous camera means the preview's stale-frame shield did not
+ * re-arm across the rewire.
  *
  * What this does NOT cover: the background-and-foreground path. iOS decides
  * when an app is suspended, so a loop cannot drive it. Backgrounding by hand
@@ -23,7 +28,7 @@
 import { configureSession, stopSession, onSessionError, type ExhibitFacing } from './exhibitCamera';
 import { logDiagnostic } from './diagnosticsLog';
 
-/** One completed open-and-close, and how long the pair took. */
+/** One completed configure-and-stop, and how long the pair took. */
 export interface SoakCycle {
   index: number;
   facing: ExhibitFacing;
@@ -32,22 +37,21 @@ export interface SoakCycle {
 }
 
 export interface SoakReport {
-  /** Cycles that opened and closed without an error event. */
+  /** Cycles that configured and stopped without an error event. */
   completed: number;
   /** Cycles asked for. A short run means something stopped it. */
   requested: number;
   /** The first error that stopped the run, verbatim. */
   stoppedBy: string | null;
-  /** Slowest open and close seen, milliseconds. A teardown that creeps is
-   *  the tomb's retry path firing, which is worth seeing before it becomes
-   *  an abort. */
+  /** Slowest configure and stop seen, milliseconds. A stop that creeps
+   *  across cycles means the graph is not being fully stripped. */
   slowestOpenMs: number;
   slowestCloseMs: number;
   totalMs: number;
 }
 
 export interface SoakOptions {
-  /** Open-and-close pairs. Each cycle alternates the camera. */
+  /** Configure-and-stop pairs. Each cycle alternates the camera. */
   cycles?: number;
   /** Called after every cycle so the screen can count up. */
   onCycle?: (c: SoakCycle) => void;
