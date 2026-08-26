@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Lab shim for expo-image-manipulator
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Lab shim for expo-image-manipulator. The disclosure store hygiene suite
