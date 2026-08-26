@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — RFC 3161 TimeStampToken verification over CMS/PKCS#7
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * RFC 3161 TimeStampToken verification over CMS/PKCS#7. Four checks per
