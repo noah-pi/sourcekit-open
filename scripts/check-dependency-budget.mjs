@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Source Kit 0.1.0 — the build and supply-chain scripts
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Dependency budget (supply-chain). Fails CI when a package.json carries a
