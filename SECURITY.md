@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — how to report a vulnerability -->
 # Security Policy
 
 Source Kit makes claims that are meant to be checked. If you find a
