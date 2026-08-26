@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — exportSheet — two cards up front, plain words
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ExportSheet (0.17.0, copy v5) — two cards up front, plain words:
