@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — TSA signer cert must carry the id-kp-timeStamping extended
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The TSA signer cert must carry the id-kp-timeStamping extended key usage
