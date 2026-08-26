@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — recovering a vault after device loss -->
 # Matching a proof back to its media
 
 Proof sometimes travels separately from the file: a detached manifest, a
