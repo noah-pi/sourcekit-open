@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — diagnostics log: a ring buffer of the last
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Diagnostics log: a ring buffer of the last 30 capture/seal events,
