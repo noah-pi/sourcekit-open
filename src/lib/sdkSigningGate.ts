@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — which engine seals which media kind
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Sealing-engine gate (0.20.0 test build → 0.22.0 default). The compile-time
