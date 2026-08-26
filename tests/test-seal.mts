@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Seal-to-desk and Shamir custody: sealed artifact → ciphertext
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Seal-to-desk and Shamir custody:
