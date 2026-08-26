@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — how this code was written and verified -->
 # Provenance of this code
 
 This repository was written with AI assistance. That's a fact about
