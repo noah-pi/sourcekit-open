@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — how to work on this repository -->
 # Contributing
 
 Thanks for looking. This is the code behind a shipping app, so the bar is that a
