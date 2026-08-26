@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — encryption to a newsroom desk key
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Sealed capture — encryption to a newsroom desk key. Captures bound for a
