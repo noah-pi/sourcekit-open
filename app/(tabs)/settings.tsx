@@ -996,10 +996,10 @@ export default function SettingsScreen() {
           <View style={styles.soakBlock}>
             <Text style={styles.rowTitle}>Session soak</Text>
             <Text style={styles.rowDetail}>
-              Opens and closes the camera 40 times, alternating front and back. On a debug build the
-              native checks stop the app the moment a preview layer outlives its session, which is the
-              point: it fails here instead of in the field. Background and foreground the app while it
-              runs to cover the other path.
+              Configures and stops the camera 40 times, alternating front and back. The session is
+              rewired in place each time, which is the path a facing flip takes. Watch for a stop that
+              gets slower each cycle, an error that fires twice, or a first frame from the previous
+              camera. Background and foreground the app while it runs to cover the other path.
             </Text>
             {soakProgress !== null ? (
               <Text style={styles.rowDetail}>{`Running — ${soakProgress} of 40 cycles`}</Text>

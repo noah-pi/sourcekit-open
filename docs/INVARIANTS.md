@@ -165,18 +165,31 @@ mismatch signs biometric captures with the wrong key and the error is silent.
 
 ## Native
 
-### No preview layer may reference a session that is about to deallocate
+### The capture session is never deallocated
 
-AVFoundation asserts inside `detachFromFigCaptureSession` when a session
-deallocates with a layer still attached. The sweep decides from the bind-time
-registry, never from `layer.session` — that getter can read nil or stale while
-Fig still considers the layer attached.
+AVFoundation aborts inside `detachFromFigCaptureSession` when a session
+deallocates with a preview layer still attached. There is exactly one
+`AVCaptureMultiCamSession`, created once as a static and held for the life of
+the process, so that abort has no precondition left to satisfy. A preview
+layer may keep its reference across a blur, a view's death, anything.
 
-`modules/exhibit-camera/ios/ExhibitCameraModule.swift` · guarded by a debug
-assertion, and exercised by **Settings ▸ Diagnostics ▸ Run soak**
-(`src/lib/sessionSoak.ts`): forty open-and-close cycles alternating cameras.
-`ios-build` compiles this file but cannot exercise it — multi-cam needs real
-hardware, so the soak is the only check that reaches this rule.
+Nothing may reintroduce a per-configure session. `configureSession` strips the
+current graph with `unwireGraph` and builds the new one inside the same
+begin-and-commit; `resetCaptureState` clears the per-graph state a fresh
+session used to clear by not existing yet.
+
+Three things follow from the session outliving a stop, and each is load-bearing:
+`capture` and `startVideo` gate on `session?.isRunning`, never on `session !=
+nil`; the session-lifetime observers attach once, or every handler double-fires
+on each rewire; and the preview is unbound explicitly before a rewire, or the
+view's stale-frame shield never re-arms and a facing flip paints the last rear
+frame over the live front camera.
+
+`modules/exhibit-camera/ios/ExhibitCameraModule.swift` · exercised by
+**Settings ▸ Diagnostics ▸ Run soak** (`src/lib/sessionSoak.ts`): forty
+configure-and-stop cycles alternating cameras. `ios-build` compiles this file
+but cannot exercise it — multi-cam needs real hardware, so the soak is the only
+check that reaches this rule.
 
 ### Expo async functions that block declare their own queue
 
