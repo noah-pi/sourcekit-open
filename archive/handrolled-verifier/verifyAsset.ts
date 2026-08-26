@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — independent verifier, kept as the oracle
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Verification pipeline — the desk editor's path.
