@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — tsaLoopbackRelay — the RFC 3161 timestamp round-trip
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import Foundation
 import Network
