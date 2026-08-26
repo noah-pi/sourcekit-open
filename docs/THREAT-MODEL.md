@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — what this defends against, and what it cannot -->
 # Threat model — Source Kit 
 
 Who attacks this system, what it assumes, what happens in each scenario, and
