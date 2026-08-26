@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Offline verification of the com.verify.app-attest assertion — the
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Offline verification of the com.verify.app-attest assertion — the check
