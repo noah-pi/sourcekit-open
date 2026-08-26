@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Per-leaf salts from one master seed
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Per-leaf salts from one master seed (docs/INTEGRITY.md — selective disclosure).
