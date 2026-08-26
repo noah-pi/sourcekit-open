@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — per-track Merkle commitments
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * streamedChunks v2 — per-track Merkle commitments.
