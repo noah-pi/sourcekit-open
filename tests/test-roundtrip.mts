@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — round-trip: build then verify, with timestamps
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Round-trip: build then verify, with timestamps on. Builds a real manifest
