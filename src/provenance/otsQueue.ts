@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — OpenTimestamps anchor and queue lifecycle
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * OpenTimestamps anchor and queue lifecycle. At seal time the record's
