@@ -1,3 +1,4 @@
+# Source Kit 0.1.0 — pod spec for the capture kit module
 Pod::Spec.new do |s|
   s.name           = 'CaptureKit'
   s.version        = '1.0.0'
