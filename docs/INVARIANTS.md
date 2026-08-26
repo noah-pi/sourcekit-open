@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — rules that must not regress -->
 # Invariants — rules that must not regress
 
 Read this before changing verification, sealing, or the network surface, and
