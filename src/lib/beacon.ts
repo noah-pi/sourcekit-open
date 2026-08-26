@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — bitcoin beacon: a signed time lower bound
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Bitcoin beacon: a signed time lower bound. The hash of the latest known
