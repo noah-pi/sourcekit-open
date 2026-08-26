@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — filesystem shim for the lab
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 
 import * as fs from 'node:fs';
