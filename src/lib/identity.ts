@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Capture-time identity resolution
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Capture-time identity resolution (CAWG-aligned). Maps the disclosure
