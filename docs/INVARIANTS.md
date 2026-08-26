@@ -98,16 +98,20 @@ even one.
 
 guarded by `tests/test-offline.mts`
 
-### The weather lookup is opt-in and never fires on its own
+### The weather lookup never fires on its own
 
-It sends the sealed coordinate and the capture day to a third party, so it is
-gated twice: the `weatherLookupEnabled` setting (default off) and a tap on the
-card. Opening a located capture must send nothing.
+It sends the sealed coordinate and the capture day to a third party, so it
+fires from a tap and nothing else. Opening a located capture must send
+nothing — no mount effect, no prefetch, no retry loop.
 
-Wire any new weather surface to **both** gates. A setting that gates only a
-component nothing renders is not a gate.
+The tap is the consent, and the button says what tapping it will do. There is
+deliberately no setting: a second switch buried in Settings makes the first one
+look optional, and a setting that gates only a component nothing renders is not
+a gate at all.
 
-`src/components/forensic/EnvironmentCard.tsx` · `src/store/useStore.ts`
+Wire any new weather surface the same way.
+
+`src/components/forensic/EnvironmentCard.tsx`
 
 ### Coordinates are not resolved to place names
 

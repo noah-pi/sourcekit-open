@@ -3,7 +3,7 @@
     "name": "Source Kit",
     "slug": "verify-app",
     "owner": "REPLACE_WITH_YOUR_EXPO_ACCOUNT",
-    "version": "0.23.0",
+    "version": "0.24.0",
     "orientation": "portrait",
     "icon": "./assets/icons/icon-light.png",
     "scheme": "verify",
