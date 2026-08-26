@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — World Magnetic Model coefficients
 // Generated from NOAA WMM.COF (2025.0            WMM-2025        11/13/2024). Do not edit by hand.
 export const WMM_EPOCH = 2025;
 export const WMM_N_MAX = 12;
