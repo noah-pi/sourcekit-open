@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — detached-manifest custody matching
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Detached-manifest custody matching: platforms strip the metadata the
