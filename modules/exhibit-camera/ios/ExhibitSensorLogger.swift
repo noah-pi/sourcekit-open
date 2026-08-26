@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — camera module's IMU evidence sink
 import Foundation
 import CoreMotion
 
