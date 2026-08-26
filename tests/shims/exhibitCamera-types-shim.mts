@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — type-only stand-in for the app's withheld camera bridge
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Type-only stand-in for the app's withheld camera bridge
