@@ -1,3 +1,4 @@
+# Source Kit 0.1.0 — pod spec for the camera module
 Pod::Spec.new do |s|
   s.name           = 'ExhibitCamera'
   s.version        = '1.0.0'
