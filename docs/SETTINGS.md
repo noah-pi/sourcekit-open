@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — every setting and what it changes -->
 # Settings, in full
 
 The Settings screen keeps every row short. This is the long-form version of
