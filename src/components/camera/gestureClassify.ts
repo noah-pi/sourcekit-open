@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Gesture classifier for the camera screen's bottom controls
 /**
  * Gesture classifier for the camera screen's bottom controls. Every responder
  * (mode swipe, pro tray, precision bar) calls this with the touch-start zone
