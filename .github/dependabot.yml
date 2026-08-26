@@ -1,3 +1,4 @@
+# Source Kit 0.1.0 — weekly dependency update checks
 # Dependency updates are supply-chain events here: every bump
 # re-runs the full lab + the dependency budget in CI, and a version split
 # must be declared in scripts/check-dependency-budget.mjs to merge.
