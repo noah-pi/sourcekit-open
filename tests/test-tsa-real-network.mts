@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — production FreeTSA token
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Regression — production FreeTSA token. The local mock TSAs issue SHA-256-only
