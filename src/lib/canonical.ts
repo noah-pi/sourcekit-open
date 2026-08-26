@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Deterministic JSON canonicalization: object keys sorted recursively, no
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Deterministic JSON canonicalization: object keys sorted recursively, no
