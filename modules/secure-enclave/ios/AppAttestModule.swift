@@ -13,13 +13,17 @@ import Security
  * bound to the app's own Secure Enclave signing key: the caller passes
  * clientDataHash = SHA256(challenge ‖ signingPublicKey) (emulated key
  * attestation), and Apple's nonce extension in the attestation leaf
- * certificate certifies that binding. The registry server re-derives the same
- * construction.
+ * certificate certifies that binding.
+ * The same key also signs one assertion per capture, bound to that
+ * capture's media hash. Apple increments a counter in the Enclave on every
+ * assertion and signs it in, so two assertions from one key show whether
+ * the count advanced.
  * API:
  * isSupported -> Bool
  * hasAttestedKey -> Bool
  * generateAttestKey -> String (keyId)
  * attestKey(keyId, clientDataHashB64) -> String (attestation object, base64)
+ * generateAssertion(clientDataHashB64) -> String (assertion object, base64)
  * deleteAttestKey -> Void
  */
 /**
@@ -83,6 +87,36 @@ public class AppAttestModule: Module {
           return
         }
         promise.resolve(attestation.base64EncodedString())
+      }
+    }
+
+    // The per-capture assertion. clientDataHashBase64 binds it to one
+    // capture: SHA256(domain ‖ cleanFileSha256 ‖ signingPublicKey),
+    // computed by the caller.
+    //
+    // The counter Apple increments is not readable from here. It rides
+    // inside the returned assertion object, where anyone holding two
+    // assertions from the same key can see whether it advanced. Nothing on
+    // the device tracks it, and nothing off the device is told.
+    AsyncFunction("generateAssertion") { (clientDataHashBase64: String, promise: Promise) in
+      guard let keyId = self.storedKeyId() else {
+        promise.reject(NamedException("ASSERT_NO_KEY", "no attested key on this device"))
+        return
+      }
+      guard let hash = Data(base64Encoded: clientDataHashBase64), hash.count == 32 else {
+        promise.reject(NamedException("ASSERT_BAD_HASH", "clientDataHash must be base64 of 32 bytes"))
+        return
+      }
+      self.service.generateAssertion(keyId, clientDataHash: hash) { assertion, error in
+        if let error = error {
+          promise.reject(NamedException("ASSERT_FAILED", "generateAssertion failed: \(error.localizedDescription)"))
+          return
+        }
+        guard let assertion = assertion else {
+          promise.reject(NamedException("ASSERT_FAILED", "no assertion object returned"))
+          return
+        }
+        promise.resolve(assertion.base64EncodedString())
       }
     }
 

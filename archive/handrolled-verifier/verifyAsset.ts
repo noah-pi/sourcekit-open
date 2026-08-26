@@ -581,7 +581,16 @@ async function c2paReport(
   }
 
   // --- App Attest: real offline verification, never a presence check. ---
-  const appAttest = verifyAppAttestAssertion(manifest.appAttestAssertion, signerPub);
+  // The capture assertion names a media hash; on the JPEG and PNG paths
+  // that is exactly the hard binding's own hash, so the two are compared.
+  // The BMFF path binds by box exclusion instead and has no whole-file
+  // hash to compare against — the assertion is still verified, and the
+  // report says the cross-check was not available.
+  const appAttest = verifyAppAttestAssertion(
+    manifest.appAttestAssertion,
+    signerPub,
+    manifest.hashData?.alg === 'sha256' ? manifest.hashData.hash : null,
+  );
   performed.push(...appAttest.checksPerformed);
 
   // An update chain carries several manifests. The asset-hash VERDICT rests
