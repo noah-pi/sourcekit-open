@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — AES-256-GCM vault encryption
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * AES-256-GCM vault encryption. Pure — depends only on @noble/ciphers.
