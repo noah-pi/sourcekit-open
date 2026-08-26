@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — bridge to the native Wi-Fi info module
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Bridge to the native Wi-Fi info module (modules/wifi-info).
