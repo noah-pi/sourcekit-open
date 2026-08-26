@@ -97,7 +97,6 @@ export interface Settings {
    * stays on the report either way (its sealed half is local); off means
    * no fetch, stated in plain words.
    */
-  weatherLookupEnabled: boolean;
   /**
    * Capture evidence collection (1.0.0, WS1 CaptureKit; E.04 three-state):
    * which evidence sinks the native capture session runs — the stills
@@ -168,7 +167,6 @@ export const DEFAULT_SETTINGS: Settings = {
   otsCalendars: null,
   tsaUrls: null,
   beaconEndpoint: null,
-  weatherLookupEnabled: false, // opt-in by design — a network lookup discloses what is being inspected
   captureEvidence: { ring: true, rawPcm: true, altView: true },
   photoFlash: 'auto', // no light unless asked
   videoTorch: false,
