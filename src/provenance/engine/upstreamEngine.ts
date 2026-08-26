@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — wraps the official C2PA reader
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Wraps the official C2PA reader and returns a normalized result. No verdicts
