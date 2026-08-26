@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — fetching the C2PA Rust core -->
 # C2PAC.xcframework
 
 The Rust core of c2pa-swift v0.0.12, exposed over a C ABI. The `c2pa-ios`
