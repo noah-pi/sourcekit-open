@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Transcript export formats for signed audio
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Transcript export formats for signed audio. The transcript of record lives
