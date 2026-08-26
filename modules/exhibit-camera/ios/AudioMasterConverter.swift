@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — AudioMasterConverter: native format to canonical PCM master, backing
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import Foundation
 import AVFoundation
