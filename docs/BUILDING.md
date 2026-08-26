@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — building and running the app -->
 # Building the app — the values you must supply
 
 Building and submitting your own copy takes four values. None of them is in
