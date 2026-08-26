@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — the optional attestation relay
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Source Kit attestation relay (beta). Verifies Apple App Attest statements
