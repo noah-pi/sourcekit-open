@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — ECDSA P-256 signing and verification of attestation records
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ECDSA P-256 (ES256) signing and verification of attestation records.
