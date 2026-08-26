@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — signed poseTrace commitment
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The signed poseTrace commitment.
