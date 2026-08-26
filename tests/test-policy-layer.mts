@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — policy-layer unit coverage: every row of the verdict-mapping
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Policy-layer unit coverage: every row of the verdict-mapping table in
