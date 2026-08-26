@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Tool: empirical malleability map of the APP11/JUMBF region
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Tool: empirical malleability map of the APP11/JUMBF region. Builds a signed
