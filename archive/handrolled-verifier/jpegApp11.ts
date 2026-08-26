@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — JPEG APP11 / JUMBF embedding, extraction, and stripping
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * JPEG APP11 / JUMBF embedding, extraction, and stripping.
