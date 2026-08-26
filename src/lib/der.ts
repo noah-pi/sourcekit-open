@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — ECDSA signature format plumbing: DER ↔ IEEE P1363
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ECDSA signature format plumbing: DER ↔ IEEE P1363 (raw r‖s), plus low-S
