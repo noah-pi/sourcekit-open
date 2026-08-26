@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Stereo-capture artifact ingestion
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Stereo-capture artifact ingestion (Spec-Camera-Module-0.13 §5 → seal).
