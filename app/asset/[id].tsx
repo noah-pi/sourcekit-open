@@ -1720,12 +1720,11 @@ export default function AssetScreen() {
                 <Button small icon="finger-print-outline" label="Hash-only claim" tone="secondary" onPress={() => void shareProofJson('hash-only')} loading={busy === 'Building proof…'} />
               </View>
 
-              {/* 0.14.2: the "Full report" drawer (AttestationView) was
-                  removed — it re-rendered signature timing, sensor-frame
-                  timing, the pose trace and the signer fingerprint, all of
-                  which already live once in the Capture / Integrity groups
-                  above (and again, by design, in the raw manifest reel
-                  below). One fact, one place. */}
+              {/* There is no "Full report" drawer. It re-rendered signature
+                  timing, sensor-frame timing, the pose trace and the signer
+                  fingerprint, all of which already live once in the Capture
+                  and Integrity groups above, and again, by design, in the raw
+                  manifest reel below. One fact, one place. */}
 
               {/* The raw C2PA manifest: shown OPEN at the bottom of Advanced
                   — the FULL manifest, windowed, never behind a drawer. Copy
