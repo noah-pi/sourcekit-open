@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — self-signed X.509 certificate for the device signing key
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Self-signed X.509 certificate (DER) for the device signing key, built with
