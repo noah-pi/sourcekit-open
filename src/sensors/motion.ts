@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Motion-signature analysis of the accelerometer stream captured while
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Motion-signature analysis of the accelerometer stream captured while the
