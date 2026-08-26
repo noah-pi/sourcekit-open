@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — camera's single adjustment surface
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Value Ribbon — the camera's single adjustment surface. A capsule tap docks
