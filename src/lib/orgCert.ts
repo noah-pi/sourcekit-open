@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — organization credentials and their chains
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Organization credentials.
