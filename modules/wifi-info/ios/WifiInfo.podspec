@@ -1,3 +1,4 @@
+# Source Kit 0.1.0 — pod spec for the wifi info module
 Pod::Spec.new do |s|
   s.name           = 'WifiInfo'
   s.version        = '1.0.0'
