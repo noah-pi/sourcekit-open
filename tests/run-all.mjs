@@ -1,4 +1,4 @@
-// Source Kit 0.1.0 — runs every suite and tallies the result
+// Source Kit 0.1.0 — the validation lab: every suite, one tally
 // Run every staged suite and report one tally.
 //
 // Suites are discovered from tests/.staged, so a new test-*.mts file is
