@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Solar geometry: where the committed time and place
 /**
  * Solar geometry: where the committed time and place put the sun.
  *
