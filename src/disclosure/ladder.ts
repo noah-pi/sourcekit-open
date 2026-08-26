@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — fixed coarseness rungs every claim family commits under
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Disclosure ladders — the fixed coarseness rungs every claim family commits
