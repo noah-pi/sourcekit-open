@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — proof that travels separately from the media
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Detachable proof — proof that travels separately from the media.
