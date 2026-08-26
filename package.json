@@ -1,6 +1,6 @@
 {
   "name": "sourcekit-open",
-  "version": "0.24.0",
+  "version": "0.1.0",
   "main": "index.ts",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
