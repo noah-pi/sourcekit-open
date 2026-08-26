@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — thin ADAPTER exposing the archived verifier (archive/handrolled-verifier/, moved
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS3 hand-rolled engine — a thin ADAPTER exposing the archived verifier
