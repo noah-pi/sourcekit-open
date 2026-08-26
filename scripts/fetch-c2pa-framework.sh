@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Source Kit 0.1.0 — fetches and verifies the C2PA framework
 # Fetch the C2PAC.xcframework the c2pa-ios module links against.
 #
 # The binary is not in this repository. It is downloaded from the c2pa-swift
