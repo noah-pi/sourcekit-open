@@ -1,4 +1,4 @@
-// Source Kit 0.1.0 — Source Kit attestation record: the self-contained provenance statement
+// Source Kit 0.1.0 — the attestation record and everything it commits
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The Source Kit attestation record: the self-contained provenance statement
