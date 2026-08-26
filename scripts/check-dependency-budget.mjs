@@ -34,10 +34,6 @@ const BUDGET = {
     ],
     cap: 43,
   },
-  'server/package.json': {
-    allow: ['cbor-x'],
-    cap: 3,
-  },
 };
 
 let failures = 0;
@@ -96,10 +92,6 @@ const KNOWN_VERSION_SPLITS = {
       '@noble/curves': ['1.9.7', '2.2.0'],
       '@noble/hashes': ['1.8.0', '2.2.0'],
     },
-  },
-  'server/package-lock.json': {
-    watch: ['cbor-x'],
-    declared: {},
   },
 };
 for (const [lockRel, { watch, declared }] of Object.entries(KNOWN_VERSION_SPLITS)) {

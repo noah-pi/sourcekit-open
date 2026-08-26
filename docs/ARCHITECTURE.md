@@ -92,19 +92,3 @@ strip manifest (+ EXIF for JPEG), redact identity/location/sensors/device
 model, drop the audio transcript, keep the original capture time, re-sign the
 identical media bytes, mark the record `deidentified` with the removed field
 list. The copy is independently verifiable — integrity without identity.
-
-## Server (optional)
-
-`server/server.mjs` — zero-framework node:http relay:
-- `GET /challenge` → single-use 5-min App Attest challenge (rate-limited)
-- `POST /attest` → verifies Apple's attestation chain against the Apple root
-  **embedded in the server source** (never fetched at
-  runtime) + app id, re-derives the emulated-key-attestation binding
-  (`clientDataHash = SHA256(challenge ‖ signingPublicKey)`) by walking the
-  DER to the nonce extension Apple signed into the leaf certificate, and
-  registers the device by its signing-key fingerprint (rate-limited, 2 MB cap)
-No database. The registry is an aggregate counter in a small JSON file on a
-volume: no keyIds, no key fingerprints, no timestamps. There is **no
-device-listing endpoint**; `GET /devices` answers 404. Verifying App Attest
-statements and counting registrations is the relay's whole job, and no media
-transits it.

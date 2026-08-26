@@ -20,7 +20,7 @@
  * No registry address ships with the app. Attestation runs on first launch
  * with a locally generated challenge and retries on later launches while
  * absent, so no network is required. An org registry (Settings → advanced) is
- * an upgrade path: a server-issued, single-use challenge it verifies itself.
+ * an upgrade path: a single-use challenge it issues and verifies itself.
  */
 
 import { Platform } from 'react-native';
@@ -53,9 +53,8 @@ const OPTIONS: SecureStore.SecureStoreOptions = {
 };
 
 /**
- * The configured registry, or null when none was set. No default is bundled.
- * Any registry speaking the open format in server/ works; the user picks one
- * in Settings.
+ * The configured registry, or null when none was set. No default is bundled
+ * and none is run here; an organization points the app at its own.
  */
 export async function getAttestServerUrl(): Promise<string | null> {
   const stored = await SecureStore.getItemAsync(SERVER_URL_KEY, OPTIONS).catch(() => null);
