@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — zoom math and lens hand-off points
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Zoom model. Pure math, no React. Zoom is one number: the factor relative to
