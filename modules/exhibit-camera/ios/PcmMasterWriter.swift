@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — raw LPCM master writer for the ExhibitCamera video
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import Foundation
 import AVFoundation
