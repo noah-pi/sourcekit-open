@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — the encrypted vault on disk
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The encrypted vault.
