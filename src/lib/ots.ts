@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — OpenTimestamps: ledger-anchored time, independent of the RFC 3161
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * OpenTimestamps (OTS): ledger-anchored time, independent of the RFC 3161
