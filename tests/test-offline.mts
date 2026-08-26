@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — the full chain with the network off
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Full-offline chain (zero-dependency).
