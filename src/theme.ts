@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Design tokens — modern minimal
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Design tokens — modern minimal.
