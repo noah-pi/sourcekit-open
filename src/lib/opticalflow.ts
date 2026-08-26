@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Global motion estimation between two frames
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Global motion estimation between two frames.
