@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Onboarding: a wordmark opening page, then three panels
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Onboarding: a wordmark opening page, then three panels, said plainly.
