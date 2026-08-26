@@ -1,3 +1,4 @@
+# Source Kit 0.1.0 — container image for the relay
 FROM node:22-alpine
 WORKDIR /app
 COPY package.json ./
