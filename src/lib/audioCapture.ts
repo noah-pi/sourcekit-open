@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Bridge to the native AudioCapture module — one
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Bridge to the native AudioCapture module (modules/audio-capture) — one
