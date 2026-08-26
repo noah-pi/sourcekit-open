@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Global app state + settings persistence
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Global app state (zustand) + settings persistence.
