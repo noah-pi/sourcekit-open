@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — trust axis lives in the verification data model
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The trust axis lives in the verification data model, not only in
