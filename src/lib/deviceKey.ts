@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — device signing identity
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Device signing identity.
