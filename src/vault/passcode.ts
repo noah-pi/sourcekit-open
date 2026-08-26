@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — app-lock passcode: 6-digit PIN, PBKDF2-SHA256 with a random
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * App-lock passcode: 6-digit PIN, PBKDF2-SHA256 with a random 128-bit salt,
