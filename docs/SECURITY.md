@@ -24,7 +24,8 @@ vulnerability see [SECURITY.md](../SECURITY.md) in the repo root.
   process, so code execution there can feed the signer pixels of its choosing.
   App Attest raises the cost and the key binding keeps the attack per-device,
   but it isn't a guarantee. In-pipeline hardware signing — the Pixel 10, or a
-  Snapdragon TEE — closes this properly in a way an app can't. See
+  Snapdragon TEE — [narrows it](https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html)
+  to whoever can get root. An app cannot narrow it that far. See
   [THREAT-MODEL.md](THREAT-MODEL.md) ▸ Where the signature sits.
 - **Stripped credentials.** Any file can have its manifest removed, and the
   absence of credentials proves nothing either way.

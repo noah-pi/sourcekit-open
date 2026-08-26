@@ -74,8 +74,8 @@ the signer.
 | | Path from sensor to signature | What can interfere |
 |---|---|---|
 | Source Kit | sensor → kernel → AVFoundation → **the app's own process** → Enclave signs | anything with code execution in that process |
-| Pixel 10 | sensor → image signal pipeline in Tensor G5 → Titan M2 signs | nothing in Android userspace |
-| Snapdragon | sensor → TEE → TEE signs | nothing in Android userspace |
+| Pixel 10 | sensor → image signal pipeline in Tensor G5 → Titan M2 signs | [anything with root](https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html) |
+| Snapdragon | sensor → TEE → TEE signs | anything with root |
 
 Source Kit signs in userspace. On a jailbroken device, an attacker can attach a
 dynamic instrumentation tool, hook the path before the Enclave call, hand it
