@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Source Kit 0.1.0 — media signed by another producer
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Rebuilds tests/corpus/foreign/ — media signed by another producer.
