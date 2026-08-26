@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — disclosure screen: what this capture committed to, what
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Disclosure screen: what this capture committed to, what is open, what is
