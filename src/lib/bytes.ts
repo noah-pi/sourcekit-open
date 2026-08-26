@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — byte, hex and base64 helpers
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Byte-level utilities. Pure — no React Native or Node dependencies.
