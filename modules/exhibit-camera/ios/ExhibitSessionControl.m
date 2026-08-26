@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — exhibit session control
 #import "ExhibitSessionControl.h"
 
 /// The exception name and reason go into the NSError verbatim, so the
