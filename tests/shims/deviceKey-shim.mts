@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Keychain tag of the Enclave key; absent for
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 
 import { p256 } from '@noble/curves/p256';
