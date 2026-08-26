@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — commit-at-capture and the burn scheduler
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Commit-at-capture and the burn scheduler. Path under test: seal commits the
