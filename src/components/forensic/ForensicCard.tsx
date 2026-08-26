@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — shared shell for the Forensic Checks modules
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ForensicCard — shared shell for the Forensic Checks modules. Flat card
