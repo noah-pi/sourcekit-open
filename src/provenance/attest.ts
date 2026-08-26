@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Attestation orchestration: media file → signed media file
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Attestation orchestration: media file → signed media file + record.
