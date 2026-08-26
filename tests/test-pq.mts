@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — one commitment, two signatures: - both layers verify
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Post-quantum dual signature — one commitment, two signatures:
