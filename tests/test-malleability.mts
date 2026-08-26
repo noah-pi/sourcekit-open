@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — pins the malleable byte set of a signed file
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Pins the malleable byte set of the signed JPEG container. C2PA signs the
