@@ -820,20 +820,6 @@ export default function SettingsScreen() {
             onChange={(v) => saveSettings({ otsEnabled: v })}
           />
 
-          <Divider />
-          {/* the weather check sends the sealed coordinate
-              and day to the Open-Meteo archive — a network disclosure of
-              what this device is inspecting, so it is opt-in, default
-              off. The Weather card's sealed half needs no network; this
-              gates only the fetch. */}
-          <ProofToggle
-            icon="cloud-outline"
-            label="Weather archive lookup"
-            tint={EVIDENCE_TINT}
-            sub="Lets the Weather card check the historical weather archive for a sealed time and place. The lookup sends that coordinate and day to the Open-Meteo archive over the network."
-            value={settings.weatherLookupEnabled}
-            onChange={(v) => saveSettings({ weatherLookupEnabled: v })}
-          />
         </Card>
 
         {/* 5. Privacy & Security */}

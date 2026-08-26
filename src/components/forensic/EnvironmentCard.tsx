@@ -18,7 +18,6 @@ import { View, Text, StyleSheet, Pressable, Linking, ActivityIndicator } from 'r
 import { colors, spacing, fontSize, useThemedStyles } from '../../theme';
 import { HorizonCard, ShadowCard } from '../Juxtapose';
 import { ForensicCard, NotRecorded } from './ForensicCard';
-import { useStore } from '../../store/useStore';
 
 // Open-Meteo archive weather-code words (same table the Inspect screen uses).
 const WEATHER_WORDS: Record<number, string> = {
@@ -40,8 +39,12 @@ function windWords(kmh: number): string {
 }
 
 /** Weather: the official archive reading for the sealed hour.
- *  The lookup sends the sealed coordinate and day to a third party, so it is
- *  gated twice — the setting, and a tap. Nothing is fetched on mount. */
+ *
+ *  The lookup sends the sealed coordinate and the capture day to a third
+ *  party, so it is gated by a tap and nothing else. Opening a located
+ *  capture sends nothing; the button says what tapping it will do. There is
+ *  no setting, because the tap is the consent and a second switch buried in
+ *  Settings would only make the first one look optional. */
 function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
   lat: number;
   lon: number;
@@ -49,7 +52,6 @@ function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
   sealedWhenWhere: string;
 }) {
   const styles = useThemedStyles(buildStyles);
-  const weatherLookupEnabled = useStore((st) => st.settings.weatherLookupEnabled);
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'offline'>('idle');
   const [reading, setReading] = useState<string | null>(null);
 
@@ -79,11 +81,7 @@ function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Weather</Text>
       <Text style={styles.cardSub}>Official weather for the sealed time and location.</Text>
-      {!weatherLookupEnabled ? (
-        <Text style={styles.weatherBtnText}>
-          Weather archive lookup is off. Turn it on in Settings to check the archive — the lookup sends the sealed coordinate and day over the network.
-        </Text>
-      ) : state === 'idle' ? (
+      {state === 'idle' ? (
         <Pressable style={styles.weatherBtn} onPress={() => void check()} hitSlop={6}>
           <Text style={styles.weatherBtnText}>Check the archive · sends the sealed coordinates</Text>
         </Pressable>
@@ -107,11 +105,9 @@ function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
           </View>
         </View>
       )}
-      {weatherLookupEnabled ? (
-        <Pressable onPress={() => void Linking.openURL('https://open-meteo.com/')} hitSlop={6}>
-          <Text style={styles.sourceLink}>Source: Open-Meteo archive ↗</Text>
-        </Pressable>
-      ) : null}
+      <Pressable onPress={() => void Linking.openURL('https://open-meteo.com/')} hitSlop={6}>
+        <Text style={styles.sourceLink}>Source: Open-Meteo archive ↗</Text>
+      </Pressable>
     </View>
   );
 }
