@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — post-quantum dual-signature layer
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Post-quantum dual-signature layer: ML-DSA-65 (FIPS 204) alongside ES256.
