@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — second camera's committed frame, next to the primary
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * MultipleLensCard — the second camera's committed frame, next to the
