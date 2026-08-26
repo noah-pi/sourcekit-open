@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — raw LPCM audio master that rode with the
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * RawAudioCard — the raw LPCM audio master (CAF) that rode with the
