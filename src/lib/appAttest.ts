@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Apple certifies that this is genuine Apple hardware
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * App Attest — Apple certifies that this is genuine Apple hardware running an
