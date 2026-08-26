@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — JUMBF assertions and media parity
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * JUMBF assertions and media parity.
