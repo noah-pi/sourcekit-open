@@ -36,6 +36,21 @@ then validates the attacker's own bytes. Rung 4 compares against
 
 `src/reader/verify/ladder.ts` · guarded by `tests/test-custody-ladder.mts`
 
+### A malformed file is a verdict, never a crash
+
+A reader is handed files by strangers, so every shape a file can arrive in
+has to end in an answer. Two rules, and no third: nothing throws out of the
+reader, and no file whose shape was changed — truncated, spliced,
+duplicated, reordered — reads INTACT.
+
+In-place writes are deliberately outside this. JUMBF framing sits outside
+the claim hash by design, and overwriting those bytes leaves a file valid;
+that set is pinned byte for byte elsewhere. Shape is this suite's business,
+the byte set is the other one's, and neither restates the other.
+
+`archive/handrolled-verifier/` · guarded by `tests/test-hostile-structure.mts`
+(997 malformed files) and `tests/test-malleability.mts`
+
 ### The hard binding's hole covers the manifest and nothing else
 
 The `c2pa.hash.data` exclusion is the one unhashed region of an otherwise
