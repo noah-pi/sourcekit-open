@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Commit-at-capture: turns the capture evidence the seal path
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Commit-at-capture: turns the capture evidence the seal path already holds
