@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — NSException-safe wrappers around the AVCaptureSession calls that can
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 
