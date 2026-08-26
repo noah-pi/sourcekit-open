@@ -1,4 +1,4 @@
-// Source Kit 0.1.0 — app's one camera session
+// Source Kit 0.1.0 — the native camera, capture and sensor modules
 import ExpoModulesCore
 import AVFoundation
 import CoreMedia
