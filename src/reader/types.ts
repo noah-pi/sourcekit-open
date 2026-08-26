@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — reader card model
 /**
  * Reader card model. A check emits a prediction, a measurement, the gap
  * between them with an error bound, and what that gap is consistent with.
