@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — FAQ at the bottom of the Inspect tab
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * InspectGuide — the FAQ at the bottom of the Inspect tab. Each question is
