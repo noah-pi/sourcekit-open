@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — seven sections, top to bottom: 1
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Settings — seven sections, top to bottom:
