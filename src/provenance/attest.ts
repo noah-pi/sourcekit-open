@@ -1339,6 +1339,12 @@ async function embedC2paInBmff(
     // upstream; absent stays absent).
     thumbnailJpeg: standard?.thumbnailJpeg ?? null,
     videoStills: standard?.videoStills ?? null,
+    // The photo and PNG arms have always declared c2pa.created with
+    // digitalSourceType digitalCapture; this arm never did, so a sealed
+    // video said less about its own origin than a sealed still of the same
+    // scene. Downstream tools read digitalSourceType before anything else,
+    // and a capture that does not state it invites the reader to guess.
+    createdDeclaration: { when: signedRecord.capturedAt },
   };
 
   let fixed: number | null = null;

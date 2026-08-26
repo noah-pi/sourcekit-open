@@ -424,6 +424,32 @@ async function c2paReport(
     performed.push('COSE unprotected header carries only defined entries, and its pad is zero-filled');
   }
 
+  // Device integrity, as the device described itself at capture. Signed,
+  // so it cannot be edited afterward, and self-reported, so a compromised
+  // device can put anything here. The app's own ladder has always shown
+  // this; the standalone verifier did not, which meant a capture sealed on
+  // a simulator read INTACT here with nothing said about it. Stated, never
+  // scored: an emulator is not proof of a forgery and its absence is not
+  // proof of a real camera.
+  const di = telemetryRecord?.deviceIntegrity;
+  if (di) {
+    const flags = [
+      di.emulatorSuspected ? 'emulator suspected' : null,
+      di.jailbreakIndicators.length > 0 ? `${di.jailbreakIndicators.length} jailbreak indicator${di.jailbreakIndicators.length === 1 ? '' : 's'}` : null,
+      di.runtimeInstrumentation?.debuggerAttached ? 'debugger attached' : null,
+      di.runtimeInstrumentation && di.runtimeInstrumentation.injectedLibraries.length > 0
+        ? `${di.runtimeInstrumentation.injectedLibraries.length} injected librar${di.runtimeInstrumentation.injectedLibraries.length === 1 ? 'y' : 'ies'}`
+        : null,
+    ].filter(Boolean);
+    performed.push(
+      flags.length > 0
+        ? `device integrity at capture (SELF-REPORTED): ${flags.join(', ')} — the device said this about itself, and a compromised device can say anything`
+        : 'device integrity at capture (SELF-REPORTED): nothing flagged — the device said this about itself, and a compromised device can say anything',
+    );
+  } else {
+    notPerformed.push('device integrity not stated: this record commits no integrity signals, so nothing is known either way about the machine that sealed it');
+  }
+
   // The pose trace is signed DATA, not a check: its integrity rides the
   // record signature above. What it shows is for the desk to weigh.
   const poseTrace = telemetryRecord?.context?.poseTrace;
