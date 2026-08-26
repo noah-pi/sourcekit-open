@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — every network call the app can make -->
 # Network calls
 
 Every network call the app can make, what triggers it, what leaves the
