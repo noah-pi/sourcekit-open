@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — the zoom wheel and its optical stops
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Zoom control.
