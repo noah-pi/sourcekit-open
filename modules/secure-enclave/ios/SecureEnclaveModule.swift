@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Secure Enclave signing identities
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import ExpoModulesCore
 import LocalAuthentication
