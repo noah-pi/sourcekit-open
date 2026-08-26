@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — differential oracle: every corpus asset runs through
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Differential oracle: every corpus asset runs through both engines, the
