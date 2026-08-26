@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — the selective disclosure bundle format
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The disclosure bundle (docs/INTEGRITY.md — selective disclosure). A bundle
