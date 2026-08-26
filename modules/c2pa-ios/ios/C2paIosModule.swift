@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — compiles // into THIS pod target, so its
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import ExpoModulesCore
 // NO `import C2PA`: c2pa-swift v0.0.12 is VENDORED (Vendor/C2PA/** compiles
