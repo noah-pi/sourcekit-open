@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Disclosure store hygiene
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Disclosure store hygiene. sealQueue writes
