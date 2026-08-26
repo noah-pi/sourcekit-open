@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Minimal, strict X.509 certificate verification
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Minimal, strict X.509 certificate verification. Three callers:
