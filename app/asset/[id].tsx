@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — media, live re-verification, sealed metadata, and actions
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Asset detail — media, live re-verification, sealed metadata, and actions.
