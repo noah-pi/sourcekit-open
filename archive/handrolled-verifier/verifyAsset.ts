@@ -412,6 +412,18 @@ async function c2paReport(
       );
     }
   }
+  // The COSE unprotected header carries the timestamp tokens, the PQ entry
+  // and a zero pad, and sits outside the signature. A file that verifies
+  // can still have had bytes written there afterward, so what the parser
+  // found is stated rather than left for nobody to notice.
+  if (manifest.unprotectedFindings.length > 0) {
+    for (const f of manifest.unprotectedFindings) {
+      performed.push(`COSE unprotected header: ${f}`);
+    }
+  } else {
+    performed.push('COSE unprotected header carries only defined entries, and its pad is zero-filled');
+  }
+
   // The pose trace is signed DATA, not a check: its integrity rides the
   // record signature above. What it shows is for the desk to weigh.
   const poseTrace = telemetryRecord?.context?.poseTrace;

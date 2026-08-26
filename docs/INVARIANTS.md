@@ -36,6 +36,37 @@ then validates the attacker's own bytes. Rung 4 compares against
 
 `src/reader/verify/ladder.ts` · guarded by `tests/test-custody-ladder.mts`
 
+### The hard binding's hole covers the manifest and nothing else
+
+The `c2pa.hash.data` exclusion is the one unhashed region of an otherwise
+whole-file hash. Anything inside it can be changed without breaking the
+signature, so the range must be exactly one, starting where the inserted
+segments start and ending where they end. A range that reaches one byte
+further is one byte an attacker gets for free.
+
+The length is set by a size-convergence loop that reassembles the store
+until it matches the reserved length. That loop is easy to change and hard
+to eyeball, which is why the property is pinned rather than read.
+
+`archive/handrolled-verifier/c2pa.ts` › `buildC2paSegment` · guarded by
+`tests/test-seal.mts`
+
+### The COSE unprotected header carries no payload
+
+The unprotected header is outside the signature by construction, so bytes
+written there survive verification. Our writer puts three things in it: the
+timestamp container, the PQ entry, and a `pad` that exists only to make the
+store land on the size the exclusion already reserved. The pad is written
+zero-filled and there is no fourth entry.
+
+A pad with a non-zero byte, or an entry this format does not define, was put
+there after signing. The verifier says so in `checksPerformed` rather than
+passing the file silently — the signature is still valid, and that is the
+point.
+
+`archive/handrolled-verifier/c2pa.ts` › `parseManifestInner` · guarded by
+`tests/test-seal.mts`
+
 ### An unreferenced hash binding is void, not tamper
 
 A binding is honored only when the signed claim references it. Without this,
