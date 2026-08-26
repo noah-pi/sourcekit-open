@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — declination row's ship gate (0.23.0, auditor handoff
 /**
  * test-geomag — the declination row's ship gate (0.23.0, auditor handoff:
  * "Do not ship the row until it passes"). Reads NOAA's published
