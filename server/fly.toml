@@ -1,3 +1,4 @@
+# Source Kit 0.1.0 — deployment config for the relay
 # Deploy: fly launch --no-deploy (from this directory), then follow the README.
 # The app name below is a placeholder — `fly launch` will prompt for/assign one.
 app = "your-attest-server"   # pick your own name; `fly apps create <name>`
