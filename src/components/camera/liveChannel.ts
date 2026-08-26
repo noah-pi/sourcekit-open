@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — synchronous pub/sub channel for gesture-live values
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Synchronous pub/sub channel for gesture-live values. Gesture sources
