@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Bridge to the native ExhibitCamera module — the
 // UNBUILT — rides EAS build 2; validated by on-device soak checklist, not CI.
 /**
  * Bridge to the native ExhibitCamera module (modules/exhibit-camera) — the
