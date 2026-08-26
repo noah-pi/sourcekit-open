@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — IMU against optical flow agreement
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * IMU/optical-flow consistency. The signed pose trace states how the camera

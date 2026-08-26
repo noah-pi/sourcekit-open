@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — device info shim for the lab
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 export const modelName = 'iPhone 15 Pro';
 export const modelId = 'iPhone16,1';

@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — fullscreen media viewer
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Fullscreen media viewer. Opened from the expand badge on the asset page.

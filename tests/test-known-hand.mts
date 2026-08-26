@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — "Known hand": local collection history at the unidentified
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * "Known hand": local collection history at the unidentified floor. Local

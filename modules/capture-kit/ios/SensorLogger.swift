@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — full-rate IMU / baro / location log
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import Foundation
 import CoreMotion

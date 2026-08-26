@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — audio recorder's IMU sink
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import Foundation
 import CoreMotion

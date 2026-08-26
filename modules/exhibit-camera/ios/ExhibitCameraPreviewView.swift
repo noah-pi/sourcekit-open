@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — native preview for the app's ONE capture session
 import ExpoModulesCore
 import AVFoundation
 import UIKit

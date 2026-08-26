@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — escalating lockout for the 6-digit vault PIN
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Escalating lockout for the 6-digit vault PIN (hashing lives in passcode.ts).

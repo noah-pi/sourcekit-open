@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — FULL C2PA manifest, exactly as parsed
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ManifestReel — the FULL C2PA manifest, exactly as parsed from the file:

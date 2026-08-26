@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — encrypted library of every exhibit this device has
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Exhibits — encrypted library of every exhibit this device has sealed.

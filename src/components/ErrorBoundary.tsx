@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — catches a render throw and offers a way
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Catches a render throw and offers a way back instead of a blank screen.

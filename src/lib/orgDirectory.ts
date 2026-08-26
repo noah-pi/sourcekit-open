@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — "sourcekit-org/1". A member enters their organization's domain
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Org credential over HTTPS — "sourcekit-org/1".

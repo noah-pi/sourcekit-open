@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — capture-time context collection: GPS, compass heading, barometer
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Capture-time context collection: GPS, compass heading, barometer.

@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — check a file against its seal
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Inspect — check a file against its seal (0.18.2). The result is a

@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — burn scheduler and per-item disclosure store
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Burn scheduler and per-item disclosure store.

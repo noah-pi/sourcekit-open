@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — shared, prop-driven module cards
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Forensic Checks — the shared, prop-driven module cards. The asset detail

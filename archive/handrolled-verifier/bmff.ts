@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — ISO Base Media File Format surgery for C2PA
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ISO Base Media File Format (MP4/MOV/M4A) surgery for C2PA embedding.

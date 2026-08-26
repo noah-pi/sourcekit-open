@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — lab shim for expo-modules-core
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Lab shim for expo-modules-core. requireNativeModule returns null, the

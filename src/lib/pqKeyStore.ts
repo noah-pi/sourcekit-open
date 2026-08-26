@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — ML-DSA-65 key custody
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * ML-DSA-65 key custody. A 32-byte seed in SecureStore is the whole secret;

@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — settings: proofs, sinks, vault and diagnostics
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Settings — seven sections, top to bottom:

@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — tab bar and its four screens
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';

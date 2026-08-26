@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — current Wi-Fi identity as iOS reports
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import ExpoModulesCore
 import NetworkExtension

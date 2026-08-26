@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — dead-code gate does not remove
 /**
  * NO SCREEN RENDERS THIS YET. Kept deliberately, and listed in knip.json so
  * the dead-code gate does not remove it. Unlike horizon.ts this needs nothing

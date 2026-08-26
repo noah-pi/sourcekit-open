@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — end-to-end validation for every format
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * End-to-end validation for every format: sign → verify → tamper-reject →

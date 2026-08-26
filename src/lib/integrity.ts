@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — device integrity signals
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Device integrity signals. Signed and self-reported, not a capture gate: a

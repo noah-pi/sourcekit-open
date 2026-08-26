@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — camera screen: framing, capture and sealing
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Capture — the cryptographic camera.

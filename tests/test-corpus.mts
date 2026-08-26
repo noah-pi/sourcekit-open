@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — reference corpus validation
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Reference corpus validation.

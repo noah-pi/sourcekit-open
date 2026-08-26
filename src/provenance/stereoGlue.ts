@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — stereo ingestion glue: maps the ExhibitCamera CaptureResult's three-state
 /**
  * Stereo ingestion glue (0.13.0): maps the ExhibitCamera CaptureResult's
  * three-state EvidencePaths onto the commitStereoArtifacts input contract

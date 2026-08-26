@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — file hashing and reading over expo-file-system
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * File hashing and reading over expo-file-system. Hashing is chunked (4 MiB)

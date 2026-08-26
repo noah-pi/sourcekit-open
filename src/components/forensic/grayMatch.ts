@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — shared on-device image math for the forensic cards
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * grayMatch — shared on-device image math for the forensic cards. Decodes two

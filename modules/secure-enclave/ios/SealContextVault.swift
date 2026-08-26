@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — sealContextVault — ONE Face ID evaluation, TWO signatures
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import Foundation
 import LocalAuthentication

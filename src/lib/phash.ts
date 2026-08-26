@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — DCT perceptual hash: 32×32 grayscale → DCT-II
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * DCT perceptual hash: 32×32 grayscale → DCT-II → the 8×8 lowest-frequency

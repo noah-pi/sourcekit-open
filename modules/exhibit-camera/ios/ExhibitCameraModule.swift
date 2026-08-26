@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — native camera, capture and sensor modules
 import ExpoModulesCore
 import AVFoundation
 import CoreMedia

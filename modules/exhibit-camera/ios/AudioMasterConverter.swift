@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — native audio format to canonical PCM master
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import Foundation
 import AVFoundation

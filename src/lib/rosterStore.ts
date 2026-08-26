@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — roster storage: the device's copy
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Roster storage: the device's copy of one or more signed newsroom rosters,

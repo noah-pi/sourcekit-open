@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — mode switcher: AUDIO / PHOTO / VIDEO
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Mode switcher: AUDIO / PHOTO / VIDEO in a horizontal track above the

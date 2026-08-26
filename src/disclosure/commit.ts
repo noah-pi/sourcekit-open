@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — commit + burn semantics
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Commit + burn semantics (docs/INTEGRITY.md — selective disclosure).

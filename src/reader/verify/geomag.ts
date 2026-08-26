@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — World Magnetic Model declination
 /**
  * World Magnetic Model declination. Spherical-harmonic evaluation to degree
  * 12, following the NOAA/BGS WMM technical report. Prediction only: it takes

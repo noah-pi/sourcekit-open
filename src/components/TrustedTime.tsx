@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — TIME section, shared by the Inspect result
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * TrustedTime — the TIME section, shared by the Inspect result and the

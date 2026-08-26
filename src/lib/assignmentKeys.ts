@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — per-assignment signing keys
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Per-assignment signing keys (0.9.0 source protection).

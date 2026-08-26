@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — running the attestation relay -->
 # Source Kit attestation relay
 
 Verifies Apple App Attest statements and counts registrations. That is the

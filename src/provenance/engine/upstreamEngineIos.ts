@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — iOS binding (SPEC WS3 phase iOS, WS3-Binding-Path §2/§7a)
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * WS3 upstream engine — iOS binding (SPEC WS3 phase iOS, WS3-Binding-Path

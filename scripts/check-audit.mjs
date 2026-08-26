@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Source Kit 0.1.0 — npm audit gate
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Audit gate (supply-chain). Every high or critical npm audit advisory fails

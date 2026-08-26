@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — corpus and ROC tooling
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Corpus and ROC tooling. Doc 2's rule: no UI signal without characterized

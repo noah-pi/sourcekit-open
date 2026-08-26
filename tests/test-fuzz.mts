@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — mutation fuzz over the hand-rolled parsers
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Mutation fuzz over the hand-rolled parsers. Every parser must terminate on

@@ -1,4 +1,5 @@
 #!/bin/sh
+# Source Kit 0.1.0 — fetches the images the site uses
 # Pulls the public-domain historical image the deep-dive page references.
 #
 # The binary isn't committed, so run this before serving site/ locally. The

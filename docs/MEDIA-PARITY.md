@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — where photo, video and audio diverge -->
 # Media parity — the named exceptions
 
 The parity principle: the SAME assertion set is emitted for

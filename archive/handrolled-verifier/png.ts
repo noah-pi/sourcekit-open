@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — PNG container support for C2PA embedding
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * PNG container support for C2PA embedding.
