@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — trust ladder projection
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Trust ladder projection.
