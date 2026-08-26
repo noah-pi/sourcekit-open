@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — sun/shadow, horizon, and weather for the sealed time
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * EnvironmentCard — sun/shadow, horizon, and weather for the sealed time
