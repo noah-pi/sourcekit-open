@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Shared value types for the ExhibitCamera module
 import Foundation
 import AVFoundation
 import CoreMedia
