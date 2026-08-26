@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Org identity assertion
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Org identity assertion (com.verify.identity). The org-credential install path
