@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — shutter-burst frames next to the sealed gyro trace
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * MotionTraceCard — the shutter-burst frames next to the sealed gyro trace.
