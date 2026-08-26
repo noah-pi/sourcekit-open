@@ -1,3 +1,4 @@
+<!-- Source Kit 0.1.0 — security model and its limits -->
 # Security design and known gaps
 
 How the system defends itself, and what it doesn't defend against. For named
