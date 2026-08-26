@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — desk-side DSP core
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Screen re-photography analysis — desk-side DSP core.
