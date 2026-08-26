@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Lock screen: Face ID and/or 6-digit passcode
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Lock screen: Face ID (if enabled) and/or 6-digit passcode.
