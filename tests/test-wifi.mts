@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Wi-Fi SSID/BSSID opt-in capture
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Wi-Fi SSID/BSSID opt-in capture. The native module is iOS-only and
