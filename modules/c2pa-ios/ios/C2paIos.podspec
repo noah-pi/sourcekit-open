@@ -1,3 +1,4 @@
+# Source Kit 0.1.0 — and compiles into this pod target, so its
 Pod::Spec.new do |s|
   s.name           = 'C2paIos'
   s.version        = '1.0.0'
