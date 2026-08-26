@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — signed-claim binding guard
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * The signed-claim binding guard. A c2pa.hash.* assertion binds media only when
