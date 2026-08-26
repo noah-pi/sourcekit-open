@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — the CSPRNG bootstrap
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * CSPRNG bootstrap. Hermes has no global crypto.getRandomValues, which the
