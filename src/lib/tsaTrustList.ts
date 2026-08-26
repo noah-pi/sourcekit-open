@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — pinned time-stamping authorities, SHA-256 over cert DER. An
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * tsaTrustList — pinned time-stamping authorities, SHA-256 over cert DER.
