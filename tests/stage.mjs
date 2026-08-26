@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Source Kit 0.1.0 — Stages a runnable validation lab into tests/.staged/. Provenance
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Stages a runnable validation lab into tests/.staged/.
