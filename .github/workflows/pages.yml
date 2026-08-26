@@ -1,3 +1,4 @@
+# Source Kit 0.1.0 — publishes the site to GitHub Pages
 name: pages
 
 # Publishes the deep-dive site in site/ to GitHub Pages.
