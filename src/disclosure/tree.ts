@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — Merkle tree over committed leaf digests
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
  * Merkle tree over committed leaf digests
