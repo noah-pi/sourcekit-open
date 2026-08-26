@@ -1,3 +1,4 @@
+// Source Kit 0.1.0 — audio capture with on-device live transcription
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 import ExpoModulesCore
 import AVFoundation
