@@ -1,0 +1,47 @@
+[
+  {
+    "file": "sealed-photo.jpg",
+    "sha256": "a27fe0d2d97aaee1c8e4ecc2e487a0f462892bf7d66d9da4c351968de7a798f6",
+    "bytes": 35601,
+    "expect": "INTACT",
+    "got": "INTACT",
+    "note": "A sealed file. The signature covers the media bytes and the assertion contents.",
+    "foreign": "no failures"
+  },
+  {
+    "file": "altered-photo.jpg",
+    "sha256": "6e1118ab2c511624d0684106382676bd18c0e871d28a49c34e149f347e8647df",
+    "bytes": 35601,
+    "expect": "CONTENT_MODIFIED",
+    "got": "CONTENT_MODIFIED",
+    "note": "The same file with the low bit of byte 26700 flipped — one bit, inside the picture. The signature still verifies; the media no longer matches what it covers.",
+    "foreign": "assertion.dataHash.mismatch"
+  },
+  {
+    "file": "sealed-video.mp4",
+    "sha256": "51e626dc64e044c3afcdad3d022623f60b04aef9cab226c216848c1330f3408a",
+    "bytes": 26048,
+    "expect": "INTACT",
+    "got": "INTACT",
+    "note": "A sealed video. Same manifest, carried in a C2PA uuid box after ftyp rather than a JPEG segment.",
+    "foreign": "no failures"
+  },
+  {
+    "file": "altered-video.mp4",
+    "sha256": "8857df1a2b916f8263ce7d83c4d9f8404ada72f4aaf9001baa984320093b23a7",
+    "bytes": 26048,
+    "expect": "CONTENT_MODIFIED",
+    "got": "CONTENT_MODIFIED",
+    "note": "The same file with the low bit of byte 19536 flipped.",
+    "foreign": "assertion.bmffHash.mismatch"
+  },
+  {
+    "file": "attacked-manifest.jpg",
+    "sha256": "2056fdbb9a25fe9533549dcedc5c3e4be7707192a69c122f332bb6c6a8fccde9",
+    "bytes": 35601,
+    "expect": "SIGNATURE_INVALID",
+    "got": "SIGNATURE_INVALID",
+    "note": "The sealed photo with the low bit of byte 4683 flipped, inside the credential rather than the picture. The claim commits a hash of every assertion, so an edited assertion no longer matches what the claim says it is — the credential contradicts itself. A different failure from an edited picture, and both tools say so in their own vocabulary.",
+    "foreign": "assertion.hashedURI.mismatch"
+  }
+]
