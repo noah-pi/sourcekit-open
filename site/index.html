@@ -678,7 +678,8 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <summary>Hardware attestation<span class="sum">Proof the key is held somewhere you cannot reach into.</span></summary>
     <div class="fbody">
       <p>On Apple the strongest available primitive is App Attest, which certifies that a genuine iPhone is running an unmodified build of this app, and then hands it no access to the key it just attested.</p>
-      <p>The two get tied together with a commitment. The attestation's <code>clientDataHash</code> is set to <code>SHA256(challenge ‖ signingPublicKey)</code>, which pins Apple's certificate to this exact key rather than to some key on some genuine device. The binding travels inside every manifest, and anyone can recompute it offline years later. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts">appAttest.ts</a></p>
+      <p>The two get tied together with a commitment. The attestation's <code>clientDataHash</code> is set to <code>SHA256(challenge ‖ signingPublicKey)</code>, which pins Apple's certificate to this exact key rather than to some key on some genuine device. The binding travels inside every manifest, and anyone can recompute it offline years later.</p>
+      <p>That binding is made once, when the key is enrolled. Every capture then asks the same hardware for a fresh signature over <code>SHA256(domain ‖ media hash ‖ signing key)</code>, so a file carries proof that this hardware was present for <b>this</b> file rather than that it exists somewhere. Apple's counter rides inside that signature, and nothing here keeps a record of anyone's count. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts">appAttest.ts</a></p>
     </div>
   </details>
 
@@ -717,8 +718,9 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
     <summary>Privacy and data redaction<span class="sum">A record of the photograph is also a record of the photographer.</span></summary>
     <div class="fbody">
       <p>Because the record is sealed at the shutter, it documents where the photographer was standing, when, on which device, and sometimes under what name. For most work that is a credential. For someone photographing a police stop, a picket line or a border crossing, the same file is a piece of evidence about them, carried in voluntarily and impossible to recall once shared.</p>
-      <p>So the choosing happens before the shutter, not on export. Every field is committed under its own salt into a signed Merkle tree, which lets a verifier tell three states apart. <b>Disclosed</b> is what it sounds like. <b>Withheld</b> means committed but absent, with no ciphertext for anyone to attack. <b>Never-recorded</b> is declared at capture and bound into the root, so a field you withheld cannot later be passed off as one you never collected.</p>
-      <p>Reveal a field later and it still verifies against the original signature. Destroy the seed and the withheld fields become permanently underivable by anyone. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure">src/disclosure</a></p>
+      <p>So the committing happens before the shutter. Every field is committed under its own salt into a signed Merkle tree, which lets a verifier tell three states apart. <b>Disclosed</b> is what it sounds like. <b>Withheld</b> means committed but absent, with no ciphertext for anyone to attack. <b>Never-recorded</b> is declared at capture and bound into the root, so a field you withheld cannot later be passed off as one you never collected.</p>
+      <p>Reveal a field later and it still verifies against the original signature. Destroy the seed and the withheld fields become permanently underivable by anyone.</p>
+      <p>Location is committed at four precisions rather than one, so an export can name a five-kilometer cell instead of a doorway. A coarse answer is a leaf that was committed coarse, which is why it can be proved instead of trusted. <a href="https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure">src/disclosure</a></p>
     </div>
   </details>
 

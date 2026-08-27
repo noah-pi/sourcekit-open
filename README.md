@@ -227,7 +227,13 @@ attested.
 The two get tied together with a commitment. The attestation's `clientDataHash` is set to
 `SHA256(challenge ‖ signingPublicKey)`, which pins Apple's certificate to this exact key rather
 than to some key on some genuine device. The binding travels inside every manifest, and anyone
-can recompute it offline years later. [appAttest.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
+can recompute it offline years later.
+
+That binding is made once, when the key is enrolled. Every capture then asks the same hardware
+for a fresh signature over `SHA256(domain ‖ media hash ‖ signing key)`, so a file carries proof
+that this hardware was present for **this** file rather than that it exists somewhere. Apple's
+counter rides inside that signature, and nothing here keeps a record of anyone's count.
+[appAttest.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
 
 </details>
 
@@ -291,7 +297,7 @@ when, on which device, and sometimes under what name. For most work that is a cr
 someone photographing a police stop, a picket line or a border crossing, the same file is a
 piece of evidence about them, carried in voluntarily and impossible to recall once shared.
 
-So the choosing happens before the shutter, not on export. Every field is committed under its
+So the committing happens before the shutter. Every field is committed under its
 own salt into a signed Merkle tree, which lets a verifier tell three states apart. **Disclosed**
 is what it sounds like. **Withheld** means committed but absent, with no ciphertext for anyone
 to attack. **Never-recorded** is declared at capture and bound into the root, so a field you
@@ -299,6 +305,10 @@ withheld cannot later be passed off as one you never collected.
 
 Reveal a field later and it still verifies against the original signature. Destroy the seed and
 the withheld fields become permanently underivable by anyone, including me.
+
+Location is committed at four precisions rather than one, so an export can name a five-kilometer
+cell instead of a doorway. A coarse answer is a leaf that was committed coarse, which is why it
+can be proved instead of trusted.
 [src/disclosure](https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure)
 
 </details>
