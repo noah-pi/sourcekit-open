@@ -155,11 +155,11 @@ const vVideoBad = await verifyVideoBytes(videoBad.bytes);
 const vManifestBad = await verifyPhotoBytes(manifestBad.bytes);
 
 record('sealed-photo.jpg', photoBytes, 'INTACT', vPhoto.verdict,
-  'A sealed capture. The signature covers the media bytes and the assertion contents.');
+  'A sealed file. The signature covers the media bytes and the assertion contents.');
 record('altered-photo.jpg', photoBad.bytes, 'CONTENT_MODIFIED', vPhotoBad.verdict,
   `The same file with the low bit of byte ${photoBad.at} flipped — one bit, inside the picture. The signature still verifies; the media no longer matches what it covers.`);
 record('sealed-video.mp4', videoBytes, 'INTACT', vVideo.verdict,
-  'A sealed video. Same manifest, carried in a C2PA uuid box after ftyp.');
+  'A sealed video. Same manifest, carried in a C2PA uuid box after ftyp rather than a JPEG segment.');
 record('altered-video.mp4', videoBad.bytes, 'CONTENT_MODIFIED', vVideoBad.verdict,
   `The same file with the low bit of byte ${videoBad.at} flipped.`);
 record('attacked-manifest.jpg', manifestBad.bytes, 'SIGNATURE_INVALID', vManifestBad.verdict,
@@ -170,6 +170,19 @@ lines.push('# Sample files', '');
 lines.push('Five files and what each one should do. Run them through this');
 lines.push("repository's verifier, through `c2patool`, or through Adobe's Content");
 lines.push('Credentials page, and compare.', '');
+lines.push('## What these are not', '');
+lines.push('The pictures are generated test patterns, and they were sealed by a');
+lines.push('lab key rather than by a Secure Enclave on a real phone. So there is');
+lines.push('no hardware attestation behind them, no sensor context, and nothing');
+lines.push('was photographed.', '');
+lines.push('None of that changes what they demonstrate, because a signature never');
+lines.push('claimed otherwise: **INTACT means these bytes are the bytes that were');
+lines.push('signed**, not that a real thing was in front of a real lens. A test');
+lines.push('pattern verifies exactly as cleanly as a photograph would, and so');
+lines.push('would a picture of a screen. What these files show is the container');
+lines.push('format and how a verifier behaves — nothing about the world.', '');
+lines.push('A capture from an actual device carries more: an Enclave signature, an');
+lines.push('Apple attestation, a sensor record. Those cannot be generated here.', '');
 lines.push('| File | This verifier | c2patool 0.14.0 | Bytes |');
 lines.push('|---|---|---|---|');
 for (const r of rows) {
