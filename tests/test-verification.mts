@@ -230,6 +230,29 @@ check('genuine-cert chain is never failed on signing-time validity (mint-time se
   rootOnly.mintWindow !== null,
   rootOnly.reason ?? '');
 
+// --- per-capture assertion (format /3) ---------------------------------
+// The positive path needs a genuine Apple chain to the pinned root and
+// cannot be synthesized, so what is testable here is the gate: a /3
+// payload must actually carry the capture binding it claims, and the
+// media hash it names must be a SHA-256. Both failures are louder than
+// silently degrading to a /2 verdict.
+const v3Missing = utf8ToBytes(JSON.stringify({
+  format: 'exhibit-app-attest/3',
+  attestationBase64: bytesToBase64(new Uint8Array(forgedAttObj)),
+  challengeBase64: bytesToBase64(new Uint8Array(32)),
+  boundFingerprint: 'aa'.repeat(32),
+}));
+const missing = verifyAppAttestAssertion(v3Missing, signerPub);
+check('a /3 payload with no capture binding is rejected, never downgraded',
+  missing.present && !missing.valid &&
+  (missing.reason ?? '').includes('does not carry one'), missing.reason ?? '');
+
+const v2Still = verifyAppAttestAssertion(rootOnlyPayload, signerPub);
+check('format /2 still passes the gate and reports no capture assertion',
+  v2Still.present && v2Still.captureAssertion === null);
+
+check('an absent attestation reports no capture assertion', absent.captureAssertion === null);
+
 console.log('\n— parser hardening: parser DoS, NaN dates, strict base64 —');
 
 // 32-bit signed-shift length overflow: a 4-byte length of 0xFFFFFFFA wraps to

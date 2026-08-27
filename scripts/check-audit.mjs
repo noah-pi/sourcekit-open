@@ -23,7 +23,6 @@ const ACCEPTED_BY_DIR = {
       advisories: ['GHSA-w3rx-r6r6-pgpr', 'GHSA-5p2g-fcmc-qvqq'],
     },
   },
-  server: {},
 };
 
 const dir = process.argv[2] ?? '.';

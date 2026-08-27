@@ -24,7 +24,8 @@ vulnerability see [SECURITY.md](../SECURITY.md) in the repo root.
   process, so code execution there can feed the signer pixels of its choosing.
   App Attest raises the cost and the key binding keeps the attack per-device,
   but it isn't a guarantee. In-pipeline hardware signing — the Pixel 10, or a
-  Snapdragon TEE — closes this properly in a way an app can't. See
+  Snapdragon TEE — [narrows it](https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html)
+  to whoever can get root. An app cannot narrow it that far. See
   [THREAT-MODEL.md](THREAT-MODEL.md) ▸ Where the signature sits.
 - **Stripped credentials.** Any file can have its manifest removed, and the
   absence of credentials proves nothing either way.
@@ -122,8 +123,8 @@ of the security surface.
 **DER length decoding is multiply-accumulate**, exact to 2^53, and never wraps.
 `len = (len << 8) | byte` is a 32-bit signed shift in JavaScript: a 4-byte length
 of `0xFFFFFFFA` decodes to −6, an overrun guard passes against a negative, and a
-TLV walker loops forever. Every walker — `src/lib/x509.ts`, `src/lib/orgCert.ts`,
-`server/server.mjs` — validates offset and length on every TLV and enforces a
+TLV walker loops forever. Every walker — `src/lib/x509.ts`, `src/lib/orgCert.ts`
+among them — validates offset and length on every TLV and enforces a
 non-advancing-walker invariant (`next <= o` throws) that closes the class
 regardless of what the length field claims. `tests/test-fuzz.mts` throws several
 hundred randomly generated buffers at each of five walkers, plus a set of fixed

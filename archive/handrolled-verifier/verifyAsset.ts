@@ -412,6 +412,44 @@ async function c2paReport(
       );
     }
   }
+  // The COSE unprotected header carries the timestamp tokens, the PQ entry
+  // and a zero pad, and sits outside the signature. A file that verifies
+  // can still have had bytes written there afterward, so what the parser
+  // found is stated rather than left for nobody to notice.
+  if (manifest.unprotectedFindings.length > 0) {
+    for (const f of manifest.unprotectedFindings) {
+      performed.push(`COSE unprotected header: ${f}`);
+    }
+  } else {
+    performed.push('COSE unprotected header carries only defined entries, and its pad is zero-filled');
+  }
+
+  // Device integrity, as the device described itself at capture. Signed,
+  // so it cannot be edited afterward, and self-reported, so a compromised
+  // device can put anything here. The app's own ladder has always shown
+  // this; the standalone verifier did not, which meant a capture sealed on
+  // a simulator read INTACT here with nothing said about it. Stated, never
+  // scored: an emulator is not proof of a forgery and its absence is not
+  // proof of a real camera.
+  const di = telemetryRecord?.deviceIntegrity;
+  if (di) {
+    const flags = [
+      di.emulatorSuspected ? 'emulator suspected' : null,
+      di.jailbreakIndicators.length > 0 ? `${di.jailbreakIndicators.length} jailbreak indicator${di.jailbreakIndicators.length === 1 ? '' : 's'}` : null,
+      di.runtimeInstrumentation?.debuggerAttached ? 'debugger attached' : null,
+      di.runtimeInstrumentation && di.runtimeInstrumentation.injectedLibraries.length > 0
+        ? `${di.runtimeInstrumentation.injectedLibraries.length} injected librar${di.runtimeInstrumentation.injectedLibraries.length === 1 ? 'y' : 'ies'}`
+        : null,
+    ].filter(Boolean);
+    performed.push(
+      flags.length > 0
+        ? `device integrity at capture (SELF-REPORTED): ${flags.join(', ')} — the device said this about itself, and a compromised device can say anything`
+        : 'device integrity at capture (SELF-REPORTED): nothing flagged — the device said this about itself, and a compromised device can say anything',
+    );
+  } else {
+    notPerformed.push('device integrity not stated: this record commits no integrity signals, so nothing is known either way about the machine that sealed it');
+  }
+
   // The pose trace is signed DATA, not a check: its integrity rides the
   // record signature above. What it shows is for the desk to weigh.
   const poseTrace = telemetryRecord?.context?.poseTrace;
@@ -581,7 +619,16 @@ async function c2paReport(
   }
 
   // --- App Attest: real offline verification, never a presence check. ---
-  const appAttest = verifyAppAttestAssertion(manifest.appAttestAssertion, signerPub);
+  // The capture assertion names a media hash; on the JPEG and PNG paths
+  // that is exactly the hard binding's own hash, so the two are compared.
+  // The BMFF path binds by box exclusion instead and has no whole-file
+  // hash to compare against — the assertion is still verified, and the
+  // report says the cross-check was not available.
+  const appAttest = verifyAppAttestAssertion(
+    manifest.appAttestAssertion,
+    signerPub,
+    manifest.hashData?.alg === 'sha256' ? manifest.hashData.hash : null,
+  );
   performed.push(...appAttest.checksPerformed);
 
   // An update chain carries several manifests. The asset-hash VERDICT rests

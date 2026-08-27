@@ -20,7 +20,7 @@
  * No registry address ships with the app. Attestation runs on first launch
  * with a locally generated challenge and retries on later launches while
  * absent, so no network is required. An org registry (Settings → advanced) is
- * an upgrade path: a server-issued, single-use challenge it verifies itself.
+ * an upgrade path: a single-use challenge it issues and verifies itself.
  */
 
 import { Platform } from 'react-native';
@@ -30,12 +30,14 @@ import { sha256 } from '@noble/hashes/sha256';
 import { p256 } from '@noble/curves/p256';
 import { base64ToBytes, bytesToBase64, bytesToHex, concatBytes, utf8ToBytes } from './bytes';
 import { enclaveAvailable, enclaveGenerateKey, enclaveGetPublicKey } from './enclave';
+import { CAPTURE_ASSERTION_DOMAIN } from './appleAttestRoot';
 
 interface AppAttestNative {
   isSupported(): boolean;
   hasAttestedKey(): boolean;
   generateAttestKey(): Promise<string>; // keyId
   attestKey(keyId: string, clientDataHashBase64: string): Promise<string>; // attestation object b64
+  generateAssertion(clientDataHashBase64: string): Promise<string>; // assertion object b64
   deleteAttestKey(): void;
 }
 
@@ -53,9 +55,8 @@ const OPTIONS: SecureStore.SecureStoreOptions = {
 };
 
 /**
- * The configured registry, or null when none was set. No default is bundled.
- * Any registry speaking the open format in server/ works; the user picks one
- * in Settings.
+ * The configured registry, or null when none was set. No default is bundled
+ * and none is run here; an organization points the app at its own.
  */
 export async function getAttestServerUrl(): Promise<string | null> {
   const stored = await SecureStore.getItemAsync(SERVER_URL_KEY, OPTIONS).catch(() => null);
@@ -98,21 +99,68 @@ export async function getAttestState(): Promise<AttestState | null> {
   return cachedState;
 }
 
+/** What Apple's Enclave is asked to sign for one capture:
+ *
+ *    SHA256(domain ‖ cleanFileSha256 ‖ signingPublicKey)
+ *
+ *  The media hash makes the assertion useless on any other file; the
+ *  signing key makes it useless to any other signer. */
+export function captureClientDataHash(
+  cleanFileSha256: Uint8Array,
+  signingPublicKey: Uint8Array,
+): Uint8Array {
+  return sha256(concatBytes(utf8ToBytes(CAPTURE_ASSERTION_DOMAIN), cleanFileSha256, signingPublicKey));
+}
+
+/**
+ * One Apple assertion over this capture's media hash. Best-effort by
+ * design: a device with no attested key, or a call Apple refuses, seals
+ * without it rather than failing the capture.
+ */
+async function captureAssertionBase64(cleanFileSha256: Uint8Array): Promise<string | null> {
+  if (!native) return null;
+  try {
+    const pub = enclaveGetPublicKey();
+    if (!pub) return null;
+    const hash = captureClientDataHash(cleanFileSha256, pub);
+    return await native.generateAssertion(bytesToBase64(hash));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The assertion payload embedded in C2PA manifests (UTF-8 JSON). Carries
  * everything a verifier needs to re-check the binding offline: the Apple
  * attestation object, the challenge it answered, and the fingerprint of the
  * signing key it is bound to (which must equal the manifest signer's key).
+ *
+ * With `cleanFileSha256`, it also carries one fresh Apple assertion over
+ * that hash. The attestation says this hardware is real; the assertion says
+ * this hardware was present for THIS file, and carries the Enclave counter
+ * that makes a replayed capture visible to anyone holding two of them.
+ *
+ * The counter is not checked here and not sent anywhere. Checking it means
+ * remembering the last one per device, which is a device list. The count
+ * rides in the record instead, where a reader who has a run of captures
+ * from one key can check it themselves, later, without anyone having kept
+ * a roster in the meantime.
  */
-export async function getAttestationAssertion(): Promise<Uint8Array | null> {
+export async function getAttestationAssertion(
+  cleanFileSha256?: Uint8Array | null,
+): Promise<Uint8Array | null> {
   const state = await getAttestState();
   if (!state) return null;
+  const capture = cleanFileSha256 ? await captureAssertionBase64(cleanFileSha256) : null;
   return utf8ToBytes(
     JSON.stringify({
-      format: 'exhibit-app-attest/2',
+      format: capture ? 'exhibit-app-attest/3' : 'exhibit-app-attest/2',
       attestationBase64: state.attestationBase64,
       challengeBase64: state.challengeBase64,
       boundFingerprint: state.boundFingerprint,
+      ...(capture
+        ? { captureAssertionBase64: capture, boundMediaSha256: bytesToHex(cleanFileSha256!) }
+        : {}),
     }),
   );
 }

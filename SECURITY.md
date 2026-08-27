@@ -34,8 +34,7 @@ In scope:
   trust resolution.
 - Verification of media, proof bundles and hash claims.
 
-Out of scope: issues in third-party dependencies already tracked upstream,
-and denial-of-service against the optional self-hosted relay (`server/`).
+Out of scope: issues in third-party dependencies already tracked upstream.
 
 ## What to expect
 
