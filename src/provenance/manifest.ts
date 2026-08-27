@@ -110,7 +110,7 @@ export function streamedChunksSuperRoot(trackRootsHex: string[]): string {
 // ---- WS2 Phase 2: unified media assertions (SPEC-WS2-Phase2 §1–§3) ----
 // PARITY PRINCIPLE: photo, video, and audio share the same JUMBF assertion
 // labels, schema, field names, and verification math. The only allowed
-// divergences (canonical list: docs/MEDIA-PARITY.md): stills have no ENF
+// divergences: stills have no ENF
 // trace and no streamed chunks beyond the zero-track structural assertion
 // (buildStreamedChunksV2ForStill — stated, never absent); audio has no
 // ring-buffer frames and no A/V desync; photos have no A/V desync.

@@ -244,7 +244,7 @@ function deviceModel(): string | null {
 // seals — com.verify.contextTree, com.verify.streamedChunks,
 // com.verify.poseTrace (whenever an IMU trace exists), and
 // com.verify.captureIntegrity. The ONLY divergences by media kind are the
-// named exceptions (docs/MEDIA-PARITY.md — the canonical list): stills
+// named exceptions: stills
 // have no ENF trace and no streamed chunks
 // beyond the zero-track structural assertion; audio has no ring-buffer
 // frames and no A/V desync; photos have no A/V desync. The audio recorder
@@ -567,7 +567,7 @@ export async function attestPhoto(params: {  photoUri: string;
   // WS2 Phase 2: the parity assertion set. Stills commit the zero-track
   // streamedChunks assertion (structural — a JPEG has no elementary
   // streams; the hard binding covers the file byte-for-byte). This is the
-  // named stills exception — docs/MEDIA-PARITY.md.
+  // named stills exception.
   const phase2 = phase2Assertions({
     record,
     kind: 'photo',
@@ -1302,7 +1302,7 @@ async function embedC2paInBmff(
   certChainOverride?: Uint8Array[],
   pq?: PqCaptureKey | null,
   /** TSA token source — defaults to the live network fetchers; overridable
-      so the lab can pin a deterministic token layout (F3, docs/SECURITY.md). */
+      so the lab can pin a deterministic token layout. */
   fetchTimestamp: C2paManifestParams['fetchTimestamp'] = fetchTimestampTokensBounded,
   /** WS2 Phase 2 parity assertions (com.verify.* JUMBF boxes). */
   customAssertions?: { label: string; data: unknown }[] | null,
@@ -1651,7 +1651,7 @@ export async function attestAudio(params: {
   // audio-capture) supplies the gyro JSONL behind params.sensorLogText, so
   // the poseTrace below commits exactly like video; the named audio
   // exceptions (no ring frames, no A/V desync) are listed in
-  // docs/MEDIA-PARITY.md.
+  // parity with the stills path.
   const v2build = buildStreamedChunksV2(stripped);
   if (!v2build.ok) {
     console.warn('streamedChunks v2 not emitted for audio:', v2build.reason);

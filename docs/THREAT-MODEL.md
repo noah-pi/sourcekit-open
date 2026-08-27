@@ -6,8 +6,8 @@ what it accepts. Every scenario carries a status: **defended (lab-tested)**,
 **defended (by design)**, **partial**, **accepted risk**, or **out of scope**.
 An accepted risk is stated in the product, not only here.
 
-Related: `SECURITY.md` (cryptographic design and threat cases), `INTEGRITY.md`
-(per-signal bounds), `NETWORK.md` (every network event).
+Related: `INTEGRITY.md` (per-signal bounds), `NETWORK.md` (every network
+event).
 
 ## Named adversaries
 
@@ -38,8 +38,8 @@ Related: `SECURITY.md` (cryptographic design and threat cases), `INTEGRITY.md`
   that the exhibit is unattackable (nothing is), but that every attack the
   cross-examiner raises is one we have already stated, precisely, first.
   Consequence for the queue: seal-queue drafts are plaintext in the app
-  container for minutes — a subpoena of the device sees them, and
-  docs/SECURITY.md says so rather than letting counsel discover it.
+  container for minutes — a subpoena of the device sees them, and this
+  document says so rather than letting counsel discover it.
 - **The AI-assisted attacker** — any of the above, aided by frontier AI
   models with **full knowledge of this codebase and its design docs**. This
   is a stated assumption, not a scenario: see its own section below.

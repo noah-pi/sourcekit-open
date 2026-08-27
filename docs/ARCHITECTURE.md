@@ -73,7 +73,7 @@ against anchors outside the file: this device's key, or an org credential
 chained to a real CA. Nothing found inside a file can ever upgrade identity
 to "known". (removed the manual known-signers list — a confirm-by-hand
 trust ritual is itself an attack surface; key-continuity trust is the roadmap
-replacement. See `docs/SECURITY.md`.)
+replacement.)
 
 The manifest parser follows the C2PA update-chain rule: the **last** manifest
 in the store is the active one, and the verification report says so when a

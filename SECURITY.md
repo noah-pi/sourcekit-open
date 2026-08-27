@@ -47,8 +47,3 @@ This is a small beta project, maintained part-time. In plain terms:
   credit reporters in the published advisory unless you ask us not to.
 - There is **no bug bounty**. Reports are thanks-in-advance work, same as
   ours.
-
-## Security design
-
-How the security properties are built, and their known gaps:
-[`docs/SECURITY.md`](docs/SECURITY.md).
