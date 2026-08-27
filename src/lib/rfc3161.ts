@@ -241,7 +241,7 @@ export function verifyTimestampToken(token: Uint8Array, expectedMessage: Uint8Ar
       bytesToHex(sha256(c.der)),
     );
 
-    // RFC 3161 §2.3 (F7b, docs/SECURITY.md): the signer cert must carry the
+    // RFC 3161 §2.3: the signer cert must carry the
     // id-kp-timeStamping EKU, otherwise a general-purpose TLS or email cert
     // could mint timestamps.
     if (!hasKeyPurpose(signer, OID_KP_TIME_STAMPING)) {
