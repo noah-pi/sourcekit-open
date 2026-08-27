@@ -23,7 +23,9 @@
  * word is telling a reader less than it knows.
  *
  * Run: node tests/stage.mjs && (cd tests/.staged && ./node_modules/.bin/tsx tool-samples.mts)
- * Output: tests/.staged/samples/
+ * Output: tests/.staged/samples/ — copy into samples/ at the repo root to
+ * publish. README.md rather than a bare list, so browsing to the directory
+ * on GitHub renders the verdict table without anyone opening a file.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -198,14 +200,14 @@ lines.push('changed, a video whose picture changed, and a credential that was');
 lines.push('edited are three different findings, not one.', '');
 
 const mismatches = rows.filter((r) => r.expect !== r.got);
-fs.writeFileSync(path.join(OUT, 'VERDICTS.md'), lines.join('\n'));
+fs.writeFileSync(path.join(OUT, 'README.md'), lines.join('\n'));
 fs.writeFileSync(path.join(OUT, 'verdicts.json'), JSON.stringify(rows, null, 2) + '\n');
 
 console.log('');
 for (const r of rows) {
   console.log(`  ${r.expect === r.got ? 'ok  ' : 'FAIL'} ${r.file.padEnd(20)} expected ${r.expect}, got ${r.got}`);
 }
-console.log(`\nwrote ${rows.length} files + VERDICTS.md to ${OUT}`);
+console.log(`\nwrote ${rows.length} files + README.md to ${OUT}`);
 if (mismatches.length > 0) {
   console.log(`\n${mismatches.length} file(s) did not do what the table says. Not shippable.`);
   process.exit(1);

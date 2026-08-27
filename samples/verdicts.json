@@ -1,0 +1,47 @@
+[
+  {
+    "file": "sealed-photo.jpg",
+    "sha256": "72267f586eca19590502ea58a63c0fcb280cbab63c2547acfe8766d2be7c0dfd",
+    "bytes": 35601,
+    "expect": "INTACT",
+    "got": "INTACT",
+    "note": "A sealed capture. The signature covers the media bytes and the assertion contents.",
+    "foreign": "no failures"
+  },
+  {
+    "file": "altered-photo.jpg",
+    "sha256": "2254f48c69b7d30df711474e7161ddd222d991704688000f299298e6418ff7c6",
+    "bytes": 35601,
+    "expect": "CONTENT_MODIFIED",
+    "got": "CONTENT_MODIFIED",
+    "note": "The same file with the low bit of byte 26700 flipped — one bit, inside the picture. The signature still verifies; the media no longer matches what it covers.",
+    "foreign": "assertion.dataHash.mismatch"
+  },
+  {
+    "file": "sealed-video.mp4",
+    "sha256": "250314f8a2fb1215a6ebe45c911aff0defe266fd6c0a9d0134852a9bccc50397",
+    "bytes": 26048,
+    "expect": "INTACT",
+    "got": "INTACT",
+    "note": "A sealed video. Same manifest, carried in a C2PA uuid box after ftyp.",
+    "foreign": "no failures"
+  },
+  {
+    "file": "altered-video.mp4",
+    "sha256": "4c6de315008868d363bc7f7d51539c36974e14353b9b218afdab49632beb96f2",
+    "bytes": 26048,
+    "expect": "CONTENT_MODIFIED",
+    "got": "CONTENT_MODIFIED",
+    "note": "The same file with the low bit of byte 19536 flipped.",
+    "foreign": "assertion.bmffHash.mismatch"
+  },
+  {
+    "file": "attacked-manifest.jpg",
+    "sha256": "19bdc929c495263ae9c89a155fe22076737f642f7f52a646ee1d3250f477d3ef",
+    "bytes": 35601,
+    "expect": "SIGNATURE_INVALID",
+    "got": "SIGNATURE_INVALID",
+    "note": "The sealed photo with the low bit of byte 4683 flipped, inside the credential rather than the picture. The claim commits a hash of every assertion, so an edited assertion no longer matches what the claim says it is — the credential contradicts itself. A different failure from an edited picture, and both tools say so in their own vocabulary.",
+    "foreign": "assertion.hashedURI.mismatch"
+  }
+]
