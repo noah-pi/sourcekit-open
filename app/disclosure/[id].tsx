@@ -42,8 +42,30 @@ import {
   type DisclosureItemState,
 } from '../../src/disclosure/burn';
 import { profileSelection, type DisclosureProfile } from '../../src/disclosure/bundle';
+import { rungIndex } from '../../src/disclosure/ladder';
 import type { ClaimFamily } from '../../src/disclosure/inventory';
 import type { AttestationRecord } from '../../src/provenance/manifest';
+
+/**
+ * How precisely a bundle may say where the capture happened.
+ *
+ * The whole ladder is committed at capture — geohash-5, -7, -9 and the
+ * exact fix are separate leaves under the same root — so choosing a rung
+ * here opens one and leaves the finer ones closed. Nothing is recomputed
+ * or rounded at export: a coarse answer is a leaf that was committed
+ * coarse, which is why it can be proved rather than merely trusted.
+ *
+ * `null` means whatever the profile chose. Touching this control overrides
+ * the profile for location only, and the bundle then exports as 'custom',
+ * because that is what it now is.
+ */
+const LOCATION_CHOICES: { rung: string | null; title: string; detail: string }[] = [
+  { rung: null, title: 'As the profile chooses', detail: 'Sealed opens nothing; Full opens the exact fix.' },
+  { rung: 'withheld', title: 'Withhold location', detail: 'No rung opens. The commitment still proves a location was recorded.' },
+  { rung: 'geohash-5', title: 'General area', detail: 'A cell of roughly five kilometers. Enough to say which city, not which street.' },
+  { rung: 'geohash-7', title: 'Neighborhood', detail: 'A cell of roughly one hundred and fifty meters. A block, not a doorway.' },
+  { rung: 'exact', title: 'Precise', detail: 'The fix as recorded. Everything coarser opens with it.' },
+];
 
 const PROFILE_LABELS: { profile: DisclosureProfile; title: string; detail: string }[] = [
   { profile: 'sealed', title: 'Sealed (default)', detail: 'Opens nothing. The bundle carries the root and the never-recorded declaration only: proof the commitment exists, no values.' },
@@ -76,6 +98,7 @@ export default function DisclosureScreen() {
   const [record, setRecord] = useState<AttestationRecord | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [profile, setProfile] = useState<DisclosureProfile>('sealed');
+  const [locRung, setLocRung] = useState<string | null>(null);
   const [customIds, setCustomIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [residuals, setResiduals] = useState<string[] | null>(null);
@@ -98,8 +121,18 @@ export default function DisclosureScreen() {
   const selected = useMemo(() => {
     if (!state) return new Set<string>();
     const sel = profileSelection(profile, profile === 'custom' ? customIds : undefined);
-    return new Set(state.claims.filter((c) => sel(c)).map((c) => c.claimId));
-  }, [state, profile, customIds]);
+    // The location control, when set, is authoritative for its own family
+    // and changes nothing else. Coarser rungs open with the chosen one:
+    // a reader given the street already knows the city.
+    const ceiling = locRung && locRung !== 'withheld' ? rungIndex('location', locRung) : null;
+    const pick = (c: (typeof state.claims)[number]): boolean => {
+      if (locRung !== null && c.family === 'location') {
+        return ceiling !== null && c.rung <= ceiling;
+      }
+      return sel(c);
+    };
+    return new Set(state.claims.filter(pick).map((c) => c.claimId));
+  }, [state, profile, customIds, locRung]);
 
   /**
    * Live summary of what the current selection's bundle will and will not
@@ -172,12 +205,17 @@ export default function DisclosureScreen() {
     setResiduals(null);
     setFailure(null);
     try {
-      const ids = profile === 'custom' ? [...customIds].sort() : undefined;
-      const out = exportForItem(state, profile, ids);
+      // A location override makes the bundle a custom selection whatever
+      // the profile radio says, so it exports as one: the bundle records
+      // what it opens, never a preset it no longer matches.
+      const overridden = locRung !== null;
+      const effProfile: DisclosureProfile = overridden ? 'custom' : profile;
+      const ids = effProfile === 'custom' ? [...selected].sort() : undefined;
+      const out = exportForItem(state, effProfile, ids);
       // Opening is an action: persist the state carrying the 'open' event.
       await persist(out.state);
       setResiduals(out.residuals);
-      const name = `verify-disclosure-${id}-${profile}.json`;
+      const name = `verify-disclosure-${id}-${effProfile}.json`;
       const path = `${FileSystem.cacheDirectory}${name}`;
       await FileSystem.writeAsStringAsync(path, JSON.stringify(out.bundle, null, 2) + '\n');
       if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType: 'application/json' });
@@ -286,6 +324,41 @@ export default function DisclosureScreen() {
                   </Pressable>
                 );
               })}
+              <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>How precisely it says where</Text>
+              {LOCATION_CHOICES.map((c) => {
+                const active = locRung === c.rung;
+                const available = c.rung === null || c.rung === 'withheld' ||
+                  (state?.claims.some((cl) => cl.family === 'location' && cl.rung === rungIndex('location', c.rung!)) ?? false);
+                return (
+                  <Pressable
+                    key={c.rung ?? 'profile'}
+                    style={[styles.profileRow, active && styles.profileRowActive]}
+                    onPress={() => available && setLocRung(c.rung)}
+                    disabled={!available}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons
+                      name={active ? 'radio-button-on' : 'radio-button-off'}
+                      size={17}
+                      color={active ? colors.accent : colors.textFaint}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.profileTitle, active && { color: colors.text }, !available && { color: colors.textFaint }]}>
+                        {c.title}
+                      </Text>
+                      <Text style={styles.profileDetail}>
+                        {available ? c.detail : 'This capture committed no leaf at this precision, so there is nothing to open.'}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+              {locRung !== null ? (
+                <Text style={styles.hint}>
+                  This overrides the profile for location only. The bundle exports as a custom
+                  selection, because that is what it is.
+                </Text>
+              ) : null}
               <Text style={styles.body}>
                 Values appear below only for claims the selected bundle opens; those are what would
                 leave this phone. Held values stay here.
@@ -301,10 +374,10 @@ export default function DisclosureScreen() {
               <View style={{ marginTop: spacing.sm }}>
                 <Button
                   icon="share-outline"
-                  label={burned ? 'Export unavailable (burned)' : `Export '${profile}' proof bundle`}
+                  label={burned ? 'Export unavailable (burned)' : `Export '${locRung !== null ? 'custom' : profile}' proof bundle`}
                   onPress={doExport}
                   loading={busy}
-                  disabled={burned || (profile === 'custom' && customIds.size === 0)}
+                  disabled={burned || (locRung === null && profile === 'custom' && customIds.size === 0) || (locRung !== null && selected.size === 0)}
                 />
               </View>
               {profile === 'custom' && customIds.size === 0 ? (
