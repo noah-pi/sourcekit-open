@@ -191,7 +191,7 @@ jobs:
 
       - name: Unreferenced files
         # knip.json lists the real entry points: expo-router screens, the
-        # server, the scripts, and every module tests/stage.mjs copies into
+        # scripts, and every module tests/stage.mjs copies into
         # the lab (the lab copies rather than imports, so knip cannot see
         # that reach on its own). Anything outside that graph is unreachable.
         run: npx knip --include files
@@ -206,9 +206,6 @@ jobs:
 
       - name: Dependency budget (allow-list + caps + lockfiles)
         run: node scripts/check-dependency-budget.mjs
-
-      - name: Audit gate — server
-        run: node scripts/check-audit.mjs server
 
       - name: Audit gate — app
         # Every high or critical advisory fails unless it is declared in the

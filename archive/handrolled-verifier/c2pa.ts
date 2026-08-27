@@ -55,6 +55,19 @@ function mapGet(m: unknown, key: unknown): unknown {
   return undefined;
 }
 
+/** Entry names our writer puts in the COSE unprotected header. Anything
+ *  else there was added by someone else, after signing. `x5chain` is
+ *  included because other C2PA writers put the chain there; it is read
+ *  from the protected header for trust, never from here. */
+const KNOWN_UNPROTECTED = new Set(['pad', 'sigTst', 'sigTst2', 'verifyPq', 'x5chain']);
+
+/** The unprotected header's entry names, whichever carrier decoded it. */
+function unprotectedKeys(m: unknown): string[] {
+  if (m instanceof Map) return [...m.keys()].map((k) => String(k));
+  if (m && typeof m === 'object') return Object.keys(m as Record<string, unknown>);
+  return [];
+}
+
 /**
  * Normalizes a claim's assertion reference URL to the bare assertion label.
  * Two forms exist in the wild: the shorthand
@@ -1505,6 +1518,12 @@ export interface C2paManifest {
    */
   timestampVersion: 'v2-sigTst2' | 'v1-sigTst' | null;
   /**
+   * What is wrong with the COSE unprotected header, if anything. The header
+   * sits outside the signature, so a file can carry payload there and still
+   * verify. Empty on every honest file; each entry names what was found.
+   */
+  unprotectedFindings: string[];
+  /**
    * PQ dual-signature entry from the COSE unprotected header (verifyPq), when
    * present. The signature covers the same Sig_structure as the
    * ES256 signature; the public key is NOT here — it is committed inside the
@@ -2228,6 +2247,35 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
     }
   } catch { /* malformed PQ entry — treated as absent */ }
 
+  // Unprotected-header hygiene. The COSE unprotected header is outside the
+  // signature by construction, so anything written there survives
+  // verification. Our own writer puts exactly three things in it: the
+  // timestamp container, the PQ entry, and a zero-filled `pad` whose only
+  // job is to make the store land on the size the exclusion range already
+  // reserved.
+  //
+  // That pad is the problem: a few hundred bytes inside a file that still
+  // verifies, which nothing else covers. It is written as zeros, so
+  // anything else in it was put there after signing. Unknown entries get
+  // the same treatment — the header is not a place to carry payload.
+  const unprotectedFindings: string[] = [];
+  try {
+    const unprotected = arr[1];
+    const pad = mapGet(unprotected, 'pad');
+    if (pad instanceof Uint8Array && pad.some((b) => b !== 0)) {
+      unprotectedFindings.push(
+        `the COSE pad holds ${pad.length} bytes that are not all zero — the pad is written zero-filled, so something wrote into it after signing`,
+      );
+    }
+    const keys = unprotectedKeys(unprotected);
+    const extra = keys.filter((k) => !KNOWN_UNPROTECTED.has(k));
+    if (extra.length > 0) {
+      unprotectedFindings.push(
+        `the COSE unprotected header carries ${extra.length} entr${extra.length === 1 ? 'y' : 'ies'} this format does not define (${extra.join(', ')}) — the header is outside the signature, so anyone could have added them`,
+      );
+    }
+  } catch { /* unreadable header — the signature check is the real gate */ }
+
   // claim_generator: the software that sealed THIS manifest ("Adobe
   // Photoshop 26.3", "ExhibitA/0.14.0"). Display only — self-asserted.
   // v1 claims carry claim_generator (string); v2 claims (c2pa-rs / the
@@ -2265,7 +2313,7 @@ function parseOneManifest(manifest: JumbNode, manifestCount: number): C2paManife
     }
   }
 
-  return { claim, claimBytes, protectedHeader, signature, certDer, certChain: chain.map((c) => new Uint8Array(c)), certChainLength: chain.length, hashData, hashBmff, telemetry, manifestLabel: manifest.label, assertionHashes, referencedAssertionLabels, timestampTokens, timestampVersion, pq, appAttestAssertion, claimVersion, transcript, exif, identity, customAssertions, actions, c2paMetadata, softBinding, trainingMining, assetType, thumbnails, resources, depthmap, collectionHash, ingredients, claimGenerator, manifestCount };
+  return { claim, claimBytes, protectedHeader, signature, certDer, certChain: chain.map((c) => new Uint8Array(c)), certChainLength: chain.length, hashData, hashBmff, telemetry, manifestLabel: manifest.label, assertionHashes, referencedAssertionLabels, timestampTokens, timestampVersion, unprotectedFindings, pq, appAttestAssertion, claimVersion, transcript, exif, identity, customAssertions, actions, c2paMetadata, softBinding, trainingMining, assetType, thumbnails, resources, depthmap, collectionHash, ingredients, claimGenerator, manifestCount };
 }
 
 /**

@@ -3,7 +3,6 @@
   "entry": [
     "index.ts",
     "app/**/*.{ts,tsx}",
-    "server/server.mjs",
     "scripts/*.mjs",
 
     "src/lib/appleAttestRoot.ts",

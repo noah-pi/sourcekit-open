@@ -155,8 +155,8 @@ with how much of that chain stands between the photons and the signing.
 protected in software, or keys in hardware with a live attestation from the silicon. The [Pixel
 10](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/) is the
 first phone to reach the second, signing inside the imaging pipeline with the key in the Titan
-M2. The frame never passes through general-purpose code, so there is no seam where another image
-could be substituted. Qualcomm has the same idea in the Snapdragon secure environment. Dedicated
+M2. The frame never passes through general-purpose code, which narrows the seam to [whoever can
+get root](https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html). Qualcomm has the same idea in the Snapdragon secure environment. Dedicated
 cameras got there first, starting with Leica in 2023.
 
 Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in
@@ -187,8 +187,7 @@ sealed just as faithfully as a true one.
 `METADATA STRIPPING` · *addressable*
 
 **Most platforms strip the credential on upload.** The manifest disappears the moment a picture
-starts to travel, and a stripped file is indistinguishable from one that was never signed. The
-answer is a fingerprint plus a lookup service. The fingerprint exists here; the lookup does not.
+starts to travel, and a stripped file is indistinguishable from one that was never signed.
 
 `SOFTWARE INJECTION` · *addressed in new devices*
 
@@ -228,7 +227,13 @@ attested.
 The two get tied together with a commitment. The attestation's `clientDataHash` is set to
 `SHA256(challenge ‖ signingPublicKey)`, which pins Apple's certificate to this exact key rather
 than to some key on some genuine device. The binding travels inside every manifest, and anyone
-can recompute it offline years later. [appAttest.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
+can recompute it offline years later.
+
+That binding is made once, when the key is enrolled. Every capture then asks the same hardware
+for a fresh signature over `SHA256(domain ‖ media hash ‖ signing key)`, so a file carries proof
+that this hardware was present for **this** file rather than that it exists somewhere. Apple's
+counter rides inside that signature, and nothing here keeps a record of anyone's count.
+[appAttest.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/appAttest.ts)
 
 </details>
 
@@ -292,7 +297,7 @@ when, on which device, and sometimes under what name. For most work that is a cr
 someone photographing a police stop, a picket line or a border crossing, the same file is a
 piece of evidence about them, carried in voluntarily and impossible to recall once shared.
 
-So the choosing happens before the shutter, not on export. Every field is committed under its
+So the committing happens before the shutter. Every field is committed under its
 own salt into a signed Merkle tree, which lets a verifier tell three states apart. **Disclosed**
 is what it sounds like. **Withheld** means committed but absent, with no ciphertext for anyone
 to attack. **Never-recorded** is declared at capture and bound into the root, so a field you
@@ -300,6 +305,10 @@ withheld cannot later be passed off as one you never collected.
 
 Reveal a field later and it still verifies against the original signature. Destroy the seed and
 the withheld fields become permanently underivable by anyone, including me.
+
+Location is committed at four precisions rather than one, so an export can name a five-kilometer
+cell instead of a doorway. A coarse answer is a leaf that was committed coarse, which is why it
+can be proved instead of trusted.
 [src/disclosure](https://github.com/noah-pi/sourcekit-open/tree/main/src/disclosure)
 
 </details>
@@ -478,13 +487,16 @@ claim made here.
 map answers the flat-screen question directly rather than inferring it from disparity, and it
 works in the dark.
 - **Authenticated satellite positioning.** Galileo began signing its navigation messages in 2025,
-which for the first time uses an encryption that evades traditional (but not all) spoofing.
+which for the first time makes a spoofed signal detectable (a relayed real one still is not).
 However phones do not yet expose it to apps.
 - **Optional face blurring that survives the signature.** A redaction committed at capture — the
 blur applied before signing, the original never written — would let someone publish a crowd
 without publishing the crowd's faces. The Guardian Project and WITNESS worked this out years ago
 in [ObscuraCam](https://guardianproject.info/apps/org.witness.sscphase1/), which finds faces
 automatically, lets you obscure them, and strips the metadata on the way out.
+- **Flash differential.** Fire the flash on one frame of a pair and not the other. A real scene
+lights up by depth; a screen just gets brighter. Cheap to capture, unproven at telling the two
+apart.
 - **More ways to catch rephotography.** Moiré from a display's pixel grid, the refresh beat of a
 panel against a rolling shutter, the polarization signature of an LCD, multiple or missing PRNU
 fingerprints, AV desynchronization — none a slam dunk.

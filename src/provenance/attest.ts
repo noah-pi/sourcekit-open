@@ -746,7 +746,8 @@ export async function attestPhoto(params: {  photoUri: string;
   if (sdkArmWanted && (!params.key.biometricBound || bioHoldActive)) {
     try {
       const sdkChain = params.certChainOverride ?? (await getDeviceCertChain()).chain;
-      const aaBytes = params.key.backend === 'secure-enclave-attested' ? await getAttestationAssertion() : null;
+      const cleanSha = sha256(stripped);
+      const aaBytes = params.key.backend === 'secure-enclave-attested' ? await getAttestationAssertion(cleanSha) : null;
       const sdk = await signSourceKitAssetSecureEnclave(stripped, 'image/jpeg', {
         appName: `Source Kit/${appVersion()} (com.verify.camera)`,
         title: `verify-${signedRecord.capturedAt.replace(/[:.]/g, '-')}.jpg`,
@@ -825,6 +826,9 @@ async function embedC2paInJpeg(stripped: Uint8Array, signedRecord: AttestationRe
   const chain = certChainOverride ?? (await getDeviceCertChain()).chain;
   const instanceId = 'xmp:iid:' + bytesToHex(p256.utils.randomPrivateKey().subarray(0, 16));
   const insertOffset = 2; // C2PA convention: APP11 immediately after SOI
+  // One hash of the clean bytes: the hard binding and the per-capture
+  // App Attest assertion both commit to exactly these.
+  const cleanSha = sha256(stripped);
   const segment = await buildC2paSegment(
     {
       appName: `Source Kit/${appVersion()} (com.verify.camera)`,
@@ -836,7 +840,7 @@ async function embedC2paInJpeg(stripped: Uint8Array, signedRecord: AttestationRe
       signPayload: key.signPayload,
       pq: pq ? pqClaimSigner(pq) : null,
       certChain: chain,
-      cleanFileSha256: sha256(stripped),
+      cleanFileSha256: cleanSha,
       fetchTimestamp: fetchTimestampTokensBounded,
       probeTokenSizes: estimatedTsaTokenSizes,
       exif: exif ?? null,
@@ -844,7 +848,7 @@ async function embedC2paInJpeg(stripped: Uint8Array, signedRecord: AttestationRe
       // The embedded attestation is bound to exactly this signing key
       // (emulated key attestation) — attach it only when the active signer
       // is the key Apple's hardware certified.
-      appAttest: key.backend === 'secure-enclave-attested' ? await getAttestationAssertion() : null,
+      appAttest: key.backend === 'secure-enclave-attested' ? await getAttestationAssertion(cleanSha) : null,
       customAssertions: customAssertions ?? null,
       // 0.16.0 data contract (C2–C5), ON by default; whichever standard
       // assertion the caller couldn't build honestly is simply absent.
@@ -879,6 +883,9 @@ async function embedC2paInPng(stripped: Uint8Array, signedRecord: AttestationRec
   const instanceId = 'xmp:iid:' + bytesToHex(p256.utils.randomPrivateKey().subarray(0, 16));
   const insertOffset = iendOffset(stripped);
   if (insertOffset === null) throw new Error('Not a well-formed PNG (no IEND)');
+  // One hash of the clean bytes: the hard binding and the per-capture
+  // App Attest assertion both commit to exactly these.
+  const cleanSha = sha256(stripped);
   const store = await buildC2paStorePng(
     {
       appName: `Source Kit/${appVersion()} (com.verify.camera)`,
@@ -890,11 +897,11 @@ async function embedC2paInPng(stripped: Uint8Array, signedRecord: AttestationRec
       signPayload: key.signPayload,
       pq: pq ? pqClaimSigner(pq) : null,
       certChain: chain,
-      cleanFileSha256: sha256(stripped),
+      cleanFileSha256: cleanSha,
       fetchTimestamp: fetchTimestampTokensBounded,
       probeTokenSizes: estimatedTsaTokenSizes,
       identity: identityAssertionFor(chain, signedRecord),
-      appAttest: key.backend === 'secure-enclave-attested' ? await getAttestationAssertion() : null,
+      appAttest: key.backend === 'secure-enclave-attested' ? await getAttestationAssertion(cleanSha) : null,
       // 0.16.0 data contract (C2/C5). The PNG path receives pixels-only
       // bytes (no file URI), so the claim thumbnail and pHash have no
       // honest source here — absent, not fabricated. No EXIF, so no
@@ -1305,6 +1312,9 @@ async function embedC2paInBmff(
   const chain = certChainOverride ?? (await getDeviceCertChain()).chain;
   const instanceId = 'xmp:iid:' + bytesToHex(p256.utils.randomPrivateKey().subarray(0, 16));
   const exclusions = bmffMandatoryExclusions(C2PA_UUID_BYTES);
+  // One hash of the clean bytes: the hard binding and the per-capture
+  // App Attest assertion both commit to exactly these.
+  const cleanSha = sha256(stripped);
   const ext = mime === 'video/quicktime' ? 'mov' : mime === 'audio/mp4' ? 'm4a' : 'mp4';
   const params: C2paManifestParams = {
     appName: `Source Kit/${appVersion()} (com.verify.camera)`,
@@ -1316,10 +1326,10 @@ async function embedC2paInBmff(
     signPayload: key.signPayload,
     pq: pq ? pqClaimSigner(pq) : null,
     certChain: chain,
-    cleanFileSha256: sha256(stripped), // unused by the BMFF builder — the v2 hash replaces it
+    cleanFileSha256: cleanSha, // unused by the BMFF builder — the v2 hash replaces it
     fetchTimestamp,
     probeTokenSizes: estimatedTsaTokenSizes,
-    appAttest: key.backend === 'secure-enclave-attested' ? await getAttestationAssertion() : null,
+    appAttest: key.backend === 'secure-enclave-attested' ? await getAttestationAssertion(cleanSha) : null,
     transcript,
     identity: identityAssertionFor(chain, signedRecord),
     customAssertions: customAssertions ?? null,
@@ -1329,6 +1339,12 @@ async function embedC2paInBmff(
     // upstream; absent stays absent).
     thumbnailJpeg: standard?.thumbnailJpeg ?? null,
     videoStills: standard?.videoStills ?? null,
+    // The photo and PNG arms have always declared c2pa.created with
+    // digitalSourceType digitalCapture; this arm never did, so a sealed
+    // video said less about its own origin than a sealed still of the same
+    // scene. Downstream tools read digitalSourceType before anything else,
+    // and a capture that does not state it invites the reader to guess.
+    createdDeclaration: { when: signedRecord.capturedAt },
   };
 
   let fixed: number | null = null;
@@ -1514,6 +1530,7 @@ export async function attestVideo(params: {
   if (sdkArmWanted && (!params.key.biometricBound || bioHoldActive)) {
     try {
       const sdkChain = params.certChainOverride ?? (await getDeviceCertChain()).chain;
+      const cleanSha = sha256(stripped);
       // 0.20.4 (field, SDK-sealed videos amber "not provided"): this arm
       // never passed the App Attest assertion — the photo arm always did.
       // Parity, same pattern: the helper returns the JSON document as
@@ -1521,7 +1538,7 @@ export async function attestVideo(params: {
       // writes. (Org identity stays off the SDK path — see the photo arm's
       // note: the telemetry-hash binding is not computable pre-signing
       // through c2pa-rs.)
-      const aaBytes = params.key.backend === 'secure-enclave-attested' ? await getAttestationAssertion() : null;
+      const aaBytes = params.key.backend === 'secure-enclave-attested' ? await getAttestationAssertion(cleanSha) : null;
       const sdk = await signSourceKitAssetSecureEnclave(stripped, 'video/mp4', {
         appName: `Source Kit/${appVersion()} (com.verify.camera)`,
         title: `verify-${signedRecord.capturedAt.replace(/[:.]/g, '-')}.mp4`,

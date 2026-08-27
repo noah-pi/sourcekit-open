@@ -63,17 +63,6 @@ are computed entirely on-device, the latter in TypeScript
 and rides as a field inside the signed record's capture-metadata block. See
 [INTEGRITY.md](INTEGRITY.md) for what that commitment does and doesn't bound.
 
-## Server-side (the relay, `server/server.mjs`)
-
-The relay is optional and self-hostable, and does exactly one thing: App Attest
-registration.
-
-It holds an aggregate registration counter, single-use 5-minute challenges, and
-rate-limit buckets. No key IDs, no fingerprints, no per-device records — a
-count, because a per-device registry is a roster of real hardware and nobody
-needs one. State checkpoints to a volume so redeploys don't reset the abuse
-controls. There is no `/devices` listing.
-
 ## Verifying this document
 
 ```sh

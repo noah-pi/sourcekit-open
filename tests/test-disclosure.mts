@@ -321,6 +321,34 @@ const open = (sel: any, profile?: any, customIds?: string[]) =>
   const p6 = verifyBundle(customLied, committed.root);
   check('profile: custom with a mismatched customClaimIds FAILS by name',
     !p6.ok && p6.failures.some((f: string) => f.includes('profile-mismatch')), p6.failures.join(' | '));
+
+  // --- the location ceiling the export screen offers ---------------------
+  //
+  // Saying roughly where without saying exactly where only works because
+  // every rung is its own committed leaf. A coarse answer is a leaf that
+  // was committed coarse, so it can be PROVED; nothing is rounded at export
+  // and the finer leaves stay closed. This pins the property the control
+  // stands on, so a change to the ladder cannot quietly turn a general area
+  // into a street address.
+  for (const ceilingName of ['geohash-5', 'geohash-7']) {
+    const ceiling = rungIndex('location', ceilingName);
+    const ids = committed.leaves
+      .filter((c: any) => c.family === 'location' && c.rung <= ceiling)
+      .map((c: any) => c.claimId)
+      .sort();
+    const capped = open((c: any) => c.family === 'location' && c.rung <= ceiling, 'custom', ids);
+    const pr = verifyBundle(capped, committed.root, committed.inventoryAssertion);
+    check(`location ceiling ${ceilingName}: the bundle verifies against the committed root`,
+      pr.ok, pr.failures.join(' | '));
+    const openedIds = capped.opened.map((o: any) => o.claim.claimId);
+    check(`location ceiling ${ceilingName}: opens nothing finer than the ceiling`,
+      openedIds.every((id: string) => {
+        const c = committed.leaves.find((x: any) => x.claimId === id);
+        return c && c.family === 'location' && c.rung <= ceiling;
+      }), openedIds.join(', '));
+    check(`location ceiling ${ceilingName}: the exact fix stays closed`,
+      !openedIds.includes('location.exact'), openedIds.join(', '));
+  }
 }
 
 // --- 5. never-recorded: commit-time, immutable, distinct from withheld --------

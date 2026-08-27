@@ -35,3 +35,14 @@ export const APPLE_ATTEST_ROOT_DER = base64ToBytes(
  * string. Not a secret: it appears in every attestation we produce.
  */
 export const VERIFY_APPLE_APP_ID = '7L49FYJH6Q.com.verify.camera';
+
+/**
+ * Domain separator for the per-capture App Attest assertion's clientDataHash:
+ *
+ *   SHA256(domain ‖ cleanFileSha256 ‖ signingPublicKey)
+ *
+ * Separate from the registration binding, which hashes a challenge instead,
+ * so bytes Apple signed for one can never be presented as the other. Both
+ * the capture path and the verifier read this constant.
+ */
+export const CAPTURE_ASSERTION_DOMAIN = 'sourcekit-capture-v1';

@@ -61,6 +61,7 @@ const SERIES_GYRO = '#C08552';
 // old gyro lane's full-scale). Paths clip at the grid edge; the lane
 // label always states the true peak.
 const DRIFT_HALF_PX = 32;
+const TWIST_HALF_DPS = 200;
 const MAP_HEIGHT = 92;
 
 type MapPoint = { x: number; y: number };
@@ -82,6 +83,33 @@ function driftPathFromShifts(shifts: { dx: number; dy: number }[]): MapPoint[] {
     pts.push({ x, y });
   }
   return pts;
+}
+
+/** Most segments a twist path draws. A minute of gyro at 100 Hz is six
+ *  thousand samples; every segment is a View, so the path is decimated to
+ *  a fixed budget by taking evenly spaced samples. The lane label states
+ *  the peak from ALL samples, so decimation never softens a spike. */
+const TWIST_MAX_POINTS = 140;
+
+/** The phone's own twist, in the yaw/pitch rate plane. Unlike the drift
+ *  and prediction paths this needs no frames and no focal length: it is
+ *  the sealed trace plotted in the units it was recorded in, so a take
+ *  that committed no second-camera pairs still shows what the gyro saw. */
+function twistPathFromGyroLog(gyro: GyroPoint[]): MapPoint[] | null {
+  if (gyro.length < 3) return null;
+  const step = Math.max(1, Math.ceil(gyro.length / TWIST_MAX_POINTS));
+  const pts: MapPoint[] = [];
+  for (let i = 0; i < gyro.length; i += step) {
+    pts.push({ x: gyro[i].yawDps, y: gyro[i].pitchDps });
+  }
+  return pts.length >= 3 ? pts : null;
+}
+
+/** The true peak rate across EVERY sample, decimation included. */
+function twistPeakDps(gyro: GyroPoint[]): number {
+  let peak = 0;
+  for (const p of gyro) peak = Math.max(peak, Math.hypot(p.yawDps, p.pitchDps));
+  return peak;
 }
 
 /** True peak radius of a path, and whether any point leaves the grid. */
@@ -312,6 +340,41 @@ function MotionOverlay({ drift, driftMsg, predicted, predictedMsg }: {
           </>
         ) : null}
       </View>
+    </View>
+  );
+}
+
+/** The sealed trace on its own, for a take with nothing to compare it
+ *  against. MotionOverlay's whole point is agreement between two series,
+ *  which needs second-camera frames; without them the gyro still recorded
+ *  something and the reader is entitled to see it. Same fixed-scale rule
+ *  as the drift map: ±200 °/s per axis in every exhibit, peak stated. */
+function TwistLane({ gyro }: { gyro: GyroPoint[] }) {
+  const styles = useThemedStyles(buildStyles);
+  const path = twistPathFromGyroLog(gyro);
+  const peak = twistPeakDps(gyro);
+  return (
+    <View style={styles.mapWrap}>
+      <View style={styles.laneLabels}>
+        <Text style={styles.laneName}>{`Twist · yaw/pitch rate · °/s (±${TWIST_HALF_DPS})`}</Text>
+        <Text style={styles.lanePeak}>
+          {`peak ${(Math.round(peak * 10) / 10).toFixed(1)} °/s${peak > TWIST_HALF_DPS ? ' · clipped' : ''} · ${gyro.length} samples`}
+        </Text>
+      </View>
+      {path ? (
+        <TrajectoryMap
+          points={path}
+          half={TWIST_HALF_DPS}
+          color={SERIES_GYRO}
+          hint={`±${TWIST_HALF_DPS} °/s · dot spacing = time`}
+        />
+      ) : (
+        <Text style={styles.dim}>The sealed trace is too short to plot.</Text>
+      )}
+      <Text style={styles.dim}>
+        No second-camera frames were sealed with this take, so there is
+        nothing to compare this against. It is what the phone reported.
+      </Text>
     </View>
   );
 }
@@ -602,6 +665,11 @@ type VideoTraceState =
        *  the measured drift), null when no sensor log was sealed/readable
        *  or the take seals no focal length. */
       predicted: MapPoint[] | null;
+      /** The sealed trace itself. Held so a take with no pair frames can
+       *  still show its twist lane: the prediction above needs frames and
+       *  a focal length, and a trace that survives neither was previously
+       *  read and then discarded. */
+      gyro: GyroPoint[] | null;
     }
   | { state: 'unavailable'; reason: string };
 
@@ -709,7 +777,7 @@ export function VideoMotionCard({ videoFrames, sensorLogPath, hfovDeg }: {
           : null;
 
         if (!cancelled) {
-          setTrace({ state: 'done', shiftsXY, predicted });
+          setTrace({ state: 'done', shiftsXY, predicted, gyro });
         }
       } catch {
         if (!cancelled) {
@@ -723,7 +791,11 @@ export function VideoMotionCard({ videoFrames, sensorLogPath, hfovDeg }: {
   return (
     <ForensicCard
       title="Motion Trace"
-      sub="Whether the second camera’s view moved the way the phone’s motion sensor says the phone moved."
+      sub={
+        trace.state === 'done' && !trace.shiftsXY && trace.gyro
+          ? 'What the phone’s motion sensor recorded across the take.'
+          : 'Whether the second camera’s view moved the way the phone’s motion sensor says the phone moved.'
+      }
     >
       {!anything ? (
         <NotRecorded />
@@ -733,18 +805,28 @@ export function VideoMotionCard({ videoFrames, sensorLogPath, hfovDeg }: {
         <Text style={styles.line}>{trace.reason}</Text>
       ) : (
         <View style={styles.juxta}>
-          <MotionOverlay
-            drift={trace.shiftsXY ? driftPathFromShifts(trace.shiftsXY) : null}
-            driftMsg="No second-camera frames sealed with this capture, so the drift map stands empty."
-            predicted={trace.predicted}
-            predictedMsg={
-              !logRecorded
-                ? 'Cannot compare. No motion trace was sealed with this capture.'
-                : fPxVideo === null
-                  ? 'Cannot compare. This capture does not seal a focal length, so the gyro reading cannot be scaled to the picture.'
-                  : 'Cannot compare. The sealed motion trace could not be read on this device.'
-            }
-          />
+          {/* With no pair frames there is no drift to overlay a
+              prediction on, and MotionOverlay would render an empty grid
+              beside a trace it had already read and thrown away. The
+              trace gets its own lane instead. */}
+          {!trace.shiftsXY && trace.gyro ? (
+            <TwistLane gyro={trace.gyro} />
+          ) : (
+            <MotionOverlay
+              drift={trace.shiftsXY ? driftPathFromShifts(trace.shiftsXY) : null}
+              driftMsg="No second-camera frames sealed with this capture, so the drift map stands empty."
+              predicted={trace.predicted}
+              predictedMsg={
+                !logRecorded
+                  ? 'Cannot compare. No motion trace was sealed with this capture.'
+                  : !trace.gyro
+                    ? 'Cannot compare. The sealed motion trace could not be read on this device.'
+                    : fPxVideo === null
+                      ? 'Cannot compare. This capture does not seal a focal length, so the gyro reading cannot be scaled to the picture.'
+                      : 'Cannot compare. The sealed motion trace does not cover the pair frames.'
+              }
+            />
+          )}
           {/* The lane labels state the true peaks; there is no bottom
               copy line. */}
         </View>

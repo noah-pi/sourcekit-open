@@ -7,6 +7,9 @@
  * The assertion carries everything needed (emulated key attestation):
  *   { format, attestationBase64, challengeBase64, boundFingerprint }
  *
+ * Format /3 adds one Apple assertion made at capture:
+ *   { captureAssertionBase64, boundMediaSha256 }
+ *
  * We verify, fully offline:
  *   1. The x5c chain walks to the PINNED Apple App Attestation root
  *      (signatures, CA flags, validity at attestation-MINT time — Apple
@@ -22,16 +25,28 @@
  *      certificate — so Apple's hardware certificate vouches for THE key
  *      that signed this file, not some other key.
  *   4. boundFingerprint equals SHA-256 of that same signing key.
+ *   5. (format /3) The capture assertion verifies under the attested
+ *      credential key over SHA256(authenticatorData ‖ SHA256(domain ‖
+ *      media hash ‖ signing key)), and names this file's own media hash.
+ *      Apple's Enclave signed it at capture, for this file and no other.
  *
- * Anything less than all four is reported as failed with the reason — a
+ * Anything less than all of them is reported as failed with the reason — a
  * forged or foreign attestation is evidence against the file, never noise.
+ *
+ * The signCount inside the capture assertion is read and reported, never
+ * judged. Apple increments it per assertion, so a run of captures from one
+ * key must show it climbing; a repeat or a step backward is a replay. That
+ * comparison needs a history of this key, which nothing here keeps and
+ * nothing anywhere is told — so the count is surfaced for a reader who has
+ * such a history, rather than checked by a verifier that does not.
  */
 
 import { decode } from 'cbor-x';
 import { sha256 } from '@noble/hashes/sha256';
+import { p256 } from '@noble/curves/p256';
 import { base64ToBytes, bytesToHex, bytesToUtf8, concatBytes, equalBytes } from '../../src/lib/bytes';
 import { asciiToBytes } from '../../src/lib/bytes';
-import { APPLE_ATTEST_ROOT_DER, VERIFY_APPLE_APP_ID } from '../../src/lib/appleAttestRoot';
+import { APPLE_ATTEST_ROOT_DER, VERIFY_APPLE_APP_ID, CAPTURE_ASSERTION_DOMAIN } from '../../src/lib/appleAttestRoot';
 import { parseCertificate, readTlv, verifyChain, OID_APPLE_ATTEST_NONCE } from '../../src/lib/x509';
 
 export interface AppAttestVerification {
@@ -54,9 +69,23 @@ export interface AppAttestVerification {
    * Null when not computed.
    */
   mintWindow: { notBeforeMs: number; notAfterMs: number } | null;
+  /**
+   * The per-capture assertion (format /3). Null when the attestation
+   * predates it — an older exhibit, not a defect.
+   */
+  captureAssertion: {
+    /** Apple's Enclave counter for this key at the moment of capture. */
+    signCount: number;
+    /** The media hash the assertion is bound to, hex. */
+    boundMediaSha256: string;
+    /** Whether the bound hash was cross-checked against this file's own
+     *  hard binding. False on the BMFF path, where the hard binding is a
+     *  box-exclusion hash rather than a whole-file one. */
+    mediaCrossChecked: boolean;
+  } | null;
 }
 
-const NOT_PRESENT: AppAttestVerification = { present: false, valid: false, reason: null, checksPerformed: [], attestationEnv: null, mintWindow: null };
+const NOT_PRESENT: AppAttestVerification = { present: false, valid: false, reason: null, checksPerformed: [], attestationEnv: null, mintWindow: null, captureAssertion: null };
 
 /** Extracts the 32-byte nonce from the Apple extension's extnValue. */
 function extractAppleNonce(extnValue: Uint8Array): Uint8Array | null {
@@ -91,14 +120,26 @@ function extractAppleNonce(extnValue: Uint8Array): Uint8Array | null {
 export function verifyAppAttestAssertion(
   assertion: Record<string, unknown> | Uint8Array | null,
   signerPublicKey: Uint8Array | null,
+  /** This file's own whole-file hard-binding hash, when it has one, so the
+   *  capture assertion can be shown to name THIS media. Null on the BMFF
+   *  path; the assertion is still verified, the cross-check is not. */
+  mediaSha256?: Uint8Array | null,
 ): AppAttestVerification {
   if (!assertion) return NOT_PRESENT;
   const checks: string[] = [];
   let attestationEnv: 'production' | 'development' | null = null;
   let mintWindow: { notBeforeMs: number; notAfterMs: number } | null = null;
-  const fail = (reason: string): AppAttestVerification => ({ present: true, valid: false, reason, checksPerformed: checks, attestationEnv, mintWindow });
+  let captureAssertion: AppAttestVerification['captureAssertion'] = null;
+  const fail = (reason: string): AppAttestVerification => ({ present: true, valid: false, reason, checksPerformed: checks, attestationEnv, mintWindow, captureAssertion });
 
-  let payload: { format?: string; attestationBase64?: string; challengeBase64?: string; boundFingerprint?: string };
+  let payload: {
+    format?: string;
+    attestationBase64?: string;
+    challengeBase64?: string;
+    boundFingerprint?: string;
+    captureAssertionBase64?: string;
+    boundMediaSha256?: string;
+  };
   if (assertion instanceof Uint8Array) {
     try {
       payload = JSON.parse(bytesToUtf8(assertion));
@@ -109,8 +150,12 @@ export function verifyAppAttestAssertion(
     // Pre-decoded (JSON or CBOR carrier — both land here as the same map).
     payload = assertion as typeof payload;
   }
-  if (payload.format !== 'exhibit-app-attest/2' || !payload.attestationBase64 || !payload.challengeBase64 || !payload.boundFingerprint) {
+  const knownFormat = payload.format === 'exhibit-app-attest/2' || payload.format === 'exhibit-app-attest/3';
+  if (!knownFormat || !payload.attestationBase64 || !payload.challengeBase64 || !payload.boundFingerprint) {
     return fail('attestation assertion has an unrecognized format');
+  }
+  if (payload.format === 'exhibit-app-attest/3' && (!payload.captureAssertionBase64 || !payload.boundMediaSha256)) {
+    return fail('assertion declares a per-capture binding but does not carry one');
   }
   if (!signerPublicKey) return fail('no signer public key to bind against');
 
@@ -235,5 +280,59 @@ export function verifyAppAttestAssertion(
   checks.push('bound fingerprint equals SHA-256 of the manifest signing key');
   if (!fpOk) return fail('bound fingerprint does not match the signing key');
 
-  return { present: true, valid: true, reason: null, checksPerformed: checks, attestationEnv, mintWindow };
+  // 5. The per-capture assertion: Apple's Enclave, at capture, over this
+  //    file's media hash. Absent on format /2 — an older exhibit.
+  if (payload.format === 'exhibit-app-attest/3') {
+    const declared = payload.boundMediaSha256!;
+    if (!/^[0-9a-f]{64}$/.test(declared)) {
+      return fail('the capture assertion names a media hash that is not a SHA-256');
+    }
+    if (mediaSha256 && bytesToHex(mediaSha256) !== declared) {
+      return fail("the capture assertion names a media hash that is not this file's");
+    }
+    let assertObj: { signature?: Uint8Array; authenticatorData?: Uint8Array };
+    try {
+      assertObj = decode(base64ToBytes(payload.captureAssertionBase64!)) as typeof assertObj;
+    } catch {
+      return fail('the capture assertion did not decode as an Apple assertion object');
+    }
+    const sig = assertObj.signature ? new Uint8Array(assertObj.signature) : null;
+    const authD = assertObj.authenticatorData ? new Uint8Array(assertObj.authenticatorData) : null;
+    if (!sig || !authD || authD.length < 37) {
+      return fail('the capture assertion is missing its signature or authenticator data');
+    }
+    if (!equalBytes(authD.subarray(0, 32), sha256(asciiToBytes(VERIFY_APPLE_APP_ID)))) {
+      return fail('the capture assertion was made for a different app');
+    }
+    // SHA256(domain ‖ media hash ‖ signing key) — the same construction the
+    // capture path asked Apple to sign, rebuilt from this file alone.
+    const captureClientData = sha256(concatBytes(
+      asciiToBytes(CAPTURE_ASSERTION_DOMAIN),
+      hexToBytes32(declared),
+      signerPublicKey,
+    ));
+    let sigOk = false;
+    try {
+      sigOk = p256.verify(sig, sha256(concatBytes(authD, captureClientData)), credPub, { prehash: false });
+    } catch {
+      sigOk = false;
+    }
+    if (!sigOk) return fail('the capture assertion is not a valid signature by the attested Apple key');
+    const signCount = (authD[33] << 24 | authD[34] << 16 | authD[35] << 8 | authD[36]) >>> 0;
+    captureAssertion = { signCount, boundMediaSha256: declared, mediaCrossChecked: !!mediaSha256 };
+    checks.push('capture assertion verified under the attested Apple key — the Enclave signed THIS media hash at capture');
+    checks.push(mediaSha256
+      ? "capture assertion's media hash equals this file's own hard binding"
+      : "capture assertion's media hash could not be cross-checked against a whole-file hard binding on this path");
+    checks.push(`Apple Enclave counter at capture: ${signCount} (reported, not judged — a replay shows as a count that did not advance)`);
+  }
+
+  return { present: true, valid: true, reason: null, checksPerformed: checks, attestationEnv, mintWindow, captureAssertion };
+}
+
+/** 64 hex chars to 32 bytes. Callers validate the shape first. */
+function hexToBytes32(hex: string): Uint8Array {
+  const out = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
 }

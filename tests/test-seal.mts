@@ -17,6 +17,8 @@ import {
 import { createRoster, resignRoster, isRoster, verifyRosterSignature } from './roster.mts';
 import { attestPhoto } from './attest.mts';
 import { verifyPhotoBytes } from './verifyAsset.mts';
+import { extractC2paStore, parseManifest } from './c2pa.mts';
+import { sha256 } from '@noble/hashes/sha256';
 import { labSigner } from './deviceKey-shim.mts';
 import { bytesToHex, bytesToBase64, utf8ToBytes } from './bytes.mts';
 import { randomBytes } from '@noble/hashes/utils';
@@ -147,6 +149,47 @@ const e2eOpened = unsealWithDeskKey(e2eSealed, desk.privateKey);
 const verdict = await verifyPhotoBytes(e2eOpened.media);
 check('desk-opens-a-sealed-capture → verifies INTACT', verdict.verdict === 'INTACT', verdict.verdict);
 check('the private key never leaves hex reconstruction', bytesToHex(deskKeyPairFromPrivateHex(bytesToHex(desk.privateKey)).publicKey) === bytesToHex(desk.publicKey));
+
+// ---------- The exclusion range covers the manifest and nothing else ----------
+//
+// The c2pa.hash.data exclusion is the one hole in an otherwise whole-file
+// hash. Everything inside it is unhashed, so its size and position are
+// load-bearing: a range reaching one byte past the manifest is a byte an
+// attacker can change for free. The size-convergence loop that sets the
+// length is easy to break without noticing, which is why this is pinned
+// here rather than left to reading the code.
+console.log('— The hard binding\'s hole —');
+const store = extractC2paStore(media);
+check('the sealed photo carries a C2PA store', store !== null);
+if (store) {
+  const parsed = parseManifest(store.payload);
+  const hd = parsed?.hashData ?? null;
+  check('the hard binding is c2pa.hash.data over sha256', hd !== null && hd.alg === 'sha256');
+  check('exactly one exclusion range — no second hole anywhere in the file',
+    hd !== null && hd.exclusions.length === 1, JSON.stringify(hd?.exclusions ?? []));
+  const ex = hd?.exclusions[0];
+  check('the hole starts where the inserted segments start',
+    ex?.start === store.segmentStart, `${ex?.start} vs ${store.segmentStart}`);
+  check('the hole is exactly as long as the inserted segments — not one byte more',
+    ex?.length === store.segmentLength, `${ex?.length} vs ${store.segmentLength}`);
+  // The committed hash is of the CLEAN file: cut the hole out and the
+  // remainder must hash to what the assertion claims. This is the property
+  // the range exists to provide, checked rather than assumed.
+  if (ex && hd) {
+    const rebuilt = new Uint8Array(media.length - ex.length);
+    rebuilt.set(media.subarray(0, ex.start), 0);
+    rebuilt.set(media.subarray(ex.start + ex.length), ex.start);
+    check('removing exactly the hole reproduces the hash the manifest committed',
+      bytesToHex(sha256(rebuilt)) === bytesToHex(hd.hash));
+  }
+
+  // The COSE unprotected header sits outside the signature. Our writer puts
+  // a zero pad there; a file that verifies can still have had those bytes
+  // rewritten, so the parser reports on them.
+  check('a freshly sealed photo has nothing to say about its unprotected header',
+    (parsed?.unprotectedFindings ?? ['unparsed']).length === 0,
+    JSON.stringify(parsed?.unprotectedFindings ?? []));
+}
 
 console.log(`\n=== ${pass} passed, ${fail} failed ===`);
 process.exit(fail ? 1 : 0);
