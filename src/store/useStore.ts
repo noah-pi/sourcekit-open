@@ -75,15 +75,6 @@ export interface Settings {
    */
   beaconEndpoint: string | null;
   /**
-   * Weather archive lookup (0.23.0, restored opt-in gate): the Weather
-   * card's "Check the archive" button sends the sealed coordinate and day
-   * to the Open-Meteo archive API. That is a NETWORK disclosure of what
-   * this device is inspecting, so the button exists only when the user
-   * has opted in here. STRICTLY OPT-IN — default off. The card itself
-   * stays on the report either way (its sealed half is local); off means
-   * no fetch, stated in plain words.
-   */
-  /**
    * Capture evidence collection (1.0.0, WS1 CaptureKit; E.04 three-state):
    * which evidence sinks the native capture session runs — the stills
    * parallax ring, the raw audio master. Default all on. OFF means DO NOT

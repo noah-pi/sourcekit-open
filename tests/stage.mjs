@@ -49,6 +49,7 @@ const STAGE = [
   'src/provenance/engine/policyLayer.ts', 'src/provenance/engine/oracle.ts',
   'src/lib/sign.ts', 'src/lib/bytes.ts', 'src/lib/canonical.ts', 'src/lib/cert.ts',
   'src/lib/der.ts', 'src/lib/timestamp.ts', 'src/lib/fileHash.ts',
+  'src/lib/evidenceDigest.ts',
   'src/lib/x509.ts', 'src/lib/rfc3161.ts', 'src/lib/tsaTrustList.ts', 'src/lib/exif.ts', 'src/lib/beacon.ts', 'src/lib/phash.ts', 'src/lib/rephoto.ts', 'src/lib/roc.ts',
   'src/lib/opticalflow.ts', 'src/lib/imuflow.ts', 'src/lib/appleAttestRoot.ts',
   'src/lib/roster.ts', 'src/lib/ots.ts', 'src/lib/proofBundle.ts',

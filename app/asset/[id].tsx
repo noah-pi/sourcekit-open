@@ -1631,6 +1631,7 @@ export default function AssetScreen() {
                 <RawAudioCard
                   kind={entry.kind}
                   rawPcmPath={record.context?.captureEvidence?.rawPcmPath}
+                  rawPcmSha256={record.context?.captureEvidence?.rawPcmSha256}
                   enfAnchor={enfAnchor}
                 />
               </View>

@@ -53,6 +53,7 @@ import { signRecord, sha256Hex, payloadBytes } from '../lib/sign';
 import { enclaveSealBioHold, enclaveSealBioRelease } from '../lib/enclave';
 import { pqClaimSigner, pqPublicBlock, type PqCaptureKey } from '../lib/pq';
 import { getDeviceCertChain, type DeviceSigner } from '../lib/deviceKey';
+import { digestCaptureEvidence } from '../lib/evidenceDigest';
 import { buildSelfSignedCert } from '../lib/cert';
 import type { DeviceIntegritySignals } from '../lib/integrity';
 import { fetchTimestampTokensBounded, estimatedTsaTokenSizes, configuredTsaUrls } from '../lib/timestamp';
@@ -526,6 +527,12 @@ export async function attestPhoto(params: {  photoUri: string;
   // does (re-attesting a signed photo), we sign the clean bytes only.
   const stripped = stripManifest(cleanBytes);
 
+  // The seal covers the delivered media. The sidecars beside it are bound
+  // only by these digests, so they are taken before the record is signed.
+  const sealContext = {
+    ...params.context,
+    captureEvidence: await digestCaptureEvidence(params.context.captureEvidence),
+  };
   const record = buildRecord({
     assetSha256: sha256Hex(stripped),
     assetBytes: stripped.length,
@@ -536,7 +543,7 @@ export async function attestPhoto(params: {  photoUri: string;
     deviceModel: deviceModel(),
     platform: Platform.OS,
     identity: params.identity,
-    context: params.context,
+    context: sealContext,
     publicKeyBase64: params.key.publicKeyBase64,
     fingerprint: params.key.fingerprint,
   });
@@ -933,6 +940,12 @@ export async function attestPng(params: {
   pq?: PqCaptureKey | null;
 }): Promise<{ signedPngBytes: Uint8Array; record: AttestationRecord }> {
   const stripped = stripCaBx(params.pngBytes); // re-attesting signs clean bytes only
+  // The seal covers the delivered media. The sidecars beside it are bound
+  // only by these digests, so they are taken before the record is signed.
+  const sealContext = {
+    ...params.context,
+    captureEvidence: await digestCaptureEvidence(params.context.captureEvidence),
+  };
   const record = buildRecord({
     assetSha256: sha256Hex(stripped),
     assetBytes: stripped.length,
@@ -943,7 +956,7 @@ export async function attestPng(params: {
     deviceModel: deviceModel(),
     platform: Platform.OS,
     identity: params.identity,
-    context: params.context,
+    context: sealContext,
     publicKeyBase64: params.key.publicKeyBase64,
     fingerprint: params.key.fingerprint,
   });
@@ -1412,6 +1425,12 @@ export async function attestVideo(params: {
 
   const mime = /\.mov($|\?)/i.test(params.videoUri) ? 'video/quicktime' : 'video/mp4';
 
+  // The seal covers the delivered media. The sidecars beside it are bound
+  // only by these digests, so they are taken before the record is signed.
+  const sealContext = {
+    ...params.context,
+    captureEvidence: await digestCaptureEvidence(params.context.captureEvidence),
+  };
   const record = buildRecord({
     assetSha256: sha256Hex(stripped),
     assetBytes: stripped.length,
@@ -1422,7 +1441,7 @@ export async function attestVideo(params: {
     deviceModel: deviceModel(),
     platform: Platform.OS,
     identity: params.identity,
-    context: params.context,
+    context: sealContext,
     publicKeyBase64: params.key.publicKeyBase64,
     fingerprint: params.key.fingerprint,
   });
@@ -1612,6 +1631,12 @@ export async function attestAudio(params: {
     stripped = stripC2paFromBmff(rawBytes);
   } catch { /* unparseable containers handled by the embed gate */ }
 
+  // The seal covers the delivered media. The sidecars beside it are bound
+  // only by these digests, so they are taken before the record is signed.
+  const sealContext = {
+    ...params.context,
+    captureEvidence: await digestCaptureEvidence(params.context.captureEvidence),
+  };
   const record = buildRecord({
     assetSha256: sha256Hex(stripped),
     assetBytes: stripped.length,
@@ -1622,7 +1647,7 @@ export async function attestAudio(params: {
     deviceModel: deviceModel(),
     platform: Platform.OS,
     identity: params.identity,
-    context: params.context,
+    context: sealContext,
     publicKeyBase64: params.key.publicKeyBase64,
     fingerprint: params.key.fingerprint,
   });

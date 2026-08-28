@@ -1915,6 +1915,7 @@ export default function InspectScreen() {
                 <RawAudioCard
                   kind={forensicKind}
                   rawPcmPath={record?.context?.captureEvidence?.rawPcmPath}
+                  rawPcmSha256={record?.context?.captureEvidence?.rawPcmSha256}
                   enfAnchor={enfAnchor}
                 />
               </View>

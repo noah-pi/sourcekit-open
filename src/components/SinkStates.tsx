@@ -177,7 +177,11 @@ function pathState(p: EvidencePath): { tone: Tone; headline: string; detail: str
 const TONE_COLOR = { good: colors.accent, bad: colors.danger, neutral: colors.textDim } as const;
 const TONE_ICON = { good: 'checkmark-circle', bad: 'alert-circle', neutral: 'remove-circle-outline' } as const;
 
-const PATH_SINKS: { key: keyof CaptureEvidencePaths; icon: keyof typeof Ionicons.glyphMap; label: string; appliesTo: string }[] = [
+/** The three path sinks, named explicitly: the digests that sit beside them
+    in CaptureEvidencePaths are not sinks and must not be listed here. */
+type PathSinkKey = 'sensorLogPath' | 'rawPcmPath' | 'ringBufferDir';
+
+const PATH_SINKS: { key: PathSinkKey; icon: keyof typeof Ionicons.glyphMap; label: string; appliesTo: string }[] = [
   { key: 'sensorLogPath', icon: 'pulse-outline', label: 'Sensor Log (Device-reported)', appliesTo: 'Every capture' },
   { key: 'rawPcmPath', icon: 'mic-outline', label: 'Raw Audio Master', appliesTo: 'Video only' },
   { key: 'ringBufferDir', icon: 'images-outline', label: 'Frames around the shutter', appliesTo: 'Photos only' },
