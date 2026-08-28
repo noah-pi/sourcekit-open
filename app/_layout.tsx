@@ -168,6 +168,10 @@ export default function RootLayout() {
             the compare sliders on this screen, so it is off here. The
             Exhibits back button stays the way out. */}
         <Stack.Screen name="asset/[id]" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        {/* Signer Information's three screens: the detail its rows leave out. */}
+        <Stack.Screen name="identity/website" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="identity/organization" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="identity/verified" options={{ animation: 'slide_from_right' }} />
       </Stack>
       </ErrorBoundary>
     </SafeAreaProvider>

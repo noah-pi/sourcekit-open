@@ -112,6 +112,15 @@ Evidence failures don't affect the capture itself — the photo or video always
 lands, and the native result's `evidenceComplete: false` reports that an
 enabled sink failed.
 
+A path says where a file was, not what it held. So each sink also carries a
+digest, taken before the record is signed and committed under the same
+signature as `rawPcmSha256`, `sensorLogSha256` and `ringBufferSha256`. A file
+sink hashes its bytes; the ring hashes its listing — every frame's own digest
+beside its name, sorted by name, hashed together, so the same directory yields
+the same digest on any device. A sink with no file has no digest, and a reader
+that finds none says the sidecar is uncommitted rather than assuming it
+matches. Records sealed before 0.25.0 carry no digests at all.
+
 What these miss:
 
 - Same ceiling as everything else here: a compromised device can stream-hash
@@ -119,6 +128,8 @@ What these miss:
 - The app performs no analysis of the evidence files beyond the on-device
   parallax measurement below. There are no verdict fields for them in the
   record.
+- The digest binds the bytes to the record. It says nothing about whether
+  those bytes describe the world truthfully.
 - Location samples are fused `CLLocation` fixes. iOS provides no raw GNSS —
   pseudoranges are Android-only — and none is claimed.
 - `mainsHz` is derived from the device region, recorded with the literal note

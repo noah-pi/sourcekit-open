@@ -38,6 +38,15 @@ export function labSigner(): DeviceSigner {
   };
 }
 
+/**
+ * The lab's stand-in for deviceKey.getDeviceKey. One process-lifetime key,
+ * so the credential modules resolve the same fingerprint every call the way
+ * a real device does.
+ */
+export async function getDeviceKey(): Promise<DeviceSigner> {
+  return labSigner();
+}
+
 /** Mirrors OrgCredential['info'] (src/lib/orgCert.ts): the fields attest.mts
  * copies into the signed record when an org credential is active. The lab
  * never attaches one — org is always null here. */

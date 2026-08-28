@@ -11,32 +11,17 @@
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
 import { setTsaUrls } from '../lib/timestamp';
+import { setIdentityChainPreference } from '../lib/deviceKey';
+import type { IdentityMode } from '../lib/identity';
 import { setAppearancePreference, type AppearancePreference } from '../theme';
 
 const SETTINGS_FILE = `${FileSystem.documentDirectory}settings.json`;
 
-/**
- * CAWG-aligned identity disclosure, per capture (0.9.0):
- *   anonymous     — no byline, no org claim ('redacted' in the record)
- *   organization  — the installed org credential vouches for the org, no
- *                   personal byline (the stringer-in-a-hostile-country
- *                   setting; without an org credential it is effectively
- *                   anonymous, and the record shows exactly that)
- *   named         — personal byline + org credential when installed
- */
-export type IdentityMode = 'anonymous' | 'organization' | 'named';
+export type { IdentityMode };
 
 export interface Settings {
-  author: string;
   includeLocation: boolean;
   includeSensors: boolean;
-  /**
-   * Byline inclusion (0.11.1, the camera "Name" HUD toggle): when on AND
-   * identityMode is 'named', the self-declared alias is embedded as the
-   * byline. Default OFF — an embedded name is identifying by design, so it
-   * is a deliberate, visible-at-a-glance choice, mirrored on the camera HUD.
-   */
-  includeByline: boolean;
   /**
    * Audio transcript embedding (0.11.1 toggle board): when on, voice notes
    * carry the on-device transcript inside the signed file. Off = the words
@@ -89,15 +74,6 @@ export interface Settings {
    * jittered schedule decoupled from shutter events — never per capture.
    */
   beaconEndpoint: string | null;
-  /**
-   * Weather archive lookup (0.23.0, restored opt-in gate): the Weather
-   * card's "Check the archive" button sends the sealed coordinate and day
-   * to the Open-Meteo archive API. That is a NETWORK disclosure of what
-   * this device is inspecting, so the button exists only when the user
-   * has opted in here. STRICTLY OPT-IN — default off. The card itself
-   * stays on the report either way (its sealed half is local); off means
-   * no fetch, stated in plain words.
-   */
   /**
    * Capture evidence collection (1.0.0, WS1 CaptureKit; E.04 three-state):
    * which evidence sinks the native capture session runs — the stills
@@ -153,10 +129,8 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  author: '',
   includeLocation: true,
   includeSensors: true,
-  includeByline: false, // identifying by design — opt-in, HUD-visible
   includeTranscript: true,
   includeWifi: false, // opt-in by design — a network name is identifying
   identityMode: 'anonymous',
@@ -219,25 +193,24 @@ export const useStore = create<AppState>((set, get) => ({
           stored.identityMode = stored.includeIdentity === true ? 'named' : 'anonymous';
         }
         delete stored.includeIdentity;
+        // Typed bylines are retired: every name comes from an installed
+        // credential. 'named' becomes 'personal', which resolves to the
+        // personal certificate or the website label, and to no name at all
+        // when neither is installed. Settings states that outcome on screen
+        // rather than leaving the drop silent.
+        if (stored.identityMode === 'named') stored.identityMode = 'personal';
+        delete stored.author;
+        delete stored.includeByline;
         // 0.13.0: CaptureKit retired (the 0.12.x two-session-owners lesson)
         // — the experimental toggle key is dropped from stored settings.
         delete stored.captureKitEnabled;
         // 0.11.0 → 0.11.1 migration — one-time, guarded:
-        //   • named identity with a non-empty alias keeps its 0.11.0 behavior:
-        //     the byline was embedded then, so includeByline stays ON.
         //   • a stale assignmentId is cleared — the assignment UI is gone and
         //     a leftover id must not silently keep signing assignment-mode.
         //   • otsEnabled forced true — the Bitcoin anchor is default-always-on
         //     now; the Settings display must stay honest about it.
         const needsMigration_0_11_1 = stored.migrated_0_11_1 !== true;
         if (needsMigration_0_11_1) {
-          if (
-            stored.identityMode === 'named' &&
-            typeof stored.author === 'string' &&
-            stored.author.trim() !== ''
-          ) {
-            stored.includeByline = true;
-          }
           if (typeof stored.assignmentId === 'string' && stored.assignmentId !== '') {
             stored.assignmentId = '';
           }
@@ -264,6 +237,9 @@ export const useStore = create<AppState>((set, get) => ({
         // ON and existing choices survive verbatim.
         merged.captureEvidence = { ...DEFAULT_SETTINGS.captureEvidence, ...(stored.captureEvidence ?? {}) };
         setTsaUrls(merged.tsaUrls);
+        // The signature's x5chain follows the identity mode, so the signing
+        // layer has to learn the mode without reaching up into this store.
+        setIdentityChainPreference(merged.identityMode);
         // Push the persisted appearance into the theme before first paint.
         setAppearancePreference(merged.appearance);
         set({
@@ -271,8 +247,7 @@ export const useStore = create<AppState>((set, get) => ({
           onboarded: parsed.onboarded === true,
           settingsLoaded: true,
         });
-        // Persist the migration marker immediately so it runs exactly once —
-        // otherwise a later includeByline opt-out would be re-migrated back on.
+        // Persist the migration marker immediately so it runs exactly once.
         if (needsMigration_0_11_1) await persist(merged, parsed.onboarded === true);
         return;
       }
@@ -285,6 +260,7 @@ export const useStore = create<AppState>((set, get) => ({
   saveSettings: async (patch) => {
     const settings = { ...get().settings, ...patch };
     if (patch.tsaUrls !== undefined) setTsaUrls(settings.tsaUrls);
+    if (patch.identityMode !== undefined) setIdentityChainPreference(settings.identityMode);
     if (patch.appearance !== undefined) setAppearancePreference(settings.appearance);
     set({ settings });
     await persist(settings, get().onboarded);

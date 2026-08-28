@@ -19,7 +19,7 @@
 
 import { sha1 } from '@noble/hashes/sha1';
 import { sha256 } from '@noble/hashes/sha256';
-import { concatBytes, asciiToBytes } from './bytes';
+import { concatBytes, asciiToBytes, utf8ToBytes, bytesToBase64 } from './bytes';
 
 // --- tiny DER writer ---
 function derLen(n: number): Uint8Array {
@@ -42,7 +42,8 @@ const int = (n: number) => {
   return tlv(0x02, new Uint8Array(b));
 };
 const intBytes = (b: Uint8Array) => tlv(0x02, b[0] & 0x80 ? concatBytes(new Uint8Array([0]), b) : b);
-const utf8 = (s: string) => tlv(0x0c, asciiToBytes(s));
+const utf8 = (s: string) => tlv(0x0c, utf8ToBytes(s));
+const ia5 = (s: string) => tlv(0x16, asciiToBytes(s));
 const utcTime = (d: Date) => {
   const p = (x: number) => String(x).padStart(2, '0');
   const y = String(d.getUTCFullYear()).slice(2);
@@ -64,6 +65,9 @@ const OID = {
   authorityKeyId: [0x55, 0x1d, 0x23],                                 // 2.5.29.35
   emailProtection: [0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x04],  // 1.3.6.1.5.5.7.3.4
   timeStamping: [0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x08],     // 1.3.6.1.5.5.7.3.8
+  // PKCS#9 emailAddress. Legacy, and still what S/MIME authorities read out
+  // of a request to seed the certificate's subject alternative name.
+  emailAddress: [0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x09, 0x01],
 };
 
 function algIdEcdsa(): Uint8Array {
@@ -127,3 +131,68 @@ export async function buildSelfSignedCert(
   return seq(tbs, algIdEcdsa(), bitString(sigDer));
 }
 
+
+// ---------------------------------------------------------------------------
+// PKCS#10 certification request
+// ---------------------------------------------------------------------------
+
+export interface CsrSubject {
+  /** The name the certificate should carry. */
+  commonName: string;
+  /** Mailbox the authority will validate. S/MIME authorities require one. */
+  email?: string | null;
+  organization?: string | null;
+}
+
+/**
+ * A PKCS#10 certification request (RFC 2986) for `publicKey`.
+ *
+ * The request is signed by the key it names, which is the whole point of the
+ * format: it proves the requester holds the private half without ever
+ * revealing it. A Secure Enclave key can therefore ask for a certificate
+ * exactly like any other, and nothing exportable leaves the device.
+ *
+ * No extension request is attached. Key usage and extended key usage are the
+ * authority's to set, and a request that dictates them is one more thing for
+ * an authority to reject.
+ */
+export async function buildCsr(
+  publicKey: Uint8Array,
+  signDigest: (digest: Uint8Array) => Promise<Uint8Array>,
+  subject: CsrSubject
+): Promise<Uint8Array> {
+  const cn = subject.commonName.trim();
+  if (cn === '') throw new Error('A certification request needs a name.');
+
+  const rdns: Uint8Array[] = [];
+  const org = subject.organization?.trim();
+  if (org) rdns.push(tlv(0x31, seq(oid(OID.organizationName), utf8(org))));
+  rdns.push(tlv(0x31, seq(oid(OID.commonName), utf8(cn))));
+  const email = subject.email?.trim();
+  if (email) rdns.push(tlv(0x31, seq(oid(OID.emailAddress), ia5(email))));
+
+  const spki = seq(
+    seq(oid(OID.ecPublicKey), oid(OID.prime256v1)),
+    bitString(publicKey)
+  );
+
+  // attributes is [0] IMPLICIT and NOT OPTIONAL: an absent field, rather than
+  // an empty one, is rejected by strict parsers including OpenSSL.
+  const info = seq(int(0), seq(...rdns), spki, explicit0(new Uint8Array(0)));
+
+  const sigDer = await signDigest(sha256(info));
+  return seq(info, algIdEcdsa(), bitString(sigDer));
+}
+
+/** DER to PEM, wrapped at 64 characters the way every authority expects. */
+function toPem(der: Uint8Array, label: string): string {
+  const b64 = bytesToBase64(der);
+  const lines: string[] = [];
+  for (let i = 0; i < b64.length; i += 64) lines.push(b64.slice(i, i + 64));
+  return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
+}
+
+/** The request as a person will paste it into an authority's order form. */
+export function csrToPem(der: Uint8Array): string {
+  return toPem(der, 'CERTIFICATE REQUEST');
+}

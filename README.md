@@ -252,20 +252,34 @@ airplane mode still carries trusted time. [timestamp.ts](https://github.com/noah
 </details>
 
 <details>
-<summary><b>Organizational credentials</b> — optional. the only thing that can attach a name to a key</summary>
+<summary><b>Credentials</b> — optional. what puts a checkable name on a key</summary>
 
-A self-signed device key proves consistency and nothing about who you are. An organization can
-supply the missing half by issuing a certificate for the device's public key, which never
-requires the private key to leave the Secure Enclave. Every signature then chains into the
-newsroom instead of into itself.
+A self-signed device key proves consistency and nothing about who you are. Three credentials
+supply the missing half, and none of them requires the private key to leave the Secure Enclave.
 
-There is a hands-off version: an organization publishes a static document at `/.well-
-known/sourcekit-org.json` listing member fingerprints and their certificates, and a member
-enters the domain rather than passing files around.
+An **organization** issues a certificate for the device's public key, and every signature chains
+into the newsroom instead of into itself. There is a hands-off version: the organization
+publishes a static document at `/.well-known/sourcekit-org.json` listing member fingerprints and
+their certificates, and a member enters the domain rather than passing files around.
 
-Revocation stays with the organization's CA, over the OCSP and CRL endpoints in the certificates
-it issues, so any verifier can ask. A credential that no longer matches the active device key is
-ignored and flagged. [orgCert.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/orgCert.ts)
+A **person** can hold a certificate of their own. The device builds a certificate request and
+signs it with the Enclave key; an authority checks the person and issues against that key. The
+certificate belongs to the person rather than to this app, so any tool that writes CAWG identity
+assertions can use it.
+
+A **website** vouches for its own devices, for someone who wants a name on their work without a
+certificate authority. They publish `/.well-known/sourcekit-site.json` listing the keys that
+domain claims. TLS vouches for the domain, and nothing in the file is signed, so it carries less
+than a certificate does. It is a separate type in the code for that reason.
+
+Revocation stays with the issuing CA, over the OCSP and CRL endpoints in the certificates it
+issues, so any verifier can ask. A credential that no longer matches the active device key is
+ignored and flagged, and no name a user typed ever reaches a capture.
+[identity.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/identity.ts) ·
+[orgCert.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/orgCert.ts) ·
+[personalCert.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/personalCert.ts) ·
+[siteCredential.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/lib/siteCredential.ts) ·
+[IDENTITY.md](docs/IDENTITY.md)
 
 </details>
 
@@ -387,7 +401,10 @@ consistency. [context.ts](https://github.com/noah-pi/sourcekit-open/blob/main/sr
 Because delivery codecs throw away whatever the ear will not miss, they also throw away what
 forensic work needs. So alongside the compressed track, a PCM master is converted from the same
 native buffers at 16 kHz: not perceptually coded, and resampled low enough to keep the room and
-the mains band while discarding everything above 8 kHz and its hash signed into the record.
+the mains band while discarding everything above 8 kHz. The master rides beside the delivery file
+rather than inside it, so its hash goes into the signed record. The sensor log and the shutter
+ring are bound the same way, and a reader that finds no hash says the sidecar is uncommitted
+rather than assuming it matches.
 
 The best-known use is the mains hum. Grids run at 50 or 60 Hz and drift in a pattern shared
 across an entire synchronous interconnection, distinctive enough over a long enough window to
@@ -535,7 +552,7 @@ app id in `src/lib/appleAttestRoot.ts`.
 ## Docs
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
-[Integrity](docs/INTEGRITY.md) ·
+[Integrity](docs/INTEGRITY.md) · [Identity](docs/IDENTITY.md) ·
 [Network](docs/NETWORK.md) · [Settings](docs/SETTINGS.md) ·
 [Recovery](docs/RECOVERY.md) ·
 [Provenance](docs/PROVENANCE.md)

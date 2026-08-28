@@ -43,13 +43,12 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as DocumentPicker from 'expo-document-picker';
 import * as Device from 'expo-device';
 import { sha256 } from '@noble/hashes/sha256';
 
 import { colors, spacing, radii, fontSize, useThemedStyles, type AppearancePreference } from '../../src/theme';
 import { useStore } from '../../src/store/useStore';
-import { ScreenTitle, Card, SectionLabel, ToggleRow, Button, Divider, Mono, KeyValueRow } from '../../src/components/ui';
+import { ScreenTitle, Card, SectionLabel, ToggleRow, Button, Divider, Mono, KeyValueRow, NavRow } from '../../src/components/ui';
 import { getDeviceKey, regenerateDeviceKey } from '../../src/lib/deviceKey';
 import {
   appAttestSupported,
@@ -61,12 +60,17 @@ import {
   setAttestServerUrl,
   type AttestState,
 } from '../../src/lib/appAttest';
-import { fetchOrgCredentialFromDomain } from '../../src/lib/orgDirectory';
 import { enclaveGetPublicKey } from '../../src/lib/enclave';
 import {
-  getOrgCredential, setOrgCredential, clearOrgCredential,
-  orgCertChainForKey, pemOrDerToDer, type OrgCredential,
+  getOrgCredential, clearOrgCredential, orgCertChainForKey, type OrgCredential,
 } from '../../src/lib/orgCert';
+import {
+  clearSiteCredential, siteCredentialForKey, type SiteCredential,
+} from '../../src/lib/siteCredential';
+import {
+  clearPersonalCredential, personalCertChainForKey, getPersonalCredential,
+  type PersonalCredential,
+} from '../../src/lib/personalCert';
 import { base64ToBytes, bytesToHex } from '../../src/lib/bytes';
 import { hasPasscode, removePasscode } from '../../src/vault/passcode';
 import { downgradeVaultKeyAcl } from '../../src/vault/vaultFs';
@@ -117,13 +121,11 @@ export default function SettingsScreen() {
   const [attestServer, setAttestServer] = useState('');
   const [attestBusy, setAttestBusy] = useState(false);
   const [showRegistryInput, setShowRegistryInput] = useState(false);
-  const [orgDomainDraft, setOrgDomainDraft] = useState('');
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const [orgCred, setOrgCred] = useState<OrgCredential | null>(null);
   const [orgStale, setOrgStale] = useState(false);
-  const [orgBusy, setOrgBusy] = useState(false);
-  // Local draft — persisted onBlur so we don't hit disk on every keystroke.
-  const [authorDraft, setAuthorDraft] = useState(settings.author);
+  const [siteCred, setSiteCred] = useState<SiteCredential | null>(null);
+  const [personalCred, setPersonalCred] = useState<PersonalCredential | null>(null);
   // PQ record-signature layer: enrollment info for display only.
   const [pqInfo, setPqInfo] = useState<{ fingerprint: string; enrolledAt: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
@@ -255,15 +257,52 @@ export default function SettingsScreen() {
       setBiometricsAvailable(hw && enrolled);
     })();
     hasPasscode().then(setPasscodeSet);
-    (async () => {
-      const cred = await getOrgCredential();
-      setOrgCred(cred);
-      if (cred) {
-        const k = await getDeviceKey().catch(() => null);
-        if (k) setOrgStale((await orgCertChainForKey(base64ToBytes(k.publicKeyBase64))) === 'stale');
-      }
-    })();
   }, []);
+
+  // Signer Information is re-read on focus: the setup screens report back
+  // only through these rows, and a stale row reads as a setup that failed.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      void (async () => {
+        const key = await getDeviceKey().catch(() => null);
+        const [cred, personal] = await Promise.all([getOrgCredential(), getPersonalCredential()]);
+        if (!alive) return;
+        setOrgCred(cred);
+        setPersonalCred(personal);
+        if (!key) return;
+        const pub = base64ToBytes(key.publicKeyBase64);
+        const [orgChain, personalChain, site] = await Promise.all([
+          orgCertChainForKey(pub),
+          personalCertChainForKey(pub),
+          siteCredentialForKey(key.publicKeyBase64),
+        ]);
+        if (!alive) return;
+        setOrgStale(orgChain === 'stale');
+        if (personalChain === 'stale') setPersonalCred(null);
+        setSiteCred(site === 'stale' ? null : site);
+      })();
+      return () => {
+        alive = false;
+      };
+    }, []),
+  );
+
+  /**
+   * What the mode will actually put on a capture. 'personal' with nothing
+   * installed resolves to no name, and saying so here is the only honest
+   * reading of that state.
+   */
+  const identitySummary = (() => {
+    if (settings.identityMode === 'anonymous') return 'No name on captures.';
+    if (settings.identityMode === 'organization') {
+      return orgCred && !orgStale
+        ? `Signed with your ${orgCred.info.subjectOrg ?? orgCred.info.issuerOrg ?? orgCred.info.issuerCN ?? 'organization'} credential.`
+        : 'Organization selected, but no credential is installed.';
+    }
+    const name = personalCred?.info.subjectCN ?? siteCred?.organization ?? null;
+    return name ? `Captures carry ${name}.` : 'Personal selected, but no credential is installed.';
+  })();
 
   /** Copies the public key + fingerprint so it can be published anywhere. */
   const copyPublicKey = async () => {
@@ -301,96 +340,6 @@ export default function SettingsScreen() {
     if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: 'Export attestation' });
   };
 
-  /**
-   * The picker filters to JSON — the org-issued credential file
-   * carrying the X.509 chain:
-   *   { "leafDerBase64": "…", "caDerBase64": "…" }
-   * PEM-armored strings under the same keys are accepted too. The private
-   * key never leaves this device — the file only vouches for the public one.
-   */
-  const doImportOrgCred = async () => {
-    setOrgBusy(true);
-    try {
-      const doc = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true });
-      if (doc.canceled || !doc.assets?.[0]) return;
-      const raw = JSON.parse(await FileSystem.readAsStringAsync(doc.assets[0].uri)) as Record<string, unknown>;
-      const pick = (...keys: string[]): string | null => {
-        for (const k of keys) {
-          const v = raw[k];
-          if (typeof v === 'string' && v.trim()) return v;
-        }
-        return null;
-      };
-      const decode = (s: string): Uint8Array =>
-        s.includes('BEGIN CERTIFICATE') ? pemOrDerToDer(s) : base64ToBytes(s.replace(/\s+/g, ''));
-      const leafS = pick('leafDerBase64', 'leafBase64', 'leaf', 'certificate');
-      if (!leafS) {
-        throw new Error('No device certificate found in that file. Expected an org-issued credential JSON containing the X.509 chain.');
-      }
-      const caS = pick('caDerBase64', 'caBase64', 'ca');
-      const key = await getDeviceKey();
-      const cred = await setOrgCredential(decode(leafS), caS ? decode(caS) : null, base64ToBytes(key.publicKeyBase64));
-      setOrgCred(cred);
-      setOrgStale(false);
-      Alert.alert('Credential active', 'New captures will chain signatures into your organization’s CA.');
-    } catch (e) {
-      Alert.alert('Import failed', e instanceof Error ? e.message : 'Could not read that credential file.');
-    } finally {
-      setOrgBusy(false);
-    }
-  };
-
-  /** Fetches the org-issued credential from the org's own domain (sourcekit-org/1). */
-  const doFetchOrgCred = async () => {
-    setOrgBusy(true);
-    try {
-      const cred = await fetchOrgCredentialFromDomain(orgDomainDraft);
-      setOrgCred(cred);
-      setOrgStale(false);
-      Alert.alert('Credential active', `Issued for this device by ${cred.info.issuerOrg ?? cred.info.issuerCN ?? 'your organization'}, fetched from ${cred.sourceDomain ?? 'the organization domain'} over TLS. New captures will chain signatures into the organization’s CA.`);
-    } catch (e) {
-      Alert.alert('Could not fetch credential', e instanceof Error ? e.message : 'The organization domain did not provide a credential for this device.');
-    } finally {
-      setOrgBusy(false);
-    }
-  };
-
-  /**
-   * Each install path explains ITS OWN specifics before it runs (0.18.2 —
-   * the dense paragraph under the buttons became one quiet line; the
-   * mechanism lives here, at the moment of action). Both alerts state the
-   * same enrollment fact: hand the org this device's key; the private key
-   * never leaves the device.
-   */
-  const handleFetchOrgCred = () => {
-    const domain = orgDomainDraft.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-    Alert.alert(
-      'Fetch from your organization',
-      `The app downloads ${domain ? `https://${domain}` : 'https://your-org-domain'}/.well-known/sourcekit-org.json over TLS, then checks the credential: it must name this device’s key, be in date, and be signed by your organization’s CA. Anything else is rejected.\n\nEnroll by handing your organization this device’s key (Device ID → Copy key). The private key never leaves this device.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Fetch', onPress: () => void doFetchOrgCred() },
-      ]
-    );
-  };
-
-  const handleImportOrgCred = () => {
-    Alert.alert(
-      'Import a credential file',
-      'Open the credential file your organization gave you: JSON carrying the X.509 chain, PEM certificates accepted. The same checks run: this device’s key, in date, signed by the organization’s CA. No network needed.\n\nEnroll by handing your organization this device’s key (Device ID → Copy key). The private key never leaves this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Choose file', onPress: () => void doImportOrgCred() },
-      ]
-    );
-  };
-
-  const handleRemoveOrgCred = () => {
-    Alert.alert('Remove organization credential?', 'New captures stop chaining into the organization. Past captures keep their signed chain.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => void (async () => { await clearOrgCredential(); setOrgCred(null); setOrgStale(false); })() },
-    ]);
-  };
 
   const confirmRotateKey = () => {
     Alert.alert(
@@ -447,12 +396,15 @@ export default function SettingsScreen() {
                   await destroyVault();
                   await removePasscode();
                   await clearOrgCredential();
+                  await clearSiteCredential();
+                  await clearPersonalCredential();
                   await clearAttestation().catch(() => {}); // no stale attestation survives the wipe
                   setAttestState(null);
                   setOrgCred(null);
                   setOrgStale(false);
+                  setSiteCred(null);
+                  setPersonalCred(null);
                   await saveSettings({
-                    author: '',
                     identityMode: 'anonymous',
                     assignmentId: '',
                     saveToCameraRoll: false,
@@ -631,87 +583,35 @@ export default function SettingsScreen() {
           <Text style={styles.deviceLine}>{deviceLine}</Text>
         </Card>
 
-        {/* 3. Signer Information — who the signature claims to be. */}
+        {/* 3. Signer Information — who the signature claims to be. Each row
+            is state only; what a credential is, and how to get one, lives on
+            the screen behind it. */}
         <SectionLabel text="Signer Information" />
         <Card>
-          <View style={styles.aliasHeader}>
-            <Text style={styles.rowTitle}>Byline</Text>
-            <View style={styles.optionalTag}>
-              <Text style={styles.optionalTagText}>optional</Text>
-            </View>
-          </View>
-          <TextInput
-            style={styles.input}
-            placeholder="No name set"
-            placeholderTextColor={colors.textFaint}
-            value={authorDraft}
-            onChangeText={setAuthorDraft}
-            onBlur={() => saveSettings({ author: authorDraft })}
-            autoCapitalize="words"
+          <NavRow
+            label="Website"
+            value={siteCred ? siteCred.domain : 'Not set up'}
+            empty={!siteCred}
+            onPress={() => router.push('/identity/website')}
           />
-          <Text style={styles.rowDetail}>
-            Self-declared: a name, not proof of identity. Sealed into captures when the Byline toggle below is on.
-          </Text>
-
           <Divider />
-          {/* Same header rank as Alias (0.14.0) — this is a second kind of
-              signer identity, not a footnote under it. */}
-          <View style={styles.aliasHeader}>
-            <Text style={styles.rowTitle}>Organization Credential</Text>
-            <View style={styles.optionalTag}>
-              <Text style={styles.optionalTagText}>optional</Text>
-            </View>
-          </View>
-          {orgCred ? (
-            <>
-              <KeyValueRow label="Organization" value={orgCred.info.subjectOrg ?? orgCred.info.subjectCN ?? '—'} />
-              <KeyValueRow label="Expires" value={new Date(orgCred.info.notAfter).toLocaleDateString()} />
-              {orgCred.sourceDomain ? (
-                <KeyValueRow label="Installed from" value={`${orgCred.sourceDomain} · over TLS`} />
-              ) : null}
-              {orgStale ? (
-                <Text style={styles.rowDetail}>
-                  Predates the current key and goes unused. Re-issue for the new key.
-                </Text>
-              ) : null}
-              <View style={styles.rowButtons}>
-                <Button small tone="secondary" label="Remove" onPress={handleRemoveOrgCred} />
-              </View>
-            </>
-          ) : (
-            <Text style={styles.rowDetail}>No organization credential installed.</Text>
-          )}
-          <View style={{ height: spacing.sm }} />
-          <TextInput
-            style={styles.input}
-            placeholder="Organization domain (e.g. example-news.com)"
-            placeholderTextColor={colors.textDim}
-            value={orgDomainDraft}
-            onChangeText={setOrgDomainDraft}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
+          <NavRow
+            label="Organization Credential"
+            value={orgCred && !orgStale ? orgCred.info.subjectOrg ?? orgCred.info.subjectCN ?? 'Installed' : orgStale ? 'Unused' : 'Not set up'}
+            empty={!orgCred || orgStale}
+            onPress={() => router.push('/identity/organization')}
           />
-          <View style={styles.rowButtons}>
-            <Button
-              small
-              tone="secondary"
-              icon="globe-outline"
-              label={orgBusy ? 'Fetching…' : 'Fetch credential'}
-              onPress={handleFetchOrgCred}
-              disabled={orgBusy}
-            />
-            <Button
-              small
-              tone="ghost"
-              icon="document-outline"
-              label={orgBusy ? 'Importing…' : 'Import file instead'}
-              onPress={handleImportOrgCred}
-              disabled={orgBusy}
-            />
-          </View>
+          <Divider />
+          <NavRow
+            label="Verified Identity"
+            value={personalCred ? personalCred.info.subjectCN ?? 'Installed' : 'Not set up'}
+            empty={!personalCred}
+            onPress={() => router.push('/identity/verified')}
+          />
+          <Divider />
           <Text style={styles.rowDetail}>
-            Chains your captures to your organization’s certificate.
+            Captures are signed either way. Without one of these, a photo proves it has not been
+            altered but says nothing about who took it.
           </Text>
         </Card>
 
@@ -733,24 +633,10 @@ export default function SettingsScreen() {
           />
           <ProofToggle
             icon="person-outline"
-            label="Byline"
-            sub="Your self-declared name, never verified."
+            label="Identity"
+            sub={identitySummary}
             tint={IDENTIFYING_TINT}
-            value={settings.includeByline}
-            onChange={(v) =>
-              saveSettings(v ? { includeByline: true, identityMode: 'named' } : { includeByline: false })
-            }
-          />
-          <ProofToggle
-            icon="business-outline"
-            label="Organization"
-            sub={
-              orgCred && !orgStale
-                ? `Signed with your ${orgCred.info.subjectOrg ?? orgCred.info.issuerOrg ?? orgCred.info.issuerCN ?? 'organization'} credential.`
-                : 'No credential installed; self-certified.'
-            }
-            tint={IDENTIFYING_TINT}
-            value={orgCred != null && !orgStale}
+            value={settings.identityMode !== 'anonymous'}
             onChange={() => {}}
             disabled
           />

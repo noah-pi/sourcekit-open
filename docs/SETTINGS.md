@@ -6,23 +6,43 @@ what each row does.
 
 ## Capture
 
-### Byline
+### Signer Information
 
-A byline is self-asserted — it records what you wanted to be called, not proof
-of who you are. Organization affiliation belongs to a real credential (see
-*Trust* below), which your organization signs and verifiers can check — never a
-typed-in claim.
+Every name on a capture comes from a credential the device holds. There is
+nowhere to type one, because a typed name is not something a verifier can
+check. Three credentials sit as peers, and any of them may be installed:
+
+- **Website** — publish one file at `/.well-known/sourcekit-site.json` on a
+  domain you control, listing the phones allowed to sign as you. It rests on
+  the certificate already on your website, so nothing else has to be
+  configured. It shows control of an address, not who owns it, and verifiers
+  report it as self-asserted. No authority, no account.
+- **Organization Credential** — your organization issues a certificate for the
+  key already in this phone, fetched from its own domain over TLS or imported
+  from a file. The private key never leaves the Secure Enclave.
+- **Verified Identity** — a certificate authority checks your ID and issues a
+  certificate in your legal name. The app builds the certification request and
+  signs it with the Enclave key; you send that to an authority and import what
+  comes back. Other tools read it as a CAWG identity.
+
+Whether a recipient sees a certificate as trusted depends on the lists their
+tool carries. Source Kit reports **trusted** only when the issuer reaches an
+anchor list this device actually holds, and **self-asserted** otherwise. A
+certificate unrecognized here can still be recognized elsewhere.
 
 ### Identity on each capture
 
 Per-capture disclosure, aligned with CAWG guidance. The cryptography is
-identical either way — this chooses what the signed record *says* about you.
+identical either way — this chooses which credential the signature names, and
+the choice is made before the shutter because it cannot be made after.
 
-- **Anonymous** — no name, no organization.
-- **Organization only** — your org credential identifies the organization,
-  never your name. The setting a stringer in a hostile country wants. Without
-  an org credential installed this is effectively anonymous.
-- **Named** — your byline, plus org credential when installed.
+- **Anonymous** — no name, no organization, and the signature carries the bare
+  device certificate rather than any credential.
+- **Personal** — your certified name, or the website you connected when no
+  certificate is installed. With neither, the record carries no name.
+- **Organization** — your org credential identifies the organization, never
+  your name. The setting a stringer in a hostile country wants. Without an org
+  credential installed this is effectively anonymous.
 
 ### Privacy at capture
 

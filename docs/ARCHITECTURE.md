@@ -13,7 +13,7 @@ camera/mic ──► media file (JPEG / MP4 / MOV / M4A)
                    │
                    ▼
         buildRecord (manifest.ts)        ← claims: time, location, sensors,
-                   │                       byline, device — all labeled claims
+                   │                       identity, device — all labeled claims
                    ▼
         signRecord (lib/sign.ts)         ← ES256 over canonical-JSON digest
                    │
@@ -28,7 +28,7 @@ camera/mic ──► media file (JPEG / MP4 / MOV / M4A)
 ```
 
 Vault layout: `index.json` (metadata only), `{id}.bin` (sealed media),
-`{id}.att.json` (sealed attestation record — it carries location/byline),
+`{id}.att.json` (sealed attestation record — it carries location/identity),
 `{id}.thumb.bin` (sealed 512-px grid thumbnail, so the library grid decrypts
 ~25 KB per cell instead of the full frame). Plaintext exists only in a cache
 folder that is shredded on lock and on background.
