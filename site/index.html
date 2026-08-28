@@ -333,7 +333,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   </div>
   <figure class="shots" data-carousel>
     <div class="shots-frame">
-      <img src="assets/shot-viewfinder.jpg" alt="The Source Kit viewfinder: a Sealing on indicator with the signing key fingerprint, Location and Byline toggles, and a live picture-in-picture from the second camera." data-slide class="on" onerror="this.classList.add('missing')">
+      <img src="assets/shot-viewfinder.jpg" alt="The Source Kit viewfinder: a Sealing on indicator with the signing key fingerprint, Location and identity controls, and a live picture-in-picture from the second camera." data-slide class="on" onerror="this.classList.add('missing')">
       <img src="assets/shot-inspect.jpg" alt="The Inspect screen reading &quot;Unchanged since sealing. Signer unknown.&quot; above the photograph with an estimated horizon drawn across it." data-slide onerror="this.classList.add('missing')">
       <img src="assets/shot-ladder.jpg" alt="The four-rung ladder: media unchanged, key attested and time bracketed all reached, signer identified left unreached because local history is not vouching." data-slide onerror="this.classList.add('missing')">
       <img src="assets/shot-integrity.jpg" alt="The Integrity card: App Attest assertion embedded, a 1.9 second shutter-to-signature gap, sensor-frame timing, and the two camera views compared with a slider." data-slide onerror="this.classList.add('missing')">
@@ -870,7 +870,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
       <tr><td class="p">Shutter burst</td><td>A short ring of frames from around the shutter moment.</td><td>Supports parallax and display-beat analysis. Shows the seconds either side of the frame you kept.</td></tr>
       <tr><td class="p">Face check</td><td>Whether an OS biometric check passed at capture start.</td><td>A boolean. No face geometry, template or image is recorded or transmitted.</td></tr>
       <tr><td class="p">Transcript</td><td>On-device speech recognition of captured audio.</td><td>Never leaves the device. Strippable from shared copies at byte level.</td></tr>
-      <tr><td class="p">Byline / org</td><td>Author name and affiliation.</td><td>Off by default. Always stripped from de-identified copies.</td></tr>
+      <tr><td class="p">Identity</td><td>The name on an installed credential: a certificate, a connected website, or an organization credential.</td><td>Chosen per capture, off by default. Never a typed-in name. Always stripped from de-identified copies.</td></tr>
       <tr><td class="p">Location</td><td>GPS fix and accuracy radius at capture.</td><td>Civilian GNSS is unauthenticated. A lead for a desk to corroborate, never proof of place.</td></tr>
       <tr><td class="p">Wi-Fi</td><td>The SSID and BSSID the phone reports joining.</td><td>Anyone can name an access point anything. Signed as a lead; BSSID lookup happens desk-side.</td></tr>
     </tbody>

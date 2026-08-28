@@ -40,7 +40,10 @@ import { type PoseSample } from '../../src/sensors/motion';
 import { enqueuePhotoSeal, enqueueVideoSeal, enqueueAudioSeal, resumeSealQueue, subscribeSeals, subscribeSealCompletions } from '../../src/provenance/sealQueue';
 import { logDiagnostic } from '../../src/lib/diagnosticsLog';
 import { getDeviceKey } from '../../src/lib/deviceKey';
-import { identityForCapture } from '../../src/lib/identity';
+import {
+  identityForCapture, installedIdentities, NO_IDENTITIES,
+  type InstalledIdentities, type IdentityMode,
+} from '../../src/lib/identity';
 import {
   isExhibitCameraAvailable,
   requestExhibitCameraPermissions,
@@ -1205,12 +1208,32 @@ export default function CaptureScreen() {
   };
   commitZoomRef.current = commitZoom;
 
-  // Byline is self-asserted (a name, never proof of identity). Organization
-  // affiliation is not typed in — it is carried by a real org credential's
-  // X.509 chain, which is embedded in the signature itself when one is installed.
-  // Disclosure level is the CAWG-aligned per-capture identity mode;
-  // the byline itself embeds only while the Name HUD toggle is on.
-  const identity = identityForCapture(settings);
+  // Read on focus, because a credential installed in Settings has to reach
+  // the HUD pill before the next shutter, not after a restart.
+  const [installedIds, setInstalledIds] = useState<InstalledIdentities>(NO_IDENTITIES);
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      void installedIdentities()
+        .then((ids) => { if (alive) setInstalledIds(ids); })
+        .catch(() => { /* no credential resolves to no name, which is the safe read */ });
+      return () => { alive = false; };
+    }, []),
+  );
+
+  // Every name comes from an installed credential: the personal certificate,
+  // the connected website, or the organization's X.509 chain, which the
+  // signature carries itself. The HUD pill picks WHICH of them rides along,
+  // and it is chosen before the shutter because it cannot be chosen after.
+  const identity = identityForCapture(settings, installedIds);
+
+  /** What the pill says: the name that will actually be sealed, or the gap. */
+  const identityPillLabel = (() => {
+    if (settings.identityMode === 'anonymous') return 'Anonymous';
+    if (identity === 'redacted') return 'Anonymous';
+    const name = identity.author ?? identity.organization;
+    return name ?? 'No credential';
+  })();
 
   /**
    * Face check — REMOVED in 0.22.0 (field finding: the LA prompt contended
@@ -2598,19 +2621,11 @@ export default function CaptureScreen() {
             }}
           />
           <HudPillToggle
-            label="Byline"
-            on={settings.includeByline}
+            label={identityPillLabel}
+            on={settings.identityMode !== 'anonymous'}
             onColor={HUD_IDENT_ON}
-            accessibilityLabel={`Byline embedding ${settings.includeByline ? 'on' : 'off'}`}
-            onPress={() =>
-              void saveSettings(
-                settings.includeByline
-                  ? { includeByline: false }
-                  // Turning Byline on opts the capture identity into 'named' so
-                  // the byline genuinely embeds — the toggle never lies.
-                  : { includeByline: true, identityMode: 'named' }
-              )
-            }
+            accessibilityLabel={`Signing identity: ${identityPillLabel}. Tap to change.`}
+            onPress={() => void saveSettings({ identityMode: nextIdentityMode(settings.identityMode) })}
           />
         </View>
       </SafeAreaView>
@@ -3331,3 +3346,10 @@ const buildStyles = () => StyleSheet.create({
   },
   permissionButtonText: { color: colors.onAccent, fontWeight: '700', fontSize: fontSize.sm },
 });
+
+/** The HUD pill cycles: anonymous → personal → organization → anonymous. */
+function nextIdentityMode(mode: IdentityMode): IdentityMode {
+  if (mode === 'anonymous') return 'personal';
+  if (mode === 'personal') return 'organization';
+  return 'anonymous';
+}

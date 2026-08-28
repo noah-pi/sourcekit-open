@@ -196,7 +196,7 @@ the container → fails exactly as scenario 1. *Defended (lab-tested — the
  red team's core attack, a permanent regression test).*
 
 **3. Claim/metadata/manifest surgery.** Editing an assertion inside the
-manifest (byline, timestamps, telemetry) invalidates the COSE signature over
+manifest (identity, timestamps, telemetry) invalidates the COSE signature over
 the claim → credentials fail, and because credentials carry every rung above
 integrity, rungs 2–5 show *cannot be evaluated* — never a partial green.
 *Defended (lab-tested).*
@@ -330,7 +330,7 @@ unlocked device, or compelled biometrics, protection degrades to whatever
 iOS provides — the passcode locks the door, it is not the key (the app says
 exactly this). *Partial.*
 
-**23. De-identified-copy leakage.** Sharing strips byline, location, Wi-Fi,
+**23. De-identified-copy leakage.** Sharing strips identity, location, Wi-Fi,
 sensors, transcript, and device identity, re-signs as a fresh de-identified
 identity, and the copy *says* it is de-identified and which fields were
 removed. EXIF survival is a permanent regression test (segment stripper;

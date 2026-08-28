@@ -52,6 +52,10 @@ const STAGE = [
   'src/lib/x509.ts', 'src/lib/rfc3161.ts', 'src/lib/tsaTrustList.ts', 'src/lib/exif.ts', 'src/lib/beacon.ts', 'src/lib/phash.ts', 'src/lib/rephoto.ts', 'src/lib/roc.ts',
   'src/lib/opticalflow.ts', 'src/lib/imuflow.ts', 'src/lib/appleAttestRoot.ts',
   'src/lib/roster.ts', 'src/lib/ots.ts', 'src/lib/proofBundle.ts',
+  // Signer Information: the three credential kinds a capture can name, and
+  // the anchor lists that decide which of them reads as trusted.
+  'src/lib/orgCert.ts', 'src/lib/siteCredential.ts', 'src/lib/personalCert.ts',
+  'src/lib/identityTrustList.ts', 'src/lib/identity.ts',
   'src/lib/seal.ts', 'src/lib/shamir.ts', 'src/lib/pq.ts',
   'src/lib/trustLadder.ts', 'src/lib/trustProvider.ts', 'src/lib/rosterStore.ts',
   // Runtime gate for the c2pa-swift signing arm. Staged so attest.ts resolves;
@@ -120,11 +124,12 @@ function rewrite(src, fname) {
     .replace("from 'expo-file-system/legacy'", "from './shim-fs.mts'")
     .replace("from 'expo-image-manipulator'", "from './shim-image-manipulator.mts'")
     .replace("from 'expo-video-thumbnails'", "from './shim-video-thumbnails.mts'")
-    .replace("from 'expo-secure-store'", "from './shim-secure-store.mts'");
+    .replace("from 'expo-secure-store'", "from './shim-secure-store.mts'")
+    // deviceKey.ts is never staged (Enclave, keychain), so every reference to
+    // it in the lab resolves to the shim's process-lifetime software key.
+    .replace("from './deviceKey.mts'", "from './deviceKey-shim.mts'");
   if (fname === 'attest') {
-    src = src
-      .replace("from './deviceKey.mts'", "from './deviceKey-shim.mts'")
-      .replace("from './appAttest.mts'", "from './appAttest-shim.mts'");
+    src = src.replace("from './appAttest.mts'", "from './appAttest-shim.mts'");
   }
   return src;
 }
