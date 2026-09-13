@@ -23,6 +23,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, LayoutAnimation, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -68,8 +69,6 @@ import { GAP_DISCLAIMER } from '../../src/lib/copy';
 import { solarPosition } from '../../src/reader/verify/solar';
 import { getDeviceKey } from '../../src/lib/deviceKey';
 import { resolveSignerTrust, type SignerTrust, type TrustTier } from '../../src/lib/trustProvider';
-import { projectTrustLadder, type LadderInput, type TrustLadder } from '../../src/lib/trustLadder';
-import { TrustLadderCard } from '../../src/components/TrustLadder';
 import { listItems } from '../../src/vault/vaultFs';
 import { payloadDigest } from '../../src/lib/sign';
 import { bytesToHex, base64ToBytes, bytesToBase64 } from '../../src/lib/bytes';
@@ -77,130 +76,17 @@ import { verifyOtsReceipt } from '../../src/lib/ots';
 import { fetchBlockHeader } from '../../src/lib/otsClient';
 import { extractC2paStore, parseManifest, type C2paManifest, type EditAction, type IngredientInfo } from '../../archive/handrolled-verifier/c2pa';
 import { extractC2paStoreBmff } from '../../archive/handrolled-verifier/bmff';
-import { ManifestReel } from '../../src/components/ManifestReel';
+import { DetailBody, deriveStrip } from '../../src/components/detail/DetailBody';
+import { SealStrip } from '../../src/components/detail/DetailKit';
+import { readForeignManifest } from '../../src/reader/foreign';
+import { manifestSecondaryFrames } from '../../src/components/forensic/manifestFrames';
+import { getSiteCredential } from '../../src/lib/siteCredential';
+import { deriveSeal, deriveSignerIdentity, deriveTime, derivePlace, deriveEdits, type ReportView, type SignerView } from '../../src/components/detail/derive';
 import { readFileBytes, writeFileBytes } from '../../src/lib/fileHash';
 
 // ---------------------------------------------------------------------------
 // Verdict language — plain sentences, never overclaimed
 // ---------------------------------------------------------------------------
-
-interface VerdictContext {
-  /** Who vouches for the signing key (anchors OUTSIDE the file). */
-  tier: TrustTier;
-  /** Roster says the capture was signed after revocation / before joining. */
-  rosterRedFlag: boolean;
-  /** Display names resolved by the caller, when the tier carries them. */
-  signerName?: string | null;
-  voucherName?: string | null;
-  orgName?: string | null;
-  /**
-   * The binding is void: the exclusions exempt the hash input, the exclusion
-   * set is malformed, or the signed claim references no media binding at all —
-   * the signature verifies but commits to nothing.
-   */
-  bindingVoid: boolean;
-}
-
-/**
- * The headline is a function of BOTH the math AND the trust tier — never of
- * the math alone. Green is earned twice: the file must verify AND someone
- * outside the file must vouch for the key. A stranger can mint a self-signed
- * key and a "valid signature" in 200 milliseconds; intact bytes alone never
- * earn green.
- *
- * Copy v5 (0.17.0): seven verdicts, plain register. No "confirmed", no
- * "checks out" — icons carry status, words carry facts.
- */
-function verdictCopy(v: VerdictCode, ctx: VerdictContext): { headline: string; subline: string; tone: 'good' | 'bad' | 'warn' | 'neutral'; icon: keyof typeof Ionicons.glyphMap } {
-  switch (v) {
-    case 'INTACT': {
-      if (ctx.rosterRedFlag) {
-        // the most serious state — the alarm moves
-        // out from behind a middot into the headline itself. ("genuine"
-        // kept over the handoff's "real" — banned-word hygiene.)
-        return {
-          headline: 'Unchanged, but signed with a key that was not valid',
-          subline: 'The file matches its seal. The key that made the seal had been revoked, or was not yet in use, at the moment it signed. A genuine capture by this member would not look like this.',
-          tone: 'bad',
-          icon: 'warning-outline',
-        };
-      }
-      if (ctx.tier === 'roster' || ctx.tier === 'trust-list') {
-        return {
-          headline: 'Unchanged since sealing',
-          subline: `Sealed by ${ctx.signerName ?? 'a known signer'}, certified by ${ctx.voucherName ?? 'a certificate authority'}.`,
-          tone: 'good',
-          icon: 'checkmark-circle',
-        };
-      }
-      if (ctx.tier === 'org') {
-        return {
-          headline: 'Unchanged since sealing',
-          subline: `Sealed by ${ctx.orgName ?? 'the organization'}, which vouches for its own key. Ask them for their fingerprint and compare all 64 characters before you rely on the name.`,
-          tone: 'warn',
-          icon: 'business-outline',
-        };
-      }
-      return {
-        headline: 'Unchanged since sealing',
-        subline: 'The seal is valid. The signer is unknown.',
-        tone: 'warn',
-        icon: 'finger-print-outline',
-      };
-    }
-    case 'CONTENT_MODIFIED':
-      return {
-        headline: 'Edited after sealing',
-        subline: 'The seal is intact but the file no longer matches it. Keep this copy exactly as it is. Do not re-save or re-share it.',
-        tone: 'bad',
-        icon: 'cut-outline',
-      };
-    case 'SIGNATURE_INVALID':
-      if (ctx.bindingVoid) {
-        return {
-          headline: 'The seal does not cover this file',
-          subline: 'There is a valid signature here, but it commits to none of the file’s contents. Treat this file as unsealed.',
-          tone: 'bad',
-          icon: 'close-circle-outline',
-        };
-      }
-      return {
-        headline: 'The seal does not hold',
-        subline: 'Treat this file as unsealed. Keep this copy exactly as it is. Do not re-save or re-share it.',
-        tone: 'bad',
-        icon: 'close-circle-outline',
-      };
-    case 'UNSUPPORTED':
-      // Unchecked, not condemned: the credentials use a structure this app
-      // cannot evaluate. Neutral, like unreadable.
-      return {
-        headline: 'This app cannot check this seal',
-        subline: `The seal uses a structure this app does not read yet. ${GAP_DISCLAIMER}`,
-        tone: 'neutral',
-        icon: 'alert-circle-outline',
-      };
-    case 'NO_ATTESTATION':
-      // Neutral by design: unsigned is the normal state of the world's
-      // files — gray, never amber, never red. Red is for proven tamper.
-      return {
-        headline: 'No seal on this file',
-        subline: 'Most files do not have one, and messaging apps strip the ones that do.',
-        tone: 'neutral',
-        icon: 'help-circle-outline',
-      };
-    default:
-      return {
-        headline: 'This app could not open the file',
-        subline: 'Messaging apps and social platforms re-encode files, which destroys the seal. Ask for the original straight off the camera or phone, by AirDrop, email, or file transfer.',
-        tone: 'neutral',
-        icon: 'alert-circle-outline',
-      };
-  }
-}
-
-function toneColor(tone: 'good' | 'bad' | 'warn' | 'neutral'): string {
-  return tone === 'good' ? colors.accent : tone === 'bad' ? colors.danger : tone === 'warn' ? colors.warn : colors.textDim;
-}
 
 function fmtWhen(iso: string): string {
   const d = new Date(iso);
@@ -208,30 +94,8 @@ function fmtWhen(iso: string): string {
   return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-/** "Aug 15, 2026 at 6:08 PM" — the timestamp row's date shape. Same
- *  formatter the exhibit page's Timestamp row uses (keep the two 1:1). */
-function fmtAt(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const date = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  return `${date} at ${time}`;
-}
 
-function fmtBytes(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} MB`;
-  if (n >= 1_000) return `${Math.round(n / 1_000)} KB`;
-  return `${n} bytes`;
-}
 
-function motionLabel(v: string): string {
-  switch (v) {
-    case 'handheld': return 'Handheld motion';
-    case 'steady': return 'Device still';
-    case 'moving': return 'Device moving';
-    default: return 'Insufficient data';
-  }
-}
 
 
 /**
@@ -292,56 +156,6 @@ function secondaryFrameFor(record: AttestationRecord): { frame: SecondaryFrameRe
   return { frame: null, ptsSeconds: null, recordError: null, videoFrames: null };
 }
 
-/**
- * 0.18.6 field fix ("when I run inspect on those files, the second view
- * doesn't show up — we need to make sure that data is maintained and
- * rendered once exported"): the sealed telemetry record does NOT carry
- * the video pair frames (they ride the proof bundle on-device), so an
- * exported video dropped here read "Not recorded" even though the frames
- * ARE in the file — embedded as the c2pa.thumbnail.ingredient.jpeg{.#}
- * boxes, one per committed pair, and by emission design the embedded
- * frame IS the vaulted pair JPEG (the ingredient's data hash commits
- * exactly these bytes). Surface them: referenced-gated (an unreferenced
- * box is not claim content), labeled by the capture-side pair sequence
- * number parsed from the label suffix or the ingredient title. Nothing
- * is fabricated — absent boxes still land in "Not recorded".
- */
-function manifestSecondaryFrames(manifest: C2paManifest): import('../../src/components/forensic/MultipleLensCard').VideoPairFrameRef[] {
-  const titlePairIndex = new Map<string, number>();
-  for (const ing of manifest.ingredients) {
-    // Pair sequence number from the ingredient title: 'pair #N' (our
-    // writer) or 'verify-pair-N.jpg' (the SDK path) — 0.20.4.
-    const m = ing.title ? (/pair #(\d+)/.exec(ing.title) ?? /verify-pair-(\d+)/.exec(ing.title)) : null;
-    if (m && ing.label) {
-      // The ingredient's thumbnail identifier is the ingredient label with
-      // the same instance suffix — '.N' from our writer, '__N' from
-      // c2pa-rs / the c2pa-swift SDK (0.20.4, ground-truthed on c2pa-rs
-      // 0.90.14 output: 'c2pa.thumbnail.ingredient__1').
-      const sm = /(?:\.(\d+)|__(\d+))$/.exec(ing.label ?? '');
-      const suffix = sm ? (sm[1] !== undefined ? `.${sm[1]}` : `__${sm[2]}`) : '';
-      titlePairIndex.set(suffix, parseInt(m[1], 10));
-    }
-  }
-  const frames: import('../../src/components/forensic/MultipleLensCard').VideoPairFrameRef[] = [];
-  for (const t of manifest.thumbnails) {
-    if (!t.referenced) continue;
-    // Both emission families (0.20.4): our writer's image content boxes
-    // 'c2pa.thumbnail.ingredient.jpeg(.N)', and the SDK's bfdb/bidb
-    // resources normalized by c2pa-rs to 'c2pa.thumbnail.ingredient(__N)'.
-    const lm = /^c2pa\.thumbnail\.ingredient(?:\.(?:jpeg|png))?((?:\.\d+|__\d+)?)$/.exec(t.label);
-    if (!lm) continue;
-    if (t.bytes.length === 0) continue;
-    const suffix = lm[1] ?? '';
-    const pairIndex = titlePairIndex.get(suffix)
-      ?? (suffix ? parseInt(suffix.replace(/^\.|^__/, ''), 10) : 0);
-    frames.push({
-      frame: { dataBase64: bytesToBase64(t.bytes), mime: 'image/jpeg' },
-      pairIndex,
-    });
-  }
-  frames.sort((a, b) => a.pairIndex - b.pairIndex);
-  return frames;
-}
 
 /**
  * ENF anchor fields (firstSampleWallClockUtcMs / sampleRate / sampleCount)
@@ -370,138 +184,17 @@ function readEnfAnchor(record: AttestationRecord): EnfAnchor | null {
   return null;
 }
 
-/** Round to `sig` significant digits — trailing zeros drop via Number. */
-function sigFig(v: number, sig: number): number {
-  if (v === 0) return 0;
-  const d = Math.ceil(Math.log10(Math.abs(v)));
-  const f = Math.pow(10, sig - d);
-  return Math.round(v * f) / f;
-}
 
-/** Camera-settings labels: the signed key names, made readable. */
-const EXIF_LABELS: Record<string, string> = {
-  ExposureBiasValue: 'ExposureBias',
-  FocalLengthIn35mmFilm: 'FocalLength (35mm equiv)',
-  'FocalLength(35mmEquiv)': 'FocalLength (35mm equiv)',
-  ISOSpeedRatings: 'ISO',
-};
 
-/**
- * Sane significant figures for the camera-settings rows: 1/120 s, not
- * 0.0083333; ISO integers; f/1.8, not 1.7999999523162842. Same formatting
- * the exhibit page's Camera settings block uses.
- */
-function formatExifValue(key: string, v: unknown): string {
-  const num = typeof v === 'number' && Number.isFinite(v) ? v : null;
-  if (num === null) return String(v);
-  switch (key) {
-    case 'ExposureTime':
-      return num > 0 && num < 1 ? `1/${Math.round(1 / num)} s` : `${sigFig(num, 3)} s`;
-    case 'ShutterSpeedValue': {
-      // APEX: exposure time = 2^-value.
-      const t = Math.pow(2, -num);
-      return t > 0 && t < 1 ? `1/${Math.round(1 / t)} s` : `${sigFig(t, 3)} s`;
-    }
-    case 'ISO':
-    case 'ISOSpeedRatings':
-      return String(Math.round(num));
-    case 'FNumber':
-      return `f/${sigFig(num, 2)}`;
-    case 'ApertureValue':
-      // APEX: f-number = 2^(value/2).
-      return `f/${sigFig(Math.pow(2, num / 2), 2)}`;
-    case 'ExposureBiasValue':
-      return `${sigFig(num, 2)} EV`;
-    case 'FocalLength':
-    case 'FocalLengthIn35mmFilm':
-    case 'FocalLength(35mmEquiv)':
-      return `${sigFig(num, 3)} mm`;
-    case 'DigitalZoomRatio':
-      return `${sigFig(num, 2)}×`;
-    default:
-      return String(sigFig(num, 3));
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Standard C2PA edit history — humanized action names + icons
 // ---------------------------------------------------------------------------
 
-/** 'c2pa.color_adjustments' → 'Color adjusted'; unknown vendor actions pass through, capitalized. */
-function actionLabel(name: string): string {
-  const bare = name.replace(/^c2pa\./, '').replace(/[_.-]+/g, ' ').trim();
-  const known: Record<string, string> = {
-    created: 'Created',
-    opened: 'Opened',
-    edited: 'Edited',
-    cropped: 'Cropped',
-    resized: 'Resized',
-    'color adjustments': 'Color adjusted',
-    orientation: 'Orientation changed',
-    reformatted: 'Converted to a new format',
-    filtered: 'Filter applied',
-    placed: 'Placed into a layout',
-    drawing: 'Drawing or paint added',
-    composited: 'Combined with other media',
-    redacted: 'Content redacted',
-    deleted: 'Content deleted',
-    published: 'Published',
-    produced: 'Produced',
-    assembled: 'Assembled',
-    transcoded: 'Transcoded',
-    repackaged: 'Repackaged',
-    saved: 'Saved',
-    printed: 'Printed',
-    watermarked: 'Watermarked',
-    unknown: 'Unspecified edit',
-  };
-  return known[bare] ?? (bare ? bare.charAt(0).toUpperCase() + bare.slice(1) : 'Unspecified edit');
-}
-
-function actionIcon(name: string): keyof typeof Ionicons.glyphMap {
-  const bare = name.replace(/^c2pa\./, '');
-  if (bare === 'created') return 'add-circle-outline';
-  if (bare === 'cropped') return 'crop-outline';
-  if (bare.includes('color')) return 'color-palette-outline';
-  if (bare === 'composited' || bare === 'placed' || bare === 'assembled') return 'layers-outline';
-  if (bare === 'redacted' || bare === 'deleted') return 'eye-off-outline';
-  if (bare === 'reformatted' || bare === 'transcoded' || bare === 'repackaged') return 'swap-horizontal-outline';
-  if (bare === 'published' || bare === 'printed') return 'share-outline';
-  return 'pencil-outline';
-}
-
 // ---------------------------------------------------------------------------
 // The label
 // ---------------------------------------------------------------------------
 
-function LabelRow({ label, value, valueColor, detail, detailColor, mono, children }: {
-  label: string;
-  value: string;
-  valueColor?: string;
-  detail?: string;
-  detailColor?: string;
-  mono?: boolean;
-  children?: React.ReactNode;
-}) {
-  const styles = useThemedStyles(buildStyles);
-  return (
-    <View style={styles.labelRow}>
-      <Text style={styles.labelRowLabel}>{label}</Text>
-      <View style={styles.labelRowValueWrap}>
-        <Text
-          style={[styles.labelRowValue, mono ? { fontFamily: type.mono } : null, valueColor ? { color: valueColor } : null]}
-          selectable
-        >
-          {value}
-        </Text>
-        {detail ? (
-          <Text style={[styles.labelRowDetail, detailColor ? { color: detailColor } : null]}>{detail}</Text>
-        ) : null}
-        {children}
-      </View>
-    </View>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // The collapsible group card — identical pattern to the exhibit details
@@ -509,175 +202,9 @@ function LabelRow({ label, value, valueColor, detail, detailColor, mono, childre
 // one-line peek, and the WHOLE header block as the tap target.
 // ---------------------------------------------------------------------------
 
-function GroupCard({ icon, title, peek, open, onToggle, children }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  peek: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  const styles = useThemedStyles(buildStyles);
-  return (
-    <View style={styles.groupCard}>
-      <Pressable style={styles.groupHeadBlock} onPress={onToggle} accessibilityLabel={`${title} section`} accessibilityRole="button">
-        <View style={styles.groupHead}>
-          <Ionicons name={icon} size={15} color={colors.textDim} />
-          <Text style={styles.groupTitle}>{title}</Text>
-          <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={14} color={colors.textFaint} />
-        </View>
-        <Text style={styles.groupPeek}>{peek}</Text>
-      </Pressable>
-      {open ? <View style={styles.groupBody}>{children}</View> : null}
-    </View>
-  );
-}
 
-/** Muted clay — the landed palette's identifying accent, matching the
- *  exhibit page's HUD.identifying (the Location row's value color). */
-const IDENT_CLAY = '#C08552';
 
-/** Bitcoin calendar row value — the same strings the exhibit page's
- *  TimestampBlock derives (keep 1:1), minus the row-label prefix. */
-function bitcoinCalendarValue(ots: OtsView): { text: string; color?: string } {
-  switch (ots.state) {
-    case 'pending':
-      return {
-        text:
-          'stamp pending, not yet confirmed in a block' +
-          (ots.queueDelayMs !== undefined && ots.queueDelayMs > 60_000
-            ? ` · submitted ${Math.round(ots.queueDelayMs / 60_000)} min late (device was offline)`
-            : ''),
-      };
-    case 'invalid':
-      return { text: 'receipt FAILED verification', color: colors.danger };
-    case 'mismatch':
-      return { text: 'receipt commits to a different record', color: colors.danger };
-    default:
-      if (ots.binding === 'verified') {
-        return { text: `confirmed in block #${ots.height ?? '—'} · receipt matches the block`, color: colors.accent };
-      }
-      if (ots.binding === 'failed') {
-        return { text: `receipt does NOT match block #${ots.height ?? '—'}`, color: colors.danger };
-      }
-      return {
-        text: ots.height
-          ? `anchored in block #${ots.height} · confirmation not fetched (offline)`
-          : 'confirmed on-chain · block binding unchecked',
-      };
-  }
-}
 
-/**
- * The seal rows (0.18.2) — the manifest lines that used to sit in the
- * "Manifest details" drawer, merged into the Capture claims card in the
- * exhibit page's row format. The old Signature detail section's copy rides
- * as the rows' details, so a failure still says exactly what failed. These
- * rows are what the seal SAYS (and what was mechanically checked about its
- * structure); none of them is a scene verdict.
- */
-function SealRows({ report }: { report: VerificationReport }) {
-  const c2pa = report.c2pa;
-  const rec = report.record;
-  const attest = c2pa?.appAttest;
-  // one vocabulary on both screens — the value says
-  // what HAPPENED (verified / failed, against what), never a structural
-  // note. Environment stays dynamic: a development authenticator must not
-  // be labeled "production" (the spec's detail text assumes prod).
-  const attestText = !attest || !attest.present
-    ? 'Not present in this file'
-    : attest.valid
-      ? 'Verified against Apple’s root'
-      : 'Failed to verify against Apple’s root';
-  const attestDetail = !attest || !attest.present
-    ? undefined
-    : attest.valid
-      ? `App Attest · ${attest.attestationEnv ?? 'production'} · checked offline.`
-      : `${attest.reason ?? 'The embedded assertion did not verify'}. A genuine attestation verifies offline.`;
-  const chain = c2pa?.certChain;
-  // checked === false means THIS verifier could not evaluate the chain at
-  // all (unsupported structure/algorithm) — a gap in this app, disclosed
-  // in neutral words, never red. Red is reserved for chains we fully
-  // parsed and cryptographically failed.
-  const chainUnchecked = !!chain && chain.checked === false;
-  const chainText = !chain
-    ? 'Device key, vouched for by itself'
-    : chainUnchecked
-      ? `${chain.length} certificate${chain.length === 1 ? '' : 's'}, structure not readable by this app`
-      : chain.linksValid
-        ? `${chain.length} certificate${chain.length === 1 ? '' : 's'}, linked correctly`
-        : `${chain.length} certificate${chain.length === 1 ? '' : 's'} · structure INVALID${chain.topSubject ? ` · top: ${chain.topSubject}` : ''}`;
-  const chainFailed = !!chain && chain.length > 1 && !chain.linksValid && !chainUnchecked;
-  const chainDetail = !chain || chain.length <= 1
-    ? 'Nothing here says who the key belongs to.'
-    : chainUnchecked
-      ? `${chain.topSubject ? `Top of chain: ${chain.topSubject}. ` : ''}${chain.reason ?? 'This app cannot parse the chain.'} ${GAP_DISCLAIMER}`
-      : chain.linksValid
-        ? `${chain.topSubject ? `Top of chain: ${chain.topSubject}, which vouches for itself. ` : ''}Confirm that fingerprint with the organization directly.`
-        : `${chain.reason ?? 'The chain failed verification.'} The signer-identity claims cannot be checked.`;
-  const pq = c2pa?.pq;
-  // 0.20.1: evaluate only layers that are PRESENT. Since 0.19.0 the design is
-  // record-only (pqScope: 'record' inside the signed payload): the claim-layer
-  // check object still exists — keyCommitted via the record block — but
-  // legitimately carries no signature. Counting it made every 0.19.0+ capture
-  // false-red "FAILED" here (the report layer already handles the declared
-  // absence correctly; this card never got the memo).
-  const pqAny = pq?.claim?.present || pq?.record?.present;
-  const pqOk = (pq?.claim?.present ? pq.claim.signatureValid && pq.claim.keyFingerprintMatches : true) &&
-    (pq?.record?.present ? pq.record.signatureValid && pq.record.keyFingerprintMatches : true);
-  // verdict on the row, algorithm and custody below.
-  const pqText = !pqAny
-    ? 'None on this file'
-    : pqOk
-      ? 'Present and valid'
-      : 'Present, failed to verify';
-  const pqDetail = !pqAny
-    ? undefined
-    : pqOk
-      ? 'ML-DSA-65 · software key.'
-      : 'A second ML-DSA-65 signature. The raw bytes are in the manifest under Advanced.';
-  return (
-    <View>
-      <LabelRow label="Signed with" value="ECDSA P-256" />
-      {/* 0.20.4 (Noah: "I can't tell what the SDK is doing"): which pipeline
-          sealed this file. The claim format version is signed content and
-          cleanly discriminates — the built-in signer writes claim v1, the
-          c2pa-swift SDK path writes claim v2. Only shown for our own
-          ecosystem's files (foreign C2PA files get no row — their
-          generator string already says who sealed them). */}
-      {c2pa?.hasVerifyTelemetry ? (
-        <LabelRow
-          label="Sealing engine"
-          value={c2pa.claimVersion === 2 ? 'c2pa-swift SDK · claim v2' : 'Source Kit signer · claim v1'}
-        />
-      ) : null}
-      <LabelRow
-        label="Hardware attestation"
-        value={attestText}
-        valueColor={attest?.present && !attest.valid ? colors.danger : undefined}
-        detail={attestDetail}
-        detailColor={attest?.present && !attest.valid ? colors.danger : undefined}
-      />
-      <LabelRow
-        label="Credential chain"
-        value={chainText}
-        valueColor={chainFailed ? colors.danger : undefined}
-        detail={chainDetail}
-        detailColor={chainFailed ? colors.danger : undefined}
-      />
-      <LabelRow
-        label="Post-quantum layer"
-        value={pqText}
-        valueColor={pqAny && !pqOk ? colors.danger : undefined}
-        detail={pqDetail}
-        detailColor={pqAny && !pqOk ? colors.danger : undefined}
-      />
-      {rec ? (
-        <LabelRow label="Media SHA-256" value={rec.asset.sha256} mono />
-      ) : null}
-    </View>
-  );
-}
 
 // Signer identity resolves against anchors OUTSIDE the file, through the
 // TrustProvider chain: this device → signed newsroom
@@ -693,75 +220,6 @@ type EditHistoryView = {
   ingredients: (IngredientInfo & { referenced: boolean })[];
 };
 
-function VerdictCard({ report, identity, ladder }: { report: VerificationReport; identity: SignerTrust; ladder: TrustLadder | null }) {
-  const styles = useThemedStyles(buildStyles);
-  // Byline/org live on the seal record's identity block (or 'redacted'),
-  // not on the c2pa summary — read them where they're actually sealed.
-  const sealedIdentity =
-    report.record && report.record.identity !== 'redacted' ? report.record.identity : null;
-  let copy = verdictCopy(report.verdict, {
-    tier: identity.tier,
-    rosterRedFlag:
-      identity.tier === 'roster' &&
-      !!identity.roster &&
-      (identity.roster.state === 'revoked' || identity.roster.state === 'not-yet-valid'),
-    signerName:
-      identity.tier === 'roster'
-        ? identity.roster?.entry.name ?? null
-        : (sealedIdentity?.author ?? report.record?.device?.model ?? null),
-    voucherName:
-      identity.tier === 'roster'
-        ? identity.roster?.roster.newsroom ?? null
-        : identity.tier === 'trust-list'
-          ? report.c2pa?.certChain?.topSubject ?? 'a curated trust list'
-          : null,
-    orgName: identity.tier === 'org' ? report.c2pa?.certChain?.topSubject ?? sealedIdentity?.organization ?? null : null,
-    bindingVoid: report.c2pa?.assetHashFailure === 'void-binding',
-  });
-  // ── Headline/rung coherence (0.18.8) ──────────────────────────────────
-  // verdictCopy keys on the verdict code alone; the ladder sees the rungs.
-  // Two rules keep the card from contradicting the ladder beneath it:
-  //   1. A FAILED rung dominates: the headline names the failure and the
-  //      tone goes red, even when the verdict itself is INTACT. (A file can
-  //      be byte-identical AND carry a countersignature that fails — both
-  //      facts, stated.)
-  //   2. "Unchanged"-style headlines require rung 1 to be REACHED. When the
-  //      rung is unreached ("Not fully checked"), the headline says so
-  //      instead of asserting unchanged-ness the checks never established.
-  const failedRung = ladder?.rungs.find((r) => r.state === 'failed') ?? null;
-  const bytesRungUnreached = ladder?.rungs[0]?.state === 'unreached';
-  if (failedRung && copy.tone !== 'bad') {
-    copy = {
-      headline: `A check failed: ${failedRung.label.charAt(0).toLowerCase()}${failedRung.label.slice(1)}`,
-      subline: `${failedRung.detail} The media itself ${report.checks.assetHashMatches === true ? 'still matches the seal' : 'could not be confirmed against the seal'}.`,
-      tone: 'bad',
-      icon: 'warning-outline',
-    };
-  } else if (bytesRungUnreached && (copy.tone === 'good' || copy.tone === 'warn')) {
-    // 0.22.0: rule 2 now actually downgrades. The old code left an
-    // "Unchanged since sealing." headline asserting what the grey rung
-    // beneath it refused to establish (field: adobe-20220124-C.JPG showed
-    // the intact headline with every rung grey). The headline goes neutral
-    // and states the gap; the original verdict copy moves into the subline
-    // as context, and the rungs carry the per-check truth.
-    copy = {
-      headline: 'Not every check ran on this file.',
-      subline: `${copy.headline} ${copy.subline} The rungs below say which checks ran.`,
-      tone: 'neutral',
-      icon: 'help-circle-outline',
-    };
-  }
-  const color = toneColor(copy.tone);
-  return (
-    <Card style={[styles.labelCard, { borderColor: color }]}>
-      <View style={styles.verdictHeader}>
-        <Ionicons name={copy.icon} size={28} color={color} />
-        <Text style={[styles.verdictText, { color }]}>{copy.headline}</Text>
-      </View>
-      <Text style={styles.verdictSubline}>{copy.subline}</Text>
-    </Card>
-  );
-}
 
 /**
  * The picked file, shown at the top of its own result: a photo
@@ -783,8 +241,10 @@ function InspectVideoPlayer({ uri, style }: { uri: string; style: object }) {
   return <VideoView player={player} style={style} contentFit="contain" nativeControls />;
 }
 
-function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta, fallbackUri }: {
+function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta, fallbackUri, strip }: {
   uri: string;
+  /** The seal strip, drawn on the frame's bottom edge. */
+  strip?: React.ReactNode;
   name: string;
   kind: 'photo' | 'bmff';
   audioHint: boolean | null;
@@ -930,6 +390,7 @@ function PickedMedia({ uri, name, kind, audioHint, overlay, onOverlay, juxta, fa
             <SunBadge lat={juxta.lat} lon={juxta.lon} at={juxta.at} />
           )
         ) : null}
+        {strip}
         {showOverlays && options.length > 1 ? (
           <View style={styles.overlayMenuWrap}>
             <Pressable style={styles.overlayChip} onPress={() => setMenuOpen((o) => !o)} hitSlop={8}>
@@ -988,13 +449,6 @@ export default function InspectScreen() {
   // The parsed manifest, feeding the Advanced group's raw-manifest reel
   // (the shared ManifestReel component — full, windowed).
   const [parsedManifest, setParsedManifest] = useState<C2paManifest | null>(null);
-  // Group cards — the same Capture / Integrity / Advanced pattern as the
-  // exhibit details page, with the same three icons.
-  const [groupOpen, setGroupOpen] = useState({ capture: true, integrity: false, advanced: false });
-  const toggleGroup = (id: 'capture' | 'integrity' | 'advanced') => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setGroupOpen((s) => ({ ...s, [id]: !s[id] }));
-  };
   // Standard C2PA edit history (c2pa.actions / ingredients) from the active
   // manifest — how a Canon→Photoshop file's edits surface here.
   const [editHistory, setEditHistory] = useState<{
@@ -1006,7 +460,7 @@ export default function InspectScreen() {
   // Camera settings (com.verify.exif) from the active manifest — the
   // "Camera settings" claims block.
   const [manifestExif, setManifestExif] = useState<{ referenced: boolean; data: Record<string, unknown> } | null>(null);
-  // the reverse-geocoded Place row is REMOVED — the platform
+  // 0.23.0 (Noah): the reverse-geocoded Place row is REMOVED — the platform
   // geocoder (CLGeocoder) sends the sealed coordinates to Apple, a network
   // disclosure the reader never asked for. The coordinates themselves stay,
   // verbatim, on the Location row.
@@ -1026,6 +480,20 @@ export default function InspectScreen() {
   // #34: the empty state links to the field guide — an obvious entry point
   // that scrolls straight to it.
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+
+  /**
+   * Tapping Inspect while already on Inspect scrolls back to the top.
+   * A verification report runs long, and the tab is the control a person
+   * reaches for when they want to start over — every other iOS app answers
+   * that gesture this way.
+   */
+  const navigation = useNavigation();
+  useEffect(() => {
+    const unsub = navigation.addListener('tabPress' as never, () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return unsub;
+  }, [navigation]);
 
   useEffect(() => {
     getDeviceKey().then((k) => setOwnFingerprint(k.fingerprint)).catch(() => {});
@@ -1176,63 +644,6 @@ export default function InspectScreen() {
     return declinationLine(record.context, Number.isFinite(ms) ? new Date(ms) : null);
   }, [record]);
 
-  // ── How this was sealed: the four rungs, projected from the evidence by
-  //    src/lib/trustLadder (presentation logic — nothing recomputed here).
-  //    The tier passes through honestly: the ladder maps 'this-device' to
-  //    rung 2 UNREACHED with the local-history wording, because the device
-  //    recognizing its own key is not identification. localHand rides along
-  //    whenever this device's collection has seen the key before. ──
-  const ladder = useMemo(() => {
-    if (!report) return null;
-    const ots: LadderInput['ots'] = !otsView
-      ? 'none'
-      : otsView.state === 'pending'
-        ? 'pending'
-        : otsView.state === 'invalid' || otsView.state === 'mismatch'
-          ? 'invalid'
-          : otsView.binding === 'verified'
-            ? 'confirmed-verified'
-            : 'confirmed-unchecked';
-    return projectTrustLadder({
-      manifestFound: report.checks.manifestFound,
-      verdict: report.verdict,
-      signatureValid: report.checks.signatureValid,
-      fingerprintMatches: report.checks.fingerprintMatches,
-      assetHashMatches: report.checks.assetHashMatches,
-      bindingVoid: report.c2pa?.assetHashFailure === 'void-binding',
-      tier: identity.tier,
-      // This-device signers get the local history stated on rung 2 — with
-      // the same threshold the trust resolver applies (a single stray
-      // capture is not a track record). At the unknown floor the resolver
-      // already attached it to the identity.
-      localHand:
-        identity.tier === 'this-device'
-          ? localHand && localHand.priorCaptures >= 2 ? localHand : null
-          : identity.localHand ?? null,
-      rosterState: identity.tier === 'roster' && identity.roster ? identity.roster.state : null,
-      rosterNewsroom: identity.tier === 'roster' && identity.roster ? identity.roster.roster.newsroom : null,
-      trustListName: null,
-      orgChain: report.c2pa?.certChain
-        ? { linksValid: report.c2pa.certChain.linksValid, topSubject: report.c2pa.certChain.topSubject }
-        : null,
-      appAttest: report.c2pa
-        ? {
-            present: report.c2pa.appAttest.present,
-            valid: report.c2pa.appAttest.valid,
-            attestationEnv: report.c2pa.appAttest.attestationEnv,
-          }
-        : { present: false, valid: false },
-      hardwareNotApplicable: record?.deidentified
-        ? 'deidentified'
-        : record?.assignment
-          ? 'assignment'
-          : null,
-      timestamps: report.c2pa
-        ? { present: report.c2pa.timestamps.present, valid: report.c2pa.timestamps.valid, trusted: report.c2pa.timestamps.trusted, unchecked: report.c2pa.timestamps.unchecked ?? 0 }
-        : { present: 0, valid: 0, trusted: 0 },
-      ots,
-    });
-  }, [report, identity, localHand, otsView, record]);
 
   // ── Forensic Checks inputs, derived once from the dropped file's
   //    verification report. Where a check needs on-device capture context
@@ -1257,6 +668,14 @@ export default function InspectScreen() {
   }, [record, parsedManifest]);
   const enfAnchor = useMemo(() => (record ? readEnfAnchor(record) : null), [record]);
 
+  // A file another signer sealed: no record, so the manifest itself is what
+  // the detail sections read. Null whenever a record is present, so a
+  // Source Kit file is never described from its manifest by mistake.
+  const foreign = useMemo(
+    () => (!record && parsedManifest ? readForeignManifest(parsedManifest) : null),
+    [record, parsedManifest],
+  );
+
   // 0.18.6: the manifest's embedded claim thumbnail, materialized once —
   // PickedMedia's preview when this device can't extract a frame from the
   // sealed container. Referenced-gated; absence stays absence.
@@ -1274,6 +693,39 @@ export default function InspectScreen() {
       .catch(() => { if (!cancelled) setManifestThumbUri(null); });
     return () => { cancelled = true; };
   }, [parsedManifest, picked]);
+
+  /**
+   * A domain claim is shown only when this device can check it: a site
+   * credential it holds, whose fingerprint is the one that signed this file.
+   * A foreign file could name a domain, but confirming that needs a fetch to
+   * a stranger's website, and a reader screen does not reach out over the
+   * network to decide what a label says.
+   */
+  const [siteCred, setSiteCred] = useState<{ domain: string; fingerprint: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getSiteCredential().then((c) => {
+      if (!cancelled) setSiteCred(c ? { domain: c.domain, fingerprint: c.fingerprint } : null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const siteForSigner =
+    siteCred && record?.signer.fingerprint === siteCred.fingerprint ? { domain: siteCred.domain } : null;
+
+  // The strip on the picture: computed here because the picture is this
+  // screen's, not the body's.
+  const stripState = useMemo(() => {
+    if (!report) return null;
+    const sealState = deriveSeal(record, report as unknown as ReportView | null, identity as unknown as SignerView, foreign);
+    return deriveStrip({
+      seal: sealState,
+      time: deriveTime(record, report as unknown as ReportView | null, null, foreign),
+      identity: deriveSignerIdentity(record, siteForSigner, foreign, report as unknown as ReportView | null),
+      foreign,
+      edits: deriveEdits(parsedManifest?.actions?.list),
+    });
+  }, [report, record, identity, foreign, siteForSigner, parsedManifest]);
+
   const forensicKind: 'photo' | 'video' | 'audio' =
     picked?.kind === 'photo' ? 'photo' : picked?.audioHint === true ? 'audio' : 'video';
 
@@ -1286,7 +738,6 @@ export default function InspectScreen() {
     null;
   // The Time claims card renders when there is anything time-shaped to
   // show: a record (its device clock) or any countersignature/ledger state.
-  const hasTimeRows = (report?.c2pa?.timestamps.present ?? 0) > 0 || otsView !== null;
 
   // The Timestamp row mirrors the exhibit page's Timestamp row derivation
   // exactly: the countersigned anchor when a pinned authority countersigned,
@@ -1297,21 +748,6 @@ export default function InspectScreen() {
     : tsInfo && tsInfo.valid > 0
       ? tsInfo.earliestValidUtc
       : null;
-  const tsBigIso = record
-    ? tsInfo && tsInfo.trusted > 0 && tsInfo.earliestTrustedUtc
-      ? tsInfo.earliestTrustedUtc
-      : record.capturedAt
-    : null;
-  const tsStatus = tsInfo && tsInfo.trusted > 0
-    ? { text: 'Countersigned by an independent authority', color: colors.accent }
-    : tsInfo && tsInfo.valid > 0
-      ? { text: 'Countersigned by an unrecognized authority', color: colors.textDim }
-      : { text: 'Device clock only', color: colors.textDim };
-  // Only tokens we fully parsed and cryptographically FAILED count here —
-  // unchecked tokens (parse/coverage gaps) are disclosed on their own row,
-  // never folded into a red count.
-  const tsFailed = tsInfo ? tsInfo.present - tsInfo.valid - (tsInfo.unchecked ?? 0) : 0;
-  const tsUnchecked = tsInfo?.unchecked ?? 0;
   const tsGapMs =
     record && tsAnchorIso &&
     Number.isFinite(Date.parse(record.capturedAt)) && Number.isFinite(Date.parse(tsAnchorIso))
@@ -1324,44 +760,9 @@ export default function InspectScreen() {
     // minutes. Original seals stay strict at 5.
     tsGapMs > (record!.deidentified ? 15 : 5) * 60 * 1000
   );
-  // the gap is in hand — show it, a fact not a flag.
+  // 0.23.0 (handoff §03): the gap is in hand — show it, a fact not a flag.
   const tsGapMinutes = tsGapMs !== null ? Math.round(tsGapMs / 60000) : null;
 
-  // Declared edits (c2pa.actions / ingredients) get a prominent flag on the
-  // result, not just a drawer: wording stays honest — declared, with the
-  // covered-by-the-seal / not-referenced distinction carried inline, never
-  // proof nothing else happened. The file's own c2pa.created declaration is
-  // filtered upstream (creation is not an edit), so a file with no declared
-  // edits raises no flag at all.
-  const editFlag = useMemo(() => {
-    if (!editHistory) return null;
-    const actions = editHistory.actions?.list ?? [];
-    // 0.18.1: the flag exists for declarations that say something — edit
-    // actions, MULTIPLE sources, or derivation from an earlier file. A
-    // straight single-source capture declares nothing of the kind:
-    // Source's own manifests carry exactly one componentOf ingredient (the
-    // committed second-camera viewpoint), which is the capture itself, not
-    // a composition — "edits are declared here, otherwise NOTHING".
-    const sources = editHistory.ingredients.filter(
-      (ing, i, all) => all.length > 1 || ing.relationship === 'parentOf',
-    );
-    if (actions.length === 0 && sources.length === 0) return null;
-    const who = editHistory.generator ?? 'The sealing software';
-    if (actions.length > 0) {
-      const names = [...new Set(actions.map((a) => actionLabel(a.action)))].slice(0, 3);
-      // count first, examples second; "binds to
-      // nothing" says what the data fails to do — the revision says what
-      // that means for the reader.
-      const covered = editHistory.actions && !editHistory.actions.referenced
-        ? 'This list is not covered by the seal, so anyone could have written it.'
-        : 'All are covered by the seal.';
-      return `${who} declares ${actions.length} edit${actions.length === 1 ? '' : 's'}: ${names.join(', ')}${actions.length > 3 ? `, and ${actions.length - 3} more` : ''}. ${covered}`;
-    }
-    const covered = sources.every((i) => i.referenced)
-      ? 'All are covered by the seal.'
-      : 'Some of those are not covered by the seal.';
-    return `${who} declares this was built from ${sources.length} source file${sources.length === 1 ? '' : 's'}. ${covered}`;
-  }, [editHistory]);
 
   // Parse the manifest once: the edit history and camera-settings claims
   // derive from it, and the parsed object itself feeds the Advanced group's
@@ -1457,8 +858,6 @@ export default function InspectScreen() {
       if (doc.canceled || !doc.assets[0]) return;
       const uri = doc.assets[0].uri;
       const sniffed = await sniffMediaType(uri);
-      // A new file resets the group cards to their defaults (Capture open).
-      setGroupOpen({ capture: true, integrity: false, advanced: false });
       switch (sniffed) {
         case 'photo':
           setBusy('Checking the signature…');
@@ -1555,16 +954,6 @@ export default function InspectScreen() {
             {/* The integrity outcome comes FIRST — then the checks. Identity,
                 provenance and claims follow; this is a forensic reader, not
                 a trophy case. */}
-            <VerdictCard report={report} identity={identity} ladder={ladder} />
-
-            {editFlag ? (
-              <Card style={{ borderColor: colors.warn, borderWidth: 1 }}>
-                <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
-                  <Ionicons name="construct-outline" size={15} color={colors.warn} style={{ marginTop: 1 }} />
-                  <Text style={styles.editFlagText}>{editFlag}</Text>
-                </View>
-              </Card>
-            ) : null}
 
             {picked ? (
               <PickedMedia
@@ -1576,424 +965,76 @@ export default function InspectScreen() {
                 onOverlay={setOverlay}
                 juxta={juxta}
                 fallbackUri={manifestThumbUri}
+                strip={stripState ? <SealStrip maker={stripState.maker} stamps={stripState.stamps} edge={picked.kind === 'photo' ? 'bottom' : 'top'} /> : null}
               />
             ) : null}
 
-            {/* DECLARED EDITS (0.18.3, Noah) — above Capture claims, only
-                when the file actually declares some, and only the C2PA
-                actions themselves: no ingredients ("includes other media"),
-                no disclaimer copy. Hidden entirely when there are none.
-                c2pa.created was filtered upstream — creation is not an edit. */}
-            {editHistory && (editHistory.actions?.list.length ?? 0) > 0 ? (
-              <View>
-                <SectionLabel text="Declared edits" />
-                <Card>
-                  <View style={{ gap: 10 }}>
-                    {editHistory.actions!.list.map((a, i) => (
-                      <View key={i} style={styles.editRow}>
-                        <Ionicons name={actionIcon(a.action)} size={15} color={colors.textDim} style={{ marginTop: 1 }} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.editAction}>{actionLabel(a.action)}</Text>
-                          <Text style={styles.editMeta}>
-                            {[a.action, a.softwareAgent ?? null, a.when ? fmtWhen(a.when) : null, a.description ?? null]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                </Card>
-              </View>
-            ) : null}
-
-            {/* CAPTURE — 0.18.3 (Noah): the same collapsible group card as
-                the exhibit details page, same time-outline icon. When &
-                where / Device / The seal / Sensors / Camera settings. */}
-            {record || hasTimeRows ? (
-              <View>
-                <GroupCard
-                  icon="time-outline"
-                  title="Capture"
-                  peek="When, where, on what."
-                  open={groupOpen.capture}
-                  onToggle={() => toggleGroup('capture')}
-                >
-                  <Text style={styles.subHead}>When and where</Text>
-                  {record && tsBigIso ? (
-                    <View>
-                      <LabelRow label="Timestamp" value={fmtAt(tsBigIso)} detail={tsStatus.text} detailColor={tsStatus.color} />
-                      {tsAnchorIso ? (
-                        <LabelRow
-                          label="Device clock"
-                          value={fmtAt(record.capturedAt)}
-                          valueColor={tsDisagrees ? colors.danger : undefined}
-                          detail={tsDisagrees ? `Disagrees with the countersigned time by ${tsGapMinutes} minute${tsGapMinutes === 1 ? '' : 's'}` : undefined}
-                          detailColor={tsDisagrees ? colors.danger : undefined}
-                        />
-                      ) : null}
-                      {tsFailed > 0 ? (
-                        <LabelRow
-                          label="Countersignatures"
-                          value={`${tsFailed} token${tsFailed === 1 ? '' : 's'} FAILED verification`}
-                          valueColor={colors.danger}
-                        />
-                      ) : tsUnchecked > 0 ? (
-                        <LabelRow
-                          label="Countersignatures"
-                          value={`${tsUnchecked} token${tsUnchecked === 1 ? '' : 's'} not readable by this app`}
-                          detail={GAP_DISCLAIMER}
-                        />
-                      ) : null}
-                      {otsView ? (
-                        (() => {
-                          const line = bitcoinCalendarValue(otsView);
-                          return <LabelRow label="Bitcoin calendar" value={line.text} valueColor={line.color} />;
-                        })()
-                      ) : null}
-                      {/* 0.18.6 (Noah): "redacted" only for de-identified
-                          copies (the re-seal marker); an anonymous-mode
-                          capture never provided a name — say Not provided. */}
-                      {record.identity === 'redacted' ? (
-                        <LabelRow label="Byline" value={record.deidentified ? 'Redacted by signer' : 'Not provided'} />
-                      ) : record.identity?.author ? (
-                        <LabelRow label="Byline" value={record.identity.author} />
-                      ) : (
-                        <LabelRow label="Byline" value="Not provided" />
-                      )}
-                      {(() => {
-                        const loc = record.context?.location;
-                        if (loc && typeof loc === 'object') {
-                          return (
-                            <>
-                              <LabelRow
-                                label="Location"
-                                value={`${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)}`}
-                                valueColor={IDENT_CLAY}
-                                detail="Reported by the phone at capture."
-                              >
-                                <Pressable
-                                  style={styles.mapsChip}
-                                  hitSlop={6}
-                                  accessibilityLabel="Open in Google Maps"
-                                  onPress={() => void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lon}`)}
-                                >
-                                  <Ionicons name="map-outline" size={12} color={colors.info} />
-                                  <Text style={styles.mapsChipText}>Google Maps</Text>
-                                </Pressable>
-                              </LabelRow>
-                            </>
-                          );
-                        }
-                        if (loc === 'redacted' || record.deidentified) {
-                          return <LabelRow label="Location" value="Redacted by signer" />;
-                        }
-                        if (loc === 'unavailable') {
-                          return <LabelRow label="Location" value="Unavailable at capture" />;
-                        }
-                        return <Text style={styles.claimAbsent}>No location sealed with this file.</Text>;
-                      })()}
-                      {record.context?.wifi === 'redacted' ? (
-                        <LabelRow label="Wi-Fi" value="Redacted by signer" />
-                      ) : record.context?.wifi === 'unavailable' ? (
-                        <LabelRow label="Wi-Fi" value="Unavailable at capture" />
-                      ) : record.context?.wifi ? (
-                        record.context.wifi.bssid ? (
-                          <LabelRow label="Wi-Fi BSSID" value={record.context.wifi.bssid} mono />
-                        ) : (
-                          <LabelRow label="Wi-Fi" value={record.context.wifi.ssid ?? 'Not reported'} detail="A lead worth following, not proof of place." />
-                        )
-                      ) : null}
-                    </View>
-                  ) : (
-                    <View>
-                      {/* No record, but time-shaped evidence exists (a
-                          countersignature or ledger state without a parsed
-                          record) — show what there is, never an empty head. */}
-                      {report.c2pa && report.c2pa.timestamps.present > 0 ? (
-                        <LabelRow
-                          label="Countersignatures"
-                          value={(() => {
-                            const t = report.c2pa.timestamps;
-                            const unchecked = t.unchecked ?? 0;
-                            if (unchecked > 0 && t.valid === 0) return `${t.present} embedded · not readable by this app`;
-                            return `${t.present} embedded · ${t.valid} verified${unchecked > 0 ? ` · ${unchecked} not readable by this app` : ''}${t.trusted === 0 && t.valid > 0 ? ' · authority not recognized' : ''}`;
-                          })()}
-                          detail={(report.c2pa.timestamps.unchecked ?? 0) > 0 && report.c2pa.timestamps.valid === 0
-                            ? GAP_DISCLAIMER
-                            : report.c2pa.timestamps.trusted === 0 && report.c2pa.timestamps.valid > 0
-                              ? 'The timestamp is genuine. This app does not recognize the authority that issued it.'
-                              : undefined}
-                        />
-                      ) : null}
-                      {otsView ? (
-                        (() => {
-                          const line = bitcoinCalendarValue(otsView);
-                          return <LabelRow label="Bitcoin calendar" value={line.text} valueColor={line.color} />;
-                        })()
-                      ) : null}
-                    </View>
-                  )}
-
-                  {record ? (
-                    <View style={styles.subSection}>
-                      <Text style={styles.subHead}>Device</Text>
-                      <LabelRow label="Device model" value={record.device.model ?? '—'} />
-                      <LabelRow label="Platform" value={record.device.platform === 'ios' ? 'iOS' : record.device.platform} />
-                      {/* Same capture-software claim as the exhibit page —
-                          the sealed claim-generator string, the record's own
-                          app block as the honest fallback. */}
-                      <LabelRow label="Capture software" value={report.c2pa?.generator ?? `${record.app.name} ${record.app.version}`} />
-                      {/* An absent org credential says nothing — never a warning. */}
-                      {orgValue ? <LabelRow label="Organization" value={orgValue} /> : null}
-                    </View>
-                  ) : null}
-
-                  {/* THE SEAL — the manifest lines, merged (0.18.2). What
-                      used to be the Manifest details drawer and the Signature
-                      detail section: each fact once, failure copy riding as
-                      the row's own detail. */}
-                  <View style={styles.subSection}>
-                    <Text style={styles.subHead}>The seal</Text>
-                    <SealRows report={report} />
-                    {signerFp ? (
-                      <View style={styles.monoBlock}>
-                        <Text style={styles.monoBlockLabel}>SIGNER FINGERPRINT · COMPARE ALL 64</Text>
-                        <Mono size="sm" color={colors.accent}>{signerFp}</Mono>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {record?.context && (record.context.headingDeg != null || record.context.declinationDeg != null || record.context.pressureHPa != null || record.context.altitudeM != null || record.context.motion || record.context.sensorTiming) ? (
-                    <View style={styles.subSection}>
-                      <Text style={styles.subHead}>Sensors (Device reported)</Text>
-                      {record.context.headingDeg != null ? (
-                        <LabelRow label="Heading" value={`${record.context.headingDeg}° (${compass8(record.context.headingDeg)})`} />
-                      ) : null}
-                      {declLine != null ? (
-                        <LabelRow
-                          label="Declination"
-                          value={declLine}
-                          detail="The magnetic field angle the phone measured, against what the model expects at the sealed coordinate."
-                        />
-                      ) : null}
-                      {record.context.pressureHPa != null ? (
-                        <LabelRow label="Barometer" value={`${record.context.pressureHPa} hPa`} />
-                      ) : null}
-                      {record.context.altitudeM != null ? (
-                        <LabelRow label="Altitude" value={`${record.context.altitudeM} m`} detail="Estimated from air pressure. Weather moves this by tens of meters." />
-                      ) : null}
-                      {record.context.motion ? (
-                        <LabelRow label="Motion" value={motionLabel(record.context.motion.verdict)} detail={`Strongest shake at ${record.context.motion.peakHz} Hz, the range a held hand produces.`} />
-                      ) : null}
-                    </View>
-                  ) : null}
-
-                  {/* Media type + size ride at the bottom of Camera
-                      Settings, under White Balance (0.18.3, Noah) — the
-                      standalone Media section is gone. */}
-                  {(manifestExif && Object.keys(manifestExif.data).filter((k) => k !== 'note').length > 0) || record ? (
-                    <View style={styles.subSection}>
-                      <Text style={styles.subHead}>Camera settings (Device reported)</Text>
-                      {/* The sealed block's `note` key is provenance boilerplate
-                          ("camera-pipeline-reported, signed as self-reported
-                          metadata"), not a camera setting — never a row. The
-                          head already carries the device-reported caveat. */}
-                      {manifestExif
-                        ? Object.entries(manifestExif.data).filter(([k]) => k !== 'note').map(([k, v]) => (
-                            <LabelRow key={k} label={EXIF_LABELS[k] ?? k} value={formatExifValue(k, v)} />
-                          ))
-                        : null}
-                      {/* the "binds to nothing" footnote
-                          is cut — the dim line under the heading now carries
-                          the one warning, at the top, in plain language. */}
-                      {record ? (
-                        <LabelRow
-                          label="Media"
-                          value={`${(record.asset.mime.split('/')[1] ?? record.asset.kind).toUpperCase()} · ${fmtBytes(record.asset.bytes)}`}
-                        />
-                      ) : null}
-                    </View>
-                  ) : null}
-                </GroupCard>
-              </View>
-            ) : null}
-
-            {/* INTEGRITY — the capture-integrity rows in the exhibit page's
-                Integrity group, with the same lock-closed-outline icon
-                (0.18.3, Noah). App Attest is NOT repeated here: it rides
-                in The seal above (0.18.2 merge — one fact, one place). */}
-            {record?.captureIntegrity ? (
-              <View>
-                <GroupCard
-                  icon="lock-closed-outline"
-                  title="Integrity"
-                  peek="How fast it was signed and how the sensors behaved."
-                  open={groupOpen.integrity}
-                  onToggle={() => toggleGroup('integrity')}
-                >
-                  <Text style={styles.subHead}>Capture integrity</Text>
-                  <LabelRow
-                    label="Time to signature"
-                    value={
-                      record.captureIntegrity.captureToSignatureMs < 1000
-                        ? `${record.captureIntegrity.captureToSignatureMs} ms`
-                        : `${(record.captureIntegrity.captureToSignatureMs / 1000).toFixed(1)} s`
-                    }
-                    detail="How long the file sat unsigned after the shutter. A long gap leaves room for a change."
-                  />
-                  {record.captureIntegrity.sensorTiming ? (
-                    <LabelRow
-                      label="Sensor-frame timing"
-                      value={sensorTimingVerdict(record.captureIntegrity.sensorTiming).value}
-                      detail={sensorTimingVerdict(record.captureIntegrity.sensorTiming).detail}
-                    />
-                  ) : null}
-                  {record.captureIntegrity.biometricGatePassed === true ? (
-                    <LabelRow label="Face ID at capture" value="Passed" />
-                  ) : record.captureIntegrity.biometricGatePassed === false ? (
-                    <LabelRow label="Face ID at capture" value="Ran, did not pass" />
-                  ) : null}
-                </GroupCard>
-              </View>
-            ) : null}
-
-            {/* FORENSIC CHECKS — the same shared module cards the exhibit
-                page renders: sealed data juxtaposed with what should be
-                true, never a conclusion. Where a check needs on-device
-                capture context the dropped file doesn't carry (burst frames,
-                the raw audio master), each card's own neutral state says
-                so — inputs are never fabricated to make a card render. */}
-            {report.checks.manifestFound ? (
-              <View>
-                <SectionLabel text="Forensic checks" />
-                {/* Lens, motion-trace and environment checks read PICTURE
-                    evidence — hidden on audio captures (0.18.3, Noah); the
-                    raw-audio master is the audio-applicable one. */}
-                {forensicKind !== 'audio' ? (
-                  <>
-                    <MultipleLensCard
-                      kind={forensicKind}
-                      primaryUri={picked?.uri ?? null}
-                      secondaryFrame={secondary.frame}
-                      primaryFrameTimeSeconds={secondary.ptsSeconds}
-                      recordError={secondary.recordError}
-                      videoFrames={secondary.videoFrames}
-                    />
-                    {forensicKind === 'video' ? (
-                      // 0.18.6 (Noah): a video take's motion trace — the
-                      // committed pair frames (the dropped file carries
-                      // them embedded) against the gyro log when THIS
-                      // device can read it. The gyro lane states its
-                      // absence on a foreign file; the picture lane is
-                      // the file's own committed content.
-                      <VideoMotionCard
-                        videoFrames={secondary.videoFrames}
-                        sensorLogPath={record?.context?.captureEvidence?.sensorLogPath}
-                        hfovDeg={record?.context?.hfovDeg}
-                      />
-                    ) : (
-                      <MotionTraceCard
-                        ringBufferDir={record?.context?.captureEvidence?.ringBufferDir}
-                        poseTrace={record?.context?.poseTrace}
-                        motion={record?.context?.motion}
-                        hfovDeg={record?.context?.hfovDeg}
-                      />
-                    )}
-                    <EnvironmentCard
-                      lat={juxta?.lat ?? null}
-                      lon={juxta?.lon ?? null}
-                      atIso={record?.capturedAt ?? null}
-                      rollDeg={juxta?.rollDeg ?? null}
-                      pitchDeg={juxta?.pitchDeg ?? null}
-                      facing={juxta?.facing ?? null}
-                      hfovDeg={juxta?.hfovDeg ?? null}
-                      sealedWhenWhere={sealedWhenWhere}
-                    />
-                  </>
-                ) : null}
-                <RawAudioCard
-                  kind={forensicKind}
-                  rawPcmPath={record?.context?.captureEvidence?.rawPcmPath}
-                  enfAnchor={enfAnchor}
-                />
-              </View>
-            ) : null}
-
-            {/* HOW THIS WAS SEALED — the sealing path as a ladder of rungs,
-                each reached / not reached / not applicable with one factual
-                line: bytes unchanged, signer identified, key attested by
-                Apple hardware, time countersigned by an independent
-                authority, public-ledger anchor. Projected by
-                src/lib/trustLadder from the evidence — nothing re-derived.
-                Closes the integrity story, as on the exhibit page. */}
-            {ladder ? (
-              <View>
-                <SectionLabel text="How this was sealed" />
-                <TrustLadderCard ladder={ladder} />
-              </View>
-            ) : null}
-
-            {/* ADVANCED (0.18.3, Noah) — the same cog-outline group card as
-                the exhibit details page, holding the raw C2PA manifest reel:
-                the FULL manifest, exactly as recovered, with copy as the way
-                it leaves the phone. The old Signer section is cut (redundant
-                — the seal rows and the ladder carry its facts), the Media
-                section folded into Camera Settings above, and the declared
-                edits moved up over Capture claims. */}
-            {report.checks.manifestFound ? (
-              <View>
-                <GroupCard
-                  icon="cog-outline"
-                  title="Advanced"
-                  peek="The full C2PA manifest, exactly as recovered."
-                  open={groupOpen.advanced}
-                  onToggle={() => toggleGroup('advanced')}
-                >
-                  {parsedManifest ? (
-                    <ManifestReel manifest={parsedManifest} />
-                  ) : (
-                    <Text style={styles.claimAbsent}>The manifest could not be parsed for display.</Text>
-                  )}
-                </GroupCard>
-              </View>
-            ) : null}
-
-            {/* Export — plain links, no ceremony. */}
-            {picked ? (
-              <View style={styles.exportRow}>
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => {
-                    void (async () => {
-                      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(picked.uri);
-                    })();
-                  }}
-                >
-                  <Text style={styles.exportLink}>Export original</Text>
-                </Pressable>
-                <Pressable
-                  hitSlop={8}
-                  onPress={() => {
-                    void (async () => {
-                      const out = {
-                        file: picked.name,
-                        verdict: report.verdict,
-                        sha256: record?.asset.sha256 ?? null,
-                        signerFingerprint: signerFp,
-                        capturedAt: record?.capturedAt ?? null,
-                      };
-                      const uri = `${FileSystem.cacheDirectory}inspection-report.json`;
-                      await FileSystem.writeAsStringAsync(uri, JSON.stringify(out, null, 2));
-                      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri);
-                    })();
-                  }}
-                >
-                  <Text style={styles.exportLink}>Export report</Text>
-                </Pressable>
-                <Pressable hitSlop={8} onPress={() => void Linking.openURL('https://contentcredentials.org/verify')}>
-                  <Text style={styles.exportLink}>Verify elsewhere</Text>
-                </Pressable>
+            {/* The detail body (0.25.0) — the same sections an exhibit
+                shows, from the same kit. A file dropped in here and a file
+                sealed by this phone are described in identical words, which
+                is the only way a reader can compare them. */}
+            {/* The scroll container pads 16 for the rest of Inspect; the
+                detail body brings its own gutter, so cancel one here or the
+                sections sit narrower than the same sections on an exhibit. */}
+            {/* A record or a manifest is enough. Any C2PA file gets the
+                same sections; the derive functions read the manifest when
+                there is no record to read. */}
+            {record || parsedManifest ? (
+              <View style={{ marginHorizontal: -spacing.md }}>
+              <DetailBody
+                record={record}
+                manifest={parsedManifest}
+                foreign={foreign}
+                signerIdentity={deriveSignerIdentity(record, siteForSigner, foreign, report as unknown as ReportView | null)}
+                seal={deriveSeal(record, report as unknown as ReportView | null, identity as unknown as SignerView, foreign)}
+                time={deriveTime(record, report as unknown as ReportView | null, null, foreign)}
+                place={derivePlace(record, foreign)}
+                kind={forensicKind}
+                mediaUri={picked?.uri ?? null}
+                secondary={secondary.frame}
+                secondaryPts={secondary.ptsSeconds}
+                secondaryError={secondary.recordError}
+                videoFrames={secondary.videoFrames}
+                juxta={juxta}
+                enfAnchor={enfAnchor}
+                sealedWhenWhere={juxta?.sealedWhenWhere ?? ''}
+                edits={deriveEdits(parsedManifest?.actions?.list)}
+                actions={[
+                  {
+                    label: 'Export original',
+                    icon: 'share-outline',
+                    onPress: () => {
+                      void (async () => {
+                        if (picked && (await Sharing.isAvailableAsync())) await Sharing.shareAsync(picked.uri);
+                      })();
+                    },
+                  },
+                  {
+                    label: 'Export attestation',
+                    icon: 'document-text-outline',
+                    onPress: () => {
+                      void (async () => {
+                        if (!picked) return;
+                        const out = {
+                          file: picked.name,
+                          verdict: report.verdict,
+                          sha256: record?.asset.sha256 ?? report.checks.recomputedSha256 ?? null,
+                          signerFingerprint: signerFp,
+                          capturedAt: record?.capturedAt ?? null,
+                        };
+                        const uri = `${FileSystem.cacheDirectory}inspection-report.json`;
+                        await FileSystem.writeAsStringAsync(uri, JSON.stringify(out, null, 2));
+                        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri);
+                      })();
+                    },
+                  },
+                  {
+                    label: 'Verify elsewhere',
+                    icon: 'open-outline',
+                    onPress: () => void Linking.openURL('https://contentcredentials.org/verify'),
+                  },
+                ]}
+              />
               </View>
             ) : null}
           </View>
@@ -2012,7 +1053,10 @@ export default function InspectScreen() {
 
 const buildStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
+  // The pill tab bar is absolutely positioned over this screen, so the
+  // scroll has to end above it: the layout's own convention, inset + the
+  // 64pt pill + breathing room. Without it the last line sits under the bar.
+  scroll: { padding: spacing.md, paddingBottom: spacing.xxl + 64 + spacing.md },
   // Group cards — the same values as the exhibit details page's buildGrp:
   // flat surface, hairline border, the whole header block as the tap target.
   groupCard: {
@@ -2155,9 +1199,6 @@ const buildStyles = () => StyleSheet.create({
     borderRadius: radii.sm, paddingVertical: 10, paddingHorizontal: spacing.md,
   },
   guideLinkText: { color: colors.textDim, fontSize: fontSize.sm, fontWeight: '600', flex: 1 },
-  editRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  editAction: { color: colors.textDim, fontSize: fontSize.sm, fontWeight: '600' },
-  editMeta: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 16, marginTop: 1 },
   fingerprintBox: {
     backgroundColor: colors.bg,
     borderRadius: radii.sm,
@@ -2208,7 +1249,6 @@ const buildStyles = () => StyleSheet.create({
   signerLine: { color: colors.text, fontSize: fontSize.sm, lineHeight: 19 },
   signerSub: { color: colors.textDim, fontSize: fontSize.sm, lineHeight: 19 },
   signerFaint: { color: colors.textFaint, fontSize: fontSize.xs, lineHeight: 17, marginTop: 4 },
-  editFlagText: { color: colors.text, fontSize: fontSize.sm, lineHeight: 19, flex: 1 },
   // A neutral fact line inside a claims card — absence said out loud, never
   // suspicion (body text: never below the muted token).
   claimAbsent: { color: colors.textDim, fontSize: fontSize.sm, lineHeight: 19, marginTop: spacing.xs },

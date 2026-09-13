@@ -521,13 +521,19 @@ export function wavBytesFromCaf(caf: CafPcm): Uint8Array | null {
 
 type AudioState =
   | { state: 'reading' }
-  | { state: 'done'; caf: CafPcm; bars: number[] | null; durationSec: number; sha256: string; sampleRate: number; frames: number }
+  | { state: 'done'; caf: CafPcm; bars: number[] | null; durationSec: number; sha256: string; fileSha256: string; sampleRate: number; frames: number }
   | { state: 'unavailable'; reason: string };
 
-export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
+export function RawAudioCard({ kind, rawPcmPath, rawPcmSha256, enfAnchor }: {
   kind: 'photo' | 'video' | 'audio';
   /** The sealed three-state raw-PCM path (record.context.captureEvidence). */
   rawPcmPath: EvidencePath | undefined;
+  /**
+   * The master's digest as committed under the record signature. Records
+   * sealed before 0.25.0 carry none, and an absent digest is reported as
+   * uncommitted — never as a match and never as a mismatch.
+   */
+  rawPcmSha256?: string | null;
   /** ENF anchor fields when the record carries them; omitted row otherwise. */
   enfAnchor?: EnfAnchor | null;
 }) {
@@ -556,6 +562,9 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
           bars: waveformBars(caf, BAR_COUNT),
           durationSec: caf.frames / caf.sampleRate,
           sha256: sha256Hex(caf.pcm),
+          // The sealed digest covers the file, not the decoded payload, so
+          // the comparison hashes the bytes that were read.
+          fileSha256: sha256Hex(bytes),
           sampleRate: caf.sampleRate,
           frames: caf.frames,
         });
@@ -666,6 +675,23 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
           {exportError ? <Text style={styles.exportError}>{exportError}</Text> : null}
           <Text style={styles.exportNote}>A PCM16 conversion of the sealed master, for listening elsewhere. The sealed bytes are the CAF above.</Text>
           <ForensicMono label="PCM SHA-256" value={audio.sha256} />
+          <ForensicMono label="File SHA-256" value={audio.fileSha256} />
+          {(() => {
+            // The master lives beside the media, not inside it. The seal
+            // reaches it through this digest and nothing else, so the three
+            // outcomes are stated apart: matched, changed, or never bound.
+            if (typeof rawPcmSha256 !== 'string' || rawPcmSha256.length === 0) {
+              return <Text style={styles.meta}>The record names this master by path only. Sealed before 0.25.0, so its bytes are not committed.</Text>;
+            }
+            const same = rawPcmSha256.toLowerCase() === audio.fileSha256.toLowerCase();
+            return (
+              <Text style={same ? styles.sealMatch : styles.sealBreak}>
+                {same
+                  ? 'Matches the digest sealed with the record.'
+                  : `Does not match the digest sealed with the record (${rawPcmSha256.slice(0, 16)}…). These are not the bytes that were signed.`}
+              </Text>
+            );
+          })()}
           {enfAnchor ? (
             <View style={styles.enfRow}>
               <Text style={styles.enfTitle}>Power-grid anchor</Text>
@@ -682,6 +708,8 @@ export function RawAudioCard({ kind, rawPcmPath, enfAnchor }: {
 
 const buildStyles = () => StyleSheet.create({
   line: { color: colors.text, fontSize: fontSize.sm, lineHeight: 19, marginTop: spacing.xs + 2 },
+  sealMatch: { color: colors.accent, fontSize: fontSize.sm, lineHeight: 19, marginTop: spacing.xs },
+  sealBreak: { color: colors.danger, fontSize: fontSize.sm, lineHeight: 19, marginTop: spacing.xs },
   waveRow: {
     flexDirection: 'row',
     alignItems: 'center',

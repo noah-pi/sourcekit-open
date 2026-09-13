@@ -40,6 +40,7 @@ import {
 } from './enclave';
 import { appAttestSupported, clearAttestation, getAttestState } from './appAttest';
 import { orgCertChainForKey, type OrgCredential } from './orgCert';
+import { personalCertChainForKey } from './personalCert';
 import { useStore } from '../store/useStore';
 
 const STORE_KEY = 'verify_device_signing_key_v1';
@@ -289,13 +290,53 @@ export async function getDeviceCert(): Promise<Uint8Array> {
 }
 
 /**
- * The x5chain for signing: an org credential chain when one is installed for
- * the current key, otherwise the self-signed device cert. `org` carries the
- * credential's display info (issuer, serial, expiry) for the signed record.
+ * Which credential the signature should name. Mirrors the identity mode the
+ * user picks per capture, pushed in from the store the way TSA URLs and the
+ * appearance preference are — this module must not reach up into the store.
+ */
+export type IdentityChainPreference = 'anonymous' | 'personal' | 'organization';
+
+// Matches DEFAULT_SETTINGS.identityMode, and fails safe if settings never
+// load: the bare device certificate names nobody, where a stale preference
+// for the org chain would name an organization the capture did not claim.
+let chainPreference: IdentityChainPreference = 'anonymous';
+
+/** Called by the settings store on load and on every save. */
+export function setIdentityChainPreference(preference: IdentityChainPreference): void {
+  chainPreference = preference;
+}
+
+/**
+ * The x5chain for signing, following the identity mode:
+ *   organization — the org credential chain when installed for the current
+ *                  key, else the self-signed device cert
+ *   personal     — the personal certificate chain when installed for the
+ *                  current key, else the self-signed device cert. It never
+ *                  falls back to the org chain: a personal capture must not
+ *                  carry an employer's name
+ *   anonymous    — the self-signed device cert, always. An anonymous capture
+ *                  that shipped an org chain would name the organization in
+ *                  the signature it just promised to leave out
+ *
+ * `org` carries the credential's display info (issuer, serial, expiry) for
+ * the signed record.
  */
 export async function getDeviceCertChain(): Promise<{ chain: Uint8Array[]; org: OrgCredential['info'] | null; orgStale: boolean }> {
   const signer = await getDeviceKey();
   const devicePub = base64ToBytes(signer.publicKeyBase64);
+
+  if (chainPreference === 'anonymous') {
+    const self = await getDeviceCert();
+    return { chain: [self], org: null, orgStale: false };
+  }
+
+  if (chainPreference === 'personal') {
+    const personal = await personalCertChainForKey(devicePub);
+    const self = await getDeviceCert();
+    if (personal && personal !== 'stale') return { chain: personal.chain, org: null, orgStale: false };
+    return { chain: [self], org: null, orgStale: false };
+  }
+
   const orgChain = await orgCertChainForKey(devicePub);
   if (orgChain === 'stale') {
     const self = await getDeviceCert();

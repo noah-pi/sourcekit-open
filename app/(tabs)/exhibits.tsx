@@ -8,7 +8,7 @@
  * data is embedded. Small glyphs on translucent dark discs, bottom-left.
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -462,6 +462,16 @@ export default function VaultScreen() {
   // Failed seals surface in the collapsed Needs-attention header; queued
   // and in-flight seals render as loading squares at the front of the grid.
   const [attentionOpen, setAttentionOpen] = useState(false);
+
+  // Tapping the active tab returns to the top, the same as Inspect.
+  const listRef = useRef<FlatList>(null);
+  const navigation = useNavigation();
+  useEffect(() => {
+    const unsub = navigation.addListener('tabPress' as never, () => {
+      listRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+    return unsub;
+  }, [navigation]);
   const failedJobs = sealJobs.filter((j) => j.state === 'failed');
   const activeJobs = sealJobs.filter((j) => j.state !== 'failed');
   const gridData: ({ job: SealJobSnapshot } | VaultIndexEntry)[] = [
@@ -499,6 +509,7 @@ export default function VaultScreen() {
       </View>
 
       <FlatList
+        ref={listRef}
         data={gridData}
         keyExtractor={(i) => ('job' in i ? `job-${i.job.id}` : i.id)}
         numColumns={COLS}
@@ -647,7 +658,11 @@ const buildStyles = () => StyleSheet.create({
   deleteButtonText: { color: '#fff', fontSize: fontSize.sm, fontWeight: '700' },
   // Needs-attention section: amber-toned failure rows (the error is the
   // point — verbatim, wrapped, selectable) and muted queued/sealing rows.
-  attentionSection: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: spacing.sm },
+  // GAP/2, not spacing.md: this header sits inside the grid's content
+  // container, which is already inset by PAD - GAP/2, and the tiles add
+  // their own GAP/2. Matching that lands the card on the tiles' edge
+  // instead of a full screen margin inside it.
+  attentionSection: { paddingHorizontal: GAP / 2, paddingBottom: spacing.sm, gap: spacing.sm },
   attentionToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs },
   attentionToggleText: { color: colors.textDim, fontSize: fontSize.sm, fontWeight: '600' },
   attentionRow: {

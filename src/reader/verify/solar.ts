@@ -24,6 +24,23 @@ export const SOLAR_CAVEAT = 'error bounds are provisional pending corpus charact
 const DEG = 180 / Math.PI;
 const RAD = Math.PI / 180;
 
+/**
+ * The sun is seen above a sea-level horizon until its geometric center is
+ * 0.833° below it: refraction lifts the disc about 0.57°, and the upper
+ * limb stands another 0.27° above the center. This is the standard
+ * sunrise and sunset definition. A card that read "below the horizon" at
+ * geometric zero was calling a visible setting sun night.
+ *
+ * Height above the ground lowers the horizon further and keeps the sun in
+ * view longer still; that is not modeled, so a high vantage at dusk can
+ * read as set a minute or two early.
+ */
+export const SUN_VISIBLE_TO_DEG = -0.833;
+
+export function sunIsUp(elevationDeg: number): boolean {
+  return elevationDeg > SUN_VISIBLE_TO_DEG;
+}
+
 export interface SolarPosition {
   /** Degrees above the horizon (negative = sun down). */
   elevationDeg: number;
@@ -79,7 +96,9 @@ export interface ShadowGrammar {
 }
 
 export function shadowGrammar(pos: SolarPosition): ShadowGrammar | null {
-  if (pos.elevationDeg <= 0) return null; // sun down, no shadow grammar applies
+  // No grammar at or under geometric zero: a visible sun on the horizon
+  // throws shadows with no usable length, and the tangent has no meaning.
+  if (pos.elevationDeg <= 0) return null;
   const tanEl = Math.tan(pos.elevationDeg * RAD);
   return {
     poleShadowCm: Math.round((100 / tanEl) * 10) / 10,
@@ -122,7 +141,7 @@ export function solarCard(record: AttestationRecord): EvidenceCard {
     audit: 'Audit ▸ lat/lon + UTC instant → elevation/azimuth is deterministic (NOAA); the shadow grammar follows from elevation alone',
   } as const;
 
-  if (pos.elevationDeg <= 0) {
+  if (!sunIsUp(pos.elevationDeg)) {
     return makeCard({
       ...base, state: 'insufficient',
       measurement: `sun ${round1(pos.elevationDeg)}° BELOW the horizon at the committed place ◌ and time ◌; no shadow grammar applies`,
@@ -132,7 +151,15 @@ export function solarCard(record: AttestationRecord): EvidenceCard {
     });
   }
 
-  const shadow = shadowGrammar(pos)!;
+  const shadow = shadowGrammar(pos);
+  if (!shadow) {
+    return makeCard({
+      ...base, state: 'insufficient',
+      measurement: `sun on the horizon (${round1(pos.elevationDeg)}°) at the committed place ◌ and time ◌; shadows run nearly flat and have no usable length`,
+      gap: 'undecidable: at sunrise or sunset a shadow has direction but no measurable length',
+      interpretation: 'consistent with a capture at sunrise or sunset; the sun sits on the horizon in the direction stated',
+    });
+  }
   // A scaled restatement for a familiar object: shadow scales with height.
   const objectCm = 30;
   const objectShadowCm = Math.round((shadow.poleShadowCm * objectCm) / 1000) * 10;

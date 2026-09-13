@@ -2,213 +2,133 @@
 # Settings, in full
 
 The Settings screen keeps every row short. This is the long-form version of
-what each row does.
+what each row does, in the order the screen shows them.
 
-## Capture
+## Device key
 
-### Byline
+Every capture is signed with an ECDSA P-256 key generated on and never
+leaving this device. Three backends, in order of strength: the Secure
+Enclave with Apple's attestation bound to the key, the Secure Enclave
+alone, and the OS keychain as a software fallback that says so. The card
+shows the fingerprint; publish it so recipients can confirm your signatures.
 
-A byline is self-asserted — it records what you wanted to be called, not proof
-of who you are. Organization affiliation belongs to a real credential (see
-*Trust* below), which your organization signs and verifiers can check — never a
-typed-in claim.
+Attestation runs on first launch with a locally generated challenge and
+needs no network. An organization that runs its own registry can enter its
+URL under "Use an organization registry instead"; nothing is bundled and
+nothing is contacted until a URL is typed.
 
-### Identity on each capture
+**Rotate key** generates a new device identity and destroys the old private
+key. Past captures stay verifiable against the old fingerprint; new
+captures sign with the new key, and any credential issued for the old key
+stops being used until re-issued.
 
-Per-capture disclosure, aligned with CAWG guidance. The cryptography is
-identical either way — this chooses what the signed record *says* about you.
+**Face ID on every seal** switches to a separate hardware key that needs
+Face ID for each capture, so a record says a recognized person approved
+that capture and not only that the phone was unlocked. The trade-off is on
+the switch: Apple's attestation binds one key, the everyday one, so files
+then read *Face ID approved* instead of *Attested*, and a certificate
+issued for the everyday key is not used.
 
-- **Anonymous** — no name, no organization.
-- **Organization only** — your org credential identifies the organization,
-  never your name. The setting a stringer in a hostile country wants. Without
-  an org credential installed this is effectively anonymous.
-- **Named** — your byline, plus org credential when installed.
+Every capture is also signed with ML-DSA-65, a post-quantum algorithm, with
+a software key in the keychain. It signs alongside the device key, never
+instead, and de-identified copies skip it so a long-lived key cannot
+re-link them.
 
-### Privacy at capture
+## Signer Information
 
-- **Record location** — GPS coordinates (and GPS-based compass heading) are
-  written into the attestation.
-- **Record sensor context** — barometric pressure/altitude and the motion
-  signal around the shutter moment.
-- **Record Wi-Fi network** — the Wi-Fi name and router address your phone
-  reports at capture. Self-reported — anyone can name a network anything — so a
-  verifier reads it as a lead to weigh, never proof of place. Needs location
-  permission and a signed build with the Wi-Fi entitlement; without them the
-  record says "unavailable". Always removed from de-identified copies. Off by
-  default.
-- **Save signed photos to camera roll** — copies leave the encrypted vault
-  (still signed). Off by default.
+Every name on a capture comes from a credential the device holds. There is
+nowhere to type one, because a typed name is not something a verifier can
+check.
 
-### Capture evidence
+- **Website** — publish one file at `/.well-known/sourcekit-site.json` on a
+  domain you control, listing the phones allowed to sign as you. It rests
+  on the certificate already on your website, so nothing else has to be
+  configured. It shows control of an address, not who owns it, and the
+  label reads *Domain verified*. One file lists every phone; creating the
+  file on a second phone keeps the first phone's entry.
+- **Identity via certificate authority** — a certificate in your name, from
+  a public authority or from your organization, issued for the key already
+  in this phone. The app builds the certification request and signs it
+  with the Enclave key; you send that out and import what comes back, from
+  a file or from the issuer's own domain over TLS. The private key never
+  leaves the Enclave. An organization's certificate reads *Certified*; a
+  person's reads *Verified*; a chain that holds but reaches no list this
+  device carries reads *Certificate*. The anchor lists refresh at most
+  weekly, when this screen or an import opens, never at launch.
 
-Three toggles — **parallax ring**, **raw audio master**, **full-rate sensor
-log** — all on by default. They control which evidence files the native
-capture session writes beside the delivery photo or video. The files stay on
-this device for later analysis. The phone does not analyze them.
-Turning a toggle off means the evidence is **not collected at all**: future
-captures carry no such evidence and their signed record says so explicitly
-(`never-recorded`) — an off toggle is never indistinguishable from a failure.
+## What gets recorded
 
-What each captures:
+Identifying rows first, evidence rows after. Each is a switch, and an off
+switch means the thing is not collected at all: the signed record says
+`never-recorded`, which is never indistinguishable from a failure.
 
-- **Parallax ring (stills only)** — about 8 JPEG frames straddling the
-  shutter, for depth review. Video keeps no ring.
-- **Raw audio master (video)** — an uncompressed LPCM track (16 kHz mono
-  `.caf`) converted on-device from the same native audio buffers that feed
-  the delivery file, for later analysis such as mains-hum work. Recording
-  mode disables voice processing as far as the public API allows.
-- **Full-rate sensor log** — accelerometer/gyroscope at 100 Hz, barometer,
-  and location fixes, as JSONL. Location is the fused `CLLocation` kind iOS
-  provides — raw GNSS is not available on iOS and is never faked.
+- **Location** — exact GPS coordinates at the shutter. Off is a sealed
+  statement that no location was recorded.
+- **Identity** — on means a name rides along, from whichever credential is
+  installed; off means anonymous. With no credential installed the switch
+  is off and says so. Which mode is active is cycled on the viewfinder
+  pill, which skips modes with nothing behind them.
+- **Wi-Fi** — the router's hardware address the phone reports. Anyone can
+  name a network anything, so a verifier reads it as a lead. Needs
+  location permission and a signed build. Off by default.
+- **Multiple lenses** — two rear cameras shoot at once, and a downsampled
+  second view is sealed into the file as a C2PA ingredient.
+- **Motion log** — full-rate 100 Hz accelerometer and gyroscope, barometer,
+  and location fixes, as JSONL, beside the delivery file.
+- **Shutter burst** — the frames around the shutter, 3 before and 4 after.
+  Photos only.
+- **Transcript** — speech-to-text on device. Video and audio only. Sealed
+  inside the signed file.
+- **Raw audio** — an uncompressed 16 kHz mono LPCM master during video,
+  converted on device from the same buffers that feed the delivery track.
 
-Alongside the evidence files, CaptureKit video also carries a **streamed
-hash commitment**: the bytes are SHA-256-hashed in fixed 1 MiB chunks as
-they are written, with constant memory, and the record's
-`camera.streamedChunks` assertion carries the Merkle root fixed the moment
-recording stopped. Byte equality of the finished file is still verified
-separately by the existing hard binding. And the record carries the
-**anti-banding state**: mains frequency derived from the device region
-(50/60 Hz), never measured — iOS exposes no anti-banding API, so the record
-says `region-derived` — plus the last known exposure duration.
+Every evidence file's digest is committed under the record signature, so a
+reader that finds no digest says the sidecar is uncommitted rather than
+assuming it matches.
 
-Every evidence sink is recorded in exactly one of three states: the file's path
-when collected, an explicit `null` when the sink was on but failed, or
-`never-recorded` when the toggle was off, the sink doesn't apply to the
-media kind (PCM on a still, ring on a video), or the CaptureKit module is
-unavailable (simulators and older builds use the previous camera path).
-Evidence failures never destroy the delivery capture — photo and video
-always land.
+## Blockchain timestamping
 
-## Time evidence
+A hash of each capture goes to the public OpenTimestamps calendars, which
+place it in a Bitcoin block within a few hours. A hash only, never media, no
+account, no cost. Pending and queued states are shown as such. Every record
+also carries the latest cached Bitcoin block, fetched on a jittered timer
+that never coincides with a shutter, as a lower bound on when the seal was
+made.
 
-- **Bitcoin-anchored timestamps** — each capture's fingerprint is submitted to
-  the free public OpenTimestamps calendars: a hash only, never media, no
-  account, no cost. Confirmation takes about two hours; pending and queued
-  states are shown as pending and queued.
-- **Custom timestamp authorities (advanced)** — every trust claim is swappable.
-  Leave blank to use the built-in RFC 3161 witness pool; enter one URL per line
-  to use your organization's own authorities.
-- **Custom OpenTimestamps calendars (advanced)** — same idea for the Bitcoin
-  anchoring step.
-- **Bitcoin block endpoint (advanced)** — every record also embeds the latest
-  cached Bitcoin block: proof the signature is no older than that block. Tips
-  are fetched on a jittered schedule, never when you shoot. Leave blank for the
-  public defaults; pin your own Esplora server here.
+Countersigning by an RFC 3161 timestamp authority is not a setting. It
+happens on every seal, against a built-in pool of public authorities, and
+the record says which one answered or that none did.
 
-## Which code seals a capture
+## Privacy and Security
 
-Not a setting. Photos and videos are signed by
-[c2pa-swift](https://github.com/contentauth/c2pa-swift); audio and PNG are
-signed by this app's own COSE/JUMBF builder, which is also what verifies every
-file. Diagnostics names the path for each capture.
+- **Set passcode**, **Remove** — the passcode locks the app. It is not the
+  key: media is encrypted under a key that never leaves the device.
+  Repeated wrong attempts lock the keypad with escalating delays.
+- **Unlock with Face ID** — unlocks the app instead of the passcode when the
+  device has it set up.
+- **Save to Photos** — keeps a signed copy of each photo in the camera roll,
+  outside the encrypted vault. Off by default.
+- **Erase all Source Kit data** — the vault, the records, the keys.
 
-## Trust
+## Appearance
 
-### Newsroom rosters
+Light, dark, or the system setting.
 
-A roster is your newsroom's signed list of staff keys: names, roles, validity
-dates, vouched for by an editor's signature. Check a colleague's exhibit and
-their name shows — with who vouched and when. Revoking a departed member never
-erases their genuine past captures; signing after a revocation is a red flag.
-Roster files come from your newsroom, out of band — never from inside a file you're
-checking. When you install one, confirm the editor fingerprint out of band
-against what your newsroom actually distributed. A roster carrying a newsroom key
-also unlocks sealed-to-newsroom capture; only that key's share holders can open
-that ciphertext.
+## Diagnostics
 
-### Organization credential
+Photos and video seal with c2pa-swift, the Content Authenticity
+Initiative's SDK. Audio seals with the Source Kit signer, as does any
+capture where the SDK fails, with the reason logged. The event log names
+the engine that sealed each capture.
 
-Optional. Without one, photos are signed by this device's self-issued
-certificate — cryptographically valid, but flagged "untrusted issuer" by public
-C2PA tools. With one, your organization's CA vouches for this device's key, and
-external verifiers can validate the credential — and its revocation status —
-against the org.
-
-How it works: export this device's public key → your organization signs that
-key with its CA (offline, e.g. openssl) → import the certificate here. The
-private key never leaves the Secure Enclave, and Source Kit never accepts one.
-Revocation is handled by your org's standard OCSP/CRL endpoints, checked by
-verifiers. If the device key rotates, the installed credential no longer
-matches and stops being used until re-issued.
-
-## Safety
-
-### App lock and the vault
-
-Only this phone can open your vault — media is encrypted under a key that never
-leaves the device. The passcode locks the door; it is not the key. Repeated
-wrong attempts lock the keypad with escalating delays. Face ID, when enabled,
-unlocks the app instead of the passcode.
-
-## This device
-
-### Signing identity
-
-Every capture is signed with an ECDSA P-256 key generated on and never leaving
-this device. Three backends, in order of strength:
-
-1. **Secure Enclave · Apple-attested** — Apple has certified this device and
-   app (App Attest), and that certificate is cryptographically bound to the
-   Secure Enclave signing key. The binding rides inside every photo's C2PA
-   manifest, verifiable offline against Apple's root.
-2. **Secure Enclave (non-extractable)** — the private key cannot leave the
-   chip; signing happens on the silicon, and no process (including this app)
-   can ever read the key.
-3. **OS keychain (software fallback)** — device-bound, not hardware-anchored.
-
-Publish the fingerprint so recipients can confirm your signatures.
-
-### Post-quantum seal
-
-Every capture is also signed with ML-DSA-65, a post-quantum algorithm —
-insurance against a future break of P-256. This key is software in the OS
-keychain, not Secure Enclave: it signs alongside the device key, never instead,
-and it is not a hardware anchor. De-identified copies skip it: a long-lived
-device key would re-link them.
-
-### Biometric-bound signing
-
-Optional extra assurance: fresh Face ID approval seals every capture — proof
-that a recognized person approved that capture, not just that the phone was
-unlocked. The trade-off, also shown when you enable it: biometric
-signing uses a separate Secure Enclave key, and Apple's hardware attestation
-can only bind one key — your everyday signing key. New signatures carry
-"Face ID–approved" instead of the Apple hardware attestation, and any
-organization credential must be re-issued for the new key.
-
-### Hardware attestation (App Attest)
-
-On demand, and off by default. Source Kit ships with no registry address and never
-contacts one at launch. If you point it at a registry you choose — self-hosted
-with the open server in the Source Kit repo, or a public one you trust — Apple
-certifies that this is genuine hardware running a genuine Source Kit build, and
-that certificate is cryptographically bound to this device's signing key.
-Signing works regardless; attestation lets anyone check your media came from
-genuine hardware.
-
-## How verification works
-
-Verification is offline math, not a service: strip the credentials, re-hash,
-check the signature against the embedded public key. A signature proves
-integrity and which key signed — never who holds that key, that a scene was
-real, or that a clock told the truth.
-
-| Piece | What it is |
-| --- | --- |
-| Hash | SHA-256 of the exact signed bytes |
-| Signature | ECDSA P-256 (ES256) · COSE_Sign1 |
-| Standard | C2PA manifest embedded in the file (JPEG / MP4 / MOV / M4A) |
-| Trusted time | RFC 3161 tokens, cryptographically verified on-device |
-| Key storage | Secure Enclave, non-extractable (when available) |
-| Hardware proof | Apple App Attest, verified offline against Apple's pinned root |
-| Org credential | X.509 chain into your org's CA (optional) |
-| Transcription | On-device Apple Speech, sealed inside the signed file |
-| Vault | AES-256-GCM, keychain-held key |
+- **12 MP photo clamp** — on by default. Off reserves the full 48 MP stream
+  on a live dual-camera graph, which costs the pipeline real bandwidth.
+- **Event log** — what sealed, what failed, and why. Clear empties it.
+- **SDK quarantine** — shown only when the SDK produced bytes that failed
+  their own self-check. Export a copy for forensics, or clear.
 
 ## Beta
 
-The cryptography is real and verifiable today — but this is early software.
-Expect rough edges, and don't rely on Source Kit as the only copy of anything
-important: keep your own backups. Files you sign now will remain verifiable
-even as the format evolves. If something breaks or feels off, that's useful —
-tell us.
+The cryptography is real and verifiable today, and this is early software.
+Keep your own backups. Files you sign now will remain verifiable as the
+format evolves.

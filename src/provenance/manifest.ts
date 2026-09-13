@@ -96,6 +96,23 @@ export interface CaptureEvidencePaths {
   sensorLogPath: EvidencePath;
   /** Dumped JPEG ring frames — a stills-only sink; 'never-recorded' on videos. */
   ringBufferDir: EvidencePath;
+  /**
+   * SHA-256 over each sink's bytes, committed under the record signature.
+   *
+   * The paths above name where a sidecar lives; these say what it contained.
+   * Without them the seal covers the delivered media and nothing else, so a
+   * swapped raw master or a rewritten sensor log passes unnoticed — the
+   * evidence a desk reaches for first is the evidence nothing binds.
+   *
+   * A directory sink hashes its listing: every file's own digest, sorted by
+   * name, hashed together (see src/lib/evidenceDigest.ts). Optional and
+   * backward compatible: absent on pre-0.25.0 records, and a reader that
+   * finds no digest says the sidecar is uncommitted rather than assuming it
+   * matches.
+   */
+  rawPcmSha256?: string | null;
+  sensorLogSha256?: string | null;
+  ringBufferSha256?: string | null;
 }
 
 /**

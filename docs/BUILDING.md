@@ -43,6 +43,6 @@ eas submit --platform ios --profile production \
 ```
 
 Note: App Attest verification is keyed to the Team ID baked into the build
-(`VERIFY_APPLE_APP_ID` in `src/lib/appleAttestRoot.ts`) — a fork must set
-its own Team ID there too, or attestations will (correctly) fail the app-id
-check.
+(`VERIFY_APPLE_APP_IDS` in `src/lib/appleAttestRoot.ts`, two entries,
+production and staging) — a fork must set its own Team ID in both, or
+attestations will (correctly) fail the app-id check.

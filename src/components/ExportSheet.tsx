@@ -35,14 +35,12 @@ export interface ExportPii {
 }
 
 
-export function ExportSheet({ visible, name, kind, pii, deskNewsroom, onBasic, onFull, onProofOnly, onCustom, onDesk, onCancel }: {
+export function ExportSheet({ visible, name, kind, pii, onBasic, onFull, onProofOnly, onCustom, onCancel }: {
   visible: boolean;
   /** Display name quoted in the title. */
   name: string;
   kind: 'photo' | 'video' | 'audio';
   pii: ExportPii;
-  /** When a desk key is configured, the encrypted handoff renders below the share options. */
-  deskNewsroom?: string | null;
   /** Share without identifying details — de-identified, re-sealed copy. */
   onBasic: (format: 'jpeg' | 'png') => void;
   /** Share original — the file exactly as sealed. */
@@ -51,7 +49,6 @@ export function ExportSheet({ visible, name, kind, pii, deskNewsroom, onBasic, o
   onProofOnly: () => void;
   /** Choose what to open — the per-field disclosure toggles. */
   onCustom: () => void;
-  onDesk?: () => void;
   onCancel: () => void;
 }) {
   const styles = useThemedStyles(buildStyles);
@@ -170,19 +167,6 @@ export function ExportSheet({ visible, name, kind, pii, deskNewsroom, onBasic, o
 
           {/* The encrypted desk handoff is transport, not a share option —
               visibly separated, and only present when configured. */}
-          {deskNewsroom && onDesk ? (
-            <>
-              <View style={styles.handoffRule} />
-              <Pressable style={styles.handoffRow} onPress={onDesk}>
-                <Ionicons name="lock-closed-outline" size={16} color={colors.text} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.handoffLabel}>Send to {deskNewsroom}</Text>
-                  <Text style={styles.handoffDetail}>Encrypted to their key.</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={14} color={colors.textFaint} />
-              </Pressable>
-            </>
-          ) : null}
 
           <Pressable style={styles.cancelButton} onPress={onCancel} hitSlop={8}>
             <Text style={styles.cancelLabel}>Cancel</Text>

@@ -42,6 +42,10 @@ import { rocCurve, auc, operatingPoint, buildRocReport, type LabeledScore } from
 import { estimateGlobalMotion } from './opticalflow.mts';
 import { analyzeImuFlowConsistency, type FlowSample } from './imuflow.mts';
 import { verifyAppAttestAssertion } from './verifyAppAttest.mts';
+import { readForeignManifest, humanGenerator, declaredLocation } from './foreign.mts';
+import { PINNED_SIGNERS, pinnedSignerFor } from './signerTrustList.mts';
+import { deriveLabel, deriveSeal, deriveTime, derivePlace, deriveSignerIdentity, deriveEdits, type ReportView } from './derive.mts';
+import { verifyCaptureAssertionSignature } from './verifyAppAttest.mts';
 import { buildC2paSegment, parseManifest, parseManifestChain, verifyManifest, extractC2paStore, hashBmffV2, sha256ExcludingRanges } from './c2pa.mts';
 import { PNG_SIGNATURE, caBxChunk, extractCaBx } from './png.mts';
 import { parseRootBoxes, extractC2paStoreBmff, buildC2paUuidBox } from './bmff.mts';
@@ -1219,6 +1223,180 @@ console.log('\n— void-binding guards (the exclusion attack) —');
   });
   check('BMFF: excluding every box is VOID (hash of nothing)',
     vAll.assetHashMatches === false && vAll.assetHashFailure === 'void-binding');
+}
+
+console.log('\n— foreign manifests (any C2PA signer, no record) —');
+{
+  const leaf = parseCertificate(leafDer);
+  const foreignBase = {
+    claimGenerator: 'Adobe Photoshop/25.0 (Windows)',
+    certDer: leafDer,
+    certChain: [leafDer, caDer],
+    certChainLength: 2,
+    actions: { list: [{ action: 'c2pa.created', when: '2026-03-04T05:06:07Z', softwareAgent: 'Pixel Camera' }], referenced: true },
+    c2paMetadata: { data: { '@context': {}, 'exif:GPSLatitude': '48,12.6N', 'exif:GPSLongitude': '11,34.2E', 'xmp:CreateDate': '2026-01-01T00:00:00Z' }, referenced: true },
+    assetType: { types: ['image'], referenced: true },
+    ingredients: [{ label: 'c2pa.ingredient.v2', title: 'IMG_0001.jpg', relationship: 'parentOf', format: 'image/jpeg', referenced: true }],
+    timestampTokens: [new Uint8Array(4)],
+    manifestCount: 2,
+    manifestLabel: 'urn:uuid:lab',
+    referencedAssertionLabels: ['c2pa.actions', 'c2pa.hash.data'],
+    trainingMining: { entries: { 'c2pa.ai_generative_training': 'notAllowed' }, referenced: true },
+    hashData: { exclusions: [], alg: 'sha256', hash: new Uint8Array([0xab, 0xcd]) },
+    hashBmff: null,
+    claimVersion: 2 as const,
+  };
+  const f = readForeignManifest(foreignBase);
+  check('foreign: generator drops the slash and the platform note', f.generator === 'Adobe Photoshop 25.0', f.generator ?? '');
+  check('foreign: signer is read from the leaf certificate', !!f.signer && f.signer.name === leaf.subjectCN && f.signer.issuer === leaf.issuerCN);
+  check('foreign: chain length carries through', f.signer?.chainLength === 2);
+  check('foreign: created action wins over metadata create date', f.createdAt === '2026-03-04T05:06:07Z', f.createdAt ?? '');
+  check('foreign: XMP degrees,minutes coordinates parse with hemisphere',
+    !!f.location && Math.abs(f.location.lat - 48.21) < 1e-6 && Math.abs(f.location.lon - 11.57) < 1e-6,
+    JSON.stringify(f.location));
+  check('foreign: signed digest is the hash.data digest in hex', f.signedDigestHex === 'abcd');
+  check('foreign: @context is not a metadata row', f.metadata.every(([k]) => !k.startsWith('@')) && f.metadata.length === 3);
+  check('foreign: ingredients keep title, relationship and format',
+    f.ingredients.length === 1 && f.ingredients[0].title === 'IMG_0001.jpg' && f.ingredients[0].relationship === 'parentOf');
+  check('foreign: training stance is surfaced', f.trainingMining.length === 1 && f.trainingMining[0][1] === 'notAllowed');
+
+  const noCreated = readForeignManifest({ ...foreignBase, actions: null });
+  check('foreign: metadata create date is the fallback', noCreated.createdAt === '2026-01-01T00:00:00Z');
+
+  const garbage = readForeignManifest({ ...foreignBase, certDer: new Uint8Array([1, 2, 3]) });
+  check('foreign: an unreadable certificate is absence, not a throw', garbage.signer === null);
+
+  const selfSigned = readForeignManifest({ ...foreignBase, certChainLength: 1 });
+  check('foreign: a bare leaf reads as chain length 1', selfSigned.signer?.chainLength === 1);
+  check('foreign: the test CA is on no published list, so no anchor', f.signer?.anchor === null);
+  check('signer list: every pin is a 64-hex fingerprint with a name', PINNED_SIGNERS.every((p) => /^[0-9a-f]{64}$/.test(p.certSha256) && p.name.length > 0));
+  check('signer list: a chain carrying a pinned root resolves to it', pinnedSignerFor(['00', PINNED_SIGNERS[0].certSha256.toUpperCase()])?.name === PINNED_SIGNERS[0].name);
+  check('signer list: an unlisted chain resolves to nothing', pinnedSignerFor(['ab'.repeat(32)]) === null);
+
+  check('foreign: generator with no version keeps the name', humanGenerator('Leica M11-P') === 'Leica M11-P');
+  check('foreign: empty generator is null', humanGenerator('') === null && humanGenerator(null) === null);
+
+  check('foreign: decimal coordinates with a separate ref sign the value',
+    (() => { const l = declaredLocation({ 'exif:GPSLatitude': 33.5, 'exif:GPSLatitudeRef': 'S', 'exif:GPSLongitude': '151.2', 'exif:GPSLongitudeRef': 'E' }); return !!l && l.lat === -33.5 && l.lon === 151.2; })());
+  check('foreign: degrees,minutes,seconds coordinates parse',
+    (() => { const l = declaredLocation({ 'exif:GPSLatitude': '48,12,36W', 'exif:GPSLongitude': '0,0,0N' }); return !!l && Math.abs(l.lat + 48.21) < 1e-6 && l.lon === 0; })());
+  check('foreign: out-of-range or malformed coordinates are absent',
+    declaredLocation({ 'exif:GPSLatitude': '91', 'exif:GPSLongitude': '0' }) === null &&
+    declaredLocation({ 'exif:GPSLatitude': 'north', 'exif:GPSLongitude': '0' }) === null &&
+    declaredLocation({ 'exif:GPSLatitude': '1' }) === null);
+}
+
+
+console.log('\n— App Attest capture assertion signatures —');
+{
+  const priv = p256.utils.randomPrivateKey();
+  const pub = p256.getPublicKey(priv, false);
+  const authD = new Uint8Array(37);
+  authD.set(sha256(new TextEncoder().encode('ABCDE12345.com.verify.camera')), 0);
+  authD[32] = 0x40;
+  authD[36] = 7;
+  const cdh = sha256(new TextEncoder().encode('capture client data'));
+  const msg = sha256(new Uint8Array([...authD, ...cdh]));
+  const low = p256.sign(msg, priv, { lowS: true, prehash: false });
+  const lowDer = low.toDERRawBytes();
+  const highDer = new p256.Signature(low.r, p256.CURVE.n - low.s).toDERRawBytes();
+  check('assertion: a low-S signature verifies', verifyCaptureAssertionSignature(lowDer, authD, cdh, pub));
+  check('assertion: a high-S signature verifies (the Enclave does not normalize S)',
+    verifyCaptureAssertionSignature(highDer, authD, cdh, pub));
+  const other = p256.getPublicKey(p256.utils.randomPrivateKey(), false);
+  check('assertion: another key does not verify', !verifyCaptureAssertionSignature(highDer, authD, cdh, other));
+  const otherCdh = sha256(new TextEncoder().encode('a different capture'));
+  check('assertion: another client data hash does not verify', !verifyCaptureAssertionSignature(highDer, authD, otherCdh, pub));
+  check('assertion: garbage bytes do not throw', !verifyCaptureAssertionSignature(new Uint8Array([1, 2, 3]), authD, cdh, pub));
+}
+
+
+console.log('\n— the label: every word, from state —');
+{
+  const rec = (over: Record<string, unknown> = {}) => ({
+    asset: { sha256: 'ab'.repeat(32), bytes: 10, mime: 'image/jpeg', kind: 'photo' },
+    app: { name: 'Source Kit', version: '0.25.0' },
+    device: { model: 'iPhone 17', platform: 'ios' },
+    capturedAt: '2026-09-06T03:09:41Z',
+    signer: { alg: 'ES256', curve: 'P-256', fingerprint: 'cd'.repeat(32) },
+    identity: 'redacted',
+    context: { location: { lat: 40.67768, lon: -74.00129, accuracyM: 14 }, declinationDeg: -12.5 },
+    beacon: { blockHeight: 965683, observedAt: '2026-09-06T03:09:38Z' },
+    ...over,
+  }) as any;
+  const proven: ReportView = { c2pa: { appAttest: { present: true, valid: true }, timestamps: { present: 1, valid: 1, trusted: 1, earliestTrustedUtc: '2026-09-06T03:10:02Z', tsaNames: ['www.freetsa.org'], trustedNames: ['FreeTSA (www.freetsa.org)'] } }, signatureValid: true, checks: { recomputedSha256: 'ab'.repeat(32) } };
+  const labelFor = (record: any, report: ReportView | null, site: { domain: string } | null = null, foreign: any = null, edits: any = null) =>
+    deriveLabel({
+      record, foreign,
+      seal: deriveSeal(record, report, null, foreign),
+      time: deriveTime(record, report, null, foreign),
+      place: derivePlace(record, foreign),
+      identity: deriveSignerIdentity(record, site, foreign, report),
+      edits,
+    });
+  const row = (l: ReturnType<typeof deriveLabel>, id: string) => l.rows.find((r) => r.id === id)!;
+
+  const base = labelFor(rec(), proven);
+  check('label: a proven seal says Apple in green', row(base, 'seal').word === 'Apple' && row(base, 'seal').tone === 'established' && row(base, 'seal').answer === 'No');
+  check('label: the countersigned time is the answer and the phone clock is the caption',
+    row(base, 'time').answer.includes('10') && /phone clock/.test(row(base, 'time').caption), row(base, 'time').answer + ' | ' + row(base, 'time').caption);
+  check('label: the authority is named from the pinned list, with Bitcoin', row(base, 'time').word === 'FreeTSA · Bitcoin', row(base, 'time').word);
+  check('label: location is Device-reported with a map link at the end', row(base, 'place').word === 'Device-reported' && row(base, 'place').link?.label === 'Open in Maps');
+  check('label: no name attached reads Not provided', row(base, 'who').word === 'Not provided' && row(base, 'who').answer === 'Signer unknown');
+  check('label: strip carries Sealed, Attested, Countersigned, Anchored', base.strip?.stamps.map((s) => s.label).join(',') === 'Sealed,Attested,Countersigned,Anchored', base.strip?.stamps.map((s) => s.label).join(','));
+
+  const redacted = labelFor(rec({ deidentified: { at: '2026-09-06T04:00:00Z', fields: ['identity'] } }), proven);
+  check('label: a de-identified copy reads Redacted', row(redacted, 'who').word === 'Redacted');
+
+  const selfReported = labelFor(rec({ identity: { author: 'Noah', organization: null } }), proven);
+  check('label: a bare name is Self reported, in amber', row(selfReported, 'who').word === 'Self reported' && row(selfReported, 'who').tone === 'attention' && row(selfReported, 'who').answer === 'Noah');
+
+  const site = labelFor(rec({ identity: { author: 'Noah', organization: null } }), proven, { domain: 'filmnoah.com' });
+  check('label: a website that published the key is Domain verified, in green', row(site, 'who').word === 'Domain verified' && row(site, 'who').tone === 'established');
+
+  const certified = labelFor(rec({ identity: { author: 'Noah', organization: null }, orgCredential: { issuer: 'Some CA', subject: 'Noah' } }), proven);
+  check('label: an issuer-checked person is Verified', row(certified, 'who').word === 'Verified');
+
+  const refused: ReportView = { ...proven, c2pa: { ...proven.c2pa!, appAttest: { present: true, valid: false, reason: 'the per-capture signature does not verify' } } };
+  const r2 = labelFor(rec(), refused);
+  check('label: a refused attestation says This device, in amber, and still answers No', row(r2, 'seal').word === 'This device' && row(r2, 'seal').tone === 'attention' && row(r2, 'seal').answer === 'No');
+
+  const altered: ReportView = { ...proven, c2pa: { ...proven.c2pa!, assetHashFailure: 'mismatch' } };
+  const a2 = labelFor(rec(), altered);
+  check('label: changed bytes answer Yes, This device in red, with the notice and a Changed stamp',
+    row(a2, 'seal').answer === 'Yes' && row(a2, 'seal').tone === 'broken' && a2.notice !== null && a2.strip?.stamps[0].label === 'Changed');
+
+  const unlisted: ReportView = { c2pa: { appAttest: { present: false, valid: false }, timestamps: { present: 1, valid: 1, trusted: 0, earliestValidUtc: '2026-09-06T03:10:02Z', tsaNames: ['Sectigo RSA Time Stamping CA'] } }, signatureValid: true };
+  const u = labelFor(rec({ beacon: undefined }), unlisted);
+  check('label: an unlisted authority is named and marked unlisted, in gray', row(u, 'time').word === 'Sectigo · unlisted' && row(u, 'time').tone === 'neutral', row(u, 'time').word);
+
+  const bare = labelFor(rec({ beacon: undefined }), { c2pa: { appAttest: { present: false, valid: false }, timestamps: { present: 0, valid: 0, trusted: 0 } }, signatureValid: true });
+  check('label: no countersignature reads Device-reported on time', row(bare, 'time').word === 'Device-reported');
+
+  const off = labelFor(rec({ context: { location: { lat: 40.67768, lon: -74.00129, accuracyM: 14 }, declinationDeg: 5 } }), proven);
+  check('label: a compass that disagrees reads Inconsistent, in amber', row(off, 'place').word === 'Inconsistent' && row(off, 'place').tone === 'attention');
+
+  const foreignAnchored = { generator: 'Pixel Camera 9.4', signer: { name: 'Google LLC', org: 'Google LLC', issuer: 'Google C2PA Mobile A 1P ICA G3', issuerOrg: 'Google LLC', validFromIso: null, validUntilIso: null, chainLength: 3, anchor: { name: 'Google C2PA Root CA G3' } }, createdAt: '2026-09-05T01:42:11Z', location: null, signedDigestHex: 'aa', assertions: [], timestampTokens: 1, manifestCount: 1, manifestLabel: 'x', claimVersion: 2, assetTypes: [], ingredients: [], metadata: [], trainingMining: [] };
+  const fr: ReportView = { c2pa: { appAttest: { present: false, valid: false }, certChain: { linksValid: true, checked: true }, timestamps: { present: 1, valid: 1, trusted: 1, earliestTrustedUtc: '2026-09-05T01:42:20Z', trustedNames: ['Google C2PA Core Time-Stamping ICA G3'] } }, signatureValid: true };
+  const f = labelFor(null, fr, null, foreignAnchored);
+  check('label: a foreign chain on the trust list is Certified, with a Certified stamp', row(f, 'who').word === 'Certified' && !!f.strip?.stamps.some((s) => s.label === 'Certified'));
+  check('label: a foreign seal names the signer in green', row(f, 'seal').word === 'Google' && row(f, 'seal').tone === 'established', row(f, 'seal').word);
+  check('label: a foreign file asks when it was taken and names the maker on the strip', row(f, 'time').question === 'When was it taken?' && f.strip?.maker === 'Pixel Camera');
+
+  const unanchored = labelFor(null, { ...fr, c2pa: { ...fr.c2pa!, certChain: { linksValid: true, checked: true } } }, null, { ...foreignAnchored, signer: { ...foreignAnchored.signer, anchor: null } });
+  check('label: a foreign chain on no list is Certificate, in gray, and the seal word is This device', row(unanchored, 'who').word === 'Certificate' && row(unanchored, 'who').tone === 'neutral' && row(unanchored, 'seal').word === 'This device');
+  check('label: an unlisted countersignature still gives a time, in gray', (() => { const l = labelFor(null, { c2pa: { appAttest: { present: false, valid: false }, certChain: { linksValid: true }, timestamps: { present: 1, valid: 1, trusted: 0, earliestValidUtc: '2026-02-12T18:44:00Z', tsaNames: ['Truepic'] } }, signatureValid: true }, null, { ...foreignAnchored, createdAt: null, signer: { ...foreignAnchored.signer, anchor: null } }); return row(l, 'time').answer !== 'Not stated in the file' && row(l, 'time').word === 'Truepic · unlisted' && row(l, 'time').tone === 'neutral'; })());
+  check('label: the strip names the generator without its version', (() => { const l = labelFor(null, fr, null, { ...foreignAnchored, generator: 'make_test_images 0.16.1 c2pa-rs/0.16.1' }); return l.strip?.maker === 'make test images'; })(), '');
+  check('label: an unnamed editor reads Declared in the file', (() => { const l = labelFor(null, fr, null, foreignAnchored, deriveEdits([{ action: 'c2pa.drawing' }])); return /^Declared in the file\./.test(row(l, 'edits').caption); })());
+
+  const selfSigned = labelFor(null, fr, null, { ...foreignAnchored, signer: { ...foreignAnchored.signer, chainLength: 1, anchor: null } });
+  check('label: a self-signed foreign certificate is Self reported', row(selfSigned, 'who').word === 'Self reported');
+
+  const edited = labelFor(null, fr, null, { ...foreignAnchored, generator: 'Adobe Photoshop 26.3' }, deriveEdits([{ action: 'c2pa.created' }, { action: 'c2pa.cropped', softwareAgent: 'Adobe Photoshop' }]));
+  check('label: declared edits lead, in amber, and the time question says made', edited.rows[0].id === 'edits' && edited.rows[0].tone === 'attention' && row(edited, 'time').question === 'When was it made?', edited.rows[0].id);
+
+  const none = labelFor(null, { c2pa: undefined, signatureValid: null }, null, null);
+  check('label: no seal is one row and no strip', none.rows.length === 1 && none.strip === null && none.unsigned);
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`);

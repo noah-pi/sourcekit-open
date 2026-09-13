@@ -46,7 +46,7 @@ import { sha256 } from '@noble/hashes/sha256';
 import { p256 } from '@noble/curves/p256';
 import { base64ToBytes, bytesToHex, bytesToUtf8, concatBytes, equalBytes } from '../../src/lib/bytes';
 import { asciiToBytes } from '../../src/lib/bytes';
-import { APPLE_ATTEST_ROOT_DER, VERIFY_APPLE_APP_ID, CAPTURE_ASSERTION_DOMAIN } from '../../src/lib/appleAttestRoot';
+import { APPLE_ATTEST_ROOT_DER, VERIFY_APPLE_APP_IDS, appIdForRpIdHash, CAPTURE_ASSERTION_DOMAIN } from '../../src/lib/appleAttestRoot';
 import { parseCertificate, readTlv, verifyChain, OID_APPLE_ATTEST_NONCE } from '../../src/lib/x509';
 
 export interface AppAttestVerification {
@@ -207,9 +207,15 @@ export function verifyAppAttestAssertion(
 
   // 2. rpIdHash binds the attestation to THIS app.
   const authData = new Uint8Array(att.authData);
-  const rpIdOk = equalBytes(authData.subarray(0, 32), sha256(asciiToBytes(VERIFY_APPLE_APP_ID)));
-  checks.push(`attestation minted for this app (rpIdHash = SHA-256 of ${VERIFY_APPLE_APP_ID})`);
-  if (!rpIdOk) return fail('attestation was minted for a different app');
+  // The app ships as two builds under one team, so the hash is matched
+  // against both App IDs and the report names the one it matched.
+  const mintedFor = appIdForRpIdHash(authData.subarray(0, 32), sha256, asciiToBytes);
+  checks.push(
+    mintedFor
+      ? `attestation minted for this app (rpIdHash = SHA-256 of ${mintedFor})`
+      : `attestation names none of ${VERIFY_APPLE_APP_IDS.join(', ')}`,
+  );
+  if (!mintedFor) return fail('attestation was minted for a different app');
 
   // 2b. Attested credential data:
   //   aaguid(16) | credIdLen(2) | credId | credPublicKey(COSE)
@@ -301,7 +307,10 @@ export function verifyAppAttestAssertion(
     if (!sig || !authD || authD.length < 37) {
       return fail('the capture assertion is missing its signature or authenticator data');
     }
-    if (!equalBytes(authD.subarray(0, 32), sha256(asciiToBytes(VERIFY_APPLE_APP_ID)))) {
+    // Same two App IDs, and the capture assertion must name the SAME build
+    // the attestation did — a mixed pair is not a Source Kit capture.
+    const assertedFor = appIdForRpIdHash(authD.subarray(0, 32), sha256, asciiToBytes);
+    if (!assertedFor || assertedFor !== mintedFor) {
       return fail('the capture assertion was made for a different app');
     }
     // SHA256(domain ‖ media hash ‖ signing key) — the same construction the
@@ -311,13 +320,9 @@ export function verifyAppAttestAssertion(
       hexToBytes32(declared),
       signerPublicKey,
     ));
-    let sigOk = false;
-    try {
-      sigOk = p256.verify(sig, sha256(concatBytes(authD, captureClientData)), credPub, { prehash: false });
-    } catch {
-      sigOk = false;
+    if (!verifyCaptureAssertionSignature(sig, authD, captureClientData, credPub)) {
+      return fail('the per-capture signature does not verify under the attested key');
     }
-    if (!sigOk) return fail('the capture assertion is not a valid signature by the attested Apple key');
     const signCount = (authD[33] << 24 | authD[34] << 16 | authD[35] << 8 | authD[36]) >>> 0;
     captureAssertion = { signCount, boundMediaSha256: declared, mediaCrossChecked: !!mediaSha256 };
     checks.push('capture assertion verified under the attested Apple key — the Enclave signed THIS media hash at capture');
@@ -328,6 +333,85 @@ export function verifyAppAttestAssertion(
   }
 
   return { present: true, valid: true, reason: null, checksPerformed: checks, attestationEnv, mintWindow, captureAssertion };
+}
+
+/**
+ * The assertion signature: ECDSA P-256 over SHA256(authenticatorData ‖
+ * clientDataHash), DER-encoded, by the attested key.
+ *
+ * `lowS: false` is stated, not left to a default. The Secure Enclave does
+ * not normalize S, so about half of all genuine assertions carry a high S
+ * value, and a verifier that rejected those as malleable would refuse half
+ * of all real captures. Every other ECDSA check in this codebase says the
+ * same thing; this one says it too, and the suite holds it to that.
+ */
+export function verifyCaptureAssertionSignature(
+  sig: Uint8Array,
+  authenticatorData: Uint8Array,
+  clientDataHash: Uint8Array,
+  credPub: Uint8Array,
+): boolean {
+  try {
+    return p256.verify(sig, sha256(concatBytes(authenticatorData, clientDataHash)), credPub, {
+      prehash: false,
+      lowS: false,
+      format: 'der',
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The other reading of Apple's "signature valid for nonce": ECDSA over
+ * SHA-256 of the nonce, as a library that hashes its input would compute
+ * it. Not used to accept anything. The capture-time self-check reports
+ * which construction a real device's assertion satisfies, so the answer
+ * comes from hardware rather than from reading documentation.
+ */
+export function verifyCaptureAssertionSignatureDoubleHash(
+  sig: Uint8Array,
+  authenticatorData: Uint8Array,
+  clientDataHash: Uint8Array,
+  credPub: Uint8Array,
+): boolean {
+  try {
+    const nonce = sha256(concatBytes(authenticatorData, clientDataHash));
+    return p256.verify(sig, sha256(nonce), credPub, { prehash: false, lowS: false, format: 'der' });
+  } catch {
+    return false;
+  }
+}
+
+/** The attested credential key from an attestation object's authData,
+ *  uncompressed. Null when the object does not parse. */
+export function attestedCredentialKey(attestationBase64: string): Uint8Array | null {
+  try {
+    const att = decode(base64ToBytes(attestationBase64)) as { authData?: Uint8Array };
+    if (!att.authData) return null;
+    const authData = new Uint8Array(att.authData);
+    if (authData.length < 55) return null;
+    const credIdLen = (authData[53] << 8) | authData[54];
+    const credKey = decode(authData.subarray(55 + credIdLen)) as Map<number, unknown> | Record<string, unknown>;
+    const get = (m: Map<number, unknown> | Record<string, unknown>, k: number) =>
+      (m instanceof Map ? m.get(k) : m[String(k)]) as Uint8Array | undefined;
+    const cx = get(credKey, -2), cy = get(credKey, -3);
+    if (!cx || !cy || cx.length !== 32 || cy.length !== 32) return null;
+    return concatBytes(new Uint8Array([0x04]), cx, cy);
+  } catch {
+    return null;
+  }
+}
+
+/** The signature and authenticator data out of an assertion object. */
+export function decodeAssertionObject(assertionBase64: string): { signature: Uint8Array; authenticatorData: Uint8Array } | null {
+  try {
+    const a = decode(base64ToBytes(assertionBase64)) as { signature?: Uint8Array; authenticatorData?: Uint8Array };
+    if (!a.signature || !a.authenticatorData) return null;
+    return { signature: new Uint8Array(a.signature), authenticatorData: new Uint8Array(a.authenticatorData) };
+  } catch {
+    return null;
+  }
 }
 
 /** 64 hex chars to 32 bytes. Callers validate the shape first. */

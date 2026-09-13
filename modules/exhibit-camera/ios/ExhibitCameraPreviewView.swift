@@ -193,17 +193,16 @@ public final class ExhibitCameraPreviewView: ExpoView {
     return previewLayer
   }
 
-  /// Top-right inset, clear of the JS HUD. The center-top stack owns more
-  /// than the old ~110 pt: recWrap at top:96 and the zoom row at top:140
-  /// (pills ~36 pt) reach to ~176, and the zoom row's pills can extend under
-  /// this corner on narrow devices — so the PiP starts below the stack, at
-  /// 196. 26% of the view width, 3:4 portrait — a glance, never a second
-  /// viewfinder.
+  /// Top-right inset, clear of the JS HUD. The top stack is one row of
+  /// toggles under the status bar, the recording pill sits at 96 and the
+  /// zoom row at 140; the zoom pills are centered and stop short of this
+  /// corner, so the inset can start beside them at 168. 26% of the view
+  /// width, 3:4 portrait — a glance, never a second viewfinder.
   private func layoutPipLayer() {
     guard let layer = pipLayer else { return }
     let w = bounds.width * 0.26
     let h = w * 4.0 / 3.0
-    layer.frame = CGRect(x: bounds.maxX - w - 14, y: 196, width: w, height: h)
+    layer.frame = CGRect(x: bounds.maxX - w - 14, y: 168, width: w, height: h)
   }
 
   // MARK: - Orientation

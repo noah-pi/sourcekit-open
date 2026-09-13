@@ -18,6 +18,7 @@ import {
   Dimensions,
   Pressable,
   PanResponder,
+  TouchableOpacity,
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,7 +38,7 @@ import { Button, Card } from '../../src/components/ui';
 import { MediaViewer } from '../../src/components/MediaViewer';
 import { ExportSheet } from '../../src/components/ExportSheet';
 import { type OtsView } from '../../src/components/TrustedTime';
-import { juxtaInputs, declinationLine, compass8, sensorTimingVerdict } from '../../src/components/Juxtapose';
+import { juxtaInputs } from '../../src/components/Juxtapose';
 import { GAP_DISCLAIMER } from '../../src/lib/copy';
 
 import {
@@ -60,9 +61,11 @@ import {
 import { verdictHeadline, type VerdictCode, type VerificationReport } from '../../archive/handrolled-verifier/verifyAsset';
 import { verifyPhoto, verifyVideo, verifyWithSidecar } from '../../src/provenance/verifyFs';
 import { resolveSignerTrust, type SignerTrust } from '../../src/lib/trustProvider';
-import { projectTrustLadder, type LadderInput } from '../../src/lib/trustLadder';
-import { TrustLadderCard } from '../../src/components/TrustLadder';
-import { ManifestReel } from '../../src/components/ManifestReel';
+import { manifestSecondaryFrames } from '../../src/components/forensic/manifestFrames';
+import { SealStrip } from '../../src/components/detail/DetailKit';
+import { DetailBody, deriveStrip } from '../../src/components/detail/DetailBody';
+import { getSiteCredential } from '../../src/lib/siteCredential';
+import { deriveSeal, deriveSignerIdentity, deriveTime, derivePlace, deriveEdits, type ReportView, type SignerView } from '../../src/components/detail/derive';
 import { upgradePendingOts } from '../../src/provenance/otsQueue';
 import { recordToSidecarJson, deidentifyPhoto, deidentifyPhotoToPng, deidentifyBmff } from '../../src/provenance/attest';
 import { extractC2paStoreBmff } from '../../archive/handrolled-verifier/bmff';
@@ -81,8 +84,6 @@ import {
 import { sha256Hex, payloadDigest } from '../../src/lib/sign';
 import { verifyOtsReceipt } from '../../src/lib/ots';
 import { fetchBlockHeader } from '../../src/lib/otsClient';
-import { listRosters } from '../../src/lib/rosterStore';
-import { sealToDeskKey } from '../../src/lib/seal';
 import { transcriptToSrt, transcriptToTxt } from '../../src/lib/transcript';
 import { getDeviceKey } from '../../src/lib/deviceKey';
 import { writeFileBytes, readFileBytes } from '../../src/lib/fileHash';
@@ -94,14 +95,14 @@ const W = Dimensions.get('window').width;
 /**
  * HUD accents for this screen (0.18.2 — the landed palette of the app icon:
  * sage, cream, warm neutrals, muted clay). Identity/name and identifying
- * details share the muted warm clay, matching the camera HUD's byline and
+ * details share the muted warm clay, matching the camera HUD's signer and
  * location chips (app/(tabs)/index.tsx); the pure blue and pure yellow are
  * gone. Verdict semantics are unchanged: green is earned twice (INTACT and
  * a roster vouch), red is reserved for proven tamper, absence of proof is
  * neutral gray — never red, never alarming.
  */
 const HUD = {
-  identity: '#C08552',    // muted clay — the signer name/byline
+  identity: '#C08552',    // muted clay — the signer name
   identifying: '#C08552', // muted clay — identifying details (was #F5B301)
   seal: '#809263',        // sage, matched to the aperture mark
   ink: '#0A0D10',
@@ -276,6 +277,8 @@ function VideoPane({ uri }: { uri: string }) {
   );
 }
 
+
+
 /** Audio playback reuses the AVPlayer under expo-video — no waveform theater, just the essentials. */
 function AudioPane({ uri }: { uri: string }) {
   const styles = useThemedStyles(buildStyles);
@@ -298,64 +301,6 @@ function AudioPane({ uri }: { uri: string }) {
 // described, not branded).
 // ---------------------------------------------------------------------------
 
-function NlRow({ label, value, valueColor, detail, detailColor, mono }: {
-  label: string;
-  value: string;
-  valueColor?: string;
-  detail?: string;
-  detailColor?: string;
-  mono?: boolean;
-}) {
-  const nl = useThemedStyles(buildNl);
-  return (
-    <View style={nl.row}>
-      <Text style={nl.label}>{label}</Text>
-      <View style={nl.valueWrap}>
-        <Text
-          style={[nl.value, mono ? { fontFamily: type.mono } : null, valueColor ? { color: valueColor } : null]}
-          selectable
-        >
-          {value}
-        </Text>
-        {detail ? <Text style={[nl.detail, detailColor ? { color: detailColor } : null]}>{detail}</Text> : null}
-      </View>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Plan A (0.14.0): the collapsible group card — icon, title, chevron, and a
-// one-line peek that stays visible whether open or closed. Three of these
-// (Capture / Integrity / Advanced) replace the old always-visible nutrition
-// label plus drawer.
-// ---------------------------------------------------------------------------
-
-function GroupCard({ icon, title, peek, open, onToggle, children }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  peek: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  const grp = useThemedStyles(buildGrp);
-  return (
-    <View style={grp.card}>
-      {/* The WHOLE header is the toggle (0.18.3, Noah): icon, title, peek
-          line and chevron sit inside one Pressable — the old head-row-only
-          target was a fingertip-miss machine. */}
-      <Pressable style={grp.headBlock} onPress={onToggle} accessibilityLabel={`${title} section`} accessibilityRole="button">
-        <View style={grp.head}>
-          <Ionicons name={icon} size={15} color={colors.textDim} />
-          <Text style={grp.title}>{title}</Text>
-          <Ionicons name={open ? 'chevron-down' : 'chevron-forward'} size={14} color={colors.textFaint} />
-        </View>
-        <Text style={grp.peek}>{peek}</Text>
-      </Pressable>
-      {open ? <View style={grp.body}>{children}</View> : null}
-    </View>
-  );
-}
 
 /**
  * The one plain sentence (Plan A). Compression, never omission: signer, date,
@@ -379,10 +324,10 @@ function SummaryLine({ record, report, signerTrust }: {
   let signer: string;
   if (record.deidentified) signer = 'A de-identified copy, re-signed on this phone';
   else if (identity && identity !== 'redacted' && identity.author) signer = `Sealed by ${identity.author}`;
-  // 0.18.6 (Noah): de-identified copies are caught above; identity
-  // 'redacted' HERE is an anonymous-mode capture — nothing was redacted,
-  // no byline was ever provided. Say that, not the act.
-  else if (identity === 'redacted') signer = 'Sealed without a byline';
+  // De-identified copies are caught above; identity 'redacted' HERE is an
+  // anonymous-mode capture — nothing was redacted, no name was ever
+  // attached. Say that, not the act.
+  else if (identity === 'redacted') signer = 'Sealed anonymously';
   else if (signerTrust.tier === 'this-device') signer = 'Sealed by this phone';
   else if (signerTrust.tier === 'roster' && signerTrust.roster) signer = `Sealed by ${signerTrust.roster.roster.newsroom}`;
   else if (signerTrust.tier === 'org' && signerTrust.org) signer = `Sealed under ${signerTrust.org.subject}`;
@@ -430,9 +375,7 @@ function SummaryLine({ record, report, signerTrust }: {
 }
 
 /** Device clock vs countersigned time: disagreement beyond this turns red. */
-const DEVICE_CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
 /** De-identified copies re-sign after the fact — a wider, stated tolerance. */
-const DEID_CLOCK_TOLERANCE_MS = 15 * 60 * 1000;
 
 function fmtWhen(iso: string): string {
   const d = new Date(iso);
@@ -440,207 +383,14 @@ function fmtWhen(iso: string): string {
   return d.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-interface TimeLine {
-  icon: keyof typeof Ionicons.glyphMap;
-  text: string;
-  color: string;
-}
 
-function bitcoinCalendarLine(ots: OtsView): TimeLine {
-  switch (ots.state) {
-    case 'pending':
-      return {
-        icon: 'logo-bitcoin',
-        color: colors.textDim,
-        text:
-          'Bitcoin calendar · stamp pending, not yet confirmed in a block' +
-          (ots.queueDelayMs !== undefined && ots.queueDelayMs > 60_000
-            ? ` · submitted ${Math.round(ots.queueDelayMs / 60_000)} min late (device was offline)`
-            : ''),
-      };
-    case 'invalid':
-      return { icon: 'logo-bitcoin', color: colors.danger, text: 'Bitcoin calendar · receipt FAILED verification' };
-    case 'mismatch':
-      return { icon: 'logo-bitcoin', color: colors.danger, text: 'Bitcoin calendar · receipt commits to a different record' };
-    default:
-      if (ots.binding === 'verified') {
-        return { icon: 'logo-bitcoin', color: HUD.seal, text: `Bitcoin calendar · confirmed in block #${ots.height ?? '—'} · receipt matches the block` };
-      }
-      if (ots.binding === 'failed') {
-        return { icon: 'logo-bitcoin', color: colors.danger, text: `Bitcoin calendar · receipt does NOT match block #${ots.height ?? '—'}` };
-      }
-      return {
-        icon: 'logo-bitcoin',
-        color: colors.textDim,
-        text: ots.height
-          ? `Bitcoin calendar · anchored in block #${ots.height} · confirmation not fetched (offline)`
-          : 'Bitcoin calendar · confirmed on-chain · block binding unchecked',
-      };
-  }
-}
 
-/** "Aug 15, 2026 at 6:08 PM" — the timestamp row's date shape. Same
- *  formatter the Inspect screen's Timestamp row uses (keep the two 1:1). */
-function fmtAt(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const date = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  return `${date} at ${time}`;
-}
 
-/**
- * The timestamp row (0.18.1): a standard nutrition-label row — label left,
- * value right — never a giant heading. The value is the countersigned
- * authority time when a pinned token exists, the device clock otherwise;
- * the countersign state rides as the smaller sub-line in the app's existing
- * words: a genuine token whose authority is not pinned reads
- * "Countersigned"; no token reads "Not countersigned — device clock only",
- * neutral, never red. The device clock gets its own row when an anchor
- * exists, and turns red ONLY when it disagrees with the anchor by more
- * than the stated tolerance. Failed tokens are named as failed: proven
- * tamper, never absence of proof. Ledger time (the Bitcoin calendar) stays
- * a strictly separate row below. Same derivation and strings as the
- * Inspect screen's Timestamp row — the two never drift.
- */
-function TimestampBlock({ report, otsView, capturedAt, deidentified }: {
-  report: VerificationReport | null;
-  otsView: OtsView | null;
-  capturedAt: string;
-  /** A de-identified copy is re-signed after the fact — its clock/anchor gap gets a wider tolerance. */
-  deidentified?: boolean;
-}) {
-  useEffectiveScheme(); // re-render on palette flip — this component reads colors.* inline
-  const ts = report?.c2pa?.timestamps ?? null;
 
-  const anchorIso = ts && ts.trusted > 0 ? ts.earliestTrustedUtc : ts && ts.valid > 0 ? ts.earliestValidUtc : null;
-  const anchorMs = anchorIso ? Date.parse(anchorIso) : NaN;
-  const capturedMs = Date.parse(capturedAt);
 
-  // The value: the countersigned anchor when a pinned authority
-  // countersigned, else the device clock.
-  const bigIso = ts && ts.trusted > 0 && ts.earliestTrustedUtc ? ts.earliestTrustedUtc : capturedAt;
-
-  const statusLine = ts && ts.trusted > 0
-    ? { text: 'Countersigned by an independent authority', color: HUD.seal }
-    : ts && ts.valid > 0
-      ? { text: 'Countersigned by an unrecognized authority', color: colors.textDim }
-      : { text: 'Device clock only', color: colors.textDim };
-
-  // The device clock, red only on a real disagreement with the anchor.
-  const clockGapMs = anchorIso !== null && !isNaN(anchorMs) && !isNaN(capturedMs) ? Math.abs(capturedMs - anchorMs) : null;
-  const disagrees =
-    clockGapMs !== null &&
-    clockGapMs > (deidentified ? DEID_CLOCK_TOLERANCE_MS : DEVICE_CLOCK_TOLERANCE_MS);
-  // the gap is in hand — show it, a fact not a flag.
-  const clockGapMinutes = clockGapMs !== null ? Math.round(clockGapMs / 60000) : null;
-
-  // Unchecked tokens (parse/coverage gaps in this verifier) are disclosed
-  // on their own neutral row — never folded into the red failure count.
-  const failed = ts ? ts.present - ts.valid - (ts.unchecked ?? 0) : 0;
-  const uncheckedTokens = ts?.unchecked ?? 0;
-
-  return (
-    <View>
-      <NlRow label="Timestamp" value={fmtAt(bigIso)} detail={statusLine.text} detailColor={statusLine.color} />
-      {anchorIso !== null && !isNaN(capturedMs) ? (
-        <NlRow
-          label="Device clock"
-          value={fmtAt(capturedAt)}
-          valueColor={disagrees ? colors.danger : undefined}
-          detail={disagrees ? `Disagrees with the countersigned time by ${clockGapMinutes} minute${clockGapMinutes === 1 ? '' : 's'}` : undefined}
-          detailColor={disagrees ? colors.danger : undefined}
-        />
-      ) : null}
-      {failed > 0 ? (
-        <NlRow
-          label="Countersignatures"
-          value={`${failed} token${failed === 1 ? '' : 's'} FAILED verification`}
-          valueColor={colors.danger}
-        />
-      ) : uncheckedTokens > 0 ? (
-        <NlRow
-          label="Countersignatures"
-          value={`${uncheckedTokens} token${uncheckedTokens === 1 ? '' : 's'} not readable by this app`}
-          detail={GAP_DISCLAIMER}
-        />
-      ) : null}
-      {otsView ? (
-        (() => {
-          const line = bitcoinCalendarLine(otsView);
-          return (
-            <NlRow
-              label="Bitcoin calendar"
-              value={line.text.replace(/^Bitcoin calendar · /, '')}
-              valueColor={line.color === colors.textDim ? undefined : line.color}
-            />
-          );
-        })()
-      ) : null}
-    </View>
-  );
-}
-
-function motionLabel(v: MotionVerdict): string {
-  switch (v) {
-    case 'handheld': return 'Handheld motion';
-    case 'steady': return 'Device still';
-    case 'moving': return 'Device moving';
-    default: return 'Insufficient data';
-  }
-}
-
-/** Round to `sig` significant digits — trailing zeros drop via Number. */
-function sigFig(v: number, sig: number): number {
-  if (v === 0) return 0;
-  const d = Math.ceil(Math.log10(Math.abs(v)));
-  const f = Math.pow(10, sig - d);
-  return Math.round(v * f) / f;
-}
 
 /** Camera-settings labels: the signed key names, made readable. */
-const EXIF_LABELS: Record<string, string> = {
-  ExposureBiasValue: 'ExposureBias',
-  FocalLengthIn35mmFilm: 'FocalLength (35mm equiv)',
-  'FocalLength(35mmEquiv)': 'FocalLength (35mm equiv)',
-  ISOSpeedRatings: 'ISO',
-};
 
-/**
- * Sane significant figures for the camera-settings rows: 1/120 s, not
- * 0.0083333; ISO integers; f/1.8, not 1.7999999523162842.
- */
-function formatExifValue(key: string, v: unknown): string {
-  const num = typeof v === 'number' && Number.isFinite(v) ? v : null;
-  if (num === null) return String(v);
-  switch (key) {
-    case 'ExposureTime':
-      return num > 0 && num < 1 ? `1/${Math.round(1 / num)} s` : `${sigFig(num, 3)} s`;
-    case 'ShutterSpeedValue': {
-      // APEX: exposure time = 2^-value.
-      const t = Math.pow(2, -num);
-      return t > 0 && t < 1 ? `1/${Math.round(1 / t)} s` : `${sigFig(t, 3)} s`;
-    }
-    case 'ISO':
-    case 'ISOSpeedRatings':
-      return String(Math.round(num));
-    case 'FNumber':
-      return `f/${sigFig(num, 2)}`;
-    case 'ApertureValue':
-      // APEX: f-number = 2^(value/2).
-      return `f/${sigFig(Math.pow(2, num / 2), 2)}`;
-    case 'ExposureBiasValue':
-      return `${sigFig(num, 2)} EV`;
-    case 'FocalLength':
-    case 'FocalLengthIn35mmFilm':
-    case 'FocalLength(35mmEquiv)':
-      return `${sigFig(num, 3)} mm`;
-    case 'DigitalZoomRatio':
-      return `${sigFig(num, 2)}×`;
-    default:
-      return String(sigFig(num, 3));
-  }
-}
 
 /**
  * The committed second-camera frame for the MultipleLensCard: the photo
@@ -741,7 +491,6 @@ export default function AssetScreen() {
   // Plan A (0.14.0): the nutrition-label drawer is gone — three collapsible
   // groups carry the same facts (Capture open by default; Integrity and
   // Advanced collapsed behind a one-line peek each).
-  const [groupOpen, setGroupOpen] = useState({ capture: true, integrity: false, advanced: false });
   // the reverse-geocoded place name is REMOVED — the
   // platform geocoder (CLGeocoder) sends the owner's coordinates to Apple.
   // The summary points at the coordinates instead.
@@ -754,28 +503,6 @@ export default function AssetScreen() {
   // options — Basic / Full / Proof-Only / Custom — replacing the old two-step
   // share menu + share sheet.
   const [exportOpen, setExportOpen] = useState(false);
-  /**
-   * Seal-to-desk target: present only when a trusted roster
-   * carries a desk encryption key. Invisible until a newsroom configures it —
-   * a personal device never sees this.
-   */
-  const [deskTarget, setDeskTarget] = useState<{ newsroom: string; publicKeyBase64: string; fingerprint: string } | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const rosters = await listRosters();
-        const withKey = rosters.find((r) => r.encryption);
-        setDeskTarget(
-          withKey?.encryption
-            ? { newsroom: withKey.newsroom, publicKeyBase64: withKey.encryption.deskPublicKeyBase64, fingerprint: withKey.encryption.fingerprint }
-            : null
-        );
-      } catch {
-        setDeskTarget(null); // a roster read failure hides the option, never blocks the page
-      }
-    })();
-  }, []);
 
   useEffect(() => {
     (async () => {
@@ -1034,60 +761,6 @@ export default function AssetScreen() {
     }
   };
 
-  /**
-   * Seal-to-desk: the capture and its proof, encrypted to the
-   * newsroom's desk key. What leaves the phone is ciphertext only the desk's
-   * key-share holders can open — the seizure case. The vault copy is
-   * untouched; this seals a COPY for the desk.
-   */
-  const sealForDesk = async () => {
-    if (!record || !mediaUri || !deskTarget) return;
-    setBusy('Encrypting & sealing…');
-    try {
-      const uri = await freshUri();
-      if (!uri) throw new Error('Could not decrypt the item. Is the vault locked?');
-      let manifestB64: string | null = null;
-      const bytes = await readFileBytes(uri);
-      try {
-        const store = entry?.kind === 'photo' ? extractC2paStore(bytes) : extractC2paStoreBmff(bytes);
-        if (store) manifestB64 = bytesToBase64(store.payload);
-      } catch { /* proof without the manifest segment is still complete */ }
-      // Chunk-map sidecar (same as the proof-only export above): the v2
-      // chunk maps stored at seal time ride the sealed
-      // proof so the desk can RANGE-verify the delivery file. Absent is fine
-      // — stills, degraded v2 builds, older items: the field is honestly
-      // omitted, root-only verification remains.
-      let chunkMaps: ChunkMapSidecar | null = null;
-      try {
-        const sealedMaps = await unsealVaultJson<Partial<Record<StreamedChunksTrackId, TrackChunkMap>>>(
-          await readFileBytes(`${FileSystem.documentDirectory}disclosure/${id}.chunks.json`),
-        );
-        if (sealedMaps && Object.keys(sealedMaps).length > 0) {
-          // Binds the SIGNED delivery bytes — the file the desk will hash.
-          chunkMaps = buildChunkMapSidecar(sha256Hex(bytes), sealedMaps);
-        }
-      } catch { /* no stored chunk maps — the sidecar is honestly absent */ }
-      const proofJson = JSON.stringify(buildProofBundle(record, manifestB64, chunkMaps, record.stereo ?? null, record.videoStereo ?? null), null, 2) + '\n';
-      const sealed = sealToDeskKey(bytes, proofJson, base64ToBytes(deskTarget.publicKeyBase64));
-      const path = `${FileSystem.cacheDirectory}exhibit-sealed-${id}.vseal`;
-      await writeFileBytes(path, sealed);
-      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType: 'application/octet-stream' });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const confirmSealForDesk = () => {
-    if (!deskTarget) return;
-    Alert.alert(
-      `Seal to ${deskTarget.newsroom}`,
-      `This capture and its proof are encrypted to the newsroom's desk key (${deskTarget.fingerprint.slice(0, 16)}…).\n\nWhat leaves the phone is ciphertext only the desk's key-share holders can open: not you, not us. Your vault copy stays exactly as it is.\n\nSealing hides WHAT you shared. It never hides THAT you shared something.`,
-      [
-        { text: 'Seal & share', onPress: () => void sealForDesk() },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  };
 
   /**
    * Export sheet: every media/proof share routes through the one bottom
@@ -1213,14 +886,20 @@ export default function AssetScreen() {
     ]);
   };
 
-  // The raw manifest reel is the shared ManifestReel component (0.18.3) —
-  // the FULL manifest, uncapped, windowed so a video manifest's telemetry
-  // actually renders. See src/components/ManifestReel.tsx.
-
   // Forensic Checks inputs, derived once from the sealed record.
-  const secondary = useMemo(
-    () => (record ? secondaryFrameFor(record) : { frame: null, ptsSeconds: null, recordError: null, videoFrames: null }),
-    [record],
+  // The record's committed pairs first; the frames embedded in the file
+  // when the record carries none. The same fallback Inspect uses, so an
+  // exhibit never shows less of its own file than a stranger's copy would.
+  const secondary = useMemo(() => {
+    const fromRecord = record
+      ? secondaryFrameFor(record)
+      : { frame: null, ptsSeconds: null, recordError: null, videoFrames: null };
+    if (fromRecord.frame || !manifest) return fromRecord;
+    const embedded = manifestSecondaryFrames(manifest);
+    if (embedded.length === 0) return fromRecord;
+    return { frame: embedded[0].frame, ptsSeconds: null, recordError: null, videoFrames: embedded };
+  },
+    [record, manifest],
   );
   const enfAnchor = useMemo(() => (record ? readEnfAnchor(record) : null), [record]);
   // The sealed when/where, as one line for the environment modules —
@@ -1238,6 +917,38 @@ export default function AssetScreen() {
     [record, sealedWhenWhere],
   );
 
+
+  /**
+   * A domain claim is shown only when this device can check it: a site
+   * credential it holds, whose fingerprint is the one that signed this file.
+   * A foreign file could name a domain, but confirming that needs a fetch to
+   * a stranger's website, and a reader screen does not reach out over the
+   * network to decide what a label says.
+   */
+  const [siteCred, setSiteCred] = useState<{ domain: string; fingerprint: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getSiteCredential().then((c) => {
+      if (!cancelled) setSiteCred(c ? { domain: c.domain, fingerprint: c.fingerprint } : null);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const siteForSigner =
+    siteCred && record?.signer.fingerprint === siteCred.fingerprint ? { domain: siteCred.domain } : null;
+
+  // The strip on the hero: the picture is this screen's, so the strip is too.
+  const stripState = useMemo(() => {
+    if (!record) return null;
+    return deriveStrip({
+      seal: deriveSeal(record, report as unknown as ReportView | null, signerTrust as unknown as SignerView),
+      time: deriveTime(record, report as unknown as ReportView | null, otsView && otsView.state === 'confirmed' ? { state: 'confirmed', height: otsView.height } : otsView ? { state: otsView.state } : null),
+      identity: deriveSignerIdentity(record, siteForSigner),
+      foreign: null,
+      edits: deriveEdits(manifest?.actions?.list),
+    });
+  }, [record, report, signerTrust, otsView, siteForSigner, manifest]);
+
+
   if (!entry) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -1249,10 +960,6 @@ export default function AssetScreen() {
   const ctx: SensorContext | undefined = record?.context;
   const loc = ctx?.location;
   const identity = record?.identity;
-  // 0.23.0: same Declination row as Inspect — same label, same value
-  // string, same detail (the parallel rule). Null-safe on capturedAt.
-  const declMs = record ? Date.parse(record.capturedAt) : NaN;
-  const declLine = ctx ? declinationLine(ctx, Number.isFinite(declMs) ? new Date(declMs) : null) : null;
   const orgValue =
     (identity && identity !== 'redacted' && identity.organization) ||
     record?.orgCredential?.issuer ||
@@ -1261,7 +968,16 @@ export default function AssetScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.topBar}>
-        <Button small tone="ghost" icon="chevron-back" label="Exhibits" onPress={() => router.back()} />
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backCtl}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Exhibits"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="chevron-back" size={18} color={colors.accent} />
+          <Text style={styles.backLabel}>Exhibits</Text>
+        </TouchableOpacity>
         {/* The corner status pill was removed (0.14.0): it duplicated the
             trust ladder two scrolls down and read as decoration. State lives
             in the ladder, once. */}
@@ -1274,7 +990,7 @@ export default function AssetScreen() {
               <Image
                 source={{ uri: mediaUri }}
                 style={styles.media}
-                contentFit="contain"
+                contentFit="cover"
                 transition={100}
                 onError={() => void freshUri()}
               />
@@ -1288,6 +1004,7 @@ export default function AssetScreen() {
               <ActivityIndicator color={colors.accent} />
             </View>
           )}
+          {stripState ? <SealStrip maker={stripState.maker} stamps={stripState.stamps} edge={entry.kind === 'photo' ? 'bottom' : 'top'} /> : null}
           {mediaUri && entry.kind === 'photo' ? (
             <Pressable style={styles.expandHint} onPress={() => void openViewer()} hitSlop={12} accessibilityLabel="View fullscreen">
               <Ionicons name="expand-outline" size={16} color="#fff" />
@@ -1307,9 +1024,12 @@ export default function AssetScreen() {
           </View>
         ) : null}
 
-        {/* Exactly three actions (Noah's call, 0.14.0): Share opens the
-            export sheet (0.15.0 Drop 2 — Basic / Full / Proof-Only /
-            Custom); Download and Delete are their own buttons. */}
+        {/* Share, Download, Delete — what to do with this copy: send it,
+            keep it, destroy it. The row at the foot of the body is the
+            evidence handoff (Export original, Export report, Verify
+            elsewhere), and Export original opens this same sheet: one door,
+            reachable from the top of the screen and from the end of the
+            read, because those are two different moments. */}
         <View style={styles.actions}>
           <View style={styles.actionCell}>
             <Button
@@ -1366,374 +1086,36 @@ export default function AssetScreen() {
           </View>
         ) : null}
 
-        {/* Plan A (0.14.0): three collapsible groups replace the nutrition
-            label + drawer. Capture (open by default) answers "when, where,
-            on what" — device-originated claims are grouped under heads that
-            carry the device-reported caveat once. */}
+        {/* The detail body (0.25.0). One kit, two screens: Inspect and an
+            exhibit describe a file in exactly the same words, because the
+            words are decided once in src/components/detail. The three
+            collapsible groups this replaces answered "what fields are
+            there"; the sections answer "can I use this", which is the
+            question a reader actually arrives with. */}
         {record ? (
-          <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
-            <GroupCard
-              icon="time-outline"
-              title="Capture"
-              peek="When, where, on what."
-              open={groupOpen.capture}
-              onToggle={() => setGroupOpen((g) => ({ ...g, capture: !g.capture }))}
-            >
-              <Text style={nl.drawerHead}>When and where</Text>
-              <TimestampBlock report={report} otsView={otsView} capturedAt={record.capturedAt} deidentified={!!record.deidentified} />
-              {/* 0.18.6 (Noah): 'redacted' in an anonymous-mode capture means
-                  no byline was ever provided — the word "redacted" asserts a
-                  removal that never happened. Only a de-identified COPY
-                  (the marker is set by the re-seal) earns "Redacted by
-                  signer"; everything else with no name reads Not provided. */}
-              {identity === 'redacted' ? (
-                <NlRow label="Byline" value={record.deidentified ? 'Redacted by signer' : 'Not provided'} />
-              ) : identity?.author ? (
-                <NlRow label="Byline" value={identity.author} valueColor={HUD.identity} />
-              ) : (
-                <NlRow label="Byline" value="Not provided" />
-              )}
-              {loc === 'redacted' ? (
-                <NlRow label="Location" value="Redacted by signer" />
-              ) : loc === 'unavailable' ? (
-                <NlRow label="Location" value="Unavailable at capture" />
-              ) : loc ? (
-                <View style={nl.row}>
-                  <Text style={nl.label}>Location</Text>
-                  <View style={nl.valueWrap}>
-                    <Text style={[nl.value, { color: HUD.identifying }]} selectable>
-                      {`${loc.lat.toFixed(5)}, ${loc.lon.toFixed(5)}`}
-                    </Text>
-                    <Text style={nl.detail}>Reported by the phone at capture.</Text>
-                    <Pressable
-                      style={nl.mapsButton}
-                      hitSlop={6}
-                      accessibilityLabel="Open in Google Maps"
-                      onPress={() => void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lon}`)}
-                    >
-                      <Ionicons name="map-outline" size={12} color={colors.info} />
-                      <Text style={nl.mapsButtonText}>Google Maps</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ) : null}
-
-              {ctx?.wifi === 'redacted' ? (
-                <NlRow label="Wi-Fi" value="Redacted by signer" />
-              ) : ctx?.wifi === 'unavailable' ? (
-                <NlRow label="Wi-Fi" value="Unavailable at capture" />
-              ) : ctx?.wifi ? (
-                <>
-                  {/* 0.14.0: the BSSID is the corroboratable claim; the
-                      network name is kept off this page (anyone can name
-                      a network anything — and it's a privacy leak). */}
-                  {ctx.wifi.bssid ? <NlRow label="Wi-Fi BSSID" value={ctx.wifi.bssid} mono /> : (
-                    <NlRow label="Wi-Fi" value={ctx.wifi.ssid ?? 'Not reported'} detail="A lead worth following, not proof of place." />
-                  )}
-                </>
-              ) : null}
-
-              <View style={nl.drawerSection}>
-                <Text style={nl.drawerHead}>Device</Text>
-                <NlRow label="Device model" value={record.device.model ?? '—'} />
-                <NlRow
-                  label="Platform"
-                  value={record.device.platform === 'ios' ? 'iOS' : record.device.platform}
-                />
-                {/* 0.18.1: the capture software is a capture claim like any
-                    other — the sealed claim-generator string ("Source Kit/
-                    0.18.0 (com.verify.camera)"), the record's own app block
-                    as the honest fallback. */}
-                <NlRow
-                  label="Capture software"
-                  value={manifest?.claimGenerator ?? report?.c2pa?.generator ?? `${record.app.name} ${record.app.version}`}
-                />
-                {/* 0.20.4 (Noah: "I can't tell what the SDK is doing"):
-                    which pipeline sealed this capture. The claim format
-                    version is signed content and cleanly discriminates —
-                    the built-in signer writes claim v1, the c2pa-swift SDK
-                    experiment writes claim v2. */}
-                {manifest ? (
-                  <NlRow
-                    label="Sealing engine"
-                    value={manifest.claimVersion === 2 ? 'c2pa-swift SDK (migration experiment) · claim v2' : 'Source Kit signer · claim v1'}
-                  />
-                ) : null}
-                {/* An absent org credential says nothing — never a warning. */}
-                {orgValue ? <NlRow label="Organization" value={orgValue} /> : null}
-                {/* Byline renders once — in When & Where above (0.14.0
-                    dedupe). */}
-              </View>
-
-              {/* Sensors sit at the bottom of Capture; the head carries the
-                  device-reported caveat once, not on every row. */}
-              {ctx?.headingDeg != null || ctx?.declinationDeg != null || ctx?.pressureHPa != null || ctx?.altitudeM != null || ctx?.motion || ctx?.sensorTiming ? (
-                <View style={nl.drawerSection}>
-                  <Text style={nl.drawerHead}>Sensors (Device reported)</Text>
-                  {ctx?.headingDeg != null ? <NlRow label="Heading" value={`${ctx.headingDeg}° (${compass8(ctx.headingDeg)})`} /> : null}
-                  {declLine != null ? (
-                    <NlRow
-                      label="Declination"
-                      value={declLine}
-                      detail="The magnetic field angle the phone measured, against what the model expects at the sealed coordinate."
-                    />
-                  ) : null}
-                  {ctx?.pressureHPa != null ? <NlRow label="Barometer" value={`${ctx.pressureHPa} hPa`} /> : null}
-                  {/* 0.18.1: altitude rides the same sensors block here as on
-                      the Inspect screen — same sealed claim, same row. */}
-                  {ctx?.altitudeM != null ? <NlRow label="Altitude" value={`${ctx.altitudeM} m`} detail="Estimated from air pressure. Weather moves this by tens of meters." /> : null}
-                  {ctx?.motion ? (
-                    <NlRow label="Motion" value={motionLabel(ctx.motion.verdict)} detail={`Strongest shake at ${ctx.motion.peakHz} Hz, the range a held hand produces.`} />
-                  ) : null}
-                  {/* Sensor timing renders once — under Integrity, where
-                      sampler regularity belongs as an integrity signal
-                      (0.14.0 dedupe). */}
-                </View>
-              ) : null}
-
-              {/* Mains frequency (0.14.0): removed from this page. It was
-                  region-derived, never measured — decoration, not
-                  evidence. The ENF question moves to the raw-audio
-                  master, where it can be measured for real. */}
-
-              {manifest?.exif && Object.keys(manifest.exif.data).filter((k) => k !== 'note').length > 0 ? (
-                <View style={nl.drawerSection}>
-                  <Text style={nl.drawerHead}>Camera settings (Device reported)</Text>
-                  {/* The sealed block's `note` key is provenance boilerplate
-                      ("camera-pipeline-reported, signed as self-reported
-                      metadata"), not a camera setting — never a row (0.18.1).
-                      The head already carries the device-reported caveat. */}
-                  {Object.entries(manifest.exif.data).filter(([k]) => k !== 'note').map(([k, v]) => (
-                    <NlRow key={k} label={EXIF_LABELS[k] ?? k} value={formatExifValue(k, v)} />
-                  ))}
-                  {/* footnote cut — the dim line
-                      under the heading carries the one warning now. */}
-                </View>
-              ) : null}
-            </GroupCard>
-          </View>
-        ) : null}
-
-        {/* Integrity (Plan A): the custody story in one collapsed group —
-            capture integrity, the Forensic Checks modules, then the five
-            rungs computed NOW from the live re-verification. Ledger state
-            comes from otsView, whose block-header check is auto-fetched
-            when a network path exists (offline: honestly "unchecked",
-            never hidden). */}
-        {report && record ? (
-          <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
-            <GroupCard
-              icon="lock-closed-outline"
-              title="Integrity"
-              peek="How fast it was signed and how the sensors behaved."
-              open={groupOpen.integrity}
-              onToggle={() => setGroupOpen((g) => ({ ...g, integrity: !g.integrity }))}
-            >
-              {record.captureIntegrity || report ? (
-                <View style={{ marginBottom: spacing.md }}>
-                  <Text style={nl.drawerHead}>Capture integrity</Text>
-                  {/* one vocabulary with Inspect —
-                      the value says what HAPPENED, against what. */}
-                  <NlRow
-                    label="Hardware attestation"
-                    value={
-                      report.c2pa?.appAttest.present
-                        ? report.c2pa.appAttest.valid
-                          ? 'Verified against Apple’s root'
-                          : 'Failed to verify against Apple’s root'
-                        : 'Not present in this file'
-                    }
-                    valueColor={
-                      report.c2pa?.appAttest.present && !report.c2pa.appAttest.valid ? colors.danger : undefined
-                    }
-                    detail={
-                      report.c2pa?.appAttest.present
-                        ? report.c2pa.appAttest.valid
-                          ? `App Attest · ${report.c2pa.appAttest.attestationEnv ?? 'production'} · checked offline.`
-                          : `${report.c2pa.appAttest.reason ?? 'The embedded assertion did not verify'}. A genuine attestation verifies offline.`
-                        : undefined
-                    }
-                  />
-                  {record.captureIntegrity ? (
-                    <NlRow
-                      label="Time to signature"
-                      value={
-                        record.captureIntegrity.captureToSignatureMs < 1000
-                          ? `${record.captureIntegrity.captureToSignatureMs} ms`
-                          : `${(record.captureIntegrity.captureToSignatureMs / 1000).toFixed(1)} s`
-                      }
-                      detail="How long the file sat unsigned after the shutter. A long gap leaves room for a change."
-                    />
-                  ) : null}
-                  {record.captureIntegrity?.sensorTiming ? (
-                    <NlRow
-                      label="Sensor-frame timing"
-                      value={sensorTimingVerdict(record.captureIntegrity.sensorTiming).value}
-                      detail={sensorTimingVerdict(record.captureIntegrity.sensorTiming).detail}
-                    />
-                  ) : null}
-                  {record.captureIntegrity?.biometricGatePassed === true ? (
-                    <NlRow label="Face ID at capture" value="Passed" />
-                  ) : record.captureIntegrity?.biometricGatePassed === false ? (
-                    <NlRow label="Face ID at capture" value="Ran, did not pass" />
-                  ) : null}
-                </View>
-              ) : null}
-
-              {/* Forensic Checks: sealed data juxtaposed with what should be
-                  true. Each module measures on this device or fetches from a
-                  stated source; none of them concludes. Lens, motion-trace
-                  and environment checks read PICTURE evidence — they hide on
-                  audio captures (0.18.3, Noah); the raw-audio master is the
-                  one audio-applicable check and always renders. */}
-              <View style={{ marginBottom: spacing.md }}>
-                <Text style={nl.drawerHead}>Forensic checks</Text>
-                {entry.kind !== 'audio' ? (
-                  <>
-                    <MultipleLensCard
-                      kind={entry.kind}
-                      primaryUri={mediaUri}
-                      secondaryFrame={secondary.frame}
-                      primaryFrameTimeSeconds={secondary.ptsSeconds}
-                      recordError={secondary.recordError}
-                      videoFrames={secondary.videoFrames}
-                    />
-                    {entry.kind === 'video' ? (
-                      // 0.18.6 (Noah: "we're not doing pose trace for video
-                      // too!"): a video take has no shutter burst — its
-                      // serial photography is the committed pair frames and
-                      // its pose trace is the sealed sensor JSONL.
-                      <VideoMotionCard
-                        videoFrames={secondary.videoFrames}
-                        sensorLogPath={record.context?.captureEvidence?.sensorLogPath}
-                        hfovDeg={record.context?.hfovDeg}
-                      />
-                    ) : (
-                      <MotionTraceCard
-                        ringBufferDir={record.context?.captureEvidence?.ringBufferDir}
-                        poseTrace={record.context?.poseTrace}
-                        motion={record.context?.motion}
-                        hfovDeg={record.context?.hfovDeg}
-                      />
-                    )}
-                    <EnvironmentCard
-                      lat={juxta?.lat ?? null}
-                      lon={juxta?.lon ?? null}
-                      atIso={record.capturedAt ?? null}
-                      rollDeg={juxta?.rollDeg ?? null}
-                      pitchDeg={juxta?.pitchDeg ?? null}
-                      facing={juxta?.facing ?? null}
-                      hfovDeg={juxta?.hfovDeg ?? null}
-                      sealedWhenWhere={sealedWhenWhere}
-                    />
-                  </>
-                ) : null}
-                <RawAudioCard
-                  kind={entry.kind}
-                  rawPcmPath={record.context?.captureEvidence?.rawPcmPath}
-                  enfAnchor={enfAnchor}
-                />
-              </View>
-
-              {(() => {
-              const ots: LadderInput['ots'] = !otsView
-                ? 'none'
-                : otsView.state === 'pending'
-                  ? 'pending'
-                  : otsView.state === 'invalid' || otsView.state === 'mismatch'
-                    ? 'invalid'
-                    : otsView.binding === 'verified'
-                      ? 'confirmed-verified'
-                      : 'confirmed-unchecked';
-              // Honesty fix: tier 'this-device' is SELF-recognition — this
-              // device recognizing its own key. That must not light the
-              // identified rung ("Signer identified"): only an org credential
-              // or a roster/trust-list vouch earns it. Fed to the ladder as
-              // the unidentified floor with the local history stated.
-              const selfRecognized = signerTrust.tier === 'this-device';
-              const ladder = projectTrustLadder({
-                manifestFound: report.checks.manifestFound,
-                verdict: report.verdict,
-                signatureValid: report.checks.signatureValid,
-                fingerprintMatches: report.checks.fingerprintMatches,
-                assetHashMatches: report.checks.assetHashMatches,
-                bindingVoid: report.c2pa?.assetHashFailure === 'void-binding',
-                tier: selfRecognized ? 'unknown' : signerTrust.tier,
-                localHand: selfRecognized ? localHand : null,
-                rosterState: signerTrust.tier === 'roster' && signerTrust.roster ? signerTrust.roster.state : null,
-                rosterNewsroom: signerTrust.tier === 'roster' && signerTrust.roster ? signerTrust.roster.roster.newsroom : null,
-                trustListName: null,
-                orgChain: report.c2pa?.certChain
-                  ? { linksValid: report.c2pa.certChain.linksValid, topSubject: report.c2pa.certChain.topSubject }
-                  : null,
-                appAttest: report.c2pa
-                  ? {
-                      present: report.c2pa.appAttest.present,
-                      valid: report.c2pa.appAttest.valid,
-                      attestationEnv: report.c2pa.appAttest.attestationEnv,
-                    }
-                  : { present: false, valid: false },
-                hardwareNotApplicable: record.deidentified
-                  ? 'deidentified'
-                  : record.assignment
-                    ? 'assignment'
-                    : null,
-                timestamps: report.c2pa
-                  ? { present: report.c2pa.timestamps.present, valid: report.c2pa.timestamps.valid, trusted: report.c2pa.timestamps.trusted, unchecked: report.c2pa.timestamps.unchecked ?? 0 }
-                  : { present: 0, valid: 0, trusted: 0 },
-                ots,
-              });
-              return ladder ? <TrustLadderCard ladder={ladder} /> : null;
-              })()}
-            </GroupCard>
-          </View>
-        ) : null}
-
-        {legacyVideo ? (
-          <View style={{ paddingHorizontal: spacing.md }}>
-            <Text style={styles.sidecarHint}>
-              This video was signed before credentials lived inside the file: share both the video
-              and its attestation .json; the recipient verifies the pair together.
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Advanced (Plan A): desk-grade surfaces — the media hash, the desk
-            exports, the full check report, and the raw C2PA manifest. One
-            collapsed group; a reader never has to see any of it. */}
-        {record ? (
-          <View style={{ paddingHorizontal: spacing.md }}>
-            <GroupCard
-              icon="cog-outline"
-              title="Advanced"
-              peek="Hashes, the full check report, the raw C2PA manifest."
-              open={groupOpen.advanced}
-              onToggle={() => setGroupOpen((g) => ({ ...g, advanced: !g.advanced }))}
-            >
-              <NlRow
-                label="Media SHA-256"
-                value={record.asset.sha256}
-                mono
-                detail="The exact bytes that were signed."
-              />
-              <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, flexWrap: 'wrap' }}>
-                <Button small icon="document-text-outline" label="Signed record (.json)" tone="secondary" onPress={() => void exportAttestation()} loading={busy === 'Exporting attestation…'} />
-                <Button small icon="finger-print-outline" label="Hash-only claim" tone="secondary" onPress={() => void shareProofJson('hash-only')} loading={busy === 'Building proof…'} />
-              </View>
-
-              {/* There is no "Full report" drawer. It re-rendered signature
-                  timing, sensor-frame timing, the pose trace and the signer
-                  fingerprint, all of which already live once in the Capture
-                  and Integrity groups above, and again, by design, in the raw
-                  manifest reel below. One fact, one place. */}
-
-              {/* The raw C2PA manifest: shown OPEN at the bottom of Advanced
-                  — the FULL manifest, windowed, never behind a drawer. Copy
-                  is how the manifest leaves the phone; what you see is what
-                  you copy (0.18.3, Noah: "it needs to be the FULL manifest"). */}
-              {manifest ? <ManifestReel manifest={manifest} /> : null}
-            </GroupCard>
-          </View>
+          <DetailBody
+            record={record}
+            manifest={manifest}
+            signerIdentity={deriveSignerIdentity(record, siteForSigner)}
+            seal={deriveSeal(record, report as unknown as ReportView | null, signerTrust as unknown as SignerView)}
+            time={deriveTime(record, report as unknown as ReportView | null, otsView && otsView.state === 'confirmed' ? { state: 'confirmed', height: otsView.height } : otsView ? { state: otsView.state } : null)}
+            place={derivePlace(record)}
+            kind={entry.kind}
+            mediaUri={mediaUri}
+            secondary={secondary.frame}
+            secondaryPts={secondary.ptsSeconds}
+            secondaryError={secondary.recordError}
+            videoFrames={secondary.videoFrames}
+            juxta={juxta}
+            enfAnchor={enfAnchor}
+            sealedWhenWhere={sealedWhenWhere}
+            edits={deriveEdits(manifest?.actions?.list)}
+            actions={[
+              { label: 'Export original', icon: 'share-outline', onPress: shareMedia },
+              { label: 'Export attestation', icon: 'document-text-outline', onPress: () => void exportAttestation() },
+              { label: 'Verify elsewhere', icon: 'open-outline', onPress: () => void Linking.openURL('https://contentcredentials.org/verify') },
+            ]}
+          />
         ) : (
           <View style={{ paddingHorizontal: spacing.md }}>
             <Card>
@@ -1767,7 +1149,6 @@ export default function AssetScreen() {
             face: p.face,
           };
         })()}
-        deskNewsroom={deskTarget?.newsroom ?? null}
         onCancel={() => setExportOpen(false)}
         onBasic={(format) => {
           setExportOpen(false);
@@ -1786,10 +1167,6 @@ export default function AssetScreen() {
           setExportOpen(false);
           router.push(`/disclosure/${entry.id}`);
         }}
-        onDesk={deskTarget ? () => {
-          setExportOpen(false);
-          confirmSealForDesk();
-        } : undefined}
       />
     </SafeAreaView>
   );
@@ -1797,6 +1174,8 @@ export default function AssetScreen() {
 
 const buildStyles = () => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  backCtl: { flexDirection: 'row', alignItems: 'center', gap: 1, paddingVertical: spacing.xs, paddingRight: spacing.sm },
+  backLabel: { color: colors.accent, fontSize: fontSize.md, fontWeight: '500' },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1818,7 +1197,9 @@ const buildStyles = () => StyleSheet.create({
   },
   pillText: { fontSize: fontSize.xs, fontWeight: '600', letterSpacing: 0.2, flexShrink: 1 },
   mediaWrap: { backgroundColor: HUD.ink },
-  media: { width: W, height: W * 0.8 },
+  // Two thirds of the screen, filled: a portrait frame no longer sits
+  // between black bars. The full framing is one tap away in the viewer.
+  media: { width: W, height: Math.round(Dimensions.get('window').height * 0.65) },
   videoSurface: { backgroundColor: '#000' },
   expandHint: {
     position: 'absolute',
@@ -1980,29 +1361,6 @@ const buildNl = () => StyleSheet.create({
   },
 });
 
-/** Plan A group cards — paper surface, header row, peek, chevron body. */
-const buildGrp = () => StyleSheet.create({
-  card: {
-    // Mockup .card: flat surface, 1px hairline border, radius 14.
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-  },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  // The whole collapsed header block (title row + peek) is the tap target.
-  headBlock: { marginHorizontal: -spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: 10 },
-  title: { flex: 1, color: colors.text, fontSize: fontSize.md, fontWeight: '700' },
-  peek: { color: colors.textDim, fontSize: fontSize.xs, lineHeight: 17, marginTop: 2 },
-  body: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-  },
-});
 
 /** The one plain sentence — paper card, book weight, verdict colors only
  *  where a verdict was genuinely earned (green) or proven (red). */

@@ -8,7 +8,7 @@ epistemology anyway. So here's what actually holds the code to account.
 
 ## The test lab
 
-30 suites, all runnable offline against the real shipping code. Device-service
+33 suites, all runnable offline against the real shipping code. Device-service
 imports are rewired to documented shims; every cryptographic operation runs as
 shipped.
 
@@ -18,13 +18,16 @@ transplants, truncations. See README ▸ Run the lab.
 
 `tests/corpus/foreign/` holds media this app did not produce — signed by
 c2patool, the C2PA reference implementation, with its own chain and its own
-claim generator. Everything else in the lab verifies media this code signed,
-which cannot show that the reader handles a stranger's output.
+claim generator. The reader describes a file it did not seal by the same five
+questions it asks of its own, and the label suite feeds it the shapes a Pixel
+Camera, a Leica, and a Photoshop manifest take and checks the words it chooses
+for each. Everything else in the lab verifies media this code signed, which
+cannot show that the reader handles a stranger's output.
 
 ## The Swift compiles
 
 `ios-build` generates the iOS project, installs the pods, and compiles every
-local module — around 13,500 lines across `modules/` — against Xcode 26.6,
+local module — around 20,000 lines across `modules/` — against Xcode 26.6,
 the same toolchain the shipping build uses. Pinned to that version rather
 than to whatever is newest, so this gate and the real build cannot drift.
 
@@ -40,7 +43,7 @@ and compiling is not the same as testing:
   import, so session lifecycle, capture, the ring buffer, and the sensor
   sinks are absent from the lab by construction. The crash class this app
   has actually shipped — an AVFoundation session deallocating while a
-  preview layer still references it — is invisible to all 30 suites and to
+  preview layer still references it — is invisible to all 33 suites and to
   the compiler alike, because it is an ordering bug rather than a wrong
   value. Multi-cam needs real hardware; a simulator will not do.
 
