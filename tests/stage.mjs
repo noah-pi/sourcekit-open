@@ -57,8 +57,9 @@ const STAGE = [
   // the anchor lists that decide which of them reads as trusted.
   'src/lib/orgCert.ts', 'src/lib/siteCredential.ts', 'src/lib/personalCert.ts',
   'src/lib/identityTrustList.ts', 'src/lib/identity.ts',
-  'src/lib/seal.ts', 'src/lib/shamir.ts', 'src/lib/pq.ts',
-  'src/lib/trustLadder.ts', 'src/lib/trustProvider.ts', 'src/lib/rosterStore.ts',
+  'src/lib/shamir.ts', 'src/lib/pq.ts',
+  'src/lib/trustLadder.ts', 'src/lib/trustProvider.ts',
+  'src/lib/signerTrustList.ts', 'src/reader/foreign.ts',
   // Runtime gate for the c2pa-swift signing arm. Staged so attest.ts resolves;
   // off in the lab, which is the hand-rolled path the suites pin.
   'src/lib/sdkSigningGate.ts',
@@ -156,6 +157,22 @@ for (const [name, rel] of [
 ]) {
   const src = fs.readFileSync(path.join(root, rel), 'utf8');
   fs.writeFileSync(path.join(out, `${name}.mts`), rewrite(src, name));
+}
+
+// The label grammar, staged with its word list. derive.ts imports only
+// types from the two screen components beside it; those shapes come from
+// tests/shims/detail-types-shim.mts so no React Native code is loaded.
+for (const [name, rel] of [
+  ['words', 'src/components/detail/words.ts'],
+  ['derive', 'src/components/detail/derive.ts'],
+]) {
+  const src = fs.readFileSync(path.join(root, rel), 'utf8')
+    .replace(/from '\.\/(?:DetailBody|DetailKit)'/g, "from './detail-types-shim.mts'")
+    .replace(/from '\.\.\/\.\.\/provenance\/(\w+)'/g, "from './$1.mts'")
+    .replace(/from '\.\.\/\.\.\/reader\/verify\/(\w+)'/g, "from './$1.mts'")
+    .replace(/from '\.\.\/\.\.\/reader\/(\w+)'/g, "from './$1.mts'")
+    .replace(/from '\.\/(\w+)'/g, "from './$1.mts'");
+  fs.writeFileSync(path.join(out, `${name}.mts`), src);
 }
 
 const DISCLOSURE_STAGE = ['ladder', 'inventory', 'salts', 'tree', 'bundle', 'commit', 'captureCommit', 'burn'];

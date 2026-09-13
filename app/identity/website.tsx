@@ -15,8 +15,8 @@ import { useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { colors, spacing, radii, fontSize, useThemedStyles } from '../../src/theme';
-import { SubScreen, RowDetail } from '../../src/components/SubScreen';
-import { Card, SectionLabel, Button, KeyValueRow, Chip, Divider, Mono } from '../../src/components/ui';
+import { SubScreen, RowDetail, Step } from '../../src/components/SubScreen';
+import { Card, SectionLabel, Button, KeyValueRow, Chip, Divider } from '../../src/components/ui';
 import {
   SITE_WELL_KNOWN_PATH,
   clearSiteCredential,
@@ -125,17 +125,33 @@ export default function WebsiteScreen() {
     <SubScreen title="Website">
       <Card>
         <RowDetail>
-          Publishing one file lets anyone match a photo&rsquo;s signature to your address. It replaces
-          nothing on your site and shows up nowhere a visitor would look. Several devices can connect
-          to the same website.
+          Adding a small JSON file to your website lets anyone checking a photo confirm the
+          site&rsquo;s owner signed it.
         </RowDetail>
+      </Card>
+
+      <SectionLabel text="How to add it" />
+      <Card style={styles.steps}>
+        <Step n={1}>
+          Enter your website address and tap Create file. It holds your site&rsquo;s name and this
+          phone&rsquo;s public key.
+        </Step>
+        <Step n={2}>
+          Add it to your site at {SITE_WELL_KNOWN_PATH}. The .well-known folder sits at the top
+          level, beside your home page.
+        </Step>
+        <Step n={3}>
+          Tap Test. Source Kit fetches it over HTTPS. Leave the file up: everyone who checks one of
+          your photos fetches it themselves, automatically, to associate your website with the
+          capture.
+        </Step>
       </Card>
 
       <SectionLabel text="Your website" />
       <Card>
         <TextInput
           style={styles.input}
-          placeholder="beckysbakery.com"
+          placeholder="example.com"
           placeholderTextColor={colors.textFaint}
           value={domainDraft}
           onChangeText={setDomainDraft}
@@ -152,20 +168,12 @@ export default function WebsiteScreen() {
           autoCapitalize="words"
         />
         <View style={styles.buttons}>
-          <Button small tone="secondary" icon="document-outline" label={busy ? 'Working…' : 'Save file'} onPress={() => void generate()} disabled={busy} />
+          <Button small tone="secondary" icon="document-outline" label={busy ? 'Working…' : 'Create file'} onPress={() => void generate()} disabled={busy} />
           <Button small tone="ghost" icon="globe-outline" label="Test" onPress={() => void test()} disabled={busy} />
         </View>
-        <RowDetail>Fetched over HTTPS, the same way a verifier will. The certificate already on your website is what ties the file to you.</RowDetail>
-      </Card>
-
-      <SectionLabel text="What you are adding" />
-      <Card>
-        <Text style={styles.rowTitle}>A folder called .well-known</Text>
         <RowDetail>
-          A standard place websites keep small files for other software to read. Yours lists which
-          phones may sign as you, and holds their public keys. Nothing private goes in it.
+          The certificate already on your website is what ties the file to you.
         </RowDetail>
-        <Mono size="sm">{`https://<your site>${SITE_WELL_KNOWN_PATH}`}</Mono>
       </Card>
 
       {cred ? (
@@ -174,7 +182,7 @@ export default function WebsiteScreen() {
           <Card>
             <View style={styles.headRow}>
               <Text style={styles.rowTitle}>{cred.organization}</Text>
-              <Chip label="Self-asserted" tone="neutral" />
+              <Chip label="Domain verified" tone="good" />
             </View>
             <KeyValueRow label="Website" value={cred.domain} />
             <KeyValueRow label="Devices listed" value={String(cred.memberCount)} />
@@ -203,8 +211,11 @@ const buildStyles = () =>
       paddingVertical: spacing.sm + 2,
       color: colors.text,
       fontSize: fontSize.md,
+      // Stacked fields ran together with no gap between them.
+      marginBottom: spacing.sm,
     },
-    buttons: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
+    buttons: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.sm, marginBottom: spacing.sm },
+    steps: { gap: spacing.sm },
     rowTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '600' },
     headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   });

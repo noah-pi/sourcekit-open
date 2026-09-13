@@ -1,8 +1,8 @@
 // Source Kit 0.1.0 — lab shim for expo-secure-store
 // Written with AI assistance. Verification: docs/PROVENANCE.md.
 /**
- * Lab shim for expo-secure-store: in-memory keychain stand-in for
- * rosterStore/trustProvider. Each suite gets a fresh module instance.
+ * Lab shim for expo-secure-store: an in-memory keychain stand-in for the
+ * identity stores. Each suite gets a fresh module instance.
  */
 export const WHEN_UNLOCKED_THIS_DEVICE_ONLY = 'WHEN_UNLOCKED_THIS_DEVICE_ONLY';
 

@@ -5,7 +5,8 @@ A record carries a name only when the device holds a credential that name
 came from. Nothing typed into the app reaches a capture, so a name in a
 record is always something a verifier can go and check.
 
-Three modes, chosen per capture in Settings.
+Three modes, chosen per capture on the viewfinder pill; Settings holds the
+on/off switch.
 
 ## Anonymous
 
@@ -16,7 +17,10 @@ nothing about a person.
 ## Personal
 
 Either of two credentials, whichever is installed. They are different
-claims and the app never presents one as the other.
+claims and the app never presents one as the other. Both certificate routes,
+a person's and an organization's, live on one screen, because the request
+comes first either way and nothing can be imported before the phone has
+produced one.
 
 **A personal certificate.** The device builds a PKCS#10 request and signs it
 with the Secure Enclave key. A certificate authority checks the person and
@@ -48,8 +52,8 @@ The organization's own CA issues a certificate for the device's public key.
 Every signature's `x5chain` is then `[org-issued device cert, org CA cert]`,
 and the record carries no personal name. Revocation is standard and
 verifier-side: the CA publishes OCSP and CRL endpoints in the certificates it
-issues, and the app surfaces each certificate's serial number and expiry so a
-desk can ask whether it is still good.
+issues, and the app surfaces each certificate's expiry so a desk can ask
+whether it is still good.
 
 ## What is recognized, and by whom
 
@@ -57,14 +61,21 @@ Recognition follows the CAWG interim trust model in force until 31 March
 2027. A certificate carrying the document-signing purpose is recognized
 outright; the specification requires that purpose and names no anchors for
 it. One carrying email protection is recognized only when its chain reaches
-an anchor list the device holds — the Mozilla root store with the S/MIME
-trust bit, or the IPTC Origin Verified News Publishers List.
+an anchor list the device holds. Only the IPTC Origin Verified News Publishers
+List is fetched. The Mozilla S/MIME roots are not: the list is large, not
+published as one file, and iOS carries an equivalent store this module does
+not query. In practice an email-protection certificate is recognized when it
+reaches the IPTC list.
 
-Anchors are pinned by SHA-256 over the certificate DER. The pinned list ships
-empty and is fetched at runtime, so until a list is fetched every issuer
-reads as self-asserted. That is the honest report of what this device can
-check, not a verdict on the certificate: a recipient's tool may hold lists
-this one does not.
+Anchors are pinned by SHA-256 over the certificate DER. The identity lists
+ship empty and are fetched when the certificate screen or an import opens, at
+most weekly and never at launch, so until then every issuer reads as
+Certificate rather than Certified or Verified. Other signers' certificates,
+in files this app did not seal, are checked against a second list pinned at
+build: the C2PA trust list and the anchors the Content Credentials verifier
+carries. Either way it is the honest report of what this device can check,
+not a verdict on the certificate: a recipient's tool may hold lists this one
+does not.
 
 ## What none of this proves
 

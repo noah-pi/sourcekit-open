@@ -30,8 +30,12 @@ camera/mic ──► media file (JPEG / MP4 / MOV / M4A)
 Vault layout: `index.json` (metadata only), `{id}.bin` (sealed media),
 `{id}.att.json` (sealed attestation record — it carries location/identity),
 `{id}.thumb.bin` (sealed 512-px grid thumbnail, so the library grid decrypts
-~25 KB per cell instead of the full frame). Plaintext exists only in a cache
-folder that is shredded on lock and on background.
+~25 KB per cell instead of the full frame), `{id}.depth.bin` (the sealed depth
+map, when one was captured), `{id}.snippet.bin` (the sealed start of a
+transcript, the audio grid's thumbnail). A sibling `disclosure/` store holds
+`{id}.json` and `{id}.chunks.json`, the salts and chunk maps behind selective
+disclosure. Plaintext exists only in a cache folder that is shredded on lock
+and on background.
 
 Hard binding: the manifest carries a `c2pa.hash.data` (JPEG/PNG) or
 `c2pa.hash.bmff.v2` (MP4 family) assertion covering every byte **except** the
@@ -57,20 +61,27 @@ credibility axes (independent of the integrity verdict):
          timestamp message, CMS signature over correctly re-tagged
          signedAttrs (RFC 5652 §5.4), TSA chain links, TSA cert valid at
          genTime
-     ──► App Attest verifier (provenance/verifyAppAttest.ts) — full chain to
-         the PINNED Apple App Attestation root (lib/appleAttestRoot.ts),
-         rpIdHash = this app, nonce extension = the emulated-key-attestation
-         binding for exactly the manifest's signing key
+     ──► App Attest verifier (archive/handrolled-verifier/verifyAppAttest.ts)
+         — full chain to the PINNED Apple App Attestation root
+         (lib/appleAttestRoot.ts), rpIdHash = one of this build's two app ids,
+         production and staging, nonce extension = the emulated-key-attestation
+         binding for exactly the manifest's signing key, and the per-capture
+         assertion checked over this file's digest
+     ──► foreign reader (reader/foreign.ts) — what any C2PA manifest says
+         about itself, with its signing chain checked against a pinned list
+         of public signers (lib/signerTrustList.ts)
      ──► every check lands in checksPerformed / checksNotPerformed, shown
          verbatim in the UI
+     ──► the label (components/detail/derive.ts) — five questions, one answer
+         each, one word naming who vouches. See LABEL.md
 ```
 
 The two axes are deliberate: a file can be cryptographically INTACT while its
 signer is unknown, its attestation forged, or its timestamps absent — the UI
 shows integrity and credibility independently, and anything present-but-failed
 is a red warning. Signer *identity* resolves only
-against anchors outside the file: this device's key, or an org credential
-chained to a real CA. Nothing found inside a file can ever upgrade identity
+against anchors outside the file: this device's key, a website that publishes
+the key, or a certificate chained to an anchor list the device holds. Nothing found inside a file can ever upgrade identity
 to "known". (removed the manual known-signers list — a confirm-by-hand
 trust ritual is itself an attack surface; key-continuity trust is the roadmap
 replacement.)
@@ -88,7 +99,8 @@ trusts us.
 ## De-identify and re-sign (share flow)
 
 Sharing flags embedded identifying details and offers a freshly signed copy:
-strip manifest (+ EXIF for JPEG), redact identity/location/sensors/device
-model, drop the audio transcript, keep the original capture time, re-sign the
-identical media bytes, mark the record `deidentified` with the removed field
-list. The copy is independently verifiable — integrity without identity.
+strip manifest (+ EXIF for JPEG), redact identity, location, Wi-Fi and the
+signing-key linkage, drop the audio transcript, keep the original capture time
+and the non-identifying evidence, re-sign the media bytes, identical for JPEG
+and re-encoded for the PNG option, mark the record `deidentified` with the
+removed field list. The copy is independently verifiable — integrity without identity.

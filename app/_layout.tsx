@@ -14,15 +14,15 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useStore } from '../src/store/useStore';
-import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { hasPasscode } from '../src/vault/passcode';
 import { ensureVaultDirs, wipePlainCache, releaseVaultKeyIfIdle } from '../src/vault/vaultFs';
 import { startBarometerFeed } from '../src/sensors/context';
 import { getDeviceKey } from '../src/lib/deviceKey';
 import { ensureAttestation } from '../src/lib/appAttest';
 import { drainOtsQueue } from '../src/provenance/otsQueue';
-import { refreshBeacon, nextRefreshDelayMs, setBeaconEndpoint } from '../src/lib/beacon';
+import { refreshBeacon, nextRefreshDelayMs } from '../src/lib/beacon';
 import { colors, useEffectiveScheme } from '../src/theme';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
 
 export default function RootLayout() {
   const { settingsLoaded, onboarded, unlocked, passcodeSet, loadSettings, setPasscodeSet, setUnlocked } =
@@ -61,8 +61,7 @@ export default function RootLayout() {
       // Ledger anchoring: digests that couldn't reach the free
       // OpenTimestamps calendars while offline submit now; the recorded
       // queue delay becomes part of each record's evidence.
-      void drainOtsQueue(useStore.getState().settings.otsCalendars ?? undefined).catch(() => {});
-      setBeaconEndpoint(useStore.getState().settings.beaconEndpoint);
+      void drainOtsQueue().catch(() => {});
       setReady(true);
     })();
   }, []);
@@ -85,7 +84,6 @@ export default function RootLayout() {
       if (state === 'active') void refreshBeacon().catch(() => {});
     });
     const unsubSettings = useStore.subscribe((s) => {
-      setBeaconEndpoint(s.settings.beaconEndpoint);
     });
     return () => {
       stopped = true;
@@ -164,14 +162,13 @@ export default function RootLayout() {
         <Stack.Screen name="lock" />
         <Stack.Screen name="set-passcode" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="(tabs)" />
-        {/* The screen-edge swipe-back gesture steals horizontal drags from
-            the compare sliders on this screen, so it is off here. The
-            Exhibits back button stays the way out. */}
-        <Stack.Screen name="asset/[id]" options={{ animation: 'slide_from_right', gestureEnabled: false }} />
+        {/* Swipe back from the left edge, the way every pushed iOS screen
+            behaves. Edge-only on purpose: the lens comparison inside is a
+            horizontal drag, and a full-screen back gesture would fight it. */}
+        <Stack.Screen name="asset/[id]" options={{ animation: 'slide_from_right', gestureEnabled: true }} />
         {/* Signer Information's three screens: the detail its rows leave out. */}
         <Stack.Screen name="identity/website" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="identity/organization" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="identity/verified" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="identity/certificate" options={{ animation: 'slide_from_right' }} />
       </Stack>
       </ErrorBoundary>
     </SafeAreaProvider>

@@ -30,11 +30,43 @@ export const APPLE_ATTEST_ROOT_DER = base64ToBytes(
 );
 
 /**
- * The Apple App ID attestation is bound to (TEAM_ID.BUNDLE_ID) — the
- * rpIdHash in every genuine attestation's authData is SHA-256 of this
- * string. Not a secret: it appears in every attestation we produce.
+ * The Apple App IDs an attestation may legitimately name.
+ *
+ * Attestation is bound to TEAM_ID.BUNDLE_ID: the rpIdHash in every genuine
+ * attestation's authData is SHA-256 of one of these strings. Neither is a
+ * secret — both appear in every attestation the corresponding build makes.
+ *
+ * There are two because the app ships as two: the App Store build and the
+ * staging build that proves a release before it becomes one. They are
+ * different apps to Apple, so they hold different App Attest keys and mint
+ * attestations naming different App IDs. A verifier that knew only one of
+ * them called every capture from the other "minted for a different app",
+ * which was true of the string and false of the fact.
+ *
+ * The list is exact and closed. Matching is against these two values, never
+ * against a prefix and never against whatever bundle the reading device
+ * happens to be — a verifier that trusted its own identity could be made to
+ * accept an attestation from any app at all.
  */
-export const VERIFY_APPLE_APP_ID = '7L49FYJH6Q.com.verify.camera';
+export const VERIFY_APPLE_APP_IDS = [
+  '7L49FYJH6Q.com.verify.camera',
+  '7L49FYJH6Q.com.verify.camera.staging',
+] as const;
+
+/** The App Store build's App ID — the canonical one, for anything that has
+ *  to name a single app rather than test membership. */
+export const VERIFY_APPLE_APP_ID = VERIFY_APPLE_APP_IDS[0];
+
+/** Which of the recognized App IDs an rpIdHash names, or null for none.
+ *  Returning the name rather than a boolean lets the report say which build
+ *  sealed a capture instead of only that some Source Kit did. */
+export function appIdForRpIdHash(rpIdHash: Uint8Array, sha256: (b: Uint8Array) => Uint8Array, ascii: (s: string) => Uint8Array): string | null {
+  for (const id of VERIFY_APPLE_APP_IDS) {
+    const want = sha256(ascii(id));
+    if (rpIdHash.length === want.length && rpIdHash.every((b, i) => b === want[i])) return id;
+  }
+  return null;
+}
 
 /**
  * Domain separator for the per-capture App Attest assertion's clientDataHash:

@@ -3,8 +3,9 @@
 /**
  * tsaTrustList — pinned time-stamping authorities, SHA-256 over cert DER.
  * An RFC 3161 token only proves some TSA signed it, and any TSA can mint any
- * genTime, so time claims anchor against this list: the C2PA TSA Trust List
- * plus FreeTSA. Unpinned authorities display as genuine but never anchor
+ * genTime, so time claims anchor against this list: the C2PA TSA Trust List,
+ * the timestamping anchors on the Content Credentials Verify site's known
+ * certificate list, plus FreeTSA. Unpinned authorities display as genuine but never anchor
  * roster or validity evaluation; stale pins fail safe rather than error.
  */
 
@@ -19,6 +20,19 @@ export interface PinnedTsa {
 
 const C2PA_SRC =
   'C2PA TSA Trust List (github.com/c2pa-org/conformance-public, trust-list/C2PA-TSA-TRUST-LIST.pem), pinned 2026-08-03';
+const C2PA_SRC_2 =
+  'C2PA TSA Trust List (github.com/c2pa-org/conformance-public, trust-list/C2PA-TSA-TRUST-LIST.pem), pinned 2026-09-06';
+/**
+ * The Content Credentials Verify site (contentcredentials.org/verify) keeps
+ * an interim known-certificate list until the C2PA publishes a public one.
+ * It anchors the general-purpose timestamping CAs that Adobe's tools, the
+ * C2PA public test files and most desktop signers countersign with, which
+ * the official TSA list does not carry. Recognizing them here means a file
+ * the reference verifier calls countersigned reads the same way on this
+ * device. Anchors only; pinned by fingerprint like everything else.
+ */
+const VERIFY_SITE_SRC =
+  'Content Credentials Verify known certificate list (github.com/contentauth/verify-site, static/trust/anchors.pem), pinned 2026-09-06';
 const FREETSA_SRC =
   'freetsa.org published certificate (freetsa.org/files/tsa.crt, cacert.pem), pinned 2026-08-03';
 
@@ -45,6 +59,14 @@ export const PINNED_TSAS: PinnedTsa[] = [
   { name: 'Encypher C2PA TSA Issuing CA 2026', certSha256: 'f10ef27b800604dd5ab41e02ef61398c8e59e621abcb3dae97533f2c395dbf99', source: C2PA_SRC },
   { name: 'TrustAsia C2PA RSA Root CA', certSha256: '67a5a52af341d284c188f0416bc38d91aec75b9f69d51643bd3430ec1f2ec07f', source: C2PA_SRC },
   { name: 'TrustAsia C2PA ECC Root CA', certSha256: '8cb6572df304ce2baf1d3e93fcb604d5eec8501feeac6af763efd4dd7aa4ecc5', source: C2PA_SRC },
+  { name: 'Castlabs C2PA ECC P-384 Root CA', certSha256: 'fa4d2a19fd5f940c9f6e160beb31aeba9ac786735a1e92d748f63d72f333dce6', source: C2PA_SRC_2 },
+  // --- Content Credentials Verify known list: general-purpose timestamping CAs ---
+  { name: 'DigiCert Trusted G4 RSA4096 SHA256 TimeStamping CA', certSha256: '281734d4592d1291d27190709cb510b07e22c405d5e0d6119b70e73589f98acf', source: VERIFY_SITE_SRC },
+  { name: 'DigiCert Trusted G4 TimeStamping RSA4096 SHA256 2025 CA1', certSha256: 'ca0b1554ecd901ea19dcad8749e9f2648c8d6dfcea1add9d2c2109415bb82ccd', source: VERIFY_SITE_SRC },
+  { name: 'GlobalSign R45 AATL TimeStamping Root CA 2021', certSha256: '3a6224e6ef98d0c4770c229e89cfa346623df5a250d4b68d04cd5da4bd85c4ce', source: VERIFY_SITE_SRC },
+  { name: 'GlobalSign Timestamping CA - SHA384 - G4', certSha256: 'f642418e4d0c63dec785c960efa68ba745f38851744ef81f225cb89305314d50', source: VERIFY_SITE_SRC },
+  { name: 'SSL.com Timestamping Issuing RSA CA R1', certSha256: '5f4d2c0e0cba7d1fb600edd3506d4331c866a11f20d137054ee39cf514576679', source: VERIFY_SITE_SRC },
+  { name: 'Microsoft C2PA Time Stamp Authority PCA 2025', certSha256: '862f4cd4667a47efd386cb045e50d1fc270e699087eb3e3da0c2d3eb71c80883', source: VERIFY_SITE_SRC },
   // --- FreeTSA (root + current leaf; the root survives leaf rotation) ---
   { name: 'FreeTSA Root CA (www.freetsa.org)', certSha256: 'a6379e7cecc05faa3cbf076013d745e327bbbaa38c0b9af22469d4701d18aabc', source: FREETSA_SRC },
   { name: 'FreeTSA (www.freetsa.org)', certSha256: '32e841a95cc1164101ffde41298ef2fc75c1c4372ef095e88a6bbd47dfb191fc', source: FREETSA_SRC },

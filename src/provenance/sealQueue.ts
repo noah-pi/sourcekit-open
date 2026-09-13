@@ -868,10 +868,10 @@ function evidenceEnabledFor(job: SealJob): EvidenceEnabledSnapshot | null {
  * also drain the backlog.
  */
 async function maybeAnchorOts(recordId: string, record: import('./manifest').AttestationRecord): Promise<void> {
-  const { otsEnabled, otsCalendars } = useStore.getState().settings;
+  const { otsEnabled } = useStore.getState().settings;
   if (!otsEnabled) return;
-  await anchorRecordWithOts(recordId, record, otsCalendars ?? undefined);
-  void drainOtsQueue(otsCalendars ?? undefined).catch(() => {});
+  await anchorRecordWithOts(recordId, record);
+  void drainOtsQueue().catch(() => {});
 }
 
 /**

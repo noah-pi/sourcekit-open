@@ -23,7 +23,7 @@ import Security
  * hasAttestedKey -> Bool
  * generateAttestKey -> String (keyId)
  * attestKey(keyId, clientDataHashB64) -> String (attestation object, base64)
- * generateAssertion(clientDataHashB64) -> String (assertion object, base64)
+ * generateAssertion(keyId, clientDataHashB64) -> String (assertion object, base64)
  * deleteAttestKey -> Void
  */
 /**
@@ -98,9 +98,12 @@ public class AppAttestModule: Module {
     // inside the returned assertion object, where anyone holding two
     // assertions from the same key can see whether it advanced. Nothing on
     // the device tracks it, and nothing off the device is told.
-    AsyncFunction("generateAssertion") { (clientDataHashBase64: String, promise: Promise) in
-      guard let keyId = self.storedKeyId() else {
-        promise.reject(NamedException("ASSERT_NO_KEY", "no attested key on this device"))
+    // The keyId is the caller's: the same id whose attestation the record
+    // will carry, held in one place with it. A second copy in UserDefaults
+    // is a second thing that can disagree.
+    AsyncFunction("generateAssertion") { (keyId: String, clientDataHashBase64: String, promise: Promise) in
+      guard !keyId.isEmpty else {
+        promise.reject(NamedException("ASSERT_NO_KEY", "no attested key id supplied"))
         return
       }
       guard let hash = Data(base64Encoded: clientDataHashBase64), hash.count == 32 else {

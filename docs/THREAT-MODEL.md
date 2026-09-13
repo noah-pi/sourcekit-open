@@ -13,12 +13,12 @@ event).
 
 - **The fabricator** — wants to create media that *reads as verified* without
   a genuine capture: forged manifests, transplanted credentials, forged
-  certificates, forged rosters, forged timestamp tokens.
+  certificates, forged timestamp tokens.
 - **The tamperer** — takes a genuinely signed file and changes it: pixels,
   metadata, manifest surgery, truncation.
 - **The impersonator** — wants one device's (or one person's) signatures to
-  be read as another's: key substitution, fingerprint confusion, roster
-  forgery, identity-assertion inconsistency.
+  be read as another's: key substitution, fingerprint confusion,
+  identity-assertion inconsistency.
 - **The discrediter** — doesn't forge anything; attacks the *meaning* of
   verification in front of an audience: screenshot-the-green,
   strip-and-discredit, tamper-to-red, the liar's dividend ("that damning
@@ -53,10 +53,10 @@ event).
 3. Apple's App Attest root key is honest **at verification time** — see the
    Apple paragraph below for the compulsion case.
 4. The user's device was not compromised *before* enrollment of its keys.
-5. Humans confirm roster editor fingerprints and device fingerprints out of
-   band when the stakes matter. Every surface that displays a fingerprint
-   says to. If they skip this, identity rungs degrade to "unknown" — the UI
-   shows exactly that, never a false green.
+5. Humans confirm device fingerprints out of band when the stakes matter.
+   Every surface that displays a fingerprint says to. If they skip this, the
+   signer reads *Not provided* — the label shows exactly that, never a false
+   green.
 6. Public infrastructure (RFC 3161 TSAs, OpenTimestamps calendars, the
    Bitcoin network) is *available* but not necessarily *honest* — see
    scenarios 14–17.
@@ -74,21 +74,25 @@ the signer.
 | | Path from sensor to signature | What can interfere |
 |---|---|---|
 | Source Kit | sensor → kernel → AVFoundation → **the app's own process** → Enclave signs | anything with code execution in that process |
-| Pixel 10 | sensor → image signal pipeline in Tensor G5 → Titan M2 signs | [anything with root](https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html) |
+| Pixel 10 | sensor → ISP → **Pixel Camera on the main processor** → Titan M2 signs | [anything with root](https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html) |
 | Snapdragon | sensor → TEE → TEE signs | anything with root |
+| Dedicated cameras | sensor → camera firmware signs the finished file | firmware, and any capture mode that feeds the signer a file |
+| iPhone 18 Pro, Reference mode | **sensor signs its own readout** → Apple's servers develop it | the optics, and Apple's revocation switch |
 
 Source Kit signs in userspace. On a jailbroken device, an attacker can attach a
 dynamic instrumentation tool, hook the path before the Enclave call, hand it
 pixels of their choosing and get a valid signature. Apple does not expose
 jailbreak status to apps, so this cannot be reliably detected from inside. On a
-Pixel the equivalent attack means compromising the ISP or the Titan M2 — a
-different order of difficulty.
+Pixel the equivalent attack is root, which can ask the Titan M2 to sign anything
+— the same order of difficulty, with a harder floor.
 
-**In-pipeline hardware signing is a genuine achievement, and it is better than
-what any third-party app on iOS can do.** Google shipped signing inside the imaging pipeline with hardware-held
-keys, per-image certificates and an on-device timestamp authority. Qualcomm put
-a C2PA signer in the TEE. That closes the injection problem properly, in a way
-no application-layer design can.
+**Hardware-attested signing is a genuine achievement, and it is better than
+what any third-party app on iOS can do.** Google shipped signing with hardware-held
+keys, an attestation over the operating system and the app, per-image certificates
+and an on-device timestamp authority. Qualcomm put a C2PA signer in the TEE. That
+narrows the injection problem to root. Signing inside the sensor, which the iPhone
+18 Pro now does, closes it: there is no process to hook and nothing to hand the
+signer. What is left is the lens, and a revocation switch that Apple holds.
 
 What the emulated key attestation still buys, and it is not nothing: an attacker
 cannot take a genuine device's attestation and bind it to a key they control,
@@ -144,14 +148,14 @@ effort of reverse-engineering.** All detection logic is public and patchable.
 Jailbreak path indicators, integrity heuristics, and anti-instrumentation
 checks are *speed bumps against commodity tooling only*.
 Against an AI-assisted attacker who can read the exact check and patch around
-it, they are noise. They are therefore **never** load-bearing: no rung of the
-trust ladder, no verdict, no green state depends on one.
+it, they are noise. They are therefore **never** load-bearing: no row of the
+label, no verdict, no green state depends on one.
 
 **(b) The durable guarantees are ONLY the cryptographic ones that hold
 independent of device honesty.** Signature math (an edited byte fails the
 hash no matter how smart the attacker), time-anchoring (an RFC 3161 token or
-Bitcoin binding verified against independent infrastructure), roster
-revocation semantics (a signed roster resolves the same way for everyone),
+Bitcoin binding verified against independent infrastructure), anchor lists
+(a certificate chain resolves the same way for everyone holding the list),
 and content analysis run elsewhere (a different machine, a different trust
 domain). An AI that has read all of this repo cannot talk its way past
 modular arithmetic.
@@ -201,8 +205,10 @@ the claim → credentials fail, and because credentials carry every rung above
 integrity, rungs 2–5 show *cannot be evaluated* — never a partial green.
 *Defended (lab-tested).*
 
-**4. Signature malleability (high-S).** All signing paths normalize to low-S;
-verifiers reject non-canonical signatures. *Defended (lab-tested).*
+**4. Signature malleability (high-S).** Signing paths produce low-S
+signatures. Verification accepts either form, because COSE defines no low-S
+rule; a high-S copy of a valid signature is the same signature over the same
+bytes and is not a forgery. Nothing here depends on canonical form. *Stated.*
 
 **5. Truncation and trailing garbage.** Short files, cut streams, bytes after
 IEND → parse or hash failure, FAILED verdict, never a wedge: the DER-walker
@@ -225,7 +231,8 @@ suspicion, and a stripped file can never be passed off *as verified*.
 **8. Forged self-issued "organization" certificate.** A self-made
 `O=Reuters` cert → rejected at import (the chain verifier runs at the door);
 in a file it verifies as a *self-asserted root* and is displayed as exactly
-that — rung 2 at most, with the out-of-band caveat, never rung 3.
+that — *Self reported* for a bare leaf, *Certificate* for a chain that reaches
+no list, never *Certified*.
 *Defended (lab-tested).*
 
 **9. Org-assertion inconsistency.** The manifest's org identity assertion and
@@ -247,20 +254,10 @@ list, and identity surfaces show the full 64-character fingerprint for
 out-of-band comparison.
 *Defended (by design).*
 
-**12. Forged roster / unknown editor key.** A roster is only as good as its
-editor signature, and the editor fingerprint must be confirmed out of band —
-the import flow instructs exactly that. A forged roster signed by an unknown
-key installs, but it *vouches for nothing the user has any reason to believe*;
-the trust decision happened at confirmation, not at import. *Partial (the
-human step is the control, and the UI says so).*
-
-**13. Roster rollback.** An attacker hands a verifier a stale roster (before
-a revocation). The roster is genuinely signed, so it verifies — and the
-capture resolves by *that* roster's contents. The deployed mitigation is
-semantics, not versioning: revocations are dated, a capture signed before
-the revocation stays *active-then-revoked* (genuine), and the practice is to
-re-issue and redistribute rosters on every edit. A monotonic version counter
-would close this properly and isn't built. *Partial.*
+**12–13. Rosters.** Signed newsroom rosters are not installed on the
+device; a roster provider slots into the trust chain only when a desk tool
+supplies one. The forged-roster and roster-rollback scenarios do not arise in
+this build. *Retired.*
 
 ### C. Time
 
@@ -275,12 +272,13 @@ chain links, validity at genTime) → junk tokens read *invalid*, and an
 invalid token is a failed rung, not an unreached one. *Defended (lab-tested —
 genuine openssl fixtures).*
 
-**16. Malicious or compromised custom TSA.** The user can pin their own TSA
-pool. A malicious TSA can sign any genTime it likes — the token verifies
-against *its* key, and the display says the trust is the TSA's reputation.
-TSA chains are not anchored to a curated trust list (no mature public TSA
-root store exists); revocation is not consulted. Both are listed under "not
-checked" on every verification. *Accepted risk (stated in-product).*
+**16. Malicious or compromised TSA.** Countersigning authorities on the
+pinned list, taken from the C2PA timestamp trust list and the Content
+Credentials verifier, anchor validity. A token from any other authority
+verifies against its own key and is disclosed as unvetted, never counted as
+trusted. Revocation is not consulted and is named on every verification.
+*Defended (lab-tested) for pinned authorities; accepted risk (stated
+in-product) for unpinned ones.*
 
 **17. Anchoring delays and withheld confirmations (OTS).** Calendars are
 public and free; confirmation takes ~2 hours and can be delayed or withheld
@@ -299,8 +297,11 @@ is displayed per record, and the software fallback says "software".
 **19. Forged or replayed App Attest.** Forged: full offline verification —
 chain to the pinned Apple root, rpIdHash bound to this app, Apple's nonce
 extension recomputed against exactly the manifest's signing key → FAILED.
-Replayed: single-use 5-minute challenges, checked server-side; the Apple
-root is pinned in the binary, never fetched at runtime. *Defended
+Replayed: every capture carries a fresh App Attest assertion over this file's
+digest, so an attestation cannot be lifted onto a file the hardware never
+saw. Challenges are local by default; a registry, when configured, issues
+single-use challenges it verifies itself. The Apple root is pinned in the
+binary, never fetched at runtime. *Defended
 (lab-tested — forged-attestation fixtures are permanent regression tests).*
 
 **20. Compromised enrolled device (genuine key, dishonest device).** The
@@ -331,12 +332,13 @@ iOS provides — the passcode locks the door, it is not the key (the app says
 exactly this). *Partial.*
 
 **23. De-identified-copy leakage.** Sharing strips identity, location, Wi-Fi,
-sensors, transcript, and device identity, re-signs as a fresh de-identified
-identity, and the copy *says* it is de-identified and which fields were
-removed. EXIF survival is a permanent regression test (segment stripper;
-pixels byte-identical). Face regions are never
-persisted, never signed, and never leave the redaction path. *Defended
-(lab-tested — test-bmff-deid, roundtrip de-id suites).*
+the transcript, and the signing-key linkage, re-signs as a fresh de-identified
+identity, and carries the non-identifying evidence — motion, pose trace,
+barometrics, depth, device model — verbatim, so a de-identified copy still
+shows the evidence it recorded. The copy *says* it is de-identified and which
+fields were removed. EXIF survival is a permanent regression test (segment
+stripper; pixels byte-identical). *Defended (lab-tested — test-bmff-deid,
+roundtrip de-id suites).*
 
 **24. Network observation.** Timestamps, OTS submissions, and attestation
 all touch the network — and nothing in this product
@@ -351,8 +353,8 @@ produce a scary verdict), strip-and-discredit, and the liar's dividend.
 These attack *readers*, not cryptography, and no code can fix them. The
 defense is claim discipline, engineered: green means only "these bytes are
 unchanged since this key signed them"; red means only "these bytes changed";
-unsigned means nothing either way; the ladder card carries its own title and
-limits sentence so a cropped screenshot still tells the truth; and the full
+unsigned means nothing either way; the strip on the picture and each row's
+caption carry the finding, so a cropped screenshot still tells the truth; and the full
 report lists what was *not* checked on every verdict. *Defended (by design —
 the defense is the copy, and the copy is tested).*
 

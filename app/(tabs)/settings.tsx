@@ -4,11 +4,11 @@
  * Settings — seven sections, top to bottom:
  *   1. Notice (the beta status, bold and verbatim, + feedback link)
  *   2. Device ID (hardware key, App Attest drill-in, copy/rotate, device line)
- *   3. Signer Information (optional byline, organization credential — fetched
+ *   3. Signer Information (website, certificate — each behind its own
  *      over TLS from the org's domain, or imported as a file)
  *   4. What gets recorded — one tight line per toggle, in two explicit
  *      groups: "Identifying — sealed into the file" in muted terracotta
- *      (location, byline, organization, Wi-Fi, transcript) and "Evidence —
+ *      (location, identity, Wi-Fi, transcript) and "Evidence —
  *      about the moment, not you" in sage green (multiple lenses, shutter
  *      burst, raw audio, full-rate motion log). The face check keeps a
  *      third color of its own; the Bitcoin-anchored timestamp row closes
@@ -18,12 +18,12 @@
  *   6. Appearance (Device / Dark / Light — Device follows the iPhone)
  *   7. Diagnostics (the last 30 capture/seal events, errors verbatim, Clear)
  * One line per row, one sub-line max. Deliberately absent: a Bitcoin on/off
- * switch (anchoring is default-always-on; status stays, read-only) and
- * trust-roster management.
+ * switch (anchoring is default-always-on; status stays, read-only).
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Constants from 'expo-constants';
+import { runSessionSoak, describeSoak, type SoakReport } from '../../src/lib/sessionSoak';
 import {
   View,
   Text,
@@ -37,7 +37,7 @@ import {
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as Sharing from 'expo-sharing';
@@ -48,7 +48,7 @@ import { sha256 } from '@noble/hashes/sha256';
 
 import { colors, spacing, radii, fontSize, useThemedStyles, type AppearancePreference } from '../../src/theme';
 import { useStore } from '../../src/store/useStore';
-import { ScreenTitle, Card, SectionLabel, ToggleRow, Button, Divider, Mono, KeyValueRow, NavRow } from '../../src/components/ui';
+import { ScreenTitle, Card, SectionLabel, ToggleRow, Button, Divider, Mono, NavRow } from '../../src/components/ui';
 import { getDeviceKey, regenerateDeviceKey } from '../../src/lib/deviceKey';
 import {
   appAttestSupported,
@@ -74,10 +74,8 @@ import {
 import { base64ToBytes, bytesToHex } from '../../src/lib/bytes';
 import { hasPasscode, removePasscode } from '../../src/vault/passcode';
 import { downgradeVaultKeyAcl } from '../../src/vault/vaultFs';
-import { pqEnrollmentInfo } from '../../src/lib/pqKeyStore';
 import { destroyVault } from '../../src/vault/vaultFs';
 import { subscribeDiagnostics, clearDiagnostics, logDiagnostic, type DiagnosticEvent } from '../../src/lib/diagnosticsLog';
-import { runSessionSoak, describeSoak, type SoakReport } from '../../src/lib/sessionSoak';
 import { getExhibitDebugFlags, setExhibitDebugFlag, type ExhibitDebugFlagKey, type ExhibitDebugFlags } from '../../src/lib/exhibitCamera';
 
 /** Fingerprint of the plain Enclave signing key — the key attestation binds. */
@@ -90,13 +88,6 @@ function enclaveFingerprint(): string {
   }
 }
 
-/**
- * All 64 hex chars, grouped eight-by-eight — this is the screen where a
- * member reads their fingerprint aloud to an editor, so nothing truncates.
- */
-function groupedFingerprint(fp: string): string {
-  return (fp.match(/.{1,8}/g) ?? []).join(' ');
-}
 
 /**
  * Scroll position, kept at MODULE scope on purpose. Toggling Device
@@ -110,6 +101,15 @@ let settingsScrollY = 0;
 
 export default function SettingsScreen() {
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+
+  // Tapping the active tab returns to the top, the same as Inspect.
+  const navigation = useNavigation();
+  useEffect(() => {
+    const unsub = navigation.addListener('tabPress' as never, () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return unsub;
+  }, [navigation]);
   const styles = useThemedStyles(buildStyles);
   const router = useRouter();
   const { settings, saveSettings, passcodeSet, setPasscodeSet, setUnlocked, bumpVault } = useStore();
@@ -117,25 +117,23 @@ export default function SettingsScreen() {
   const [publicKey, setPublicKey] = useState('');
   const [keyBackend, setKeyBackend] = useState<'secure-enclave-attested' | 'secure-enclave' | 'software' | ''>('');
   const [attestState, setAttestState] = useState<AttestState | null>(null);
-  const [attestExpanded, setAttestExpanded] = useState(false);
   const [attestServer, setAttestServer] = useState('');
   const [attestBusy, setAttestBusy] = useState(false);
   const [showRegistryInput, setShowRegistryInput] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  // Session soak: cycles run so far, and the report when it stops.
+  const [soakProgress, setSoakProgress] = useState<number | null>(null);
+  const [soakResult, setSoakResult] = useState<SoakReport | null>(null);
+  const soakCancel = useRef(false);
   const [orgCred, setOrgCred] = useState<OrgCredential | null>(null);
   const [orgStale, setOrgStale] = useState(false);
   const [siteCred, setSiteCred] = useState<SiteCredential | null>(null);
   const [personalCred, setPersonalCred] = useState<PersonalCredential | null>(null);
   // PQ record-signature layer: enrollment info for display only.
-  const [pqInfo, setPqInfo] = useState<{ fingerprint: string; enrolledAt: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
   // The diagnostics log: the record of capture/seal events that toasts
   // can't be (they fade; this persists).
   const [diagnostics, setDiagnostics] = useState<DiagnosticEvent[]>([]);
-  // Session soak: cycles run so far, and the report when it stops.
-  const [soakProgress, setSoakProgress] = useState<number | null>(null);
-  const [soakResult, setSoakResult] = useState<SoakReport | null>(null);
-  const soakCancel = useRef(false);
   // Wave-7 isolation switches — null until the native flags are read.
   const [debugFlags, setDebugFlags] = useState<ExhibitDebugFlags | null>(null);
 
@@ -250,7 +248,6 @@ export default function SettingsScreen() {
     // silently; here we simply read the stored state for display.
     getAttestState().then(setAttestState).catch(() => {});
     getAttestServerUrl().then((u) => setAttestServer(u ?? ''));
-    pqEnrollmentInfo().then(setPqInfo).catch(() => {});
     (async () => {
       const hw = await LocalAuthentication.hasHardwareAsync();
       const enrolled = await LocalAuthentication.isEnrolledAsync();
@@ -293,6 +290,8 @@ export default function SettingsScreen() {
    * installed resolves to no name, and saying so here is the only honest
    * reading of that state.
    */
+  const hasPersonalIdentity = !!(personalCred?.info.subjectCN ?? siteCred?.organization);
+  const hasOrgIdentity = !!orgCred && !orgStale;
   const identitySummary = (() => {
     if (settings.identityMode === 'anonymous') return 'No name on captures.';
     if (settings.identityMode === 'organization') {
@@ -332,14 +331,21 @@ export default function SettingsScreen() {
     }
   };
 
-  /** The attestation detail panel's export — the stored state, as JSON. */
-  const exportAttestation = async () => {
-    if (!attestState) return;
-    const path = `${FileSystem.cacheDirectory}exhibit-attestation.json`;
-    await FileSystem.writeAsStringAsync(path, JSON.stringify(attestState, null, 2));
-    if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType: 'application/json', dialogTitle: 'Export attestation' });
+  /**
+   * Turning the ledger anchor off costs something a person cannot get back
+   * later: captures made while it is off have no independent upper bound on
+   * their time, and no setting can retro-anchor them. So the switch asks.
+   */
+  const confirmDisableLedger = () => {
+    Alert.alert(
+      'Turn off blockchain timestamping?',
+      'New captures will carry only the phone\u2019s own clock and any timestamp authority that answers. Nothing can anchor them to the ledger afterwards.',
+      [
+        { text: 'Keep it on', style: 'cancel' },
+        { text: 'Turn off', style: 'destructive', onPress: () => saveSettings({ otsEnabled: false }) },
+      ],
+    );
   };
-
 
   const confirmRotateKey = () => {
     Alert.alert(
@@ -428,12 +434,44 @@ export default function SettingsScreen() {
 
   const attested = attestState != null;
   const attestationBound = attested && attestState.boundFingerprint === enclaveFingerprint();
-  const deviceLine = `${Device.modelName ?? 'This device'} · iOS ${Platform.Version} · reported by this device, not attested.`;
+  /**
+   * One line for the key: where it is held, and who vouched for the app
+   * that made it. Two facts, one sentence, and never a claim the device
+   * cannot support — a software key says so, and an unattested Enclave key
+   * says that too rather than staying quiet about it.
+   */
+  /**
+   * One row now stands for both certificate routes. A personal certificate
+   * names a person and an organization credential names a masthead, so the
+   * row shows whichever is installed and names the person first when both
+   * are.
+   */
+  const certificateEmpty = !personalCred && (!orgCred || orgStale);
+  const certificateValue = personalCred
+    ? personalCred.info.subjectCN ?? 'Installed'
+    : orgCred && !orgStale
+      ? orgCred.info.subjectOrg ?? orgCred.info.subjectCN ?? 'Installed'
+      : orgStale
+        ? 'Unused'
+        : 'Not set up';
+
+  const staleAttestation = attested && !attestationBound;
+  const keyProvenance =
+    keyBackend === 'software'
+      ? 'Held by the OS keychain, in software.'
+      : keyBackend === '' || keyBackend == null
+        ? '…'
+        : staleAttestation
+          ? 'Held in the Secure Enclave. The attestation predates this key.'
+          : attestationBound || keyBackend === 'secure-enclave-attested'
+            ? 'Held in the Secure Enclave, attested by Apple.'
+            : 'Held in the Secure Enclave. Not attested by Apple.';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
         ref={scrollRef}
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={16}
@@ -457,172 +495,116 @@ export default function SettingsScreen() {
               <Text style={styles.betaLead}>
                 PLEASE READ{'  '}
                 <Text style={styles.betaText}>
-                  The Source Kit camera app is <Text style={styles.betaEm}>in beta</Text>. Its cryptographic and privacy
-                  claims cannot be verified until a full security audit is complete.
+                  Source Kit is <Text style={styles.betaEm}>in beta</Text>. Its cryptographic and privacy claims cannot
+                  be verified until a full security audit is complete.{' '}
+                </Text>
+                <Text
+                  style={styles.feedbackLink}
+                  onPress={() => void Linking.openURL('mailto:enbenpi@gmail.com?subject=Source%20Kit%20feedback')}
+                  suppressHighlighting
+                >
+                  Please share feedback →
                 </Text>
               </Text>
-              <Text style={styles.betaText}>
-                Please break it and tell us.
-              </Text>
-              <Pressable
-                onPress={() => void Linking.openURL('mailto:enbenpi@gmail.com?subject=Source%20Kit%20feedback')}
-                hitSlop={6}
-              >
-                <Text style={styles.feedbackLink}>Send feedback →</Text>
-              </Pressable>
             </View>
           </View>
         </Card>
 
-        {/* 2. Device ID */}
-        <SectionLabel text="Device ID" />
+        {/* 2. Device key — one header, the key, two buttons, one line.
+            Where the key lives and who attested it are two facts, and they
+            are stated once, together, in the grammar Inspect uses: a fact
+            and who established it. The old panel said each of them twice. */}
+        <SectionLabel text="Device key" />
         <Card>
-          {/* Two rows, never one bullet-joined badge: where the key lives and
-              who attested it are separate facts. */}
-          <KeyValueRow
-            label="Hardware Key"
-            value={
-              keyBackend === 'secure-enclave-attested' || keyBackend === 'secure-enclave'
-                ? 'Secure Enclave'
-                : keyBackend === 'software'
-                  ? 'OS keychain (software)'
-                  : '…'
-            }
-          />
-          <KeyValueRow
-            label="Attestation"
-            value={
-              keyBackend === 'secure-enclave-attested' || (keyBackend === 'secure-enclave' && attestationBound)
-                ? 'Apple Attested'
-                : 'Not attested'
-            }
-          />
-
-          {appAttestSupported() ? (
-            attested ? (
-              <View style={styles.attestBlock}>
-                <Pressable style={styles.rowBetween} onPress={() => setAttestExpanded((e) => !e)} hitSlop={6}>
-                  <Text style={styles.rowTitle}>App Attest</Text>
-                  <View style={styles.attestRight}>
-                    <Text style={styles.attestValue}>Attested</Text>
-                    <Ionicons name={attestExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={colors.textDim} />
-                  </View>
-                </Pressable>
-                {attestExpanded ? (
-                  <View style={styles.attestPanel}>
-                    <Text style={styles.rowDetail}>Key fingerprint: all 64 hex digits, grouped for reading aloud:</Text>
-                    <Mono size="sm" color={colors.text} style={styles.fpGrouped}>{groupedFingerprint(attestState.boundFingerprint || fingerprint)}</Mono>
-                    <KeyValueRow label="Attested at" value={new Date(attestState.registeredAt).toLocaleDateString()} />
-                    <KeyValueRow label="Apple chain" value="Checked against Apple’s pinned root" />
-                    <KeyValueRow
-                      label="Challenge"
-                      value={attestState.origin === 'local' ? 'Generated on this device' : attestState.origin === 'registry' ? 'Issued by the registry' : 'Registry (pre-0.18)'}
-                    />
-                    {!attestationBound ? (
-                      <>
-                        <Text style={styles.rowDetail}>
-                          This attestation predates the current key. Re-attest to bind it to the key in use now.
-                        </Text>
-                        <View style={styles.rowButtons}>
-                          <Button small tone="secondary" icon="shield-checkmark-outline" label={attestBusy ? 'Attesting…' : 'Re-attest'} onPress={() => void handleAttest()} disabled={attestBusy} />
-                        </View>
-                      </>
-                    ) : null}
-                    <View style={styles.rowButtons}>
-                      <Button small tone="secondary" icon="share-outline" label="Export attestation" onPress={() => void exportAttestation()} />
-                      <Button small tone="secondary" icon="refresh-outline" label="Rotate key" onPress={confirmRotateKey} />
-                    </View>
-                    <Text style={styles.rowDetail}>
-                      {pqInfo ? 'Post-quantum signature: on' : 'Post-quantum signature: enrolls on your next capture'}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            ) : (
-              <View style={styles.attestBlock}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.rowTitle}>App Attest</Text>
-                  <Button small tone="secondary" label={attestBusy ? 'Attesting…' : 'Retry now'} onPress={() => void handleAttest()} disabled={attestBusy} />
-                </View>
-                <Text style={styles.rowDetail}>
-                  Runs automatically at every launch. No setup, no server; it retries on its own.
-                </Text>
-                <Pressable onPress={() => setShowRegistryInput((s) => !s)} hitSlop={6}>
-                  <Text style={styles.registryToggle}>{showRegistryInput ? 'Hide registry option' : 'Use an organization registry instead'}</Text>
-                </Pressable>
-                {showRegistryInput ? (
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Registry URL (your choice; none bundled)"
-                    placeholderTextColor={colors.textDim}
-                    value={attestServer}
-                    onChangeText={setAttestServer}
-                    onBlur={() => void setAttestServerUrl(attestServer)}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    keyboardType="url"
-                  />
-                ) : null}
-              </View>
-            )
-          ) : null}
-
           <View style={styles.fingerprintBox}>
             <Mono size="sm" color={colors.accent}>{fingerprint || '…'}</Mono>
           </View>
           <View style={styles.rowButtons}>
             <Button small tone="secondary" icon="copy-outline" label={copiedKey ? 'Copied' : 'Copy key'} onPress={() => void copyPublicKey()} />
-            {!attested ? <Button small tone="secondary" icon="refresh-outline" label="Rotate key" onPress={confirmRotateKey} /> : null}
+            <Button small tone="secondary" icon="refresh-outline" label="Rotate key" onPress={confirmRotateKey} />
           </View>
-          <Text style={styles.rowDetail}>
-            {keyBackend === 'secure-enclave-attested' || attestationBound
-              ? 'This device’s App Attest signing key.'
-              : 'This device’s signing key.'}
-          </Text>
-
-          <Text style={styles.deviceLine}>{deviceLine}</Text>
+          <Text style={styles.rowDetail}>{keyProvenance}</Text>
+          {/* Face ID on every seal. A separate Enclave key that needs a face
+              for each signature. Apple's attestation stays bound to the
+              everyday key, so the trade is stated on the row, not hidden. */}
+          <ProofToggle
+            icon="scan-outline"
+            label="Face ID on every seal"
+            sub={biometricsAvailable
+              ? 'A separate hardware key that needs Face ID for each capture. Files then read Face ID approved instead of Attested, and a certificate issued for the everyday key is not used.'
+              : 'Face ID is not set up on this device.'}
+            value={settings.biometricSigning && biometricsAvailable}
+            onChange={(v) => saveSettings({ biometricSigning: v })}
+            disabled={!biometricsAvailable}
+          />
+          {/* Re-attest appears for one condition only: an attestation that
+              predates the key now in use. It is a fix for a real state, not
+              a button that sits there. */}
+          {staleAttestation ? (
+            <View style={styles.rowButtons}>
+              <Button small tone="secondary" icon="shield-checkmark-outline" label={attestBusy ? 'Attesting…' : 'Re-attest'} onPress={() => void handleAttest()} disabled={attestBusy} />
+            </View>
+          ) : null}
+          {/* App Attest runs itself at launch. It is worth a control only
+              when it has not succeeded, and then only to retry now. */}
+          {appAttestSupported() && !attested ? (
+            <>
+              <View style={styles.rowButtons}>
+                <Button small tone="secondary" label={attestBusy ? 'Attesting…' : 'Retry attestation'} onPress={() => void handleAttest()} disabled={attestBusy} />
+              </View>
+              <Pressable onPress={() => setShowRegistryInput((s) => !s)} hitSlop={6}>
+                <Text style={styles.registryToggle}>{showRegistryInput ? 'Hide registry option' : 'Use an organization registry instead'}</Text>
+              </Pressable>
+              {showRegistryInput ? (
+                <TextInput
+                  style={styles.input}
+                  placeholder="Registry URL (your choice; none bundled)"
+                  placeholderTextColor={colors.textDim}
+                  value={attestServer}
+                  onChangeText={setAttestServer}
+                  onBlur={() => void setAttestServerUrl(attestServer)}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              ) : null}
+            </>
+          ) : null}
         </Card>
 
-        {/* 3. Signer Information — who the signature claims to be. Each row
-            is state only; what a credential is, and how to get one, lives on
-            the screen behind it. */}
+        {/* 3. Signer Information — two routes, because a domain and a
+            certificate answer different questions. What each one is, and how
+            to get it, lives on the screen behind the row. */}
         <SectionLabel text="Signer Information" />
         <Card>
           <NavRow
             label="Website"
             value={siteCred ? siteCred.domain : 'Not set up'}
+            detail="Add a file to your website to associate it with your identity."
             empty={!siteCred}
             onPress={() => router.push('/identity/website')}
           />
           <Divider />
           <NavRow
-            label="Organization Credential"
-            value={orgCred && !orgStale ? orgCred.info.subjectOrg ?? orgCred.info.subjectCN ?? 'Installed' : orgStale ? 'Unused' : 'Not set up'}
-            empty={!orgCred || orgStale}
-            onPress={() => router.push('/identity/organization')}
-          />
-          <Divider />
-          <NavRow
-            label="Verified Identity"
-            value={personalCred ? personalCred.info.subjectCN ?? 'Installed' : 'Not set up'}
-            empty={!personalCred}
-            onPress={() => router.push('/identity/verified')}
+            label="Identity via certificate authority"
+            value={certificateValue}
+            detail="A certificate in your name, from an authority or your organization."
+            empty={certificateEmpty}
+            onPress={() => router.push('/identity/certificate')}
           />
           <Divider />
           <Text style={styles.rowDetail}>
-            Captures are signed either way. Without one of these, a photo proves it has not been
-            altered but says nothing about who took it.
+            Website and identity are optional. You can still capture sealed photos anonymously.
           </Text>
         </Card>
 
-        {/* 4. What gets recorded — two labeled groups (identifying in amber,
-            evidence in the accent), one tight line per toggle. */}
+        {/* 4. What gets recorded — one list, no group headings. The three
+            toggles that seal WHO or WHERE you are keep the terracotta tint;
+            everything below is evidence about the moment and reads sage. The
+            color is the only distinction, which is all the distinction the
+            list needs. */}
         <SectionLabel text="What gets recorded" />
         <Card>
-          {/* Two explicit groups (0.18.1): terracotta marks the toggles that
-              seal WHO/WHERE-you-are into the file; sage marks evidence about
-              the moment itself. One tight line per toggle. */}
-          <GroupLabel tint={IDENTIFYING_TINT} text="Identifying · sealed into the file" />
           <ProofToggle
             icon="location-outline"
             label="Location"
@@ -631,14 +613,22 @@ export default function SettingsScreen() {
             value={settings.includeLocation}
             onChange={(v) => saveSettings({ includeLocation: v })}
           />
+          {/* On means a name rides along; off means anonymous. Which name is
+              the credential's business: the personal one, or the website's,
+              or the organization's, whichever is installed. With none
+              installed the switch has nothing to turn on, and says so. */}
           <ProofToggle
             icon="person-outline"
             label="Identity"
-            sub={identitySummary}
+            sub={hasPersonalIdentity || hasOrgIdentity ? identitySummary : 'Add a credential below to put a name on captures.'}
             tint={IDENTIFYING_TINT}
             value={settings.identityMode !== 'anonymous'}
-            onChange={() => {}}
-            disabled
+            onChange={(v) =>
+              saveSettings({
+                identityMode: !v ? 'anonymous' : hasPersonalIdentity ? 'personal' : hasOrgIdentity ? 'organization' : 'anonymous',
+              })
+            }
+            disabled={!hasPersonalIdentity && !hasOrgIdentity}
           />
           <ProofToggle
             icon="wifi-outline"
@@ -649,17 +639,6 @@ export default function SettingsScreen() {
             onChange={(v) => saveSettings({ includeWifi: v })}
           />
           <ProofToggle
-            icon="text-outline"
-            label="Transcript"
-            sub="Speech-to-text, on device."
-            tint={IDENTIFYING_TINT}
-            value={settings.includeTranscript}
-            onChange={(v) => saveSettings({ includeTranscript: v })}
-          />
-
-          <Divider />
-          <GroupLabel tint={EVIDENCE_TINT} text="Evidence · about the moment, not you" />
-          <ProofToggle
             icon="camera-outline"
             label="Multiple lenses"
             sub="Two rear cameras shoot at once."
@@ -667,22 +646,6 @@ export default function SettingsScreen() {
             recommended
             value={settings.captureEvidence.altView}
             onChange={(v) => saveSettings({ captureEvidence: { ...settings.captureEvidence, altView: v } })}
-          />
-          <ProofToggle
-            icon="copy-outline"
-            label="Shutter burst"
-            sub="Keeps the frames around the shutter."
-            tint={EVIDENCE_TINT}
-            value={settings.captureEvidence.ring}
-            onChange={(v) => saveSettings({ captureEvidence: { ...settings.captureEvidence, ring: v } })}
-          />
-          <ProofToggle
-            icon="mic-outline"
-            label="Raw audio"
-            sub="Uncompressed audio during video."
-            tint={EVIDENCE_TINT}
-            value={settings.captureEvidence.rawPcm}
-            onChange={(v) => saveSettings({ captureEvidence: { ...settings.captureEvidence, rawPcm: v } })}
           />
           <ProofToggle
             icon="pulse-outline"
@@ -693,20 +656,48 @@ export default function SettingsScreen() {
             value={settings.includeSensors}
             onChange={(v) => saveSettings({ includeSensors: v })}
           />
+          <ProofToggle
+            icon="copy-outline"
+            label="Shutter burst"
+            sub="The frames around the shutter. Photos only."
+            tint={EVIDENCE_TINT}
+            value={settings.captureEvidence.ring}
+            onChange={(v) => saveSettings({ captureEvidence: { ...settings.captureEvidence, ring: v } })}
+          />
+          <ProofToggle
+            icon="text-outline"
+            label="Transcript"
+            sub="Speech-to-text on device. A/V only."
+            tint={EVIDENCE_TINT}
+            value={settings.includeTranscript}
+            onChange={(v) => saveSettings({ includeTranscript: v })}
+          />
+          <ProofToggle
+            icon="mic-outline"
+            label="Raw audio"
+            sub="Uncompressed audio during video."
+            tint={EVIDENCE_TINT}
+            value={settings.captureEvidence.rawPcm}
+            onChange={(v) => saveSettings({ captureEvidence: { ...settings.captureEvidence, rawPcm: v } })}
+          />
+        </Card>
 
-          <Divider />
+        {/* Its own block, in the sunk register. The Recommended chip
+            collided with the switch, and a toggle that sits alone does not
+            need a chip to say it matters. */}
+        <Card style={styles.ledgerCard}>
           <ProofToggle
             icon="logo-bitcoin"
-            label="Free public-ledger timestamp"
+            label="Blockchain timestamping"
             tint={EVIDENCE_TINT}
             sub={
-              'Anchored to the Bitcoin public ledger via OpenTimestamps — no account, no cost, nothing to buy. ' +
-              'Only a hash leaves the phone, never the file. Usually confirmed a couple of hours after capture.'
+              'A hash of your capture goes into the Bitcoin ledger through OpenTimestamps. It proves the seal ' +
+              'existed before that block, so nobody can later claim the photo was made after the fact. ' +
+              'Free and anonymous.'
             }
             value={settings.otsEnabled}
-            onChange={(v) => saveSettings({ otsEnabled: v })}
+            onChange={(v) => (v ? saveSettings({ otsEnabled: true }) : confirmDisableLedger())}
           />
-
         </Card>
 
         {/* 5. Privacy & Security */}
@@ -736,7 +727,7 @@ export default function SettingsScreen() {
           <Divider />
           <ToggleRow
             label="Save to Photos"
-            detail="Keeps an unsigned copy in your camera roll."
+            detail="Keep a signed copy of each photo in the camera roll."
             value={settings.saveToCameraRoll}
             onChange={(v) => saveSettings({ saveToCameraRoll: v })}
           />
@@ -783,7 +774,7 @@ export default function SettingsScreen() {
               sealed each capture — so this card states facts, not
               promises. */}
           <Text style={styles.rowDetail}>
-            Photos and video seal with the C2PA Swift SDK; any failure falls back to the legacy hand-rolled engine and is logged below. Audio always seals with the legacy hand-rolled engine.
+            Photos and video seal with c2pa-swift, the Content Authenticity Initiative&rsquo;s SDK. Audio seals with the Source Kit signer, as does any capture where c2pa-swift fails — the event log below names the engine that sealed each one.
           </Text>
           <Divider />
           {/* 0.18.4-R3: a flipped switch persists across app updates (only
@@ -860,6 +851,37 @@ export default function SettingsScreen() {
               </View>
             ))
           )}
+          {diagnostics.length > 0 ? (
+            <View style={styles.rowButtons}>
+              <Button small tone="secondary" icon="trash-outline" label="Clear" onPress={clearDiagnostics} />
+            </View>
+          ) : null}
+          {/* 0.20.9: SDK-quarantine export. Rendered ONLY when rejected
+              Swift-SDK bytes exist on disk — the row list IS the fact, never
+              a placeholder. Export sends a copy through the share sheet;
+              Clear deletes unviewed forensics to reclaim disk. */}
+          {quarantine.length > 0 ? (
+            <>
+              <Divider />
+              <Text style={styles.rowDetail}>
+                {`SDK quarantine — ${quarantine.length} rejected file${quarantine.length === 1 ? '' : 's'}. Bytes the Swift SDK produced that failed their own self-check: kept for forensics, never sealed, never in Exhibits. Export sends a copy through the share sheet.`}
+              </Text>
+              {quarantine.map((f) => (
+                <View key={f.name} style={styles.rowButtons}>
+                  <Button
+                    small
+                    tone="secondary"
+                    icon="share-outline"
+                    label={`${f.name} · ${(f.size / 1048576).toFixed(1)} MB`}
+                    onPress={() => void shareQuarantineFile(f.name)}
+                  />
+                </View>
+              ))}
+              <View style={styles.rowButtons}>
+                <Button small tone="secondary" icon="trash-outline" label="Clear quarantine" onPress={() => void clearQuarantine()} />
+              </View>
+            </>
+          ) : null}
           {/* Session soak. The camera's failure mode is an ordering bug
               between queues, so it only appears when a session is really
               built and torn down, repeatedly, on real hardware. Nothing in
@@ -912,38 +934,6 @@ export default function SettingsScreen() {
               )}
             </View>
           </View>
-
-          {diagnostics.length > 0 ? (
-            <View style={styles.rowButtons}>
-              <Button small tone="secondary" icon="trash-outline" label="Clear" onPress={clearDiagnostics} />
-            </View>
-          ) : null}
-          {/* 0.20.9: SDK-quarantine export. Rendered ONLY when rejected
-              Swift-SDK bytes exist on disk — the row list IS the fact, never
-              a placeholder. Export sends a copy through the share sheet;
-              Clear deletes unviewed forensics to reclaim disk. */}
-          {quarantine.length > 0 ? (
-            <>
-              <Divider />
-              <Text style={styles.rowDetail}>
-                {`SDK quarantine — ${quarantine.length} rejected file${quarantine.length === 1 ? '' : 's'}. Bytes the Swift SDK produced that failed their own self-check: kept for forensics, never sealed, never in Exhibits. Export sends a copy through the share sheet.`}
-              </Text>
-              {quarantine.map((f) => (
-                <View key={f.name} style={styles.rowButtons}>
-                  <Button
-                    small
-                    tone="secondary"
-                    icon="share-outline"
-                    label={`${f.name} · ${(f.size / 1048576).toFixed(1)} MB`}
-                    onPress={() => void shareQuarantineFile(f.name)}
-                  />
-                </View>
-              ))}
-              <View style={styles.rowButtons}>
-                <Button small tone="secondary" icon="trash-outline" label="Clear quarantine" onPress={() => void clearQuarantine()} />
-              </View>
-            </>
-          ) : null}
           <Text style={styles.rowDetail}>
             The last 30 capture and seal events on this device. Error strings are verbatim. Nothing here leaves the device.
           </Text>
@@ -997,16 +987,6 @@ const APPEARANCE_OPTIONS: { value: AppearancePreference; label: string }[] = [
   { value: 'light', label: 'Light' },
 ];
 
-/** Group header inside the toggle card — a tint dot + quiet caps label. */
-function GroupLabel({ text, tint }: { text: string; tint: string }) {
-  const styles = useThemedStyles(buildStyles);
-  return (
-    <View style={styles.groupLabelRow}>
-      <View style={[styles.groupDot, { backgroundColor: tint }]} />
-      <Text style={styles.groupLabel}>{text}</Text>
-    </View>
-  );
-}
 
 /** Toggle row — same icon+label language as the HUD and grid badges.
  *  0.18.2: subs are NEVER truncated (field report: ellipsized copy reads as
@@ -1061,6 +1041,7 @@ const buildStyles = () => StyleSheet.create({
   recTagText: { color: colors.textDim, fontSize: 9, fontWeight: '700', letterSpacing: 0.3 },
   scroll: { padding: spacing.md, paddingBottom: spacing.xxl },
   betaCard: { backgroundColor: colors.surface2 },
+  ledgerCard: { backgroundColor: colors.surface2 },
   flagNotice: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -1076,14 +1057,9 @@ const buildStyles = () => StyleSheet.create({
   rowTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: '600', letterSpacing: 0.2 },
   rowDetail: { color: colors.textDim, fontSize: fontSize.xs, marginTop: 4, lineHeight: 17 },
   rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
-  attestBlock: { marginTop: spacing.md },
-  attestRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  attestValue: { color: colors.accent, fontSize: fontSize.sm, fontWeight: '600' },
-  registryToggle: { color: colors.textDim, fontSize: fontSize.xs, fontWeight: '600', marginTop: spacing.sm },
-  attestPanel: { marginTop: spacing.sm },
-  rowButtons: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.sm },
   soakBlock: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.borderSoft },
-  deviceLine: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: spacing.md, marginBottom: spacing.xs },
+  registryToggle: { color: colors.textDim, fontSize: fontSize.xs, fontWeight: '600', marginTop: spacing.sm },
+  rowButtons: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.sm },
   aliasHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   optionalTag: {
     backgroundColor: colors.accentSoft,
@@ -1096,9 +1072,6 @@ const buildStyles = () => StyleSheet.create({
   // Two lines of rowDetail (lineHeight 17) — reserved on every toggle sub
   // so one-line and two-line rows land at the same height.
   proofSubMin: { minHeight: 34 },
-  groupLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, marginBottom: 2 },
-  groupDot: { width: 6, height: 6, borderRadius: 3 },
-  groupLabel: { color: colors.textFaint, fontSize: 10, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
   // Appearance selector — one inset track, three pills; the selected pill
   // lifts to the card surface (the segmented-control register, no new
   // component for a single row).
@@ -1121,7 +1094,6 @@ const buildStyles = () => StyleSheet.create({
   appearanceOptionTextSelected: { color: colors.text },
   proofRowText: { flex: 1 },
   piiCallout: { color: colors.warn, fontSize: fontSize.xs, lineHeight: 17, marginTop: spacing.sm },
-  fpGrouped: { marginTop: 2, lineHeight: 18 },
   fingerprintBox: {
     backgroundColor: colors.bg,
     borderWidth: StyleSheet.hairlineWidth,

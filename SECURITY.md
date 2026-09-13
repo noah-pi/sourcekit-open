@@ -30,7 +30,7 @@ In scope:
   layer, C2PA manifest parsing and embedding.
 - The on-device vault (`src/vault/`): encryption at rest, key handling,
   plaintext cache hygiene.
-- Roster and trust-list handling: signature checks, revocation timing,
+- Trust-list and credential handling: signature checks, anchor lists,
   trust resolution.
 - Verification of media, proof bundles and hash claims.
 

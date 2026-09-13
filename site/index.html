@@ -71,6 +71,7 @@ p { margin:0 0 var(--s-md); }
 
 /* primitives from the app */
 .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s-md); }
+.kicker { font-size:11px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; color:var(--textDim); margin:0 0 6px; }
 .chip { display:inline-flex; align-items:center; gap:5px; border-radius:var(--r-full); padding:5px 10px; font-size:11px; font-weight:600; }
 .chip.good{background:var(--accentSoft);color:var(--accent)}
 .chip.warn{background:var(--warnSoft);color:var(--warn)}
@@ -330,6 +331,11 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
       <p style="color:var(--textDim);margin:0 0 var(--s-md)">All of Source Kit's code is published under Apache-2.0. I'm a journalist turned product designer, not a cryptographer or a career engineer. Everything is here: camera, cryptography, native modules, interface, test suite.</p>
       <div class="cta"><a class="btn primary" href="https://github.com/noah-pi/sourcekit-open">View repo</a></div>
     </div>
+
+    <div class="card" style="margin-top:var(--s-lg);max-width:52ch">
+      <p class="kicker">Update, September 13, 2026</p>
+      <p style="margin:0">This week, Apple finally delivered its provenance camera. The iPhone 18 Pro signs photos at the sensor: in <a href="https://www.apple.com/newsroom/2026/09/apple-debuts-iphone-18-pro-and-iphone-18-pro-max/">Reference Mode</a>, the main camera signs its own raw readout before any software touches it. With each image you get what Apple calls a digital negative, the unaltered sensor data with its signature, kept on the phone and developed on request. It is the strongest capture proof anyone has shipped, and the chart below is updated to show where it sits: in front of the pipeline, one stop earlier than anyone else. It is a hopeful advance, and the gaps are plain. Stills only, just the iPhone 18 Pro. Not C2PA, so nothing else can read it. Developing and verifying both run through Apple's Private Cloud Compute, which can also revoke a negative. And the lens is still the lens: it does nothing for rephotography or a face that needs to leave the frame. Source Kit's plan is to read a reference in Inspect beside everything else it reads, and, where iOS 27 allows it, seal one into a standard manifest with a countersigned time and a name.</p>
+    </div>
   </div>
   <figure class="shots" data-carousel>
     <div class="shots-frame">
@@ -476,7 +482,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
 
   <figure class="pipefig">
     <div class="fig plain">
-      <svg viewBox="0 0 900 236" role="img" aria-label="The path from photons to a rendered file, with approximate durations for each stage and the two places a signature can be applied.">
+      <svg viewBox="0 0 900 236" role="img" aria-label="The path from photons to a rendered file, with approximate durations for each stage and the three places a signature can be applied.">
         <defs><marker id="pa" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L8 4 L0 8 z" class="s-faint"/></marker></defs>
 
         <text x="16" y="20" class="lbl s-faint">SCENE</text>
@@ -529,19 +535,21 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
         <text x="770" y="150" text-anchor="middle" class="cap s-txt">rendered</text>
 
         <!-- signing points, each on its own row -->
-        <path d="M128 178 v8 h424 v-8" class="f-none k-ac" stroke-width="1.4"/>
-        <text x="340" y="200" text-anchor="middle" class="lbl s-ac">A · SIGNED INSIDE THE PIPELINE</text>
+        <path d="M128 178 v8 h72 v-8" class="f-none k-ac" stroke-width="1.4"/>
+        <text x="164" y="200" text-anchor="middle" class="lbl s-ac">S · AT THE SENSOR</text>
+        <path d="M252 178 v8 h300 v-8" class="f-none k-ac" stroke-width="1.4"/>
+        <text x="402" y="200" text-anchor="middle" class="lbl s-ac">A · IN CAMERA FIRMWARE</text>
         <path d="M604 178 v8 h86 v-8" class="f-none k-warn" stroke-width="1.4" stroke-dasharray="4 3"/>
         <text x="647" y="200" text-anchor="middle" class="lbl s-warn">B · AFTER THE HAND-OFF</text>
         <text x="450" y="222" text-anchor="middle" class="cap s-dim">Everything left of the hand-off is code a third-party app never sees.</text>
       </svg>
     </div>
-    <figcaption>Roughly thirty milliseconds separate the photons from the pixels, and every stage of it runs before any third-party app is handed anything. A Pixel 10 signs at <b>A</b>. Source Kit signs at <b>B</b>.</figcaption>
+    <figcaption>Roughly thirty milliseconds separate the photons from the pixels, and every stage of it runs before any third-party app is handed anything. An iPhone 18 Pro in Reference mode signs at <b>S</b>. A Leica signs at <b>A</b>. A Pixel 10 and Source Kit both sign at <b>B</b>, and differ in what the silicon will attest about the code before it.</figcaption>
   </figure>
   <div class="col">
     <p>A photograph starts as charge on a grid of sensor wells and ends as a file. Everything in between — demosaic, lens correction, noise reduction, tone-map, encode — is code that could hand the next stage a different picture. What a signature proves has less to do with the key than with how much of that chain stands between the photons and the signing.</p>
 
-    <p><a href="https://github.com/c2pa-org/conformance-public">C2PA grades signers on two levels</a>: keys protected in software, or keys in hardware with a live attestation from the silicon. The <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10</a> is the first phone to reach the second, signing inside the imaging pipeline with the key in the Titan M2. The frame never passes through general-purpose code, which narrows the seam to <a href="https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html">whoever can get root</a>. Qualcomm has the same idea in the Snapdragon secure environment. Dedicated cameras got there first, starting with Leica in 2023.</p>
+    <p><a href="https://github.com/c2pa-org/conformance-public">C2PA grades signers on two levels</a>: keys protected in software, or keys in hardware with a live attestation from the silicon. The <a href="https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/">Pixel 10</a> is the first phone to reach the second, signing the finished frame from the camera app with the key in the Titan M2 and an attestation from the silicon over the operating system and the app, which narrows the seam to <a href="https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html">whoever can get root</a>. Qualcomm has the same idea in the Snapdragon secure environment. Dedicated cameras got there first, starting with Leica in 2023, signing in firmware before any operating system sees the frame. The iPhone 18 Pro goes one step further back: in Reference mode the main camera's sensor signs its own readout before any of that code runs.</p>
 
     <p>Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in the Secure Enclave, and can attest to nothing upstream of that hand-off. That is the ceiling for a third-party app on iOS, which is why it commits more <i>around</i> the frame instead of claiming more about it.</p>
 
@@ -579,7 +587,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
       <p class="gtag"><span class="chip info">partially addressable</span></p>
       <p class="gname">Rephotography</p>
       <h3>The lens can be pointed at a screen</h3>
-      <p>Photograph a good monitor and every guarantee holds, because every guarantee is true: the sensor did see those photons. No signature reaches past the front of the lens.</p>
+      <p>Photograph a good monitor and every guarantee holds, because every guarantee is true: the sensor did see those photons. No signature reaches past the front of the lens, including one made inside the sensor.</p>
     </div>
 
     <div class="gap">
@@ -832,8 +840,8 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
   <details class="f">
     <summary>Works without a network<span class="sum">Sealing and verifying both, with the radio off.</span></summary>
     <div class="fbody">
-      <p>No accounts, no analytics, no launch-time network calls, and no registry address bundled in the app. Sealing reaches the network only for a timestamp authority and a Bitcoin anchor, and a capture made offline signs anyway and says which anchors are missing. Reading a file can reach further: the weather comparison sends the sealed coordinates to a third party. All eight calls are enumerated in the docs with what each one discloses.</p>
-      <p>Apple's Reference Image sends the raw image, sensor signatures and hardware identifiers to Private Cloud Compute and returns an authenticated copy. That is a reasonable trade for most people, and not available to someone who cannot afford to be seen talking to a server. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/NETWORK.md">NETWORK.md</a></p>
+      <p>No accounts, no analytics, no launch-time network calls, and no registry address bundled in the app. Sealing reaches the network only for a timestamp authority and a Bitcoin anchor, and a capture made offline signs anyway and says which anchors are missing. Reading a file can reach further: the weather comparison sends the sealed coordinates to a third party. All eleven calls are enumerated in the docs with what each one discloses.</p>
+      <p>Apple's Reference Image signs offline, but the negative is raw sensor data and only Private Cloud Compute can develop or verify it, so every reference anyone will actually see has been through Apple's servers. That is a reasonable trade for most people, and not available to someone who cannot afford to be seen talking to a server. <a href="https://github.com/noah-pi/sourcekit-open/blob/main/docs/NETWORK.md">NETWORK.md</a></p>
     </div>
   </details>
 
@@ -870,7 +878,6 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
       <tr><td class="p">Motion log</td><td>Gyro, attitude and user acceleration around the shutter, decimated and signed.</td><td>Hard to fabricate consistently with the optical flow of the frames it accompanies.</td></tr>
       <tr><td class="p">Raw audio</td><td>Uncompressed LPCM master alongside the delivery file.</td><td>Delivery codecs filter exactly the frequencies forensic work needs. Capture it now or lose it.</td></tr>
       <tr><td class="p">Shutter burst</td><td>A short ring of frames from around the shutter moment.</td><td>Supports parallax and display-beat analysis. Shows the seconds either side of the frame you kept.</td></tr>
-      <tr><td class="p">Face check</td><td>Whether an OS biometric check passed at capture start.</td><td>A boolean. No face geometry, template or image is recorded or transmitted.</td></tr>
       <tr><td class="p">Transcript</td><td>On-device speech recognition of captured audio.</td><td>Never leaves the device. Strippable from shared copies at byte level.</td></tr>
       <tr><td class="p">Identity</td><td>The name on an installed credential: a certificate, a connected website, or an organization credential.</td><td>Chosen per capture, off by default. Never a typed-in name. Always stripped from de-identified copies.</td></tr>
       <tr><td class="p">Location</td><td>GPS fix and accuracy radius at capture.</td><td>Civilian GNSS is unauthenticated. A lead for a desk to corroborate, never proof of place.</td></tr>
@@ -899,6 +906,7 @@ details.f > summary .sum { color:var(--textDim); font-weight:400; font-size:15px
       <li><b>Flash differential.</b> Fire the flash on one frame of a pair and not the other. A real scene lights up by depth; a screen just gets brighter. Cheap to capture, unproven at telling the two apart.</li>
       <li><b>More ways to catch rephotography.</b> Moiré from a display's pixel grid, the refresh beat of a panel against a rolling shutter, the polarization signature of an LCD, multiple or missing PRNU fingerprints, AV desynchronization — none a slam dunk.</li>
       <li><b>Soft binding, and formats that outlive the file.</b> The perceptual fingerprint is already committed. What is missing is somewhere to look it up.</li>
+      <li><b>Reading and wrapping Apple references.</b> iOS 27 lets an app show a Reference-mode photo's status. Inspect should read it beside the seal, and Source Kit should be able to seal such a photo after the fact, with a countersigned time and a name, so the sensor's word travels in a standard manifest a picture desk can check on any machine.</li>
     </ul>
   </div>
 </div></section>

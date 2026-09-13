@@ -10,7 +10,6 @@
 
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system/legacy';
-import { setTsaUrls } from '../lib/timestamp';
 import { setIdentityChainPreference } from '../lib/deviceKey';
 import type { IdentityMode } from '../lib/identity';
 import { setAppearancePreference, type AppearancePreference } from '../theme';
@@ -64,16 +63,6 @@ export interface Settings {
    * RFC 3161 authority time only and the record says nothing about OTS.
    */
   otsEnabled: boolean;
-  /** Custom OTS calendar base URLs; null = the free public defaults. */
-  otsCalendars: string[] | null;
-  /** Custom RFC 3161 TSA URLs; null = the built-in witness pool. */
-  tsaUrls: string[] | null;
-  /**
-   * Bitcoin beacon endpoint (0.10.0): one Esplora base URL pinned by the
-   * user/newsroom; null = the default public pool. Tips are fetched on a
-   * jittered schedule decoupled from shutter events — never per capture.
-   */
-  beaconEndpoint: string | null;
   /**
    * Capture evidence collection (1.0.0, WS1 CaptureKit; E.04 three-state):
    * which evidence sinks the native capture session runs — the stills
@@ -139,9 +128,6 @@ export const DEFAULT_SETTINGS: Settings = {
   biometricSigning: false,
   assignmentId: '',
   otsEnabled: true,
-  otsCalendars: null,
-  tsaUrls: null,
-  beaconEndpoint: null,
   captureEvidence: { ring: true, rawPcm: true, altView: true },
   photoFlash: 'auto', // no light unless asked
   videoTorch: false,
@@ -236,7 +222,6 @@ export const useStore = create<AppState>((set, get) => ({
         // the nested evidence object over the defaults so new sinks default
         // ON and existing choices survive verbatim.
         merged.captureEvidence = { ...DEFAULT_SETTINGS.captureEvidence, ...(stored.captureEvidence ?? {}) };
-        setTsaUrls(merged.tsaUrls);
         // The signature's x5chain follows the identity mode, so the signing
         // layer has to learn the mode without reaching up into this store.
         setIdentityChainPreference(merged.identityMode);
@@ -259,7 +244,6 @@ export const useStore = create<AppState>((set, get) => ({
 
   saveSettings: async (patch) => {
     const settings = { ...get().settings, ...patch };
-    if (patch.tsaUrls !== undefined) setTsaUrls(settings.tsaUrls);
     if (patch.identityMode !== undefined) setIdentityChainPreference(settings.identityMode);
     if (patch.appearance !== undefined) setAppearancePreference(settings.appearance);
     set({ settings });

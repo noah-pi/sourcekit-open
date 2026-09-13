@@ -17,16 +17,16 @@ const FAQ: { q: string; a: string }[] = [
     a: 'Most photos don’t have one, and messaging apps strip the ones that do. Ask for the file straight off the camera or phone: AirDrop, email, or a file transfer.',
   },
   {
-    q: 'What does a green verdict mean?',
-    a: 'The bytes match the seal, the signature is valid, and a certificate authority vouches for the signing key. Nothing about the file has changed since it was sealed.',
+    q: 'What does the green word mean?',
+    a: 'Somebody outside the phone vouches for that answer: Apple for a key held in hardware and an app it attested, a timestamp authority for the time, a domain or a certificate on a list for a name. A gray word means only the phone or the software says so. Neither is a verdict on the picture.',
   },
   {
-    q: 'Why is a valid seal sometimes amber?',
-    a: 'The seal holds, but nothing outside the file vouches for the signer. A signer can claim any name, so an unknown key shows amber, never green. If an organization signed it, ask them for their fingerprint directly and compare all 64 characters.',
+    q: 'Why does a valid seal show Signer unknown?',
+    a: 'The seal holds, but no credential put a name on it. That is the normal state for a file sealed anonymously, and it reads Not provided in gray, never as a warning. A name needs a website that publishes the key, or a certificate from an authority or an organization.',
   },
   {
     q: 'What if the file was edited after sealing?',
-    a: 'The seal and the file no longer match, and the verdict says so. Keep the file; don’t re-save or re-share it.',
+    a: 'The seal and the file no longer match, and the label says so. Keep the file; don’t re-save or re-share it.',
   },
   {
     q: 'What does the hardware check mean?',
@@ -42,7 +42,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'What leaves the phone?',
-    a: 'Only what you share, plus an anonymous hash if the public-ledger timestamp is on. Inspection happens on the device holding the file.',
+    a: 'Only what you share. Sealing sends a hash to a timestamp authority and, when the ledger is on, to OpenTimestamps. Inspecting a file sends nothing, with one exception you have to tap: the weather row sends the sealed coordinates to a public archive. Every call is listed in NETWORK.md.',
   },
 ];
 

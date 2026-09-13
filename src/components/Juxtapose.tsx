@@ -29,10 +29,11 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 
 import { colors, spacing, radii, fontSize, type, useThemedStyles } from '../theme';
 import type { AttestationRecord, PoseTrace, SensorContext } from '../provenance/manifest';
-import { solarPosition, shadowGrammar } from '../reader/verify/solar';
+import { solarPosition, shadowGrammar, sunIsUp } from '../reader/verify/solar';
 import { wmmDeclination } from '../reader/verify/geomag';
 import { useStore } from '../store/useStore';
 
@@ -395,7 +396,7 @@ export function SunAzimuthOverlay({ lat, lon, at, headingDeg, hfovDeg, rollDeg, 
   const styles = useThemedStyles(buildStyles);
   const pos = solarPosition(lat, lon, at);
   const wind = compass8(pos.azimuthDeg);
-  if (pos.elevationDeg <= 0) {
+  if (!sunIsUp(pos.elevationDeg)) {
     return (
       <View style={styles.sunBadge} pointerEvents="none">
         <Text style={styles.sunBadgeText}>Sun below the horizon</Text>
@@ -508,7 +509,16 @@ export function SunAzimuthOverlay({ lat, lon, at, headingDeg, hfovDeg, rollDeg, 
   );
 }
 
-export function HorizonCard({ rollDeg, pitchDeg, facing, hfovDeg }: { rollDeg: number; pitchDeg: number; facing?: 'front' | 'back' | null; hfovDeg?: number | null }) {
+export function HorizonCard({ rollDeg, pitchDeg, facing, hfovDeg, frameUri }: {
+  rollDeg: number;
+  pitchDeg: number;
+  facing?: 'front' | 'back' | null;
+  hfovDeg?: number | null;
+  /** The capture itself, under the overlay. A level line drawn over an empty
+   *  box asks a reader to imagine the comparison; drawn over the picture,
+   *  they can just make it. */
+  frameUri?: string | null;
+}) {
   const styles = useThemedStyles(buildStyles);
   const halfVfov = halfVfovFor(hfovDeg);
   const aim = aimForFacing(facing, rollDeg, pitchDeg);
@@ -519,6 +529,7 @@ export function HorizonCard({ rollDeg, pitchDeg, facing, hfovDeg }: { rollDeg: n
   return (
     <Card title="Horizon" sub="Where level should sit, from the sealed accelerometer.">
       <View style={styles.hrect}>
+        {frameUri ? <Image source={{ uri: frameUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={80} /> : null}
         <View style={styles.hrectCrossH} />
         <View style={styles.hrectCrossV} />
         {inFrame ? (
@@ -573,7 +584,8 @@ const DIAL_CY = 64; // container is 114 tall: 22px of headroom above the far edg
  * weather API decision (flagged to Noah), so they never render here.
  */
 function sunCondition(elevationDeg: number): { icon: keyof typeof Ionicons.glyphMap; words: string } {
-  if (elevationDeg <= 0) return { icon: 'moon-outline', words: 'Nighttime. Not applicable.' };
+  if (!sunIsUp(elevationDeg)) return { icon: 'moon-outline', words: 'Nighttime. Not applicable.' };
+  if (elevationDeg <= 0) return { icon: 'sunny-outline', words: 'Sunrise or sunset · sun on the horizon' };
   if (elevationDeg < 12) return { icon: 'sunny-outline', words: `Low sun · ${Math.round(elevationDeg)}° up, near the horizon` };
   return { icon: 'sunny', words: `Day · sun ${Math.round(elevationDeg)}° up` };
 }
@@ -582,19 +594,24 @@ export function ShadowCard({ lat, lon, at, sealedWhenWhere }: { lat: number; lon
   const styles = useThemedStyles(buildStyles);
   const pos = solarPosition(lat, lon, at);
   const condition = sunCondition(pos.elevationDeg);
-  if (pos.elevationDeg <= 0) {
-    // Night: the sundial becomes plain language — Noah's verbatim.
+  const shadow = shadowGrammar(pos);
+  if (!shadow) {
+    // Night, or a sun on the horizon: the sundial becomes plain language.
     return (
       <Card title="Shadows" sub="Where the sun was, from the sealed time and place.">
         <View style={styles.conditionRow}>
           <Ionicons name={condition.icon} size={13} color={colors.textDim} />
           <Text style={styles.conditionText}>{condition.words}</Text>
         </View>
-        <Pair sealed={sealedWhenWhere} shouldBe="The sun was below the horizon; no shadow grammar applies." />
+        <Pair
+          sealed={sealedWhenWhere}
+          shouldBe={sunIsUp(pos.elevationDeg)
+            ? `The sun sat on the horizon toward the ${compass8(pos.azimuthDeg)}; shadows run nearly flat.`
+            : 'The sun was below the horizon; no shadow grammar applies.'}
+        />
       </Card>
     );
   }
-  const shadow = shadowGrammar(pos)!;
   const wind = compass8(shadow.bearingDeg);
   const ratio = Math.round((shadow.poleShadowCm / 100) * 100) / 100;
   /* ONE shared unit keeps the drawing to scale on the tilted plane: the

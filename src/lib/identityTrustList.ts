@@ -139,7 +139,7 @@ export async function identityAnchorState(): Promise<AnchorListState[]> {
 /**
  * Fetches a published anchor list and caches the fingerprints it yields.
  * Returns how many anchors the list carried. Throws with a plain-English
- * reason: this runs behind a button, never silently.
+ * reason, so the button that calls it can say what went wrong.
  */
 export async function refreshIdentityAnchors(listId = 'iptc-publishers'): Promise<AnchorListState> {
   const list = ANCHOR_LISTS.find((l) => l.id === listId);
@@ -188,4 +188,43 @@ export async function anchorListFor(chainFingerprints: string[]): Promise<Anchor
     }
   }
   return null;
+}
+
+/** A week. Published anchor lists change on the order of months, and a
+ *  device a week behind is not wrong about anything that matters. */
+const STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Refreshes any list this device has never fetched or last fetched over a
+ * week ago, and reports what it holds either way.
+ *
+ * Without a list every certificate reads as self-asserted — including one a
+ * recognized publisher genuinely issued. That is a statement about this
+ * device's knowledge dressed up as a statement about the certificate, and
+ * leaving it to a button meant most devices never got past it.
+ *
+ * So the fetch happens where it can matter: opening the certificate screen,
+ * and importing a certificate. Not at launch, and never for someone who has
+ * nothing to check. What leaves the phone is a plain GET for a public file,
+ * identical from every device — no capture, no identity, no location. A
+ * failure is silent here because the caller is not a button: the screen
+ * shows what the device holds, and holding nothing is a state it already
+ * states plainly.
+ */
+export async function ensureIdentityAnchors(): Promise<AnchorListState[]> {
+  const now = Date.now();
+  const current = await identityAnchorState();
+  await Promise.all(
+    current.map(async (state) => {
+      const age = state.fetchedAt ? now - Date.parse(state.fetchedAt) : Infinity;
+      if (age < STALE_AFTER_MS) return;
+      try {
+        await refreshIdentityAnchors(state.list.id);
+      } catch {
+        // Offline, or the list did not answer. The screen reports what the
+        // device actually holds, which is the honest thing to report.
+      }
+    }),
+  );
+  return identityAnchorState();
 }

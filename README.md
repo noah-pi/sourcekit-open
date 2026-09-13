@@ -154,10 +154,13 @@ with how much of that chain stands between the photons and the signing.
 [C2PA grades signers on two levels](https://github.com/c2pa-org/conformance-public): keys
 protected in software, or keys in hardware with a live attestation from the silicon. The [Pixel
 10](https://blog.google/security/pixel-android-trusted-images-c2pa-content-credentials/) is the
-first phone to reach the second, signing inside the imaging pipeline with the key in the Titan
-M2. The frame never passes through general-purpose code, which narrows the seam to [whoever can
-get root](https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html). Qualcomm has the same idea in the Snapdragon secure environment. Dedicated
-cameras got there first, starting with Leica in 2023.
+first phone to reach the second, signing the finished frame from the camera app with the key in
+the Titan M2 and an attestation from the silicon over the operating system and the app, which
+narrows the seam to [whoever can get root](https://www.da.vidbuchanan.co.uk/blog/android-c2pa.html).
+Qualcomm has the same idea in the Snapdragon secure environment. Dedicated cameras got there
+first, starting with Leica in 2023, signing in firmware before any operating system sees the
+frame. The iPhone 18 Pro goes one step further back: in Reference mode the main camera's sensor
+signs its own readout before any of that code runs.
 
 Source Kit sits at the far end. It signs the bytes the operating system hands it, with a key in
 the Secure Enclave, and can attest to nothing upstream of that hand-off. That is the ceiling for
@@ -176,7 +179,7 @@ The six below are structural.
 
 **The lens can be pointed at a screen.** Photograph a good monitor and every guarantee holds,
 because all of them are true: the sensor did see those photons. No signature reaches past the
-front of the lens.
+front of the lens, including one made inside the sensor.
 
 `SENSOR SPOOFING` · *partially addressable*
 
@@ -215,7 +218,7 @@ however good the hardware gets.
 ## What Source Kit commits
 
 Each of these exists because of a gap named above. All of it optional, and all of it switchable
-in the viewfinder.
+in Settings.
 
 <details>
 <summary><b>Hardware attestation</b> — proof the key is held somewhere you cannot reach into</summary>
@@ -271,6 +274,12 @@ A **website** vouches for its own devices, for someone who wants a name on their
 certificate authority. They publish `/.well-known/sourcekit-site.json` listing the keys that
 domain claims. TLS vouches for the domain, and nothing in the file is signed, so it carries less
 than a certificate does. It is a separate type in the code for that reason.
+
+Each one earns a different word beside the name. *Domain verified* for a website that publishes
+the key. *Certified* for an organization's certificate that reaches a list the app carries,
+*Verified* for a person's. *Certificate* when the chain holds but reaches no list. *Not provided*
+when no name was attached, and *Redacted* when one was taken out of a de-identified copy. The
+word is the credential, never a judgment about the person.
 
 Revocation stays with the issuing CA, over the OCSP and CRL endpoints in the certificates it
 issues, so any verifier can ask. A credential that no longer matches the active device key is
@@ -370,7 +379,7 @@ every photograph is handheld: a tripod or a copy stand reads as still, which is 
 answer. But for the ones that are, hand tremor over a second or two is unglamorous and highly
 particular, and a generator does not produce it by accident.
 
-On a video or a burst — an option in the viewfinder — that trace is drawn against the optical
+On a video — an option in the viewfinder — that trace is drawn against the optical
 flow of the frames themselves, so the movement the device felt is checked against the movement
 it saw. [poseTrace.ts](https://github.com/noah-pi/sourcekit-open/blob/main/src/provenance/poseTrace.ts)
 
@@ -458,13 +467,14 @@ meaning anything. Nobody gets to re-sign the archive later. [pq.ts](https://gith
 <summary><b>Works without a network</b> — sealing and verifying both, with the radio off</summary>
 
 No accounts, no analytics, no launch-time network calls, and no registry address bundled in the
-app. Three optional calls exist: a timestamp authority, a Bitcoin anchor, and an organization
-directory you host. Each is named in the docs, and a capture made offline signs anyway and says
-which anchors are missing.
+app. Six optional calls exist: a timestamp authority, a Bitcoin anchor, a website or
+organization file you host, a public anchor list, and a weather archive you have to tap. Each is
+named in the docs, and a capture made offline signs anyway and says which anchors are missing.
 
-Apple's Reference Image sends the raw image, sensor signatures and hardware identifiers to
-Private Cloud Compute and returns an authenticated copy. That is a reasonable trade for most
-people, and not available to someone who cannot afford to be seen talking to a server.
+Apple's Reference Image signs offline, but the negative is raw sensor data and only Private
+Cloud Compute can develop or verify it, so every reference anyone will actually see has been
+through Apple's servers. That is a reasonable trade for most people, and not available to
+someone who cannot afford to be seen talking to a server.
 [NETWORK.md](https://github.com/noah-pi/sourcekit-open/blob/main/docs/NETWORK.md)
 
 </details>
@@ -519,11 +529,17 @@ panel against a rolling shutter, the polarization signature of an LCD, multiple 
 fingerprints, AV desynchronization — none a slam dunk.
 - **Soft binding, and formats that outlive the file.** The perceptual fingerprint is already
 committed. What is missing is somewhere to look it up.
+- **Reading and wrapping Apple references.** iOS 27 lets an app show a Reference-mode photo's
+status. Inspect should read it beside the seal, and Source Kit should be able to seal such a
+photo after the fact, with a countersigned time and a name, so the sensor's word travels in a
+standard manifest a picture desk can check on any machine.
 
 ## Limits
 
-- **Two checks aren't performed:** TSA root anchoring and certificate revocation. Both
-  are named on every verification rather than skipped quietly.
+- **One check isn't performed:** certificate revocation. It is named on every verification
+  rather than skipped quietly. Countersignatures from authorities on no list this build carries
+  are disclosed as unvetted.
+- **HEIC is not read.** The app says so when handed one.
 - **Sensors are claims.** Time, GPS, heading, altitude are what the device reported,
   bound into the signature. The binding is real; whether the device told the truth is a
   separate question.
@@ -546,13 +562,13 @@ To build it yourself:
 `./scripts/fetch-c2pa-framework.sh` for the C2PA Rust core, then `npx expo run:ios`
 on a Mac with Xcode. Secure Enclave and App Attest need a real
 device; the simulator falls back to a software key and labels itself as such. Forking
-for your own build means replacing the EAS project id in `app.json` and the App Attest
-app id in `src/lib/appleAttestRoot.ts`.
+for your own build means replacing the EAS project id in `app.json` and the two App Attest
+app ids, production and staging, in `src/lib/appleAttestRoot.ts`.
 
 ## Docs
 
 [Architecture](docs/ARCHITECTURE.md) · [Threat model](docs/THREAT-MODEL.md) ·
-[Integrity](docs/INTEGRITY.md) · [Identity](docs/IDENTITY.md) ·
+[Integrity](docs/INTEGRITY.md) · [Identity](docs/IDENTITY.md) · [Label](docs/LABEL.md) ·
 [Network](docs/NETWORK.md) · [Settings](docs/SETTINGS.md) ·
 [Recovery](docs/RECOVERY.md) ·
 [Provenance](docs/PROVENANCE.md)

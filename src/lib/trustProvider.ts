@@ -9,7 +9,6 @@
  * "not checked".
  */
 
-import { resolveSignerInRosters } from './rosterStore';
 import type { RosterResolution } from './roster';
 
 export type TrustTier = 'this-device' | 'roster' | 'org' | 'trust-list' | 'unknown';
@@ -64,17 +63,6 @@ export function thisDeviceProvider(): TrustProvider {
   };
 }
 
-/** Signed newsroom rosters stored on this device (editor-vouched). */
-export function rosterProvider(): TrustProvider {
-  return {
-    id: 'roster',
-    resolve: async (input) => {
-      const hit = await resolveSignerInRosters(input.fingerprint, input.atMs);
-      return hit ? { tier: 'roster', roster: hit } : null;
-    },
-  };
-}
-
 /** 'org' only when the chain's links verified. The caller displays the self-asserted-root caveat. */
 export function orgChainProvider(): TrustProvider {
   return {
@@ -87,11 +75,11 @@ export function orgChainProvider(): TrustProvider {
 }
 
 /**
- * Default provider chain, in precedence order. A C2PA Trust List provider
- * slots in above roster; this array is the seam.
+ * Default provider chain, in precedence order. A roster provider, when a
+ * desk tool supplies one, slots in between; this array is the seam.
  */
 export function defaultTrustProviders(): TrustProvider[] {
-  return [thisDeviceProvider(), rosterProvider(), orgChainProvider()];
+  return [thisDeviceProvider(), orgChainProvider()];
 }
 
 /**

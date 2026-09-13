@@ -154,9 +154,12 @@ export function ToggleRow({ label, detail, value, onChange }: {
  * set up, or that nothing is — so a section of these reads as state at a
  * glance and the explaining happens behind the tap.
  */
-export function NavRow({ label, value, empty, onPress }: {
+export function NavRow({ label, value, detail, empty, onPress }: {
   label: string;
   value: string;
+  /** One quiet line under the label: what the row is for, when the label
+   *  alone does not carry it. The state stays on the right either way. */
+  detail?: string;
   /** Dims the value: nothing is configured yet. */
   empty?: boolean;
   onPress: () => void;
@@ -164,14 +167,17 @@ export function NavRow({ label, value, empty, onPress }: {
   const styles = useThemedStyles(buildStyles);
   return (
     <TouchableOpacity
-      style={styles.navRow}
+      style={detail ? styles.navRowStacked : styles.navRow}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${label}, ${value}`}
     >
-      <Text style={styles.navLabel}>{label}</Text>
-      <Text style={[styles.navValue, empty && { color: colors.textFaint }]} numberOfLines={1}>{value}</Text>
-      <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+      <View style={styles.navMain}>
+        <Text style={styles.navLabel}>{label}</Text>
+        <Text style={[styles.navValue, empty && { color: colors.textFaint }]} numberOfLines={1}>{value}</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+      </View>
+      {detail ? <Text style={styles.navDetail}>{detail}</Text> : null}
     </TouchableOpacity>
   );
 }
@@ -274,6 +280,9 @@ const buildStyles = () => StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.sm + 3,
   },
+  navRowStacked: { paddingVertical: spacing.sm + 2, gap: 3 },
+  navMain: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  navDetail: { color: colors.textFaint, fontSize: fontSize.sm, lineHeight: 18 },
   navLabel: { color: colors.text, fontSize: fontSize.md, fontWeight: '500' },
   navValue: { color: colors.textDim, fontSize: fontSize.sm, flex: 1, textAlign: 'right' },
   kvLabel: { color: colors.textFaint, fontSize: fontSize.sm, width: 110 },

@@ -18,7 +18,7 @@
  *   - The ASYNC ladder, rosterFetch (TLS well-known resolution + Node fs
  *     snapshot cache), and the NoticesSource seam stay WEB-SIDE: they need
  *     network/Node. Rung 3 here is the caller path only — the app hands in
- *     the rosters it holds (src/lib/rosterStore). Rung 5 is the honest
+ *     a roster a desk tool supplies. Rung 5 is the honest
  *     not-run stub. The stale-cache cap is web-only machinery and is
  *     removed with the async path.
  *   - The format-gate message names the app's bundle format
@@ -69,7 +69,7 @@ export interface CustodyInput {
   bundle: unknown;
   /**
    * Outside anchors supplied by the caller (signed newsroom rosters — on
-   * device, the rosters the app holds in src/lib/rosterStore). The Reader
+   * device, a roster a desk tool supplies). The Reader
    * holds no trust store of its own — vouching arrives from outside the
    * file or the rung says it never ran.
    */

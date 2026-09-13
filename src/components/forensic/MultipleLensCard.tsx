@@ -68,7 +68,7 @@ function VideoPrimary({ uri, atSeconds, style }: { uri: string; atSeconds: numbe
   useEffect(() => {
     let cancelled = false;
     setExhausted(false);
-    //  field fix ("fades from the original view to a black box" on
+    // 0.18.8 field fix ("fades from the original view to a black box" on
     // exported videos): ONE seek attempt meant a single bad extract (t=0 on
     // a moov-last export, a slow content-uri read) left the whole blend box
     // on its near-black background. Walk the same fallback ladder the
@@ -133,7 +133,7 @@ function FilmstripThumb({ frameRef, selected, onSelect }: {
     return () => { cancelled = true; };
   }, [frameRef]);
   return (
-    // the strip frames are tappable — a tap swaps THAT
+    // 0.18.6 (Noah): the strip frames are tappable — a tap swaps THAT
     // pair into the blend view + parallax above.
     <Pressable
       style={({ pressed }) => [styles.stripItem, pressed && { opacity: 0.7 }]}
@@ -169,12 +169,13 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   const styles = useThemedStyles(buildStyles);
   // 0 = primary only, 1 = secondary fully blended over the primary.
   const [mix, setMix] = useState(0.5);
-  // The blend crops both views to one shared 4:3 box, and the wider
-  // camera's edges live outside it, so the committed second-camera frame is
-  // also shown UNCROPPED below the blend, at its own aspect ratio. The ratio
+  // 0.20.1 (Noah: "just seeing the full frame is actually really helpful
+  // itself"): the blend crops both views to one shared 4:3 box, and the
+  // wider camera's edges live outside it — show the committed second-camera
+  // frame UNCROPPED, at its own aspect ratio, below the blend. The ratio
   // comes from the decode itself, never assumed.
   const [secondaryAspect, setSecondaryAspect] = useState<number | null>(null);
-  // which take pair the blend view shows. Null → the
+  // 0.18.6 (Noah): which take pair the blend view shows. Null → the
   // card's own secondaryFrame (the first recorded pair). A filmstrip tap
   // swaps the pair in — frame AND its PTS anchor.
   const [activePair, setActivePair] = useState<number | null>(null);
@@ -192,7 +193,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   // the committed frame bytes are materialized to the (plain, shred-on-lock)
   // cache once and shown from there.
   const [secondaryUri, setSecondaryUri] = useState<string | null>(null);
-  // a materialized frame that expo-image cannot DECODE rendered as
+  // 0.18.8: a materialized frame that expo-image cannot DECODE rendered as
   // an opaque black layer over the primary — the field's "fades to a black
   // box". A decode failure is a fact about this device, stated in words,
   // never pixels.
@@ -205,17 +206,17 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
       setSecondaryUri(null);
       return;
     }
-    //  stale-frame fix: the materialized path must be UNIQUE per
+    // 0.18.5 stale-frame fix: the materialized path must be UNIQUE per
     // frame — expo-image caches decodes by URI, so a constant path showed
     // the FIRST exhibit's secondary frame on every later exhibit (the
     // bytes on disk were correct; the decode cache was not). Key the file
     // by the committed sha256; fall back to a cheap content fingerprint
     // when a legacy bundle lacks it.
-    //  field fix (the Inspect second-view vanish): the fallback
+    // 0.18.6 field fix (the Inspect second-view vanish): the fallback
     // fingerprint is raw base64 — a '/' in it made the cache path traverse
     // a nonexistent directory, the write failed, and the blend view
     // silently disappeared. Strip to a path-safe alphabet.
-    // exported-video frames carry no committed sha256, and the old
+    // 0.18.8: exported-video frames carry no committed sha256, and the old
     // fallback fingerprint (length + first 24 base64 chars) was effectively
     // "length + the universal JFIF header" — every real JPEG shares those
     // 24 characters, so two same-length frames COLLIDED on one cache path
@@ -241,14 +242,14 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
   const slider = useMemo(
     () =>
       PanResponder.create({
-        //  field fix, corrected: the drag-thief was the detail
+        // 0.18.6 field fix, corrected: the drag-thief was the detail
         // screen's swipe-back gesture, now disabled on that screen — so
         // the wrap claims its touches directly again (tap sets the blend,
         // a drag follows the finger). The wrap is a dedicated 44 px
         // control row; page scroll starts above or below it.
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        //  field fix ("the compare slider doesn't work"): once a
+        // 0.18.1 field fix ("the compare slider doesn't work"): once a
         // horizontal drag IS claimed, never cede it to the enclosing
         // ScrollView mid-gesture — the default termination request lets a
         // parent scroller steal the responder, freezing the thumb.
@@ -286,7 +287,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
         const secondary = await decodeBytesToGray(secBytes, 96, 64, 'forensic-secondary.jpg');
         let primarySource = primaryUri;
         if (kind === 'video') {
-          // try the pair's moment first, then fall back through
+          // 0.18.6: try the pair's moment first, then fall back through
           // fixed offsets before declaring the measurement uncomputable —
           // one bad seek (e.g. t=0 on a moov-last file) must not kill it.
           const anchorMs = Math.max(0, Math.round((shownPtsSeconds ?? 0) * 1000));
@@ -331,7 +332,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
           {primaryUri && secondaryUri && !secondaryDecodeFailed ? (
             <View>
               <View style={styles.compareBox}>
-                {/* the primary frame follows the SELECTED
+                {/* 0.18.6 (Noah): the primary frame follows the SELECTED
                     pair's anchor — tapping a strip frame re-seeks the
                     primary thumbnail to that pair's moment. */}
                 <PrimaryView kind={kind} uri={primaryUri} atSeconds={shownPtsSeconds} style={StyleSheet.absoluteFill} />
@@ -372,7 +373,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
             </View>
           ) : null}
 
-          {/* the match numbers belong with the comparison
+          {/* 0.23.1 (Noah): the match numbers belong with the comparison
               they describe — directly under the blend slider, before the
               full-frame view. */}
           <View style={styles.parallaxBlock}>
@@ -395,7 +396,7 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
             )}
           </View>
 
-          {/* the committed frame whole. The blend above matches the
+          {/* 0.20.1: the committed frame whole. The blend above matches the
               two views inside one box (cover-fit crops both); this is the
               second camera's frame uncropped, at the ratio the decode
               reports. Follows the filmstrip selection, like the blend. */}
@@ -412,11 +413,10 @@ export function MultipleLensCard({ kind, primaryUri, secondaryFrame, primaryFram
                 }}
                 onError={() => setSecondaryDecodeFailed(true)}
               />
-              <Text style={styles.sliderLab}>Uncropped.</Text>
             </View>
           ) : null}
 
-          {/* the whole take's second camera — every
+          {/* 0.18.5 post-field: the whole take's second camera — every
               committed pair frame as a strip, labeled by its capture-side
               sequence number (never a time claim: the anchors are host
               clock, not take-relative). */}
@@ -497,7 +497,7 @@ const buildStyles = () => StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: '#101013',
   },
-  // the selected strip frame — an accent ring, nothing
+  // 0.18.6 (Noah): the selected strip frame — an accent ring, nothing
   // more (selection is UI state, not a claim about the frame).
   stripImageSelected: { borderColor: colors.text, borderWidth: 2 },
   stripLabel: { color: colors.textFaint, fontSize: 9.5, marginTop: 2, textAlign: 'center' },

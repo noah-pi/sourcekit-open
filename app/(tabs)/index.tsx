@@ -37,9 +37,8 @@ import { colors, spacing, radii, type, fontSize, useThemedStyles, useEffectiveSc
 import { useStore } from '../../src/store/useStore';
 import { collectContext, requestCapturePermissions } from '../../src/sensors/context';
 import { type PoseSample } from '../../src/sensors/motion';
-import { enqueuePhotoSeal, enqueueVideoSeal, enqueueAudioSeal, resumeSealQueue, subscribeSeals, subscribeSealCompletions } from '../../src/provenance/sealQueue';
+import { enqueuePhotoSeal, enqueueVideoSeal, enqueueAudioSeal, resumeSealQueue } from '../../src/provenance/sealQueue';
 import { logDiagnostic } from '../../src/lib/diagnosticsLog';
-import { getDeviceKey } from '../../src/lib/deviceKey';
 import {
   identityForCapture, installedIdentities, NO_IDENTITIES,
   type InstalledIdentities, type IdentityMode,
@@ -528,14 +527,6 @@ export default function CaptureScreen() {
   const [recording, setRecording] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [fingerprint, setFingerprint] = useState<string>('');
-  // The camera's ONE status element: the seal pill. Three honest
-  // states — steady ("Sealing on · key"), busy ("Sealing…" while the queue
-  // drains), and the completion flash ("Sealed", fired ONLY by the queue's
-  // completion signal, never by enqueue). No GPS/motion/key chips: the info
-  // pile is cut, the proof is in the file.
-  const [pendingSeals, setPendingSeals] = useState(0);
-  const [sealedFlash, setSealedFlash] = useState(false);
   // Face check: when the toggle is on, capture START runs an OS
   // biometric check; the boolean outcome rides to the seal as an event
   // record (captureIntegrity.biometricGatePassed). Null = toggle off.
@@ -1009,22 +1000,9 @@ export default function CaptureScreen() {
     });
   }, []);
 
-  // Device fingerprint for the seal pill + queue wiring for its three states.
+  // Anything left in the seal queue from a previous run drains on mount.
   useEffect(() => {
-    getDeviceKey().then((k) => setFingerprint(k.fingerprint.slice(0, 12))).catch(() => {});
     void resumeSealQueue();
-    let flashTimer: ReturnType<typeof setTimeout> | null = null;
-    const unsubCount = subscribeSeals(setPendingSeals);
-    const unsubDone = subscribeSealCompletions(() => {
-      setSealedFlash(true);
-      if (flashTimer) clearTimeout(flashTimer);
-      flashTimer = setTimeout(() => setSealedFlash(false), 2200);
-    });
-    return () => {
-      unsubCount();
-      unsubDone();
-      if (flashTimer) clearTimeout(flashTimer);
-    };
   }, []);
 
   // Fused DeviceMotion feed while the screen is focused: true gyro
@@ -2568,43 +2546,11 @@ export default function CaptureScreen() {
         </View>
       ) : null}
 
-      {/* The top HUD is ONE column stack (0.15.0 overlap fix): the seal pill
-          and the proof toggles were two independently-positioned rows
-          (top:0 and top:52), so a long fingerprint pill or a narrow device
-          could land the toggle row ON the pill. One stack, laid out by
-          flexbox, can never overlap itself; the toggle row wraps and its
-          pills shrink instead of spilling off the edges.
-          The seal pill is the camera's ONE status element.
-          Deadpan states only: Sealing on / Sealing… / Sealed. Every pill is
-          the mockup's hudpill — translucent dark glass (blur 8), a 1px
-          hairline, a status dot and a 10.5/700 label. The "Sealed" flash
-          stays the camera's one moment of glow — a green gradient, earned
-          only on a real completion (never on enqueue, never on failure). */}
+      {/* The top HUD is the proof toggles and nothing else. Sealing is not a
+          state a reader chooses between — it is on, and the file says so —
+          so the pill that announced it is gone and the toggles hold the top
+          line beside the lock. */}
       <SafeAreaView edges={['top']} style={styles.hudStack} pointerEvents="box-none">
-        {sealedFlash ? (
-          <LinearGradient
-            colors={[colors.accentGradStart, colors.accentGradEnd]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.hudPill, styles.sealPill, styles.sealPillFlash]}
-          >
-            <View style={[styles.hudDot, { backgroundColor: '#FFFFFF' }]} />
-            <Text style={[styles.hudPillText, { color: '#FFFFFF' }]}>Sealed</Text>
-          </LinearGradient>
-        ) : (
-          <BlurView intensity={8} tint="dark" style={[styles.hudPill, styles.sealPill]}>
-            {/* Sage = sealing armed (steady), clay = the queue is
-                draining — the palette's two status-dot colors. */}
-            <View style={[styles.hudDot, pendingSeals > 0 ? styles.hudDotBusy : styles.hudDotGreen]} />
-            <Text style={styles.hudPillText}>
-              {pendingSeals > 0 ? 'Sealing…' : 'Sealing on'}
-            </Text>
-            {pendingSeals === 0 ? (
-              <Text style={styles.sealPillFp}>{fingerprint || '………'}</Text>
-            ) : null}
-          </BlurView>
-        )}
-
         {/* Proof HUD: what will be embedded, visible BEFORE the shutter.
             Mockup hudpill language: a glass pill with a status dot — filled
             + tinted when ON, a hollow ring when OFF (the dot's SHAPE says
@@ -2625,7 +2571,7 @@ export default function CaptureScreen() {
             on={settings.identityMode !== 'anonymous'}
             onColor={HUD_IDENT_ON}
             accessibilityLabel={`Signing identity: ${identityPillLabel}. Tap to change.`}
-            onPress={() => void saveSettings({ identityMode: nextIdentityMode(settings.identityMode) })}
+            onPress={() => void saveSettings({ identityMode: nextIdentityMode(settings.identityMode, installedIds) })}
           />
         </View>
       </SafeAreaView>
@@ -2807,6 +2753,18 @@ export default function CaptureScreen() {
           </View>
         ) : null}
 
+        {/* Toast — tap to open the exhibits grid. It rides in the controls
+            column rather than at an absolute offset, so it sits above the
+            mode line at the same gap the mode line keeps from the shutter,
+            and cannot land on the shutter on any device. */}
+        {toast ? (
+          <TouchableOpacity style={styles.toast} activeOpacity={0.8} onPress={() => router.push('/exhibits')}>
+            <Ionicons name="albums-outline" size={15} color={colors.onDark.accent} />
+            <Text style={styles.toastText}>{toast}</Text>
+            <Ionicons name="chevron-forward" size={13} color={colors.onDark.faint} />
+          </TouchableOpacity>
+        ) : null}
+
         {/* Mode labels with the sliding highlight pill (0.15.0 Drop 2,
             research §7): crossfade/translate on the native driver, travel
             always toward the newly active label — never inverted. */}
@@ -2908,14 +2866,6 @@ export default function CaptureScreen() {
       {/* Shutter flash */}
       <Animated.View pointerEvents="none" style={[styles.flashOverlay, { opacity: flashAnim }]} />
 
-      {/* Toast — tap to open the exhibits grid */}
-      {toast ? (
-        <TouchableOpacity style={styles.toast} activeOpacity={0.8} onPress={() => router.push('/exhibits')}>
-          <Ionicons name="albums-outline" size={15} color={colors.onDark.accent} />
-          <Text style={styles.toastText}>{toast}</Text>
-          <Ionicons name="chevron-forward" size={13} color={colors.onDark.faint} />
-        </TouchableOpacity>
-      ) : null}
     </View>
   );
 }
@@ -3091,26 +3041,6 @@ const buildStyles = () => StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  // The mockup's hudpill, shared by every HUD element: translucent dark
-  // glass (BlurView intensity 8 at the call sites), a 1px hairline,
-  // borderRadius 999, a status dot and a 10.5/700 label.
-  hudPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: 'rgba(13,13,15,0.55)',
-    borderWidth: 1,
-    borderColor: 'rgba(232,232,236,0.14)',
-    borderRadius: radii.full,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    overflow: 'hidden', // clip the blur to the pill's radius
-  },
-  hudPillText: { color: colors.onDark.text, fontSize: 10.5, fontWeight: '700', letterSpacing: 0.4 },
-  hudDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.onDark.faint },
-  // The palette's two status-dot colors: sage (steady) and clay (busy).
-  hudDotGreen: { backgroundColor: HUD_SEAL_GREEN },
-  hudDotBusy: { backgroundColor: HUD_IDENT_ON },
   // Proof toggles: the same glass pill; ON tints the hairline/label with
   // the state color (inline at the call site), OFF is a hollow dot ring.
   hudToggle: {
@@ -3147,10 +3077,6 @@ const buildStyles = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sealPill: { marginTop: spacing.sm },
-  // The "Sealed" completion flash: the mockup's green-pill hairline tint.
-  sealPillFlash: { borderColor: 'rgba(52,199,89,0.35)' },
-  sealPillFp: { color: colors.onDark.accent, fontFamily: type.mono, fontSize: fontSize.xs },
   recWrap: { position: 'absolute', top: 96, left: 0, right: 0, alignItems: 'center' },
   recIndicator: {
     flexDirection: 'row',
@@ -3319,10 +3245,11 @@ const buildStyles = () => StyleSheet.create({
   audioBlockedDismiss: { color: colors.textFaint, fontSize: fontSize.xs, padding: 4 },
   hint: { color: 'rgba(237,241,244,0.65)', fontSize: fontSize.xs, marginTop: spacing.md, letterSpacing: 0.3 },
   flashOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#fff' },
+  // In-flow, directly above the mode line, at the mode line's own gap (24)
+  // so toast, mode line and shutter sit evenly apart.
   toast: {
-    position: 'absolute',
-    bottom: 168,
     alignSelf: 'center',
+    marginBottom: 24,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
@@ -3348,8 +3275,22 @@ const buildStyles = () => StyleSheet.create({
 });
 
 /** The HUD pill cycles: anonymous → personal → organization → anonymous. */
-function nextIdentityMode(mode: IdentityMode): IdentityMode {
-  if (mode === 'anonymous') return 'personal';
-  if (mode === 'personal') return 'organization';
+/**
+ * The pill cycles only through modes that have a credential behind them. A
+ * mode with nothing installed would seal no name and read "No credential",
+ * which is a stop on the way to nowhere. With nothing installed at all, the
+ * pill stays on Anonymous.
+ */
+function nextIdentityMode(mode: IdentityMode, installed: InstalledIdentities): IdentityMode {
+  const order: IdentityMode[] = ['anonymous', 'personal', 'organization'];
+  const available = (m: IdentityMode) =>
+    m === 'anonymous' ||
+    (m === 'personal' && !!(installed.personalName ?? installed.siteName)) ||
+    (m === 'organization' && !!installed.organization);
+  let i = order.indexOf(mode);
+  for (let step = 0; step < order.length; step++) {
+    i = (i + 1) % order.length;
+    if (available(order[i])) return order[i];
+  }
   return 'anonymous';
 }

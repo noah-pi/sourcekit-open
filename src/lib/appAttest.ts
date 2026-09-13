@@ -31,13 +31,20 @@ import { p256 } from '@noble/curves/p256';
 import { base64ToBytes, bytesToBase64, bytesToHex, concatBytes, utf8ToBytes } from './bytes';
 import { enclaveAvailable, enclaveGenerateKey, enclaveGetPublicKey } from './enclave';
 import { CAPTURE_ASSERTION_DOMAIN } from './appleAttestRoot';
+import { logDiagnostic } from './diagnosticsLog';
+import {
+  verifyCaptureAssertionSignature,
+  verifyCaptureAssertionSignatureDoubleHash,
+  attestedCredentialKey,
+  decodeAssertionObject,
+} from '../../archive/handrolled-verifier/verifyAppAttest';
 
 interface AppAttestNative {
   isSupported(): boolean;
   hasAttestedKey(): boolean;
   generateAttestKey(): Promise<string>; // keyId
   attestKey(keyId: string, clientDataHashBase64: string): Promise<string>; // attestation object b64
-  generateAssertion(clientDataHashBase64: string): Promise<string>; // assertion object b64
+  generateAssertion(keyId: string, clientDataHashBase64: string): Promise<string>; // assertion object b64
   deleteAttestKey(): void;
 }
 
@@ -117,16 +124,44 @@ export function captureClientDataHash(
  * design: a device with no attested key, or a call Apple refuses, seals
  * without it rather than failing the capture.
  */
-async function captureAssertionBase64(cleanFileSha256: Uint8Array): Promise<string | null> {
+async function captureAssertionBase64(cleanFileSha256: Uint8Array, state: AttestState): Promise<string | null> {
   if (!native) return null;
   try {
     const pub = enclaveGetPublicKey();
     if (!pub) return null;
     const hash = captureClientDataHash(cleanFileSha256, pub);
-    return await native.generateAssertion(bytesToBase64(hash));
-  } catch {
+    const assertion = await native.generateAssertion(state.keyId, bytesToBase64(hash));
+    // Checked here, against the attestation this record will carry, with
+    // the verifier's own code. An assertion that would not verify is left
+    // out rather than sealed in, and the reason goes to the diagnostics
+    // log, with both readings of the signature so a device answers which
+    // one Apple uses.
+    return selfCheckAssertion(assertion, hash, state) ? assertion : null;
+  } catch (e) {
+    logDiagnostic({ t: Date.now(), kind: 'seal', outcome: 'info', message: `app attest assertion not produced: ${e instanceof Error ? e.message : String(e)}` });
     return null;
   }
+}
+
+function selfCheckAssertion(assertionBase64: string, clientDataHash: Uint8Array, state: AttestState): boolean {
+  const credPub = attestedCredentialKey(state.attestationBase64);
+  const a = decodeAssertionObject(assertionBase64);
+  if (!credPub || !a) {
+    logDiagnostic({ t: Date.now(), kind: 'seal', outcome: 'info', message: `app attest self-check: ${!credPub ? 'attestation object did not parse' : 'assertion object did not parse'}` });
+    return false;
+  }
+  const direct = verifyCaptureAssertionSignature(a.signature, a.authenticatorData, clientDataHash, credPub);
+  if (direct) return true;
+  const doubled = verifyCaptureAssertionSignatureDoubleHash(a.signature, a.authenticatorData, clientDataHash, credPub);
+  logDiagnostic({
+    t: Date.now(),
+    kind: 'seal',
+    outcome: 'info',
+    message:
+      `app attest self-check failed: direct construction does not verify; double-hash construction ${doubled ? 'VERIFIES' : 'does not verify'}; ` +
+      `keyId ${state.keyId.slice(0, 10)}…, attestation ${state.registeredAt}, authData ${a.authenticatorData.length} bytes, signature ${a.signature.length} bytes`,
+  });
+  return false;
 }
 
 /**
@@ -151,7 +186,7 @@ export async function getAttestationAssertion(
 ): Promise<Uint8Array | null> {
   const state = await getAttestState();
   if (!state) return null;
-  const capture = cleanFileSha256 ? await captureAssertionBase64(cleanFileSha256) : null;
+  const capture = cleanFileSha256 ? await captureAssertionBase64(cleanFileSha256, state) : null;
   return utf8ToBytes(
     JSON.stringify({
       format: capture ? 'exhibit-app-attest/3' : 'exhibit-app-attest/2',

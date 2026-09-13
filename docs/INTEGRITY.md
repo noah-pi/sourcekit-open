@@ -100,7 +100,7 @@ paths are signed into the same block as `context.captureEvidence`:
 - **A short JPEG ring** straddling the shutter — 3 frames before and 4 after —
   for stills only.
 
-All three are switchable in Settings ▸ Capture evidence and on by default.
+All three are switchable in Settings ▸ What gets recorded and on by default.
 
 Each sink is recorded in exactly one of three states: the file's path when it
 was collected, an explicit `null` when the sink was enabled but failed, or
@@ -149,16 +149,18 @@ committed second view and its calibration.
 
 Two cameras separated by a known baseline see a flat plane identically, up to a
 single projective transform. They see a scene with real depth with a residual
-disagreement no homography removes. The card reports a geometric measurement —
-track count, inlier ratio, best-fit planar residual, depth spread — not a
-score.
+disagreement no homography removes. The card decodes both views to 96 × 64
+grayscale, matches a grid of patches by normalized cross-correlation within a
+±14 pixel horizontal window, and reports two numbers: the matched-patch count
+and the median disparity. No planar fit, no inlier ratio, no score. Below the
+matching floor it says insufficient.
 
 It is deterministic geometry. There's no trained model, no probability, and no
 combined "recapture" number. Metadata distributions are never read.
 
 Insufficient data is a first-class answer with a stated reason and no numbers:
-too few decodable frames, too few full-span feature tracks, or a baseline below
-tracker noise. Past a few metres disparity falls below what the baseline can
+too few decodable frames, too few matched patches, or a baseline below
+matcher noise. Past a few metres disparity falls below what the baseline can
 resolve, and the answer is `insufficient` rather than a pass.
 
 What it misses:
@@ -166,17 +168,16 @@ What it misses:
 - **No error rates are published.** These are raw measurements with stated model
   assumptions, not calibrated thresholds. Nothing should ship a number until
   there's a real-corpus characterization behind it.
-- The planar fit is affine in image position. Large depth relief at a wide
-  baseline violates the model and inflates the residual.
-- Block matching is integer-pixel, so per-pair track noise is roughly ±1 px at
+- Patch matching is integer-pixel, so per-patch noise is roughly ±1 px at
   the analysis raster. Disparities near that floor are noise.
 - A motion rig replaying a screen can produce genuine-looking parallax.
 
-## Scene depth (LiDAR)
+## Scene depth
 
-Designed, not shipped. A native depth pipeline can't be validated without a
-physical Pro device. The record schema reserves `sceneDepth` and captures omit
-it.
+Shipped from the dual camera's depth output, not LiDAR. When the hardware
+supports it, a depth map is captured with each still, its digest committed as
+`context.depth`, and a GDepth assertion and a collection hash carry it in the
+manifest. A phone without depth support seals a statement of absence.
 
 ## The signed byte boundary
 

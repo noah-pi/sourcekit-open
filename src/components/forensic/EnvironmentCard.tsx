@@ -5,10 +5,11 @@
  * and place, in the same juxtaposition style as the Inspect screen.
  *
  * The horizon and shadow modules REUSE the Inspect screen's components
- * (src/components/Juxtapose.tsx — HorizonCard / ShadowCard) so the two
+ * (src/components/Juxtapose.tsx — HorizonCard / ShadowCard), which the
+ * Scene evidence list renders as their own rows, so the two
  * screens can never drift apart; weather renders in the same card language
- * but fetches BY DEFAULT when a location is present (Inspect puts the fetch
- * behind a tap). Offline the weather module says "Network not available",
+ * and, like Inspect, puts the archive fetch behind a tap. Offline the weather
+ * module says "Network not available",
  * neutral. Every module juxtaposes the sealed claim with what should be
  * true and never concludes.
  */
@@ -17,7 +18,6 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Linking, ActivityIndicator } from 'react-native';
 
 import { colors, spacing, fontSize, useThemedStyles } from '../../theme';
-import { HorizonCard, ShadowCard } from '../Juxtapose';
 import { ForensicCard, NotRecorded } from './ForensicCard';
 
 // Open-Meteo archive weather-code words (same table the Inspect screen uses).
@@ -113,50 +113,29 @@ function AutoWeather({ lat, lon, at, sealedWhenWhere }: {
   );
 }
 
-export function EnvironmentCard({ lat, lon, atIso, rollDeg, pitchDeg, facing, hfovDeg, sealedWhenWhere }: {
+export function EnvironmentCard({ lat, lon, atIso, sealedWhenWhere }: {
   /** Sealed location claim (device-reported), when present. */
   lat: number | null;
   lon: number | null;
   /** Sealed capture time (ISO), when parseable. */
   atIso: string | null;
-  /** Sealed pose-trace attitude at the shutter, degrees, when present. */
-  rollDeg: number | null;
-  pitchDeg: number | null;
-  /** 0.20.5: sealed camera facing / horizontal FOV — the horizon card's
-   *  projection inputs (absent on older records → nominal fallbacks). */
-  facing?: 'front' | 'back' | null;
-  hfovDeg?: number | null;
   /** "Aug 12 · 2:41 PM · Austin" — the sealed time/place line, caller-formatted. */
   sealedWhenWhere: string;
 }) {
   const at = atIso ? new Date(atIso) : null;
   const atValid = at && Number.isFinite(at.getTime()) ? at : null;
   const hasPlace = lat !== null && lon !== null && atValid !== null;
-  const hasHorizon = rollDeg !== null && pitchDeg !== null;
-
-  if (!hasPlace && !hasHorizon) {
+  // Weather only. Horizon and Shadows are their own rows in Scene evidence,
+  // and this card used to render all three — so opening Weather showed the
+  // two cards the reader had already opened above it.
+  if (!hasPlace) {
     return (
-      <ForensicCard
-        title="Environment"
-        sub="What the sun, the horizon, and the weather record say about the sealed time and place."
-      >
-        <NotRecorded reason="no location or pose trace sealed with this capture" />
+      <ForensicCard title="Weather" sub="What the archive recorded for the sealed time and place.">
+        <NotRecorded reason="no location sealed with this capture" />
       </ForensicCard>
     );
   }
-
-  // The modules render as sibling cards in the Inspect screen's own style.
-  return (
-    <View>
-      {hasHorizon ? <HorizonCard rollDeg={rollDeg} pitchDeg={pitchDeg} facing={facing} hfovDeg={hfovDeg} /> : null}
-      {hasPlace ? (
-        <ShadowCard lat={lat} lon={lon} at={atValid} sealedWhenWhere={sealedWhenWhere} />
-      ) : null}
-      {hasPlace ? (
-        <AutoWeather lat={lat} lon={lon} at={atValid} sealedWhenWhere={sealedWhenWhere} />
-      ) : null}
-    </View>
-  );
+  return <AutoWeather lat={lat} lon={lon} at={atValid} sealedWhenWhere={sealedWhenWhere} />;
 }
 
 const buildStyles = () => StyleSheet.create({
